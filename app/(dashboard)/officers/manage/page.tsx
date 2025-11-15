@@ -101,18 +101,15 @@ export default function ManageOfficersPage() {
       }
       
       // Get current user details
-      const { data: userData } = await supabase
+      const { data: userData } = await (supabase as any)
         .from('users')
         .select('*')
         .eq('id', user?.id)
         .single()
       
-      setCurrentUser(userData)
+      setCurrentUser(userData as any)
 
-      // Check if user is admin or super admin
-      const isAdmin = userData?.role === 'admin' || userData?.role === 'super_admin'
-      
-      if (!isAdmin) {
+      if (!userData || !['super_admin', 'admin'].includes((userData as any).role)) {
         toast.error('Access denied. Admin privileges required.')
         return
       }
@@ -153,8 +150,8 @@ export default function ManageOfficersPage() {
             full_name: formData.full_name,
             phone: formData.phone,
             oscar: oscar,
-            role: formData.role
-          })
+            role: formData.role as any
+          } as any)
           .eq('id', editing.id)
 
         if (error) throw error
@@ -200,7 +197,7 @@ export default function ManageOfficersPage() {
     if (!assigningTitleFor) return
     
     try {
-      const { data, error } = await supabase.rpc('assign_title', {
+      const { data, error } = await (supabase as any).rpc('assign_title', {
         p_user_id: assigningTitleFor.id,
         p_title_code: titles.find(t => t.id === titleFormData.title_id)?.code,
         p_program_id: titleFormData.program_id || null,
@@ -245,7 +242,7 @@ export default function ManageOfficersPage() {
         .update({
           is_active: !officer.is_active,
           activation_status: newStatus
-        })
+        } as any)
         .eq('id', officer.id)
 
       if (error) throw error

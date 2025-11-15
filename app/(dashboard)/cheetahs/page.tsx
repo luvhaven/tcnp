@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
+import type { Database } from "@/types/supabase"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -17,6 +18,7 @@ type Cheetah = {
   id: string
   call_sign: string
   registration_number: string
+  reg_no: string | null
   make: string
   model: string
   year: number
@@ -28,19 +30,44 @@ type Cheetah = {
   features: string | null
   last_maintenance: string | null
   next_maintenance: string | null
+  driver_name: string
+  driver_phone: string
   created_at: string
   programs: { name: string } | null
 }
 
+type CheetahFormState = {
+  registration_number: string
+  driver_name: string
+  driver_phone: string
+  make: string
+  model: string
+  year: number
+  color: string
+  status: string
+  capacity: number
+  fuel_status: string
+  program_id: string
+  features: string
+  last_maintenance: string
+  next_maintenance: string
+}
+
+type CheetahUpdatePayload = Database['public']['Tables']['cheetahs']['Update']
+type CheetahInsertPayload = Database['public']['Tables']['cheetahs']['Insert']
+type ProgramRow = Database['public']['Tables']['programs']['Row']
+
 export default function CheetahsPage() {
   const supabase = createClient()
   const [cheetahs, setCheetahs] = useState<Cheetah[]>([])
-  const [programs, setPrograms] = useState<any[]>([])
+  const [programs, setPrograms] = useState<ProgramRow[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingCheetah, setEditingCheetah] = useState<Cheetah | null>(null)
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<CheetahFormState>({
     registration_number: '',
+    driver_name: '',
+    driver_phone: '',
     make: '',
     model: '',
     year: new Date().getFullYear(),
@@ -77,7 +104,7 @@ export default function CheetahsPage() {
 
       if (cheetahsRes.error) throw cheetahsRes.error
       setCheetahs(cheetahsRes.data || [])
-      setPrograms(programsRes.data || [])
+      setPrograms((programsRes.data as ProgramRow[]) || [])
     } catch (error) {
       console.error('Error loading cheetahs:', error)
       toast.error('Failed to load Cheetahs')
@@ -90,16 +117,39 @@ export default function CheetahsPage() {
     e.preventDefault()
     
     try {
-      const data = {
-        ...formData,
-        program_id: formData.program_id || null
+      const trimmedRegNo = formData.registration_number.trim()
+      const trimmedDriverName = formData.driver_name.trim()
+      const trimmedDriverPhone = formData.driver_phone.trim()
+      const trimmedMake = formData.make.trim()
+      const trimmedModel = formData.model.trim()
+      const trimmedColor = formData.color.trim()
+      const trimmedFeatures = formData.features.trim()
+      const trimmedLastMaintenance = formData.last_maintenance.trim()
+      const trimmedNextMaintenance = formData.next_maintenance.trim()
+
+      const basePayload: CheetahUpdatePayload = {
+        reg_no: trimmedRegNo,
+        registration_number: trimmedRegNo,
+        driver_name: trimmedDriverName,
+        driver_phone: trimmedDriverPhone,
+        make: trimmedMake,
+        model: trimmedModel,
+        year: formData.year,
+        color: trimmedColor,
+        status: formData.status,
+        capacity: formData.capacity,
+        fuel_status: formData.fuel_status.trim() || null,
+        program_id: formData.program_id ? formData.program_id : null,
+        features: trimmedFeatures ? trimmedFeatures : null,
+        last_maintenance: trimmedLastMaintenance ? trimmedLastMaintenance : null,
+        next_maintenance: trimmedNextMaintenance ? trimmedNextMaintenance : null
       }
 
       if (editingCheetah) {
         // Update
         const { error } = await supabase
           .from('cheetahs')
-          .update(data)
+          .update(basePayload)
           .eq('id', editingCheetah.id)
 
         if (error) throw error
@@ -113,10 +163,15 @@ export default function CheetahsPage() {
         
         const nextNumber = (count || 0) + 1
         const callSign = `CHEETAH-${nextNumber.toString().padStart(3, '0')}`
-        
+
+        const insertPayload: CheetahInsertPayload = {
+          ...basePayload,
+          call_sign: callSign
+        }
+
         const { error } = await supabase
           .from('cheetahs')
-          .insert([{ ...data, call_sign: callSign }])
+          .insert([insertPayload])
 
         if (error) throw error
         toast.success('Cheetah added successfully!')
@@ -135,7 +190,9 @@ export default function CheetahsPage() {
   const handleEdit = (cheetah: Cheetah) => {
     setEditingCheetah(cheetah)
     setFormData({
-      registration_number: cheetah.registration_number,
+      registration_number: cheetah.registration_number || cheetah.reg_no || '',
+      driver_name: cheetah.driver_name,
+      driver_phone: cheetah.driver_phone,
       make: cheetah.make,
       model: cheetah.model,
       year: cheetah.year,
@@ -172,6 +229,8 @@ export default function CheetahsPage() {
   const resetForm = () => {
     setFormData({
       registration_number: '',
+      driver_name: '',
+      driver_phone: '',
       make: '',
       model: '',
       year: new Date().getFullYear(),
@@ -332,6 +391,30 @@ export default function CheetahsPage() {
                 value={formData.registration_number}
                 onChange={(e) => setFormData({ ...formData, registration_number: e.target.value })}
               />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="driver_name">Driver Name *</Label>
+                <Input
+                  id="driver_name"
+                  required
+                  placeholder="e.g., James Okafor"
+                  value={formData.driver_name}
+                  onChange={(e) => setFormData({ ...formData, driver_name: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="driver_phone">Driver Phone *</Label>
+                <Input
+                  id="driver_phone"
+                  required
+                  placeholder="e.g., +2348012345678"
+                  value={formData.driver_phone}
+                  onChange={(e) => setFormData({ ...formData, driver_phone: e.target.value })}
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
