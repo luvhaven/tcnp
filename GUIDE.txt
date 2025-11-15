@@ -1,0 +1,220 @@
+================================================================================
+TCNP JOURNEY MANAGEMENT - COMPLETE SETUP GUIDE
+================================================================================
+
+This is the main guide. Additional detailed guides are in the /docs folder:
+- docs/SUPABASE_SETUP.md - Complete Supabase configuration
+- docs/DATABASE_SCHEMA.sql - All database tables and RLS policies  
+- docs/SEED_DATA.sql - Sample data for testing
+- docs/DEPLOYMENT.md - Vercel deployment instructions
+- docs/FEATURES.md - Feature documentation
+
+================================================================================
+QUICK START (5 MINUTES)
+================================================================================
+
+1. CREATE SUPABASE PROJECT
+   - Go to https://supabase.com and create account
+   - Create new project: "tcnp-journey-management"
+   - Save your Project URL and API keys
+
+2. SETUP DATABASE
+   - In Supabase dashboard, go to SQL Editor
+   - Run the script from: docs/DATABASE_SCHEMA.sql
+   - Run the seed script from: docs/SEED_DATA.sql
+
+3. CONFIGURE ENVIRONMENT
+   - Copy .env.local.example to .env.local
+   - Add your Supabase URL and keys
+
+4. INSTALL & RUN
+   npm install
+   npm run dev
+
+5. LOGIN
+   Email: doriazowan@gmail.com
+   Password: &DannyDev1&
+
+================================================================================
+DETAILED SETUP INSTRUCTIONS
+================================================================================
+
+See docs/SUPABASE_SETUP.md for complete step-by-step instructions including:
+- Account creation
+- Database schema setup
+- Row Level Security configuration
+- Storage bucket setup
+- Real-time configuration
+- Environment variables
+- Deployment to Vercel
+
+================================================================================
+PROJECT STRUCTURE
+================================================================================
+
+tcnp-journey-management/
+├── app/                    # Next.js app directory
+│   ├── (auth)/            # Authentication pages
+│   ├── (dashboard)/       # Main dashboard pages
+│   ├── api/               # API routes
+│   └── globals.css        # Global styles
+├── components/            # React components
+│   ├── ui/               # shadcn/ui components
+│   ├── dashboard/        # Dashboard-specific components
+│   └── maps/             # Map components
+├── lib/                   # Utility functions
+│   ├── supabase/         # Supabase client & helpers
+│   ├── hooks/            # Custom React hooks
+│   └── utils.ts          # Utility functions
+├── types/                 # TypeScript type definitions
+├── docs/                  # Documentation
+└── public/               # Static assets
+
+================================================================================
+KEY FEATURES
+================================================================================
+
+✓ Role-Based Access Control (RBAC)
+✓ Real-time Journey Tracking
+✓ Interactive Map with Live Vehicle Positions
+✓ Call-Sign Workflow Management
+✓ Papa (Guest) Management
+✓ Fleet (Cheetah) Management
+✓ Protocol Officers Management
+✓ Eagle Square (Airport) & Flight Tracking
+✓ Nest (Hotel) Management
+✓ Theatre (Venue) Management
+✓ Incident Reporting & Management
+✓ Audit Logging
+✓ Notification System
+✓ Dark/Light Theme
+✓ Mobile Responsive
+✓ PWA Support
+
+================================================================================
+USER ROLES & PERMISSIONS
+================================================================================
+
+SUPER ADMIN
+- Full system access
+- Manage all users, roles, and settings
+- Cannot be deactivated
+
+ADMIN
+- High-level access
+- Manage users and core entities
+- Cannot be deactivated
+
+CAPTAIN / HEAD OF OPERATION
+- Oversee all operations
+- View all journeys and reports
+- Manage protocol officers
+
+HEAD OF COMMAND CENTER
+- Monitor all active operations
+- Access to command center view
+- Real-time tracking oversight
+
+DELTA OSCAR (DO)
+- Manage assigned Papa journeys
+- Execute call-sign actions
+- Create incident reports
+
+TANGO OSCAR (TO) / HEAD TANGO OSCAR
+- Manage fleet (cheetahs)
+- Assign vehicles to journeys
+- Vehicle maintenance tracking
+
+ALPHA OSCAR (AO)
+- Manage Eagle Squares (airports)
+- Track flight arrivals/departures
+- Update ETAs
+
+NOVEMBER OSCAR (NO)
+- Manage Nests (hotels)
+- Room assignments
+- Check-in/check-out
+
+VICTOR OSCAR (VO)
+- Manage Theatres (venues)
+- Gate instructions
+- Arrival confirmations
+
+VIEWER
+- Read-only access
+- View journeys and status
+
+MEDIA
+- Limited access for media scheduling
+- View arrival times only
+
+================================================================================
+CALL-SIGN WORKFLOW
+================================================================================
+
+The system is built around SOP call-signs:
+
+FIRST COURSE - Departure from Nest to Theatre
+CHAPMAN - Arrival at Theatre gate
+DESSERT - Departure from Theatre to Nest
+COCKTAIL - Principal in-transit
+BLUE COCKTAIL - Mild traffic (status indicator)
+RED COCKTAIL - Heavy traffic (status indicator)
+RE-ORDER - Route change required
+BROKEN ARROW - Emergency/Distress (triggers immediate alerts)
+
+Only assigned Delta Oscars can execute call-sign actions.
+All actions are logged with timestamp and user info.
+
+================================================================================
+REAL-TIME FEATURES
+================================================================================
+
+The app uses Supabase Real-time for:
+- Live journey status updates
+- Vehicle position tracking
+- Online/offline user status
+- Instant notifications
+- Call-sign event broadcasting
+
+All users with proper permissions see updates instantly.
+
+================================================================================
+SUPPORT & TROUBLESHOOTING
+================================================================================
+
+Common Issues:
+
+1. "Failed to connect to Supabase"
+   - Check your .env.local file
+   - Verify NEXT_PUBLIC_SUPABASE_URL is correct
+   - Ensure NEXT_PUBLIC_SUPABASE_ANON_KEY is set
+
+2. "Authentication error"
+   - Clear browser cache and cookies
+   - Check if user exists in database
+   - Verify RLS policies are enabled
+
+3. "Real-time not working"
+   - Check Supabase replication settings
+   - Ensure tables have real-time enabled
+   - Verify network connection
+
+4. "Map not loading"
+   - Check browser console for errors
+   - Verify Leaflet CSS is loaded
+   - Check if location data exists
+
+For more help, check docs/ folder or contact support.
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. Read docs/SUPABASE_SETUP.md for detailed setup
+2. Run the seed data to populate test data
+3. Explore the dashboard and features
+4. Customize branding in settings
+5. Deploy to Vercel (see docs/DEPLOYMENT.md)
+
+================================================================================
