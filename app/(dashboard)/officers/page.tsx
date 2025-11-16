@@ -11,6 +11,9 @@ export default function OfficersPage() {
   const supabase = createClient()
   const [officers, setOfficers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  const pageSize = 50
 
   useEffect(() => {
     loadOfficers()
@@ -18,13 +21,18 @@ export default function OfficersPage() {
 
   const loadOfficers = async () => {
     try {
-      const { data, error } = await supabase
+      const from = page * pageSize
+      const to = from + pageSize - 1
+      
+      const { data, error, count } = await supabase
         .from('users')
-        .select('*')
+        .select('id, full_name, email, phone, role, is_active, oscar, activation_status', { count: 'exact' })
         .order('full_name')
+        .range(from, to)
 
       if (error) throw error
       setOfficers(data || [])
+      setHasMore(data ? data.length === pageSize : false)
     } catch (error) {
       console.error('Error loading officers:', error)
     } finally {

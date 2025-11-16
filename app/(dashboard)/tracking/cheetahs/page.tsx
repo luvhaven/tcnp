@@ -56,9 +56,12 @@ export default function CheetahTrackingPage() {
 
   useEffect(() => {
     loadData()
-    subscribeToLocationUpdates()
-
+    const channel = subscribeToLocationUpdates()
+    
     return () => {
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current)
       }
@@ -115,11 +118,11 @@ export default function CheetahTrackingPage() {
 
   const subscribeToLocationUpdates = () => {
     const channel = supabase
-      .channel('vehicle_locations_changes')
+      .channel('vehicle-locations')
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'vehicle_locations'
         },
@@ -128,10 +131,8 @@ export default function CheetahTrackingPage() {
         }
       )
       .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
+    
+    return channel
   }
 
   const startTracking = async (cheetahId: string) => {

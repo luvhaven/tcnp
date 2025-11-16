@@ -88,6 +88,10 @@ export default function ManageOfficersPage() {
 
   useEffect(() => {
     loadData()
+    
+    return () => {
+      // Cleanup if needed
+    }
   }, [])
 
   const loadData = async () => {
@@ -118,8 +122,9 @@ export default function ManageOfficersPage() {
       const [officersRes, titlesRes] = await Promise.all([
         supabase
           .from('users')
-          .select('*')
-          .order('full_name'),
+          .select('id, full_name, email, phone, role, is_active, oscar, activation_status, unit, current_title_id')
+          .order('full_name')
+          .limit(100),
         supabase
           .from('official_titles')
           .select('*')

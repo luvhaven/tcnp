@@ -73,7 +73,13 @@ export default function IncidentsPage() {
 
   useEffect(() => {
     loadData()
-    subscribeToIncidents()
+    const channel = subscribeToIncidents()
+    
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
+    }
   }, [])
 
   const loadData = async () => {
@@ -95,31 +101,25 @@ export default function IncidentsPage() {
                                  userData?.role === 'head_of_command'
       setCanManage(canManageIncidents)
 
-      const [incidentsRes, journeysRes] = await Promise.all([
-        supabase
-          .from('incidents')
-          .select(`
-            *,
-            journeys(
-              papas(full_name, title),
-              cheetahs(call_sign)
-            ),
-            reporter:reported_by(full_name, oscar)
-          `)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('journeys')
-          .select(`
-            id,
-            papas(full_name, title),
-            cheetahs(call_sign)
-          `)
-          .order('created_at', { ascending: false })
-          .limit(50)
-      ])
+      const { data: incidents, error: incidentsError } = await supabase
+        .from('incidents')
+        .select('id, type, severity, description, status, latitude, longitude, reported_by, program_id, created_at')
+        .order('created_at', { ascending: false })
+        .limit(100)
+      
+      if (incidents) setIncidents(incidents as Incident[])
 
-      if (incidentsRes.data) setIncidents(incidentsRes.data as Incident[])
-      if (journeysRes.data) setJourneys(journeysRes.data)
+      const { data: journeysRes } = await supabase
+        .from('journeys')
+        .select(`
+          id,
+          papas(full_name, title),
+          cheetahs(call_sign)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(50)
+      
+      if (journeysRes) setJourneys(journeysRes.data)
     } catch (error) {
       console.error('Error:', error)
       toast.error('Failed to load incidents')
@@ -130,7 +130,7 @@ export default function IncidentsPage() {
 
   const subscribeToIncidents = () => {
     const channel = supabase
-      .channel('incidents_changes')
+      .channel('incidents-channel')
       .on(
         'postgres_changes',
         {
@@ -143,10 +143,8 @@ export default function IncidentsPage() {
         }
       )
       .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
+    
+    return channel
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
