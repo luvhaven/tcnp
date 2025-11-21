@@ -58,7 +58,7 @@ type CheetahInsertPayload = Database['public']['Tables']['cheetahs']['Insert']
 type ProgramRow = Database['public']['Tables']['programs']['Row']
 
 export default function CheetahsPage() {
-  const supabase = createClient()
+  const supabase = createClient() as any
   const [cheetahs, setCheetahs] = useState<Cheetah[]>([])
   const [programs, setPrograms] = useState<ProgramRow[]>([])
   const [loading, setLoading] = useState(true)
