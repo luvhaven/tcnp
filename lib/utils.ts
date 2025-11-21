@@ -1,5 +1,10 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import {
+  TNCP_CALL_SIGN_COLORS,
+  getCallSignDefinition,
+  resolveCallSignKey
+} from '@/lib/constants/tncpCallSigns';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -98,18 +103,13 @@ export function getStatusColor(status: string): string {
 }
 
 export function getCallSignColor(callSign: string): string {
-  const callSignColors: Record<string, string> = {
-    'First Course': 'bg-blue-600 text-white hover:bg-blue-700',
-    'Chapman': 'bg-teal-600 text-white hover:bg-teal-700',
-    'Dessert': 'bg-purple-600 text-white hover:bg-purple-700',
-    'Cocktail': 'bg-indigo-600 text-white hover:bg-indigo-700',
-    'Blue Cocktail': 'bg-blue-500 text-white',
-    'Red Cocktail': 'bg-red-500 text-white',
-    'Re-order': 'bg-orange-600 text-white hover:bg-orange-700',
-    'Broken Arrow': 'bg-red-600 text-white hover:bg-red-700 broken-arrow-alert',
-  };
-  
-  return callSignColors[callSign] || 'bg-gray-600 text-white';
+  const key = resolveCallSignKey(callSign) ?? resolveCallSignKey(getCallSignDefinition(callSign)?.label ?? '')
+
+  if (key && key in TNCP_CALL_SIGN_COLORS) {
+    return TNCP_CALL_SIGN_COLORS[key]
+  }
+
+  return 'bg-gray-600 text-white'
 }
 
 export function getSeverityColor(severity: string): string {

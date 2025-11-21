@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { cn } from "@/lib/utils"
 import { 
   MapPin, 
   Plus, 
@@ -22,6 +23,47 @@ import {
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
+import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/lib/constants/tncpCallSigns"
+
+const FALLBACK_STATUS_LABELS: Record<string, string> = {
+  planned: "Planned",
+  in_progress: "In Progress",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  broken_arrow: "BROKEN ARROW",
+}
+
+const FALLBACK_STATUS_COLORS: Record<string, string> = {
+  planned: "bg-blue-500 text-white",
+  in_progress: "bg-yellow-500 text-white",
+  completed: "bg-green-500 text-white",
+  cancelled: "bg-red-500 text-white",
+  broken_arrow: "bg-red-600 text-white",
+}
+
+const toTitleCase = (value: string) =>
+  value
+    .replace(/_/g, " ")
+    .replace(/\b[a-z]/g, (char) => char.toUpperCase())
+
+const getStatusColor = (status: string): string => {
+  const key = resolveCallSignKey(status)
+
+  if (key) {
+    return TNCP_CALL_SIGN_COLORS[key]
+  }
+
+  return FALLBACK_STATUS_COLORS[status] || "bg-gray-500 text-white"
+}
+
+const getStatusIndicatorClass = (status: string): string => {
+  const classes = getStatusColor(status)
+  const background = classes.split(" ").find((className) => className.startsWith("bg-"))
+  return background || "bg-gray-500"
+}
+
+const getStatusLabel = (status: string): string =>
+  getCallSignLabel(status) || FALLBACK_STATUS_LABELS[status] || toTitleCase(status)
 
 type Journey = {
   id: string
@@ -305,7 +347,13 @@ export default function JourneysPage() {
                   }}
                 >
                   <div className="flex items-center space-x-4">
-                    <div className={`h-3 w-3 rounded-full ${getStatusColor(journey.status)} ${journey.status === 'broken_arrow' ? 'animate-pulse' : ''}`} />
+                    <div
+                    className={cn(
+                      'h-3 w-3 rounded-full',
+                      getStatusIndicatorClass(journey.status),
+                      journey.status === 'broken_arrow' && 'animate-pulse'
+                    )}
+                  />
                     <div>
                       <p className="font-medium">
                         {journey.papas?.title} {journey.papas?.full_name}
@@ -316,9 +364,12 @@ export default function JourneysPage() {
                     </div>
                   </div>
                   <div className="flex items-center space-x-4">
-                    <Badge 
-                      variant={journey.status === 'broken_arrow' ? 'destructive' : 'secondary'}
-                      className={journey.status === 'broken_arrow' ? 'animate-pulse' : ''}
+                    <Badge
+                      variant="secondary"
+                      className={cn(
+                        getStatusColor(journey.status),
+                        journey.status === 'broken_arrow' && 'animate-pulse'
+                      )}
                     >
                       {getStatusLabel(journey.status)}
                     </Badge>

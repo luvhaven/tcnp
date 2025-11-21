@@ -176,7 +176,53 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================================
--- 5. CREATE FUNCTION TO MARK MESSAGE AS READ
+-- 5. HELPER: FETCH CHAT PARTICIPANTS (SANITIZED USER PROFILE)
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION get_chat_participants()
+RETURNS TABLE (
+  id UUID,
+  full_name TEXT,
+  oscar TEXT,
+  role user_role,
+  is_online BOOLEAN,
+  last_seen TIMESTAMPTZ
+) AS $$
+  SELECT
+    u.id,
+    COALESCE(u.full_name, 'Unknown User') AS full_name,
+    COALESCE(u.oscar, '') AS oscar,
+    u.role,
+    COALESCE(u.is_online, false) AS is_online,
+    u.last_seen
+  FROM users u
+  WHERE u.is_active = true;
+$$ LANGUAGE sql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION get_chat_participants TO authenticated;
+
+-- ============================================================================
+-- 6. HELPER: UPDATE AUTHENTICATED USER PRESENCE FLAGS
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION set_user_presence(is_user_online BOOLEAN)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE users
+  SET
+    is_online = COALESCE(is_user_online, false),
+    last_seen = CASE
+      WHEN COALESCE(is_user_online, false) THEN NOW()
+      ELSE NOW()
+    END
+  WHERE id = auth.uid();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION set_user_presence TO authenticated;
+
+-- ============================================================================
+-- 7. CREATE FUNCTION TO MARK MESSAGE AS READ
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION mark_message_read(message_uuid UUID, user_uuid UUID)
@@ -190,7 +236,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================================
--- 6. CREATE FUNCTION TO EXPORT PROGRAM DATA
+-- 8. CREATE FUNCTION TO EXPORT PROGRAM DATA
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION export_program_data(program_uuid UUID)

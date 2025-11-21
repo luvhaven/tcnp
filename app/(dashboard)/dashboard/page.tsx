@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
+import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/lib/constants/tncpCallSigns"
 import { 
   Users, 
   Car, 
@@ -69,33 +71,43 @@ export default function DashboardPage() {
     }
   }
 
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      planned: 'bg-blue-500',
-      in_progress: 'bg-yellow-500',
-      first_course: 'bg-orange-500',
-      chapman: 'bg-purple-500',
-      dessert: 'bg-indigo-500',
-      completed: 'bg-green-500',
-      cancelled: 'bg-red-500',
-      broken_arrow: 'bg-red-600 animate-pulse',
-    }
-    return colors[status] || 'bg-gray-500'
+  const FALLBACK_STATUS_COLORS: Record<string, string> = {
+    planned: 'bg-blue-500 text-white',
+    in_progress: 'bg-yellow-500 text-white',
+    completed: 'bg-green-500 text-white',
+    cancelled: 'bg-red-500 text-white',
+    broken_arrow: 'bg-red-600 text-white',
   }
 
-  const getStatusLabel = (status: string) => {
-    const labels: Record<string, string> = {
-      planned: 'Planned',
-      in_progress: 'In Progress',
-      first_course: 'First Course',
-      chapman: 'Chapman',
-      dessert: 'Dessert',
-      completed: 'Completed',
-      cancelled: 'Cancelled',
-      broken_arrow: 'BROKEN ARROW',
-    }
-    return labels[status] || status
+  const FALLBACK_STATUS_LABELS: Record<string, string> = {
+    planned: 'Planned',
+    in_progress: 'In Progress',
+    completed: 'Completed',
+    cancelled: 'Cancelled',
+    broken_arrow: 'BROKEN ARROW',
   }
+
+  const toTitleCase = (value: string) =>
+    value
+      .replace(/_/g, ' ')
+      .replace(/\b[a-z]/g, (char) => char.toUpperCase())
+
+  const getStatusColor = (status: string) => {
+    const key = resolveCallSignKey(status)
+    if (key && TNCP_CALL_SIGN_COLORS[key]) {
+      return TNCP_CALL_SIGN_COLORS[key]
+    }
+
+    return FALLBACK_STATUS_COLORS[status] || 'bg-gray-500 text-white'
+  }
+
+  const getStatusIndicatorClass = (status: string) => {
+    const classes = getStatusColor(status)
+    return classes.split(' ').find((className) => className.startsWith('bg-')) || 'bg-gray-500'
+  }
+
+  const getStatusLabel = (status: string) =>
+    getCallSignLabel(status) || FALLBACK_STATUS_LABELS[status] || toTitleCase(status)
 
   if (loading) {
     return (

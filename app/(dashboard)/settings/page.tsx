@@ -24,8 +24,24 @@ export default function SettingsPage() {
     email_notifications: true,
     sms_notifications: false,
     push_notifications: true,
+    notification_sound: true,
     theme: 'light',
-    timezone: 'Africa/Lagos'
+    language: 'en',
+    timezone: 'Africa/Lagos',
+    date_format: 'DD/MM/YYYY',
+    time_format: '24h',
+    default_journey_duration: 60,
+    auto_assign_vehicles: false,
+    require_journey_approval: true,
+    session_timeout: 30,
+    require_2fa: false,
+    password_expiry_days: 90,
+    default_map_center_lat: 9.0765,
+    default_map_center_lng: 7.3986,
+    default_map_zoom: 12,
+    map_provider: 'openstreetmap',
+    location_update_interval: 30,
+    enable_offline_mode: true
   })
 
   useEffect(() => {
@@ -67,8 +83,24 @@ export default function SettingsPage() {
           email_notifications: data.email_notifications ?? true,
           sms_notifications: data.sms_notifications ?? false,
           push_notifications: data.push_notifications ?? true,
+          notification_sound: data.notification_sound ?? true,
           theme: data.theme || 'light',
-          timezone: data.timezone || 'Africa/Lagos'
+          language: data.language || 'en',
+          timezone: data.timezone || 'Africa/Lagos',
+          date_format: data.date_format || 'DD/MM/YYYY',
+          time_format: data.time_format || '24h',
+          default_journey_duration: data.default_journey_duration ?? 60,
+          auto_assign_vehicles: data.auto_assign_vehicles ?? false,
+          require_journey_approval: data.require_journey_approval ?? true,
+          session_timeout: data.session_timeout ?? 30,
+          require_2fa: data.require_2fa ?? false,
+          password_expiry_days: data.password_expiry_days ?? 90,
+          default_map_center_lat: data.default_map_center_lat ?? 9.0765,
+          default_map_center_lng: data.default_map_center_lng ?? 7.3986,
+          default_map_zoom: data.default_map_zoom ?? 12,
+          map_provider: data.map_provider || 'openstreetmap',
+          location_update_interval: data.location_update_interval ?? 30,
+          enable_offline_mode: data.enable_offline_mode ?? true
         })
       } else {
         // Create default settings if none exist
@@ -197,7 +229,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Notification Preferences</CardTitle>
-            <CardDescription>Configure notification channels</CardDescription>
+            <CardDescription>Configure notification channels and behaviour</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
@@ -216,7 +248,7 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium">SMS Notifications</p>
-                <p className="text-sm text-muted-foreground">Receive notifications via SMS</p>
+                <p className="text-sm text-muted-foreground">Receive notifications via SMS (if configured)</p>
               </div>
               <input
                 type="checkbox"
@@ -229,7 +261,7 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium">Push Notifications</p>
-                <p className="text-sm text-muted-foreground">Receive browser push notifications</p>
+                <p className="text-sm text-muted-foreground">Enable in-app and browser/device alerts</p>
               </div>
               <input
                 type="checkbox"
@@ -237,6 +269,269 @@ export default function SettingsPage() {
                 onChange={(e) => setFormData({ ...formData, push_notifications: e.target.checked })}
                 className="h-4 w-4"
               />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Notification Sound</p>
+                <p className="text-sm text-muted-foreground">Play a sound when important events occur</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={formData.notification_sound}
+                onChange={(e) => setFormData({ ...formData, notification_sound: e.target.checked })}
+                className="h-4 w-4"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Display & Localization</CardTitle>
+            <CardDescription>Control theme, language, and regional formatting</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="theme">Theme</Label>
+                <select
+                  id="theme"
+                  className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                  value={formData.theme}
+                  onChange={(e) => setFormData({ ...formData, theme: e.target.value })}
+                >
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                  <option value="auto">Auto (system)</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="language">Language</Label>
+                <select
+                  id="language"
+                  className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                  value={formData.language}
+                  onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+                >
+                  <option value="en">English</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="timezone">Timezone</Label>
+                <Input
+                  id="timezone"
+                  placeholder="Africa/Lagos"
+                  value={formData.timezone}
+                  onChange={(e) => setFormData({ ...formData, timezone: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="date_format">Date Format</Label>
+                <Input
+                  id="date_format"
+                  placeholder="DD/MM/YYYY"
+                  value={formData.date_format}
+                  onChange={(e) => setFormData({ ...formData, date_format: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="time_format">Time Format</Label>
+                <select
+                  id="time_format"
+                  className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                  value={formData.time_format}
+                  onChange={(e) => setFormData({ ...formData, time_format: e.target.value })}
+                >
+                  <option value="24h">24-hour</option>
+                  <option value="12h">12-hour</option>
+                </select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Journey & Approvals</CardTitle>
+            <CardDescription>Control journey defaults and approval rules</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="default_journey_duration">Default Journey Duration (mins)</Label>
+                <Input
+                  id="default_journey_duration"
+                  type="number"
+                  min={5}
+                  max={1440}
+                  value={formData.default_journey_duration}
+                  onChange={(e) => setFormData({ ...formData, default_journey_duration: Number(e.target.value) || 0 })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Auto-assign Vehicles</Label>
+                <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                  <span className="text-sm text-muted-foreground">Automatically suggest vehicles for new journeys</span>
+                  <input
+                    type="checkbox"
+                    checked={formData.auto_assign_vehicles}
+                    onChange={(e) => setFormData({ ...formData, auto_assign_vehicles: e.target.checked })}
+                    className="h-4 w-4"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Require Journey Approval</Label>
+                <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                  <span className="text-sm text-muted-foreground">Journeys must be approved before they start</span>
+                  <input
+                    type="checkbox"
+                    checked={formData.require_journey_approval}
+                    onChange={(e) => setFormData({ ...formData, require_journey_approval: e.target.checked })}
+                    className="h-4 w-4"
+                  />
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Security</CardTitle>
+            <CardDescription>Session and authentication policies</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="session_timeout">Session Timeout (mins)</Label>
+                <Input
+                  id="session_timeout"
+                  type="number"
+                  min={5}
+                  max={480}
+                  value={formData.session_timeout}
+                  onChange={(e) => setFormData({ ...formData, session_timeout: Number(e.target.value) || 0 })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Require 2FA</Label>
+                <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                  <span className="text-sm text-muted-foreground">Enforce two-factor authentication for users</span>
+                  <input
+                    type="checkbox"
+                    checked={formData.require_2fa}
+                    onChange={(e) => setFormData({ ...formData, require_2fa: e.target.checked })}
+                    className="h-4 w-4"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password_expiry_days">Password Expiry (days)</Label>
+                <Input
+                  id="password_expiry_days"
+                  type="number"
+                  min={0}
+                  max={365}
+                  value={formData.password_expiry_days}
+                  onChange={(e) => setFormData({ ...formData, password_expiry_days: Number(e.target.value) || 0 })}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Maps & Tracking</CardTitle>
+            <CardDescription>Map provider, default view, and tracking behaviour</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="map_provider">Map Provider</Label>
+                <select
+                  id="map_provider"
+                  className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                  value={formData.map_provider}
+                  onChange={(e) => setFormData({ ...formData, map_provider: e.target.value })}
+                >
+                  <option value="openstreetmap">OpenStreetMap</option>
+                  <option value="mapbox">Mapbox</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="default_map_center_lat">Default Center Latitude</Label>
+                <Input
+                  id="default_map_center_lat"
+                  type="number"
+                  step="0.000001"
+                  value={formData.default_map_center_lat}
+                  onChange={(e) => setFormData({ ...formData, default_map_center_lat: Number(e.target.value) })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="default_map_center_lng">Default Center Longitude</Label>
+                <Input
+                  id="default_map_center_lng"
+                  type="number"
+                  step="0.000001"
+                  value={formData.default_map_center_lng}
+                  onChange={(e) => setFormData({ ...formData, default_map_center_lng: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="default_map_zoom">Default Zoom</Label>
+                <Input
+                  id="default_map_zoom"
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={formData.default_map_zoom}
+                  onChange={(e) => setFormData({ ...formData, default_map_zoom: Number(e.target.value) || 0 })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="location_update_interval">Location Update Interval (secs)</Label>
+                <Input
+                  id="location_update_interval"
+                  type="number"
+                  min={5}
+                  max={600}
+                  value={formData.location_update_interval}
+                  onChange={(e) => setFormData({ ...formData, location_update_interval: Number(e.target.value) || 0 })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Enable Offline Mode</Label>
+                <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                  <span className="text-sm text-muted-foreground">Allow limited offline use for field officers</span>
+                  <input
+                    type="checkbox"
+                    checked={formData.enable_offline_mode}
+                    onChange={(e) => setFormData({ ...formData, enable_offline_mode: e.target.checked })}
+                    className="h-4 w-4"
+                  />
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>

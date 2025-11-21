@@ -1,5 +1,8 @@
+'use client'
+
 import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
+import { LocationTracker } from "@/components/tracking/LocationTracker"
 
 export default function DashboardLayout({
   children,
@@ -8,6 +11,7 @@ export default function DashboardLayout({
 }) {
   return (
     <div className="flex h-screen overflow-hidden">
+      <LocationTracker />
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header />

@@ -273,6 +273,24 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ============================================================================
 -- 8. OFFICIAL TITLES & ASSIGNMENTS
 -- ============================================================================
+CREATE TABLE IF NOT EXISTS nests (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  address TEXT NOT NULL,
+  city TEXT DEFAULT 'Lagos',
+  contact TEXT,
+  phone TEXT,
+  email TEXT,
+  rating INTEGER DEFAULT 5,
+  amenities TEXT,
+  room_assignments JSONB DEFAULT '[]',
+  check_in_time TIME DEFAULT '14:00',
+  check_out_time TIME DEFAULT '12:00',
+  latitude NUMERIC,
+  longitude NUMERIC,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS official_titles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   code TEXT UNIQUE NOT NULL,
@@ -598,6 +616,41 @@ CREATE POLICY "authorized_users_export"
 CREATE POLICY "users_view_exports"
   ON program_exports FOR SELECT
   USING (auth.uid() IS NOT NULL);
+
+CREATE OR REPLACE FUNCTION get_chat_participants()
+RETURNS TABLE (
+  id UUID,
+  full_name TEXT,
+  oscar TEXT,
+  role user_role,
+  is_online BOOLEAN,
+  last_seen TIMESTAMPTZ
+) AS $$
+  SELECT
+    u.id,
+    COALESCE(u.full_name, 'Unknown User') AS full_name,
+    COALESCE(u.oscar, '') AS oscar,
+    u.role,
+    COALESCE(u.is_online, false) AS is_online,
+    u.last_seen
+  FROM users u
+  WHERE u.is_active = true;
+$$ LANGUAGE sql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION get_chat_participants TO authenticated;
+
+CREATE OR REPLACE FUNCTION set_user_presence(is_user_online BOOLEAN)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE users
+  SET
+    is_online = COALESCE(is_user_online, false),
+    last_seen = NOW()
+  WHERE id = auth.uid();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION set_user_presence TO authenticated;
 
 CREATE OR REPLACE FUNCTION get_unread_message_count(user_uuid UUID)
 RETURNS INTEGER AS $$

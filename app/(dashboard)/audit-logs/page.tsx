@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -11,6 +11,9 @@ export default function AuditLogsPage() {
   const supabase = createClient()
   const [logs, setLogs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [userFilter, setUserFilter] = useState("")
+  const [actionFilter, setActionFilter] = useState("all")
+  const [entityFilter, setEntityFilter] = useState("all")
 
   useEffect(() => {
     loadLogs()
@@ -19,29 +22,19 @@ export default function AuditLogsPage() {
   const loadLogs = async () => {
     try {
       const { data, error } = await supabase
-        .from('audit_logs')
-        .select(`
-          id,
-          user_id,
-          action,
-          target_type,
-          target_id,
-          changes,
-          description,
-          created_at,
-          users:user_id(full_name, email, oscar, role)
-        `)
+        .from('audit_logs_readable')
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(200)
 
       if (error) {
-        console.error('Supabase error:', error)
+        console.error('Supabase error:', JSON.stringify(error))
         throw error
       }
       
       setLogs(data || [])
     } catch (error: any) {
-      console.error('Error loading logs:', error)
+      console.error('Error loading logs:', JSON.stringify(error))
       // Show user-friendly message
       if (error?.code === 'PGRST116') {
         console.log('No audit logs table or no data yet')
@@ -100,8 +93,8 @@ export default function AuditLogsPage() {
   const getDetailedDescription = (log: any) => {
     const action = log.action?.toLowerCase()
     const targetType = formatTargetType(log.target_type)
-    const userName = log.users?.full_name || log.users?.email || 'System'
-    const userRole = log.users?.role || ''
+    const userName = log.user_full_name || log.user_email || 'System'
+    const userRole = log.user_role || ''
     
     let description = ''
     
@@ -122,6 +115,70 @@ export default function AuditLogsPage() {
     return description
   }
 
+  const getChangeSummary = (changes: any): string | null => {
+    if (!changes || typeof changes !== 'object') return null
+
+    const before = (changes as any).before
+    const after = (changes as any).after
+
+    // Simple cases: only "after" (create) or only "before" (delete)
+    if (before && !after && typeof before === 'object') {
+      return 'Record removed'
+    }
+
+    if (!before && after && typeof after === 'object') {
+      const keys = Object.keys(after)
+      if (keys.length === 0) return 'Record created'
+      return `Record created with fields: ${keys.slice(0, 6).join(', ')}${keys.length > 6 ? '…' : ''}`
+    }
+
+    if (!before || !after || typeof before !== 'object' || typeof after !== 'object') {
+      return null
+    }
+
+    const changedKeys = new Set<string>()
+    for (const key of Object.keys(before)) {
+      if ((before as any)[key] !== (after as any)[key]) {
+        changedKeys.add(key)
+      }
+    }
+    for (const key of Object.keys(after)) {
+      if ((before as any)[key] !== (after as any)[key]) {
+        changedKeys.add(key)
+      }
+    }
+
+    if (changedKeys.size === 0) return null
+
+    const list = Array.from(changedKeys)
+    return `Fields changed: ${list.slice(0, 6).join(', ')}${list.length > 6 ? '…' : ''}`
+  }
+
+  const filteredLogs = useMemo(() => {
+    return logs.filter((log) => {
+      if (actionFilter !== "all" && log.action !== actionFilter) return false
+
+      if (entityFilter !== "all" && log.target_type !== entityFilter) return false
+
+      if (userFilter.trim().length > 0) {
+        const needle = userFilter.trim().toLowerCase()
+        const haystack = [
+          log.user_full_name,
+          log.user_email,
+          log.user_oscar,
+          log.user_id
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+
+        if (!haystack.includes(needle)) return false
+      }
+
+      return true
+    })
+  }, [logs, actionFilter, entityFilter, userFilter])
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -134,7 +191,7 @@ export default function AuditLogsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Audit Logs</h1>
-        <p className="text-muted-foreground">View system activity and changes</p>
+        <p className="text-muted-foreground">View who did what, when, and where across the system</p>
       </div>
 
       <Card>
@@ -143,7 +200,7 @@ export default function AuditLogsPage() {
             <FileText className="h-5 w-5" />
             <span>Activity Logs</span>
           </CardTitle>
-          <CardDescription>Complete audit trail of system activities (Last 100 entries)</CardDescription>
+          <CardDescription>Complete audit trail of system activities (Last 200 entries)</CardDescription>
         </CardHeader>
         <CardContent>
           {logs.length === 0 ? (
@@ -153,57 +210,160 @@ export default function AuditLogsPage() {
               <p className="text-xs text-muted-foreground">System activities will appear here</p>
             </div>
           ) : (
-            <div className="space-y-2">
-              {logs.map((log) => (
-                <div
-                  key={log.id}
-                  className="flex items-center justify-between rounded-lg border p-3 text-sm"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3">
-                      <span className="text-2xl">{getActionIcon(log.action)}</span>
-                      <div className="flex-1">
-                        <p className="font-medium text-base mb-1">
-                          {getDetailedDescription(log)}
-                        </p>
-                        <div className="flex items-center space-x-2 mb-1">
-                          <Badge variant={getActionColor(log.action) as any} className="text-xs">
-                            {log.action?.toUpperCase()}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">{formatTargetType(log.target_type)}</span>
-                        </div>
-                        <div className="flex items-center space-x-3 mt-2 text-xs text-muted-foreground">
-                          <span>
-                            <strong>By:</strong> {log.users?.full_name || log.users?.email || 'System'}
-                            {log.users?.oscar && ` (${log.users.oscar})`}
-                          </span>
-                          {log.users?.role && (
-                            <span>
-                              <strong>Role:</strong> {log.users.role.replace('_', ' ').toUpperCase()}
-                            </span>
-                          )}
-                          {log.target_id && (
-                            <span>
-                              <strong>ID:</strong> {log.target_id.substring(0, 8)}
-                            </span>
-                          )}
-                        </div>
-                        {log.changes && (
-                          <details className="text-xs text-muted-foreground mt-2">
-                            <summary className="cursor-pointer hover:text-foreground font-medium">📋 View detailed changes</summary>
-                            <pre className="mt-2 p-3 bg-muted rounded text-xs overflow-auto max-h-40 border">
-                              {JSON.stringify(log.changes, null, 2)}
-                            </pre>
-                          </details>
-                        )}
-                      </div>
+            <div className="space-y-3">
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between text-[11px] sm:text-xs">
+                  <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-col gap-1">
+                      <span className="font-semibold text-[11px] text-muted-foreground">Filter by user</span>
+                      <input
+                        className="h-7 w-44 rounded border bg-background px-2 text-[11px] outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                        placeholder="Name, email, or ID"
+                        value={userFilter}
+                        onChange={(e) => setUserFilter(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="font-semibold text-[11px] text-muted-foreground">Action</span>
+                      <select
+                        className="h-7 rounded border bg-background px-2 text-[11px] outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                        value={actionFilter}
+                        onChange={(e) => setActionFilter(e.target.value)}
+                      >
+                        <option value="all">All</option>
+                        {Array.from(new Set(logs.map((l) => l.action).filter(Boolean))).map((action: string) => (
+                          <option key={action} value={action}>
+                            {action.toUpperCase()}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="font-semibold text-[11px] text-muted-foreground">Entity</span>
+                      <select
+                        className="h-7 rounded border bg-background px-2 text-[11px] outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                        value={entityFilter}
+                        onChange={(e) => setEntityFilter(e.target.value)}
+                      >
+                        <option value="all">All</option>
+                        {Array.from(new Set(logs.map((l) => l.target_type).filter(Boolean))).map((entity: string) => (
+                          <option key={entity} value={entity}>
+                            {entity}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
-                  </span>
+                  <div className="text-[11px] text-muted-foreground text-right">
+                    <span>
+                      Showing {filteredLogs.length} of {logs.length} events
+                    </span>
+                  </div>
                 </div>
-              ))}
+              </div>
+              <div className="space-y-2">
+                {filteredLogs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="flex items-start justify-between rounded-lg border p-3 text-xs sm:text-sm bg-card/40"
+                  >
+                    <div className="flex-1 pr-4">
+                      <div className="flex items-center gap-3 mb-1">
+                        <span className="text-base sm:text-lg">
+                          {getActionIcon(log.action)}
+                        </span>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge
+                              variant={getActionColor(log.action) as any}
+                              className="text-[11px] px-2 py-0.5"
+                            >
+                              {log.action?.toUpperCase()}
+                            </Badge>
+                            <span className="text-[11px] font-medium text-muted-foreground">
+                              {formatTargetType(log.target_type)}
+                            </span>
+                            {log.target_id && (
+                              <span className="font-mono text-[11px] text-muted-foreground">
+                                #{String(log.target_id).slice(0, 8)}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs sm:text-sm font-medium text-foreground">
+                            {getDetailedDescription(log)}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                        <span>
+                          <span className="font-semibold">User:</span>{" "}
+                          {log.user_full_name || log.user_email || "System"}
+                          {log.user_oscar && ` (${log.user_oscar})`}
+                        </span>
+                        {log.user_role && (
+                          <span>
+                            <span className="font-semibold">Role:</span>{" "}
+                            {String(log.user_role).replace(/_/g, " ").toUpperCase()}
+                          </span>
+                        )}
+                        {log.target_type && (
+                          <span>
+                            <span className="font-semibold">Table:</span>{" "}
+                            <span className="font-mono text-[11px]">{log.target_type}</span>
+                          </span>
+                        )}
+                        {log.target_id && (
+                          <span>
+                            <span className="font-semibold">Record ID:</span>{" "}
+                            <span className="font-mono text-[11px] break-all">
+                              {log.target_id}
+                            </span>
+                          </span>
+                        )}
+                      </div>
+
+                      {log.changes && (
+                        (() => {
+                          const summary = getChangeSummary(log.changes)
+                          if (!summary) return null
+                          return (
+                            <div className="mt-1 text-[11px] text-muted-foreground">
+                              <span className="font-semibold">Details:</span>{" "}
+                              <span>{summary}</span>
+                            </div>
+                          )
+                        })()
+                      )}
+
+                      {log.changes && (
+                        <details className="mt-2 text-[11px] text-muted-foreground">
+                          <summary className="cursor-pointer select-none hover:text-foreground font-medium flex items-center gap-2">
+                            <span>View changes</span>
+                            <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">
+                              {"JSON"}
+                            </span>
+                          </summary>
+                          <pre className="mt-2 max-h-56 overflow-auto rounded border bg-muted p-3 text-[11px] leading-relaxed">
+                            {JSON.stringify(log.changes, null, 2)}
+                          </pre>
+                        </details>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1 text-[11px] text-muted-foreground whitespace-nowrap">
+                      {log.created_at && (
+                        <>
+                          <span>{formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}</span>
+                          <span className="text-[10px] opacity-80">
+                            {new Date(log.created_at).toLocaleString()}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </CardContent>

@@ -78,12 +78,9 @@ export default function ManageOfficersPage() {
       // Load officers and roles
       const [officersRes, rolesRes] = await Promise.all([
         supabase
-          .from('users')
-          .select(`
-            *,
-            roles(name, description)
-          `)
-          .order('full_name'),
+  .from('users')
+  .select('*')
+  .order('full_name'),
         supabase.from('roles').select('*').order('name')
       ])
 

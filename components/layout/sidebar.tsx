@@ -1,10 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { createClient } from "@/lib/supabase/client"
+import { useUnreadChatCount } from '@/hooks/useUnreadChatCount'
 import {
   LayoutDashboard,
   Users,
@@ -44,8 +47,38 @@ const navigation = [
 ]
 
 export function Sidebar() {
+  const supabase = useMemo(() => createClient(), [])
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
+  const { count: unreadCount } = useUnreadChatCount()
+  const [currentUser, setCurrentUser] = useState<string | null>(null)
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const {
+        data: { user }
+      } = await supabase.auth.getUser()
+      setCurrentUser(user?.id ?? null)
+    }
+
+    void loadUser()
+  }, [supabase])
+
+  useEffect(() => {
+    if (!currentUser) return
+
+    const channel = supabase.channel('chat-notifications')
+
+    channel
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
+        // Hook will handle updates via chat_messages subscription.
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [supabase, currentUser])
 
   return (
     <div 
@@ -99,7 +132,19 @@ export function Sidebar() {
               title={collapsed ? item.name : undefined}
             >
               <item.icon className={cn("h-5 w-5 flex-shrink-0", collapsed && "mx-auto")} />
-              {!collapsed && <span className="animate-fade-in">{item.name}</span>}
+              {!collapsed && (
+                <span className="flex items-center justify-between w-full animate-fade-in">
+                  <span>{item.name}</span>
+                  {item.name === "Team Chat" && unreadCount > 0 && (
+                    <Badge 
+                      variant="destructive" 
+                      className="ml-auto bg-red-500 text-white font-semibold animate-pulse shadow-lg"
+                    >
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </Badge>
+                  )}
+                </span>
+              )}
             </Link>
           )
         })}

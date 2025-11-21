@@ -88,27 +88,43 @@ export default function PapasPage() {
 
   const handleSubmit = async (data: any) => {
     try {
+      console.log('Papa form data received:', data)
+      
       // Convert arrays to JSONB
       const papaData = {
         ...data,
         speaking_schedule: data.speaking_schedule || [],
         personal_assistants: data.personal_assistants || []
       }
+      
+      console.log('Papa data to save:', papaData)
 
       if (editingPapa) {
-        const { error } = await supabase
+        const { data: result, error } = await supabase
           .from('papas')
           .update(papaData)
           .eq('id', editingPapa.id)
+          .select()
 
-        if (error) throw error
+        if (error) {
+          console.error('Supabase update error:', error)
+          console.error('Error details:', JSON.stringify(error, null, 2))
+          throw error
+        }
+        console.log('Papa updated:', result)
         toast.success('Papa updated successfully!')
       } else {
-        const { error } = await supabase
+        const { data: result, error } = await supabase
           .from('papas')
           .insert([papaData])
+          .select()
 
-        if (error) throw error
+        if (error) {
+          console.error('Supabase insert error:', error)
+          console.error('Error details:', JSON.stringify(error, null, 2))
+          throw error
+        }
+        console.log('Papa created:', result)
         toast.success('Papa added successfully!')
       }
 
@@ -117,7 +133,9 @@ export default function PapasPage() {
       loadPapas()
     } catch (error: any) {
       console.error('Error saving papa:', error)
-      toast.error(error.message || 'Failed to save Papa')
+      console.error('Error type:', typeof error)
+      console.error('Error keys:', Object.keys(error || {}))
+      toast.error(error.message || error.hint || error.details || 'Failed to save Papa')
     }
   }
 

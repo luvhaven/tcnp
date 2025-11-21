@@ -1,9 +1,14 @@
-import { createBrowserClient } from '@supabase/ssr';
-import type { Database } from '@/types/supabase';
+import { createBrowserClient } from '@supabase/ssr'
+import type { Database } from '@/types/supabase'
+import { getSupabaseBrowserConfig } from '@/lib/supabase/config'
+import { logSupabaseError } from '@/lib/supabase/error-utils'
 
 export function createClient() {
-  return createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  try {
+    const { url, anonKey } = getSupabaseBrowserConfig()
+    return createBrowserClient<Database>(url, anonKey)
+  } catch (error) {
+    logSupabaseError('Supabase client initialization failed', error)
+    throw error
+  }
 }

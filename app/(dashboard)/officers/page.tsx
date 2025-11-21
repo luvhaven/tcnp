@@ -26,7 +26,7 @@ export default function OfficersPage() {
       
       const { data, error, count } = await supabase
         .from('users')
-        .select('id, full_name, email, phone, role, is_active, oscar, activation_status', { count: 'exact' })
+        .select('id, full_name, email, phone, role, is_active, oscar, activation_status, is_online, last_seen', { count: 'exact' })
         .order('full_name')
         .range(from, to)
 

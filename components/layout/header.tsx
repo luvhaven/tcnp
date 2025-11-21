@@ -21,10 +21,10 @@ export function Header() {
 
       if (user) {
         const { data: profile } = await supabase
-          .from('users')
-          .select('*, roles(name)')
-          .eq('id', user.id)
-          .single()
+  .from('users')
+  .select('*')
+  .eq('id', user.id)
+  .single()
         
         setProfile(profile)
       }
@@ -48,11 +48,11 @@ export function Header() {
         <h1 className="text-xl font-semibold">
           Welcome back, {profile?.full_name || user?.email?.split('@')[0] || 'User'}
         </h1>
-        {profile?.roles?.name && (
-          <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-            {profile.roles.name}
-          </span>
-        )}
+        {profile?.role && (
+  <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+    {profile.role}
+  </span>
+)}
       </div>
 
       <div className="flex items-center space-x-4">
