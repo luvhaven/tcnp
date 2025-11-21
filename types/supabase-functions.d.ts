@@ -1,4 +1,8 @@
+import type { Database as GeneratedDatabase } from './supabase'
+
 declare module '@/types/supabase' {
+  export type Database = GeneratedDatabase
+
   export interface SupabaseFunctions {
     set_user_presence: {
       Args: {
