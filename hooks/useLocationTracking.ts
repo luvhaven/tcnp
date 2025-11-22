@@ -184,7 +184,9 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
       } = normalizePermissionError(code, rawMessage, permissionStatus)
 
       const logPrefix = severity === 'warning' ? '⚠️ Location permission warning:' : '❌ Location permission error:'
-      const logFn = severity === 'warning' ? console.warn : console.error
+      // Always log location permission issues as warnings to avoid red noise,
+      // while keeping the severity distinction in the prefix and toast behavior.
+      const logFn = console.warn
       logFn(logPrefix, friendlyMessage, geolocationError)
 
       if (recoverable) {
