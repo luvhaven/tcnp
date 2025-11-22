@@ -47,6 +47,28 @@
     --input: 217.2 32.6% 17.5%;
     --ring: 262 83% 58%;
   }
+
+  .theme-tcnp {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 30%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 30%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 30%;
+    --primary: 20 88% 54%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 30%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 20 88% 95%;
+    --accent-foreground: 0 0% 30%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 20 88% 54%;
+  }
 }
 
 @layer base {

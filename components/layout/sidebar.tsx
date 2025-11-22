@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -90,13 +91,13 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex h-16 items-center border-b px-4 justify-between">
         <Link href="/dashboard" className="flex items-center space-x-2 overflow-hidden">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground flex-shrink-0">
-            <span className="text-lg font-bold">T</span>
+          <div className="relative h-8 w-8 flex-shrink-0">
+            <Image src="/tcnp-logo.png" alt="The Covenant Nation" fill className="object-contain" priority />
           </div>
           {!collapsed && (
             <div className="flex flex-col animate-fade-in">
-              <span className="text-sm font-semibold">TCNP</span>
-              <span className="text-xs text-muted-foreground">Journey Mgmt</span>
+              <span className="text-sm font-semibold">The Covenant Nation</span>
+              <span className="text-xs text-muted-foreground">Journey Management</span>
             </div>
           )}
         </Link>

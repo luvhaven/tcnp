@@ -122,7 +122,7 @@ export default function MyAssignmentsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold">My Assignments</h1>
@@ -138,19 +138,19 @@ export default function MyAssignmentsPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
+        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
           <CardHeader className="pb-3">
             <CardDescription>Active Journeys</CardDescription>
             <CardTitle className="text-3xl">{activeJourneys.length}</CardTitle>
           </CardHeader>
         </Card>
-        <Card>
+        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
           <CardHeader className="pb-3">
             <CardDescription>Completed</CardDescription>
             <CardTitle className="text-3xl">{completedJourneys.length}</CardTitle>
           </CardHeader>
         </Card>
-        <Card>
+        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
           <CardHeader className="pb-3">
             <CardDescription>Total Assignments</CardDescription>
             <CardTitle className="text-3xl">{journeys.length}</CardTitle>
@@ -171,7 +171,7 @@ export default function MyAssignmentsPage() {
 
         <TabsContent value="active" className="space-y-4">
           {activeJourneys.length === 0 ? (
-            <Card>
+            <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <Navigation className="h-12 w-12 text-muted-foreground mb-4" />
                 <p className="text-sm text-muted-foreground">No active journeys assigned</p>
@@ -179,7 +179,7 @@ export default function MyAssignmentsPage() {
             </Card>
           ) : (
             activeJourneys.map((journey) => (
-              <div key={journey.id} className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div key={journey.id} className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-slide-up">
                 {/* Journey Status Card */}
                 <CallSignUpdater journey={journey} onUpdate={loadAssignments} />
 

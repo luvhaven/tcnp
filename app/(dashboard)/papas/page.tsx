@@ -179,7 +179,7 @@ export default function PapasPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Papas</h1>
@@ -193,7 +193,7 @@ export default function PapasPage() {
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
+        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Papas</CardTitle>
           </CardHeader>
@@ -201,7 +201,7 @@ export default function PapasPage() {
             <div className="text-2xl font-bold">{papas.length}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">With Flights</CardTitle>
           </CardHeader>
@@ -237,7 +237,7 @@ export default function PapasPage() {
               {papas.map((papa) => (
                 <div
                   key={papa.id}
-                  className="flex items-center justify-between rounded-lg border p-4"
+                  className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:-translate-y-0.5 hover:shadow-md animate-slide-up"
                 >
                   <div className="flex-1">
                     <p className="font-medium text-lg">

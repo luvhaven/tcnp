@@ -263,7 +263,7 @@ export default function JourneysPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -278,7 +278,7 @@ export default function JourneysPage() {
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Journeys</CardTitle>
           </CardHeader>
@@ -286,7 +286,7 @@ export default function JourneysPage() {
             <div className="text-2xl font-bold">{journeys.length}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Active</CardTitle>
           </CardHeader>
@@ -296,7 +296,7 @@ export default function JourneysPage() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Completed</CardTitle>
           </CardHeader>
@@ -306,7 +306,7 @@ export default function JourneysPage() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Incidents</CardTitle>
           </CardHeader>
@@ -340,7 +340,7 @@ export default function JourneysPage() {
               {journeys.map((journey) => (
                 <div
                   key={journey.id}
-                  className="flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-accent cursor-pointer"
+                  className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:-translate-y-0.5 hover:shadow-md cursor-pointer animate-slide-up"
                   onClick={() => {
                     setSelectedJourney(journey)
                     setCallSignDialogOpen(true)

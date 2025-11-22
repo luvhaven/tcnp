@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { FileText } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
+import { toast } from "sonner"
 
 export default function AuditLogsPage() {
   const supabase = createClient()
@@ -14,6 +15,7 @@ export default function AuditLogsPage() {
   const [userFilter, setUserFilter] = useState("")
   const [actionFilter, setActionFilter] = useState("all")
   const [entityFilter, setEntityFilter] = useState("all")
+  const [authorized, setAuthorized] = useState(false)
 
   useEffect(() => {
     loadLogs()
@@ -21,6 +23,26 @@ export default function AuditLogsPage() {
 
   const loadLogs = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setAuthorized(false)
+        return
+      }
+
+      const { data: userData } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+      if (!userData || !['super_admin', 'admin'].includes((userData as any).role)) {
+        setAuthorized(false)
+        toast.error('Access denied. Admin privileges required to view audit logs.')
+        return
+      }
+
+      setAuthorized(true)
+
       const { data, error } = await supabase
         .from('audit_logs_readable')
         .select('*')
@@ -178,6 +200,14 @@ export default function AuditLogsPage() {
       return true
     })
   }, [logs, actionFilter, entityFilter, userFilter])
+
+  if (!authorized) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-sm text-muted-foreground">You do not have permission to view audit logs.</p>
+      </div>
+    )
+  }
 
   if (loading) {
     return (

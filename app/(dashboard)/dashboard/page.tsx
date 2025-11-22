@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/lib/constants/tncpCallSigns"
 import { 
@@ -18,6 +19,7 @@ import {
   XCircle
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
+import { toast } from "sonner"
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -30,10 +32,63 @@ export default function DashboardPage() {
   })
   const [recentJourneys, setRecentJourneys] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [canInstall, setCanInstall] = useState(false)
+  const [installPromptEvent, setInstallPromptEvent] = useState<any | null>(null)
+  const [isInstalled, setIsInstalled] = useState(false)
 
   useEffect(() => {
     loadDashboardData()
   }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const handleBeforeInstall = (event: any) => {
+      event.preventDefault()
+      setInstallPromptEvent(event)
+      setCanInstall(true)
+    }
+
+    const handleAppInstalled = () => {
+      setIsInstalled(true)
+      setCanInstall(false)
+      setInstallPromptEvent(null)
+    }
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstall)
+    window.addEventListener("appinstalled", handleAppInstalled)
+
+    if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) {
+      setIsInstalled(true)
+    }
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch((error) => {
+        console.error("Error registering service worker:", error)
+      })
+    }
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstall)
+      window.removeEventListener("appinstalled", handleAppInstalled)
+    }
+  }, [])
+
+  const handleInstallClick = async () => {
+    if (!installPromptEvent) {
+      toast.info("Use your browser's 'Install app' option to add TCNP Journey to your device.")
+      return
+    }
+
+    installPromptEvent.prompt()
+    try {
+      await installPromptEvent.userChoice
+    } catch (error) {
+      console.error("PWA install prompt failed:", error)
+    }
+    setInstallPromptEvent(null)
+    setCanInstall(false)
+  }
 
   const loadDashboardData = async () => {
     try {
@@ -121,18 +176,25 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Overview of TCNP Journey Management System
-        </p>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Overview of TCNP Journey Management System
+          </p>
+        </div>
+        {!isInstalled && canInstall && (
+          <Button onClick={handleInstallClick} className="pwa-banner shadow-lg">
+            Download this app
+          </Button>
+        )}
       </div>
 
       {/* Stats Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Papas</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
@@ -145,7 +207,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Fleet Size</CardTitle>
             <Car className="h-4 w-4 text-muted-foreground" />
@@ -158,7 +220,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active Journeys</CardTitle>
             <MapPin className="h-4 w-4 text-muted-foreground" />
@@ -171,7 +233,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Open Incidents</CardTitle>
             <AlertTriangle className="h-4 w-4 text-muted-foreground" />
@@ -271,6 +333,21 @@ export default function DashboardPage() {
             <CardDescription>Register a new Cheetah</CardDescription>
           </CardHeader>
         </Card>
+  
+        {!isInstalled && (
+          <Card 
+            className="cursor-pointer transition-colors hover:bg-accent hover:shadow-lg"
+            onClick={handleInstallClick}
+          >
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <XCircle className="h-5 w-5 rotate-45 text-primary" />
+                <span>Download App (PWA)</span>
+              </CardTitle>
+              <CardDescription>Install TCNP Journey on this device for faster access</CardDescription>
+            </CardHeader>
+          </Card>
+        )}
       </div>
     </div>
   )

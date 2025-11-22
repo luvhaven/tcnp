@@ -9,9 +9,11 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Settings, Save } from "lucide-react"
 import { toast } from "sonner"
+import { useTheme } from "@/components/theme/ThemeProvider"
 
 export default function SettingsPage() {
-  const supabase = createClient()
+  const supabase = createClient() as any
+  const { setTheme } = useTheme()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [settings, setSettings] = useState<any>(null)
@@ -102,6 +104,7 @@ export default function SettingsPage() {
           location_update_interval: data.location_update_interval ?? 30,
           enable_offline_mode: data.enable_offline_mode ?? true
         })
+        setTheme(data.theme || 'light')
       } else {
         // Create default settings if none exist
         const { data: newSettings, error: insertError } = await supabase
@@ -299,11 +302,16 @@ export default function SettingsPage() {
                   id="theme"
                   className="h-9 w-full rounded-md border bg-background px-2 text-sm"
                   value={formData.theme}
-                  onChange={(e) => setFormData({ ...formData, theme: e.target.value })}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setFormData({ ...formData, theme: value })
+                    setTheme(value)
+                  }}
                 >
                   <option value="light">Light</option>
                   <option value="dark">Dark</option>
                   <option value="auto">Auto (system)</option>
+                  <option value="tcnp">TCNP Brand</option>
                 </select>
               </div>
 

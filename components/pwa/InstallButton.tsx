@@ -58,7 +58,13 @@ export default function InstallButton() {
   }
 
   if (isInstalled) {
-    return null
+    // When running as a PWA / installed app, show a subtle status badge in the header
+    return (
+      <span className="hidden md:inline-flex items-center gap-1 rounded-full border border-emerald-400/60 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400 animate-slide-up">
+        <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+        PWA active
+      </span>
+    )
   }
 
   if (!showInstallBanner) {
