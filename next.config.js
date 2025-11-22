@@ -31,6 +31,14 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  webpack(config) {
+    // Work around lucide-react packaging issue where TriangleAlert references
+    // a non-existent ./icons/triangle-alert.js file. Alias it to alert-triangle.
+    config.resolve = config.resolve || {}
+    config.resolve.alias = config.resolve.alias || {}
+    config.resolve.alias['./icons/triangle-alert.js'] = 'lucide-react/dist/esm/icons/alert-triangle.js'
+    return config
+  },
   async headers() {
     return [
       {
