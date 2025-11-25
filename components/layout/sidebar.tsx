@@ -47,7 +47,12 @@ const navigation = [
   { name: "Settings", href: "/settings", icon: Settings },
 ]
 
-export function Sidebar() {
+type SidebarProps = {
+  isMobile?: boolean
+  onClose?: () => void
+}
+
+export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   const supabase = useMemo(() => createClient(), [])
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
@@ -82,15 +87,19 @@ export function Sidebar() {
   }, [supabase, currentUser])
 
   return (
-    <div 
+    <div
       className={cn(
         "flex h-full flex-col border-r bg-card transition-all duration-300 ease-in-out",
-        collapsed ? "w-16" : "w-64"
+        isMobile ? "w-64" : collapsed ? "w-16" : "w-64"
       )}
     >
       {/* Logo */}
       <div className="flex h-16 items-center border-b px-4 justify-between">
-        <Link href="/dashboard" className="flex items-center space-x-2 overflow-hidden">
+        <Link
+          href="/dashboard"
+          className="flex items-center space-x-2 overflow-hidden"
+          onClick={isMobile ? onClose : undefined}
+        >
           <div className="relative h-8 w-8 flex-shrink-0">
             <Image src="/tcnp_logo.png" alt="The Covenant Nation" fill className="object-contain" priority />
           </div>
@@ -101,18 +110,29 @@ export function Sidebar() {
             </div>
           )}
         </Link>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setCollapsed(!collapsed)}
-          className="h-8 w-8 flex-shrink-0"
-        >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
+        {isMobile ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="h-8 w-8 flex-shrink-0"
+          >
             <ChevronLeft className="h-4 w-4" />
-          )}
-        </Button>
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setCollapsed(!collapsed)}
+            className="h-8 w-8 flex-shrink-0"
+          >
+            {collapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronLeft className="h-4 w-4" />
+            )}
+          </Button>
+        )}
       </div>
 
       {/* Navigation */}
@@ -123,6 +143,7 @@ export function Sidebar() {
             <Link
               key={item.name}
               href={item.href}
+              onClick={isMobile ? onClose : undefined}
               className={cn(
                 "flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 border border-transparent",
                 collapsed ? "justify-center" : "space-x-3",

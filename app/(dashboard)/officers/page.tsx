@@ -1,19 +1,14 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { UserCircle } from "lucide-react"
 
 export default function OfficersPage() {
-  const supabase = createClient()
   const [officers, setOfficers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [page, setPage] = useState(0)
-  const [hasMore, setHasMore] = useState(true)
-  const pageSize = 50
 
   useEffect(() => {
     loadOfficers()
@@ -21,18 +16,15 @@ export default function OfficersPage() {
 
   const loadOfficers = async () => {
     try {
-      const from = page * pageSize
-      const to = from + pageSize - 1
-      
-      const { data, error, count } = await supabase
-        .from('users')
-        .select('id, full_name, email, phone, role, is_active, oscar, activation_status, is_online, last_seen', { count: 'exact' })
-        .order('full_name')
-        .range(from, to)
+      const response = await fetch('/api/officers/list')
 
-      if (error) throw error
-      setOfficers(data || [])
-      setHasMore(data ? data.length === pageSize : false)
+      if (!response.ok) {
+        console.error('Failed to load officers via API:', await response.text())
+        return
+      }
+
+      const body = await response.json()
+      setOfficers(body.officers || [])
     } catch (error) {
       console.error('Error loading officers:', error)
     } finally {

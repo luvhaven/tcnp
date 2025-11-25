@@ -63,7 +63,15 @@ export async function middleware(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     if (error) {
-      console.warn('⚠️ Supabase auth.getUser in middleware failed (non-fatal):', error);
+      const message = (error as any)?.message || '';
+      const name = (error as any)?.name || '';
+      const isSessionMissing =
+        name === 'AuthSessionMissingError' ||
+        (typeof message === 'string' && message.toLowerCase().includes('auth session missing'));
+
+      if (!isSessionMissing) {
+        console.warn('⚠️ Supabase auth.getUser in middleware failed (non-fatal):', error);
+      }
     }
 
     user = data?.user ?? null;

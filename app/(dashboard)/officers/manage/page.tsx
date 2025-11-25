@@ -118,20 +118,22 @@ export default function ManageOfficersPage() {
         return
       }
 
-      // Load officers and titles
-      const [officersRes, titlesRes] = await Promise.all([
-        supabase
-          .from('users')
-          .select('id, full_name, email, phone, role, is_active, oscar, activation_status, unit, current_title_id')
-          .order('full_name')
-          .limit(100),
+      // Load officers (via admin-backed API) and titles
+      const [officersResponse, titlesRes] = await Promise.all([
+        fetch('/api/officers/list'),
         supabase
           .from('official_titles')
           .select('*')
           .order('unit, name')
       ])
 
-      if (officersRes.data) setOfficers(officersRes.data as Officer[])
+      if (!officersResponse.ok) {
+        console.error('Failed to load officers via API:', await officersResponse.text())
+      } else {
+        const body = await officersResponse.json()
+        setOfficers((body.officers || []) as Officer[])
+      }
+
       if (titlesRes.data) setTitles(titlesRes.data as OfficialTitle[])
     } catch (error) {
       console.error('Error:', error)
@@ -242,20 +244,29 @@ export default function ManageOfficersPage() {
   const handleToggleActivation = async (officer: Officer) => {
     try {
       const newStatus = officer.is_active ? 'deactivated' : 'active'
-      const { error } = await supabase
-        .from('users')
-        .update({
-          is_active: !officer.is_active,
-          activation_status: newStatus
-        } as any)
-        .eq('id', officer.id)
 
-      if (error) throw error
+      const response = await fetch('/api/officers/toggle-activation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          officerId: officer.id,
+          isActive: officer.is_active,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update officer status')
+      }
+
       toast.success(`Officer ${newStatus}!`)
       loadData()
     } catch (error: any) {
       console.error('Error:', error)
-      toast.error('Failed to update officer status')
+      toast.error(error.message || 'Failed to update officer status')
     }
   }
 

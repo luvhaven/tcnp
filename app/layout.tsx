@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import "leaflet/dist/leaflet.css";
@@ -11,7 +11,6 @@ export const metadata: Metadata = {
   title: "TCNP Journey Management",
   description: "Enterprise Journey Management System for The Covenant Nation Protocol",
   manifest: "/manifest.json",
-  themeColor: "#F26522",
   icons: {
     icon: "/icon-192.png",
     apple: "/icon-192.png",
@@ -21,6 +20,10 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "TCNP Journey",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#F26522",
 };
 
 export default function RootLayout({

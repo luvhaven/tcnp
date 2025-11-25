@@ -27,7 +27,7 @@ export default function DashboardLayout({
             onClick={() => setMobileSidebarOpen(false)}
           />
           <div className="relative z-50 h-full w-72 max-w-[80%]">
-            <Sidebar />
+            <Sidebar isMobile onClose={() => setMobileSidebarOpen(false)} />
           </div>
         </div>
       )}
