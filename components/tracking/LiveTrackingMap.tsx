@@ -74,10 +74,17 @@ const ROLE_METADATA: Record<string, { label: string; color: string }> = {
   alpha_oscar: { label: 'Alpha Oscar', color: '#6D28D9' },
   victor_oscar: { label: 'Victor Oscar', color: '#D97706' },
   november_oscar: { label: 'November Oscar', color: '#4338CA' },
+  captain: { label: 'Captain', color: '#16A34A' },
+  vice_captain: { label: 'Vice Captain', color: '#22C55E' },
+  head_tango_oscar: { label: 'Head, Tango Oscar', color: '#0EA5E9' },
   head_of_operations: { label: 'Head of Operations', color: '#DB2777' },
   head_of_command: { label: 'Head of Command', color: '#0F172A' },
+  command: { label: 'Command', color: '#1D4ED8' },
   admin: { label: 'Admin', color: '#1F2937' },
-  super_admin: { label: 'Super Admin', color: '#111827' }
+  super_admin: { label: 'Super Admin', color: '#111827' },
+  prof: { label: 'Prof', color: '#7C3AED' },
+  duchess: { label: 'Duchess', color: '#DB2777' },
+  viewer: { label: 'Viewer', color: '#6B7280' },
 }
 
 const toTitleCase = (value: string) =>
@@ -325,22 +332,44 @@ export default function LiveTrackingMap() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center space-y-3">
-          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
-          <p className="text-sm text-muted-foreground">Loading live tracking...</p>
+      <div className="space-y-4">
+        <div>
+          <div className="h-7 w-56 rounded-md skeleton" />
+          <div className="mt-2 h-4 w-80 rounded-md skeleton" />
         </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[...Array(4)].map((_, index) => (
+            <Card key={index}>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="h-3 w-20 rounded-md skeleton" />
+                    <div className="mt-2 h-6 w-10 rounded-md skeleton" />
+                  </div>
+                  <div className="h-8 w-8 rounded-full skeleton" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <Card>
+          <CardContent className="p-0">
+            <div className="h-[400px] w-full rounded-lg skeleton" />
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
   return (
-    <div className="space-y-4 p-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Live Map Tracking</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-3xl font-bold tracking-tight">Live Map Tracking</h1>
+          <p className="text-sm text-muted-foreground mt-1 max-w-xl">
             Track journeys, vehicles, and team members in real-time
           </p>
         </div>
@@ -348,7 +377,7 @@ export default function LiveTrackingMap() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card>
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
@@ -359,7 +388,7 @@ export default function LiveTrackingMap() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
@@ -370,7 +399,7 @@ export default function LiveTrackingMap() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
@@ -381,7 +410,7 @@ export default function LiveTrackingMap() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>

@@ -1,13 +1,14 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
-import { toast } from 'sonner';
+import { useState } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const supabase = createClient();
@@ -18,33 +19,48 @@ export default function LoginPage() {
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password,
       });
 
       if (error) throw error;
 
       if (data.user) {
-        toast.success('Login successful!');
-        router.push('/dashboard');
-        router.refresh();
+        toast.success("Login successful!");
+        // Replace history entry so back button does not return to login
+        router.replace("/dashboard");
       }
     } catch (error: any) {
-      toast.error(error.message || 'Failed to login');
+      console.error("Login error:", error);
+      const message =
+        (error && typeof error.message === "string" && error.message) ||
+        "Failed to login";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 p-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 via-white to-slate-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-900 p-4">
+      <div className="w-full max-w-md animate-slide-up">
+        <div className="bg-white/90 dark:bg-gray-900/80 rounded-2xl shadow-2xl border border-orange-100/60 dark:border-orange-500/20 p-8 backdrop-blur-sm">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            <div className="flex justify-center mb-4">
+              <div className="relative h-12 w-12">
+                <Image
+                  src="/tcnp_logo.png"
+                  alt="TCNP Journey Management"
+                  fill
+                  className="object-contain"
+                  priority
+                />
+              </div>
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white mb-1">
               TCNP Journey Management
             </h1>
-            <p className="text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               Sign in to your account
             </p>
           </div>
@@ -89,7 +105,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-4 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 px-4 rounded-lg shadow-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5 hover:shadow-lg"
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </button>

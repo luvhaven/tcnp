@@ -307,11 +307,33 @@ export default function IncidentsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center space-y-3">
-          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
-          <p className="text-sm text-muted-foreground">Loading incidents...</p>
+      <div className="space-y-6">
+        <div>
+          <div className="h-7 w-64 rounded-md skeleton" />
+          <div className="mt-2 h-4 w-80 rounded-md skeleton" />
         </div>
+
+        <Card>
+          <CardHeader>
+            <div className="h-5 w-40 rounded-md skeleton" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {[...Array(4)].map((_, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between gap-4 py-2 border-b last:border-b-0"
+                >
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-40 rounded-md skeleton" />
+                    <div className="h-3 w-72 rounded-md skeleton" />
+                  </div>
+                  <div className="h-5 w-20 rounded-md skeleton" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -321,8 +343,8 @@ export default function IncidentsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Incident Management</h1>
-          <p className="text-muted-foreground mt-1">Track and resolve journey incidents</p>
+          <h1 className="text-3xl font-bold tracking-tight">Incident Management</h1>
+          <p className="text-sm text-muted-foreground mt-1 max-w-xl">Track and resolve journey incidents</p>
         </div>
         <Button onClick={() => openDialog()} className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold">
           <Plus className="h-4 w-4 mr-2" />

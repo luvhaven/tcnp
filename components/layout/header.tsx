@@ -43,16 +43,16 @@ export function Header() {
   }
 
   return (
-    <header className="flex h-16 items-center justify-between border-b bg-card px-6">
+    <header className="flex h-16 items-center justify-between border-b bg-card/95 backdrop-blur-sm px-6">
       <div className="flex items-center space-x-4">
-        <h1 className="text-xl font-semibold">
+        <h1 className="text-xl font-semibold tracking-tight">
           Welcome back, {profile?.full_name || user?.email?.split('@')[0] || 'User'}
         </h1>
         {profile?.role && (
-  <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-    {profile.role}
-  </span>
-)}
+          <span className="rounded-full bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
+            {profile.role}
+          </span>
+        )}
       </div>
 
       <div className="flex items-center space-x-4">

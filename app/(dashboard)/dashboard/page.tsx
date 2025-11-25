@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+ import { useEffect, useState } from "react"
+ import dynamic from "next/dynamic"
+ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -18,10 +19,17 @@ import {
   CheckCircle,
   XCircle
 } from "lucide-react"
-import { formatDistanceToNow } from "date-fns"
-import { toast } from "sonner"
+ import { formatDistanceToNow } from "date-fns"
+ import { toast } from "sonner"
 
-export default function DashboardPage() {
+ const DashboardCharts = dynamic(
+   () => import("@/components/dashboard/DashboardCharts").then((m) => m.DashboardCharts),
+   {
+     ssr: false,
+   }
+ )
+
+ export default function DashboardPage() {
   const router = useRouter()
   const supabase = createClient()
   const [stats, setStats] = useState({
@@ -35,6 +43,7 @@ export default function DashboardPage() {
   const [canInstall, setCanInstall] = useState(false)
   const [installPromptEvent, setInstallPromptEvent] = useState<any | null>(null)
   const [isInstalled, setIsInstalled] = useState(false)
+  const [installHelpPlatform, setInstallHelpPlatform] = useState<"ios" | "android" | "desktop" | null>(null)
 
   useEffect(() => {
     loadDashboardData()
@@ -47,12 +56,14 @@ export default function DashboardPage() {
       event.preventDefault()
       setInstallPromptEvent(event)
       setCanInstall(true)
+      setInstallHelpPlatform(null)
     }
 
     const handleAppInstalled = () => {
       setIsInstalled(true)
       setCanInstall(false)
       setInstallPromptEvent(null)
+      setInstallHelpPlatform(null)
     }
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstall)
@@ -62,7 +73,9 @@ export default function DashboardPage() {
       setIsInstalled(true)
     }
 
-    if ("serviceWorker" in navigator) {
+    // Only register the service worker in production builds to avoid
+    // interfering with local development and Next.js chunk loading.
+    if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch((error) => {
         console.error("Error registering service worker:", error)
       })
@@ -76,18 +89,55 @@ export default function DashboardPage() {
 
   const handleInstallClick = async () => {
     if (!installPromptEvent) {
-      toast.info("Use your browser's 'Install app' option to add TCNP Journey to your device.")
+      if (typeof window !== "undefined") {
+        const isStandalone =
+          (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+          // @ts-ignore - iOS Safari specific
+          (window.navigator as any).standalone === true
+
+        if (isStandalone) {
+          toast.success("TCNP Journey is already installed on this device.")
+          return
+        }
+
+        const ua = window.navigator.userAgent || ""
+        let platform: "ios" | "android" | "desktop" = "desktop"
+        if (/iphone|ipad|ipod/i.test(ua)) {
+          platform = "ios"
+        } else if (/android/i.test(ua)) {
+          platform = "android"
+        }
+
+        setInstallHelpPlatform(platform)
+
+        if (platform === "ios") {
+          toast.info("Follow the quick steps above to add TCNP Journey to your home screen.")
+        } else if (platform === "android") {
+          toast.info("Follow the quick steps above to install TCNP Journey from the Chrome menu.")
+        } else {
+          toast.info("Follow the quick steps above to install TCNP Journey from your browser.")
+        }
+      }
       return
     }
 
-    installPromptEvent.prompt()
     try {
-      await installPromptEvent.userChoice
+      installPromptEvent.prompt()
+      const choice = await installPromptEvent.userChoice
+
+      if (choice && choice.outcome === "accepted") {
+        toast.success("Installing TCNP Journey… Check your home screen or app launcher.")
+        setIsInstalled(true)
+        setCanInstall(false)
+      } else {
+        toast.info("You can install TCNP Journey later from your browser's menu.")
+      }
     } catch (error) {
       console.error("PWA install prompt failed:", error)
+      toast.error("We couldn't open the install prompt. Try using your browser's install option.")
+    } finally {
+      setInstallPromptEvent(null)
     }
-    setInstallPromptEvent(null)
-    setCanInstall(false)
   }
 
   const loadDashboardData = async () => {
@@ -180,24 +230,70 @@ export default function DashboardPage() {
       {/* Page Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground max-w-xl">
             Overview of TCNP Journey Management System
           </p>
         </div>
         {!isInstalled && canInstall && (
-          <Button onClick={handleInstallClick} className="pwa-banner shadow-lg">
+          <Button
+            onClick={handleInstallClick}
+            className="pwa-banner shadow-lg rounded-full px-5 py-2 text-sm font-medium"
+          >
             Download this app
           </Button>
         )}
       </div>
 
+      {installHelpPlatform && (
+        <div className="mt-2 flex items-start justify-between gap-3 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-4 py-3 text-xs text-muted-foreground">
+          <div>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
+              Install on{" "}
+              {installHelpPlatform === "ios"
+                ? "iPhone / iPad (Safari)"
+                : installHelpPlatform === "android"
+                ? "Android (Chrome)"
+                : "Desktop browser"}
+            </p>
+            {installHelpPlatform === "ios" && (
+              <ol className="list-decimal space-y-0.5 pl-4">
+                <li>Open this page in Safari.</li>
+                <li>Tap the Share icon in the toolbar.</li>
+                <li>Select "Add to Home Screen", then tap "Add".</li>
+              </ol>
+            )}
+            {installHelpPlatform === "android" && (
+              <ol className="list-decimal space-y-0.5 pl-4">
+                <li>Open this page in Chrome.</li>
+                <li>Tap the three-dot menu and choose "Install app" or "Add to Home screen".</li>
+                <li>Confirm the install prompt.</li>
+              </ol>
+            )}
+            {installHelpPlatform === "desktop" && (
+              <ol className="list-decimal space-y-0.5 pl-4">
+                <li>Open this page in Chrome, Edge, or another modern browser.</li>
+                <li>Click the install icon in the address bar or browser menu.</li>
+                <li>Choose "Install TCNP Journey" and confirm.</li>
+              </ol>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setInstallHelpPlatform(null)}
+            className="ml-3 text-xs text-muted-foreground hover:text-foreground"
+          >
+            Close
+          </button>
+        </div>
+      )}
+
       {/* Stats Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Papas</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <Users className="h-4 w-4 text-primary/70" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalPapas}</div>
@@ -207,10 +303,10 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Fleet Size</CardTitle>
-            <Car className="h-4 w-4 text-muted-foreground" />
+            <Car className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalCheetahs}</div>
@@ -220,10 +316,10 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active Journeys</CardTitle>
-            <MapPin className="h-4 w-4 text-muted-foreground" />
+            <MapPin className="h-4 w-4 text-sky-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.activeJourneys}</div>
@@ -233,10 +329,10 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Open Incidents</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.incidents}</div>
@@ -246,6 +342,9 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Analytics Charts */}
+      <DashboardCharts />
 
       {/* Recent Journeys */}
       <Card>
@@ -265,7 +364,7 @@ export default function DashboardPage() {
               {recentJourneys.map((journey) => (
                 <div
                   key={journey.id}
-                  className="flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-accent"
+                  className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:border-primary/30 hover:shadow-sm"
                 >
                   <div className="flex items-center space-x-4">
                     <div className={`h-2 w-2 rounded-full ${getStatusColor(journey.status)}`} />
@@ -279,7 +378,10 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <div className="flex items-center space-x-4">
-                    <Badge variant={journey.status === 'broken_arrow' ? 'destructive' : 'secondary'}>
+                    <Badge
+                      variant={journey.status === 'broken_arrow' ? 'destructive' : 'secondary'}
+                      className="uppercase tracking-wide text-[11px] px-3 py-1"
+                    >
                       {getStatusLabel(journey.status)}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
@@ -296,7 +398,7 @@ export default function DashboardPage() {
       {/* Quick Actions */}
       <div className="grid gap-6 md:grid-cols-3">
         <Card 
-          className="cursor-pointer transition-colors hover:bg-accent hover:shadow-lg"
+          className="cursor-pointer transition-all hover:bg-accent hover:shadow-lg hover:-translate-y-0.5"
           onClick={() => router.push('/journeys')}
         >
           <CardHeader>
@@ -309,7 +411,7 @@ export default function DashboardPage() {
         </Card>
 
         <Card 
-          className="cursor-pointer transition-colors hover:bg-accent hover:shadow-lg"
+          className="cursor-pointer transition-all hover:bg-accent hover:shadow-lg hover:-translate-y-0.5"
           onClick={() => router.push('/papas')}
         >
           <CardHeader>
@@ -322,7 +424,7 @@ export default function DashboardPage() {
         </Card>
 
         <Card 
-          className="cursor-pointer transition-colors hover:bg-accent hover:shadow-lg"
+          className="cursor-pointer transition-all hover:bg-accent hover:shadow-lg hover:-translate-y-0.5"
           onClick={() => router.push('/cheetahs')}
         >
           <CardHeader>
@@ -336,13 +438,13 @@ export default function DashboardPage() {
   
         {!isInstalled && (
           <Card 
-            className="cursor-pointer transition-colors hover:bg-accent hover:shadow-lg"
+            className="cursor-pointer transition-all hover:bg-accent hover:shadow-lg hover:-translate-y-0.5"
             onClick={handleInstallClick}
           >
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <XCircle className="h-5 w-5 rotate-45 text-primary" />
-                <span>Download App (PWA)</span>
+                <span>Download App</span>
               </CardTitle>
               <CardDescription>Install TCNP Journey on this device for faster access</CardDescription>
             </CardHeader>

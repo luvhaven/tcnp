@@ -51,8 +51,48 @@ export default function OfficersPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      <div className="space-y-6">
+        <div>
+          <div className="h-7 w-56 rounded-md skeleton" />
+          <div className="mt-2 h-4 w-80 rounded-md skeleton" />
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-4">
+          {[...Array(4)].map((_, index) => (
+            <Card key={index}>
+              <CardHeader className="pb-2">
+                <div className="h-4 w-24 rounded-md skeleton" />
+              </CardHeader>
+              <CardContent>
+                <div className="h-6 w-12 rounded-md skeleton" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <Card>
+          <CardHeader>
+            <div className="h-5 w-32 rounded-md skeleton" />
+            <div className="mt-2 h-4 w-40 rounded-md skeleton" />
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {[...Array(6)].map((_, index) => (
+                <div
+                  key={index}
+                  className="flex items-center space-x-3 rounded-lg border p-4"
+                >
+                  <div className="h-10 w-10 rounded-full skeleton" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-32 rounded-md skeleton" />
+                    <div className="h-3 w-40 rounded-md skeleton" />
+                    <div className="h-3 w-24 rounded-md skeleton" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -60,12 +100,12 @@ export default function OfficersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Protocol Officers</h1>
-        <p className="text-muted-foreground">Manage protocol staff and assignments</p>
+        <h1 className="text-3xl font-bold tracking-tight">Protocol Officers</h1>
+        <p className="text-sm text-muted-foreground max-w-xl">Manage protocol staff and assignments</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Officers</CardTitle>
           </CardHeader>
@@ -73,7 +113,7 @@ export default function OfficersPage() {
             <div className="text-2xl font-bold">{officers.length}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Active</CardTitle>
           </CardHeader>
@@ -83,7 +123,7 @@ export default function OfficersPage() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Online</CardTitle>
           </CardHeader>
@@ -93,7 +133,7 @@ export default function OfficersPage() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Offline</CardTitle>
           </CardHeader>
@@ -124,7 +164,7 @@ export default function OfficersPage() {
               {officers.map((officer) => (
                 <div
                   key={officer.id}
-                  className="flex items-center space-x-3 rounded-lg border p-4"
+                  className="flex items-center space-x-3 rounded-lg border p-4 transition-all hover:bg-accent hover:border-primary/30 hover:shadow-sm"
                 >
                   <Avatar>
                     <AvatarImage src={officer.avatar_url} />
@@ -136,7 +176,7 @@ export default function OfficersPage() {
                     <p className="font-medium truncate">{officer.full_name || 'No name'}</p>
                     <p className="text-xs text-muted-foreground truncate">{officer.email}</p>
                     <div className="flex items-center space-x-2 mt-1">
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge variant="secondary" className="text-xs uppercase tracking-wide">
                         {officer.role || 'No role'}
                       </Badge>
                       <div className="flex items-center space-x-1">

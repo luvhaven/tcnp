@@ -349,20 +349,20 @@ export default function ManageOfficersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Manage Protocol Officers</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-3xl font-bold tracking-tight">Manage Protocol Officers</h1>
+          <p className="text-sm text-muted-foreground mt-1 max-w-xl">
             Create, edit, and manage Protocol Officers and their titles
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Protocol Officer
+        <Button onClick={() => setDialogOpen(true)} className="gap-2">
+          <Plus className="h-4 w-4" />
+          <span>Add Protocol Officer</span>
         </Button>
       </div>
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Total Officers</CardTitle>
           </CardHeader>
@@ -370,7 +370,7 @@ export default function ManageOfficersPage() {
             <div className="text-2xl font-bold">{officers.length}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Active</CardTitle>
           </CardHeader>
@@ -380,7 +380,7 @@ export default function ManageOfficersPage() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Deactivated</CardTitle>
           </CardHeader>
@@ -390,7 +390,7 @@ export default function ManageOfficersPage() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">With Titles</CardTitle>
           </CardHeader>
@@ -405,7 +405,10 @@ export default function ManageOfficersPage() {
       {/* Officers List */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {officers.map((officer) => (
-          <Card key={officer.id} className={!officer.is_active ? 'opacity-60' : ''}>
+          <Card
+            key={officer.id}
+            className={`${!officer.is_active ? 'opacity-60' : ''} transition-all hover:-translate-y-0.5 hover:shadow-md`}
+          >
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">

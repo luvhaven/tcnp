@@ -199,8 +199,35 @@ export default function CheetahTrackingPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      <div className="space-y-6">
+        <div>
+          <div className="h-7 w-56 rounded-md skeleton" />
+          <div className="mt-2 h-4 w-80 rounded-md skeleton" />
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[...Array(3)].map((_, index) => (
+            <Card key={index}>
+              <CardHeader className="pb-3">
+                <div className="h-4 w-32 rounded-md skeleton" />
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="h-4 w-40 rounded-md skeleton" />
+                <div className="h-3 w-24 rounded-md skeleton" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <Card>
+          <CardHeader>
+            <div className="h-5 w-40 rounded-md skeleton" />
+            <div className="mt-2 h-4 w-60 rounded-md skeleton" />
+          </CardHeader>
+          <CardContent>
+            <div className="aspect-video w-full rounded-lg skeleton" />
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -208,8 +235,8 @@ export default function CheetahTrackingPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Cheetah Tracking</h1>
-        <p className="text-muted-foreground">Real-time location tracking for all Cheetahs</p>
+        <h1 className="text-3xl font-bold tracking-tight">Cheetah Tracking</h1>
+        <p className="text-sm text-muted-foreground max-w-xl">Real-time location tracking for all Cheetahs</p>
       </div>
 
       {/* Instructions */}
@@ -273,7 +300,12 @@ export default function CheetahTrackingPage() {
           </Card>
         ) : (
           locations.map((location) => (
-            <Card key={location.id} className={tracking && selectedCheetah === location.cheetah_id ? 'border-green-500' : ''}>
+            <Card
+              key={location.id}
+              className={`transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-primary/40 ${
+                tracking && selectedCheetah === location.cheetah_id ? 'border-green-500' : ''
+              }`}
+            >
               <CardHeader>
                 <CardTitle className="text-lg flex items-center justify-between">
                   <span>{location.cheetahs.call_sign}</span>

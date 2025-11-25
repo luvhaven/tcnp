@@ -60,7 +60,7 @@ export function LocationTracker() {
       return
     }
 
-    console.error('❌ Location tracking error:', errorMessage)
+    console.warn('❌ Location tracking issue (non-fatal):', errorMessage)
   }, [error])
 
   // Log tracking status

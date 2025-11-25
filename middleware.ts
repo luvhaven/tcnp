@@ -54,9 +54,23 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Safely resolve current user so middleware never crashes all routes if Supabase fails
+  let user = null as any;
+  try {
+    const {
+      data,
+      error,
+    } = await supabase.auth.getUser();
+
+    if (error) {
+      console.warn('⚠️ Supabase auth.getUser in middleware failed (non-fatal):', error);
+    }
+
+    user = data?.user ?? null;
+  } catch (error) {
+    console.warn('⚠️ Unexpected error in Supabase auth middleware (treated as unauthenticated):', error);
+    user = null;
+  }
 
   // Protected routes
   if (!user && !request.nextUrl.pathname.startsWith('/login') && !request.nextUrl.pathname.startsWith('/signup')) {
@@ -68,9 +82,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
-  // Update user online status
+  // Update user online status without ever blocking the request pipeline
   if (user) {
-    await supabase.rpc('update_user_online_status', { p_is_online: true });
+    try {
+      await supabase.rpc('update_user_online_status', { p_is_online: true });
+    } catch (error) {
+      console.warn('⚠️ Failed to update user online status in middleware (non-fatal):', error);
+    }
   }
 
   return response;

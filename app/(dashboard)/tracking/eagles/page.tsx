@@ -124,17 +124,17 @@ export default function EagleTrackingPage() {
     : [0, 0]
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold">Eagle Tracking</h1>
-        <p className="text-muted-foreground mt-1">Track flights in real-time using OpenSky Network</p>
+        <h1 className="text-3xl font-bold tracking-tight">Eagle Tracking</h1>
+        <p className="text-sm text-muted-foreground mt-1 max-w-xl">Track flights in real-time using OpenSky Network</p>
       </div>
 
       {/* Search */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex gap-4">
+          <div className="flex flex-col gap-4 md:flex-row">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input

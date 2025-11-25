@@ -118,6 +118,7 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
   const lastReminderRef = useRef<number>(0)
   const isTrackingRef = useRef(false)
   const lastPermissionWarningRef = useRef<number>(0)
+  const permissionPermanentlyDeniedRef = useRef(false)
 
   // Request location permission
   const requestPermission = useCallback(async () => {
@@ -183,6 +184,10 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
         shouldNotify
       } = normalizePermissionError(code, rawMessage, permissionStatus)
 
+      if (!recoverable) {
+        permissionPermanentlyDeniedRef.current = true
+      }
+
       const logPrefix = severity === 'warning' ? '⚠️ Location permission warning:' : '❌ Location permission error:'
       // Always log location permission issues as warnings to avoid red noise,
       // while keeping the severity distinction in the prefix and toast behavior.
@@ -212,6 +217,11 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
 
   const remindEnableLocation = useCallback(
     (reason: 'denied' | 'unavailable' | 'stopped' = 'denied') => {
+      if (permissionPermanentlyDeniedRef.current) {
+        // User has explicitly denied location; avoid further toasts.
+        return
+      }
+
       const now = Date.now()
       if (now - lastReminderRef.current < 10000) {
         return
@@ -418,7 +428,14 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
   // Proactively remind when permissions change
   useEffect(() => {
     if (!enableTracking) return
-    if (permissionStatus === 'denied' || permissionStatus === 'prompt') {
+    if (permissionStatus === 'denied') {
+      // Mark as permanently denied; rely on the initial error toast only.
+      permissionPermanentlyDeniedRef.current = true
+      return
+    }
+
+    if (permissionStatus === 'prompt') {
+      // Soft reminder while permission is still undecided.
       remindEnableLocation('denied')
     }
   }, [permissionStatus, enableTracking, remindEnableLocation])

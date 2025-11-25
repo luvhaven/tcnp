@@ -12,6 +12,10 @@ export const metadata: Metadata = {
   description: "Enterprise Journey Management System for The Covenant Nation Protocol",
   manifest: "/manifest.json",
   themeColor: "#F26522",
+  icons: {
+    icon: "/favicon.png.png",
+    apple: "/icon-192.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

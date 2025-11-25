@@ -1,5 +1,5 @@
 const missingEnvMessage = (key: string) =>
-  `Missing required Supabase environment variable: ${key}. Please populate it in .env.local`
+  `Missing required Supabase environment variable: ${key}. In local development, set this in .env.local. On Vercel, add it under Project → Settings → Environment Variables.`
 
 const ensureEnvValue = (key: string, value: string | undefined | null): string => {
   if (!value || value.trim().length === 0) {

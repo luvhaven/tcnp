@@ -92,7 +92,7 @@ export function Sidebar() {
       <div className="flex h-16 items-center border-b px-4 justify-between">
         <Link href="/dashboard" className="flex items-center space-x-2 overflow-hidden">
           <div className="relative h-8 w-8 flex-shrink-0">
-            <Image src="/tcnp-logo.png" alt="The Covenant Nation" fill className="object-contain" priority />
+            <Image src="/tcnp_logo.png" alt="The Covenant Nation" fill className="object-contain" priority />
           </div>
           {!collapsed && (
             <div className="flex flex-col animate-fade-in">
@@ -124,11 +124,11 @@ export function Sidebar() {
               key={item.name}
               href={item.href}
               className={cn(
-                "flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+                "flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 border border-transparent",
                 collapsed ? "justify-center" : "space-x-3",
                 isActive
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  ? "bg-primary/10 text-primary border-primary/40 shadow-sm"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:border-primary/20"
               )}
               title={collapsed ? item.name : undefined}
             >

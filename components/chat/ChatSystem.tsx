@@ -108,6 +108,7 @@ export default function ChatSystem({ programId }: { programId?: string }) {
   const [users, setUsers] = useState<User[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [newMessage, setNewMessage] = useState('')
+  const [loadingMessages, setLoadingMessages] = useState(true)
   const [showUserList, setShowUserList] = useState(false)
   const [selectedMentions, setSelectedMentions] = useState<string[]>([])
   const [showMentionSuggestions, setShowMentionSuggestions] = useState(false)
@@ -610,6 +611,8 @@ export default function ChatSystem({ programId }: { programId?: string }) {
   }
 
   const loadMessages = async () => {
+    setLoadingMessages(true)
+
     try {
       let query = supabase
         .from('chat_messages')
@@ -645,6 +648,8 @@ export default function ChatSystem({ programId }: { programId?: string }) {
     } catch (error) {
       console.error('Error loading messages:', error)
       toast.error('Failed to load messages')
+    } finally {
+      setLoadingMessages(false)
     }
   }
 
@@ -845,6 +850,10 @@ export default function ChatSystem({ programId }: { programId?: string }) {
     return name.split(' ').map(n => n[0]).join('').toUpperCase()
   }
 
+  const getDisplayName = (meta: MessageUserMeta) => {
+    return resolveDisplayName(meta.full_name, meta.oscar, meta.role)
+  }
+
   const canViewMessage = (message: Message) => {
     if (!currentUser) return false
     
@@ -864,7 +873,7 @@ export default function ChatSystem({ programId }: { programId?: string }) {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-12rem)] min-h-[500px] max-h-[800px] bg-background rounded-lg border shadow-sm">
+    <div className="relative flex flex-col h-[calc(100vh-12rem)] min-h-[500px] max-h-[800px] bg-card/95 rounded-lg border shadow-sm backdrop-blur-sm">
       {/* Header */}
       <div className="border-b bg-muted/30 px-6 py-4">
         <div className="flex items-center justify-between">
@@ -905,7 +914,22 @@ export default function ChatSystem({ programId }: { programId?: string }) {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-muted/10">
-        {messages.filter(canViewMessage).length === 0 ? (
+        {loadingMessages ? (
+          <div className="space-y-4">
+            {[...Array(4)].map((_, index) => (
+              <div
+                key={index}
+                className="flex items-end gap-3"
+              >
+                <div className="h-9 w-9 rounded-full skeleton" />
+                <div className="flex flex-col gap-2 max-w-[70%]">
+                  <div className="h-3 w-24 rounded-md skeleton" />
+                  <div className="h-9 w-40 rounded-2xl skeleton" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : messages.filter(canViewMessage).length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-3">
             <div className="p-4 bg-muted/50 rounded-full">
               <MessageCircle className="h-8 w-8 text-muted-foreground" />
@@ -918,6 +942,7 @@ export default function ChatSystem({ programId }: { programId?: string }) {
         ) : (
           messages.filter(canViewMessage).map((message) => {
             const isOwn = message.sender_id === currentUser?.id
+            const displayName = getDisplayName(message.users)
             return (
               <div
                 key={message.id}
@@ -929,14 +954,14 @@ export default function ChatSystem({ programId }: { programId?: string }) {
                   <AvatarFallback className={`text-xs font-semibold ${
                     isOwn ? 'bg-primary text-primary-foreground' : 'bg-muted'
                   }`}>
-                    {getInitials(message.users.full_name)}
+                    {getInitials(displayName)}
                   </AvatarFallback>
                 </Avatar>
                 <div className={`flex flex-col gap-1 max-w-[70%] ${isOwn ? 'items-end' : 'items-start'}`}>
                   <div className={`flex items-center gap-2 px-1 ${
                     isOwn ? 'flex-row-reverse' : ''
                   }`}>
-                    <span className="text-xs font-semibold">{message.users.full_name}</span>
+                    <span className="text-xs font-semibold">{displayName}</span>
                     {message.is_private && (
                       <div className="flex items-center gap-1 text-amber-600">
                         <Lock className="h-3 w-3" />

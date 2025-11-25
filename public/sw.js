@@ -25,14 +25,11 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Only handle full-page navigations so we don't interfere with
+  // Next.js route chunks, assets, or API calls.
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() => caches.match(OFFLINE_URL))
     );
-    return;
   }
-
-  event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request).then((response) => response || fetch(event.request)))
-  );
 });
