@@ -1,6 +1,6 @@
 "use client"
 
-import { Bell, LogOut, User } from "lucide-react"
+import { Bell, LogOut, Menu, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { createClient } from "@/lib/supabase/client"
@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import InstallButton from "@/components/pwa/InstallButton"
 
-export function Header() {
+export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
   const router = useRouter()
   const supabase = createClient()
   const [user, setUser] = useState<any>(null)
@@ -43,16 +43,25 @@ export function Header() {
   }
 
   return (
-    <header className="flex h-16 items-center justify-between border-b bg-card/95 backdrop-blur-sm px-6">
-      <div className="flex items-center space-x-4">
-        <h1 className="text-xl font-semibold tracking-tight">
-          Welcome back, {profile?.full_name || user?.email?.split('@')[0] || 'User'}
-        </h1>
-        {profile?.role && (
-          <span className="rounded-full bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
-            {profile.role}
-          </span>
-        )}
+    <header className="flex h-16 items-center justify-between border-b bg-card/95 backdrop-blur-sm px-4 md:px-6">
+      <div className="flex items-center space-x-3">
+        <button
+          type="button"
+          onClick={onOpenSidebar}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full border bg-background text-foreground shadow-sm md:hidden"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <div className="flex flex-col">
+          <h1 className="text-base font-semibold tracking-tight md:text-xl">
+            Welcome back, {profile?.full_name || user?.email?.split('@')[0] || 'User'}
+          </h1>
+          {profile?.role && (
+            <span className="mt-0.5 inline-flex max-w-full items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary md:mt-1 md:px-3 md:py-1 md:text-[11px]">
+              {profile.role}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center space-x-4">
