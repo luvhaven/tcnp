@@ -7,7 +7,7 @@ export async function POST(request: Request) {
   try {
     const supabase = await createClient()
     const adminClient = createAdminClient()
-    const db = supabase as any
+    const db = adminClient as any
     
     // Verify the requesting user is admin or super_admin
     const { data: { user } } = await supabase.auth.getUser()
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
 
     const oscar = generateOscar(full_name, role)
 
-    // Insert into users table
+    // Insert into users table using the admin client (bypasses RLS, but route is already admin-guarded)
     const { error: userError } = await db
       .from('users')
       .insert([
