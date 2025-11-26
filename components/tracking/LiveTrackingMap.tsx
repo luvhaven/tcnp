@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { MapPin, Users, Car, Navigation, Search } from 'lucide-react'
+import { MapPin, Users, Car, Navigation, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn, getCallSignColor } from '@/lib/utils'
 import { CallSignKey, getCallSignLabel, resolveCallSignKey, TNCP_JOURNEY_PHASE_KEYS } from '@/lib/constants/tncpCallSigns'
 
@@ -127,6 +127,7 @@ export default function LiveTrackingMap() {
   const [loading, setLoading] = useState(true)
   const [mapCenter, setMapCenter] = useState<[number, number]>([6.5244, 3.3792]) // Lagos, Nigeria
   const [isClient, setIsClient] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
 
   useEffect(() => {
     setIsClient(true)
@@ -182,13 +183,22 @@ export default function LiveTrackingMap() {
   const loadUserLocations = async () => {
     try {
       const { data, error } = await (supabase as any).rpc('get_active_user_locations')
-      
-      if (error) throw error
-      
+
+      if (error) {
+        console.error('❌ Error loading user locations (Supabase RPC get_active_user_locations):', {
+          message: (error as any)?.message,
+          details: (error as any)?.details,
+          hint: (error as any)?.hint,
+          code: (error as any)?.code,
+        })
+        // Keep UI functional even if RPC fails
+        return
+      }
+
       console.log('✅ Loaded user locations:', data)
       setUserLocations(data || [])
     } catch (error) {
-      console.error('❌ Error loading user locations:', error)
+      console.error('❌ Error loading user locations (unexpected):', error)
     }
   }
 
@@ -207,12 +217,13 @@ export default function LiveTrackingMap() {
       if (error) throw error
       
       console.log('✅ Loaded journeys:', data)
-      const normalizedJourneys = (data ?? []).map((journey) => {
+      const journeysData = (data ?? []) as Journey[]
+      const normalizedJourneys: Journey[] = journeysData.map((journey) => {
         const callSignKey = resolveCallSignKey(journey.status) ?? null
         return {
           ...journey,
           callSignKey
-        } as Journey
+        }
       })
 
       setJourneys(normalizedJourneys)
@@ -332,279 +343,292 @@ export default function LiveTrackingMap() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <div>
-          <div className="h-7 w-56 rounded-md skeleton" />
-          <div className="mt-2 h-4 w-80 rounded-md skeleton" />
+      <div className="flex h-[calc(100vh-6rem)] flex-col gap-4 animate-fade-in">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <div className="h-6 w-40 rounded-md skeleton" />
+            <div className="h-4 w-64 rounded-md skeleton" />
+          </div>
         </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {[...Array(4)].map((_, index) => (
-            <Card key={index}>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="h-3 w-20 rounded-md skeleton" />
-                    <div className="mt-2 h-6 w-10 rounded-md skeleton" />
-                  </div>
-                  <div className="h-8 w-8 rounded-full skeleton" />
-                </div>
+        <div className="flex flex-1 flex-col gap-4 lg:flex-row">
+          <div className="flex-[0.72] min-w-0">
+            <Card className="h-full">
+              <CardContent className="h-full p-0">
+                <div className="h-full w-full rounded-lg skeleton" />
               </CardContent>
             </Card>
-          ))}
+          </div>
+          <div className="flex-[0.28] min-w-[260px] space-y-3">
+            {[...Array(3)].map((_, index) => (
+              <Card key={index}>
+                <CardContent className="space-y-2 pt-4">
+                  <div className="h-4 w-32 rounded-md skeleton" />
+                  <div className="h-3 w-48 rounded-md skeleton" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
-
-        <Card>
-          <CardContent className="p-0">
-            <div className="h-[400px] w-full rounded-lg skeleton" />
-          </CardContent>
-        </Card>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Live Map Tracking</h1>
-          <p className="text-sm text-muted-foreground mt-1 max-w-xl">
-            Track journeys, vehicles, and team members in real-time
+    <div className="flex h-[calc(100vh-6rem)] flex-col gap-3 animate-fade-in">
+      {/* Compact header with inline stats and sidebar toggle */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-lg font-semibold tracking-tight sm:text-xl">Live Tracking</h1>
+          <p className="mt-0.5 text-[11px] text-muted-foreground sm:text-xs">
+            Track journeys, vehicles, and team members in real time.
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] sm:text-xs">
+            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1">
+              <Navigation className="h-3 w-3 text-yellow-500" />
+              <span className="font-medium">Journeys:</span>
+              <span className="font-semibold text-yellow-600">{stats.journeys}</span>
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1">
+              <Car className="h-3 w-3 text-blue-500" />
+              <span className="font-medium">Vehicles:</span>
+              <span className="font-semibold text-blue-600">{stats.vehicles}</span>
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1">
+              <Users className="h-3 w-3 text-purple-500" />
+              <span className="font-medium">Users:</span>
+              <span className="font-semibold text-purple-600">{stats.users}</span>
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1">
+              <MapPin className="h-3 w-3 text-green-500" />
+              <span className="font-medium">Active:</span>
+              <span className="font-semibold text-green-600">{stats.active}</span>
+            </span>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="ml-1 h-8 w-8 rounded-full shadow-sm"
+            onClick={() => setSidebarOpen((open) => !open)}
+            aria-label={sidebarOpen ? 'Hide details panel' : 'Show details panel'}
+          >
+            {sidebarOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </Button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Journeys</p>
-                <p className="text-2xl font-bold text-yellow-500">{stats.journeys}</p>
+      {/* Main content: wide map + right sidebar */}
+      <div className="flex flex-1 min-h-0 flex-col gap-3 lg:flex-row">
+        {/* Map column (dominant) */}
+        <div
+          className={cn(
+            'min-w-0 transition-all duration-300 ease-in-out',
+            sidebarOpen ? 'lg:flex-[0.76] flex-1' : 'flex-1'
+          )}
+        >
+          <Card className="h-full overflow-hidden shadow-lg border border-border/80">
+            <CardHeader className="px-4 py-2 sm:px-5 sm:py-3">
+              <CardTitle className="text-sm font-medium">Live Map</CardTitle>
+            </CardHeader>
+            <CardContent className="h-full p-0">
+              <div className="h-full w-full min-h-[360px]">
+                {isClient && (
+                  <LiveTrackingLeaflet
+                    center={mapCenter}
+                    locations={filteredLocations}
+                    getUserStatus={getUserStatus}
+                    getRoleDisplay={getRoleDisplayMeta}
+                  />
+                )}
               </div>
-              <Navigation className="h-8 w-8 text-yellow-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Vehicles</p>
-                <p className="text-2xl font-bold text-blue-500">{stats.vehicles}</p>
-              </div>
-              <Car className="h-8 w-8 text-blue-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Users</p>
-                <p className="text-2xl font-bold text-purple-500">{stats.users}</p>
-              </div>
-              <Users className="h-8 w-8 text-purple-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Active</p>
-                <p className="text-2xl font-bold text-green-500">{stats.active}</p>
-              </div>
-              <MapPin className="h-8 w-8 text-green-500" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+              {filteredLocations.length === 0 && (
+                <div className="px-4 py-3 border-t text-xs text-muted-foreground bg-muted/40">
+                  No active locations yet. Ask your team to enable location services on their devices to appear on the map.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Filter by name..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
-                <option value="all">All Roles</option>
-                {roleOptions.map((role) => (
-                  <option key={role} value={role}>
-                    {formatRole(role)}
-                    {roleCounts[role] ? ` (${roleCounts[role]})` : ''}
-                  </option>
-                ))}
-              </Select>
-              <div className="flex flex-wrap gap-2">
-                {statusOptions.map((option) => (
-                  <Button
-                    key={option.key}
-                    type="button"
-                    variant={statusFilter === option.key ? 'default' : 'outline'}
-                    size="sm"
-                    className="flex items-center gap-2 whitespace-nowrap"
-                    onClick={() => setStatusFilter(option.key)}
-                  >
-                    <span>{option.label}</span>
-                    <Badge
-                      variant="secondary"
-                      className="bg-muted text-muted-foreground"
-                    >
-                      {option.count}
-                    </Badge>
-                  </Button>
-                ))}
+        {/* Sidebar column (narrow) */}
+        <div
+          className={cn(
+            'lg:flex-[0.24] w-full lg:w-auto min-w-[220px] space-y-4 overflow-y-auto pb-2 transition-all duration-300 ease-in-out',
+            sidebarOpen
+              ? 'opacity-100 translate-x-0'
+              : 'pointer-events-none opacity-0 translate-x-4 lg:max-w-0 lg:min-w-0'
+          )}
+        >
+          {/* Filters */}
+          <Card>
+            <CardContent className="pt-5">
+              <div className="flex flex-col gap-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Filter by name, OSCAR, or role"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 text-sm"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+                    <option value="all">All Roles</option>
+                    {roleOptions.map((role) => (
+                      <option key={role} value={role}>
+                        {formatRole(role)}
+                        {roleCounts[role] ? ` (${roleCounts[role]})` : ''}
+                      </option>
+                    ))}
+                  </Select>
+                  <div className="flex flex-wrap gap-2">
+                    {statusOptions.map((option) => (
+                      <Button
+                        key={option.key}
+                        type="button"
+                        variant={statusFilter === option.key ? 'default' : 'outline'}
+                        size="sm"
+                        className="flex items-center gap-2 whitespace-nowrap"
+                        onClick={() => setStatusFilter(option.key)}
+                      >
+                        <span className="text-xs sm:text-sm">{option.label}</span>
+                        <Badge
+                          variant="secondary"
+                          className="bg-muted text-muted-foreground"
+                        >
+                          {option.count}
+                        </Badge>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
 
-      {/* Recent activity */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Team Activity Snapshot</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {recentLocations.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No matching locations yet. Encourage your team to enable location services to appear here.
-            </p>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {recentLocations.map((loc) => {
-                const category = getStatusCategory(loc.updated_at)
-                const meta = STATUS_METADATA[category]
-                const accuracy = Number.isFinite(loc.accuracy)
-                  ? `±${Math.round(loc.accuracy)}m`
-                  : 'Accuracy unavailable'
+          {/* Recent activity */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Team Activity Snapshot</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {recentLocations.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No matching locations yet. Encourage your team to enable location services to appear here.
+                </p>
+              ) : (
+                <div className="grid gap-3">
+                  {recentLocations.map((loc) => {
+                    const category = getStatusCategory(loc.updated_at)
+                    const meta = STATUS_METADATA[category]
+                    const accuracy = Number.isFinite(loc.accuracy)
+                      ? `±${Math.round(loc.accuracy)}m`
+                      : 'Accuracy unavailable'
 
-                return (
-                  <div
-                    key={loc.user_id}
-                    className="rounded-lg border border-border/70 bg-card p-4 shadow-sm"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold">{loc.full_name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatRole(loc.role)}{loc.oscar ? ` • ${loc.oscar}` : ''}
+                    return (
+                      <div
+                        key={loc.user_id}
+                        className="rounded-lg border border-border/70 bg-card p-3 shadow-sm"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold truncate">{loc.full_name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatRole(loc.role)}{loc.oscar ? ` • ${loc.oscar}` : ''}
+                            </p>
+                          </div>
+                          <Badge className={`${meta.colorClass} text-white`}>{meta.label}</Badge>
+                        </div>
+                        <p className="mt-2 text-[11px] text-muted-foreground">
+                          Updated {formatDistanceToNow(new Date(loc.updated_at), { addSuffix: true })}{' '}
+                          • {accuracy}
                         </p>
                       </div>
-                      <Badge className={`${meta.colorClass} text-white`}>{meta.label}</Badge>
-                    </div>
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      Updated {formatDistanceToNow(new Date(loc.updated_at), { addSuffix: true })}{' '}
-                      • {accuracy}
-                    </p>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Map */}
-      <Card>
-        <CardContent className="p-0">
-          <div style={{ height: '600px', width: '100%' }}>
-            {isClient && (
-              <LiveTrackingLeaflet
-                center={mapCenter}
-                locations={filteredLocations}
-                getUserStatus={getUserStatus}
-                getRoleDisplay={getRoleDisplayMeta}
-              />
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Legend */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Journey Call Signs</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-4">
-            {TNCP_JOURNEY_PHASE_KEYS.map((key) => {
-              const label = getJourneyCallSignLabel(key)
-              const background = getCallSignBackgroundClass(key)
-              const count = journeyPhaseCounts[key] ?? 0
-              return (
-                <div key={key} className="flex items-center gap-2">
-                  <div className={cn('w-4 h-4 rounded-full', background)} />
-                  <span className="text-sm">
-                    {label}
-                    {count > 0 ? ` (${count})` : ''}
-                  </span>
+                    )
+                  })}
                 </div>
-              )
-            })}
-          </div>
-        </CardContent>
-      </Card>
+              )}
+            </CardContent>
+          </Card>
 
-      {roleEntries.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Active Team Roles</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-3">
-              {roleEntries.map(([role, count]) => {
-                const display = getRoleDisplayMeta(role === 'unassigned' ? null : role)
-                return (
-                  <span
-                    key={role}
-                    className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold text-white shadow-sm"
-                    style={{ backgroundColor: display.color }}
-                  >
-                    <span>{display.label}</span>
-                    <span className="rounded-full bg-black/20 px-1.5 py-0.5 text-[10px] font-medium">
-                      {count}
-                    </span>
-                  </span>
-                )
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+          {/* Legend */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Journey Call Signs</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-3">
+                {TNCP_JOURNEY_PHASE_KEYS.map((key) => {
+                  const label = getJourneyCallSignLabel(key)
+                  const background = getCallSignBackgroundClass(key)
+                  const count = journeyPhaseCounts[key] ?? 0
+                  return (
+                    <div key={key} className="flex items-center gap-2">
+                      <div className={cn('w-3 h-3 rounded-full', background)} />
+                      <span className="text-xs sm:text-sm">
+                        {label}
+                        {count > 0 ? ` (${count})` : ''}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">User Status</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full bg-green-500" />
-              <span className="text-sm">Active (&lt;2m)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full bg-orange-500" />
-              <span className="text-sm">Stale (&lt;10m)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full bg-gray-500" />
-              <span className="text-sm">Offline (&gt;10m)</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          {roleEntries.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Active Team Roles</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-3">
+                  {roleEntries.map(([role, count]) => {
+                    const display = getRoleDisplayMeta(role === 'unassigned' ? null : role)
+                    return (
+                      <span
+                        key={role}
+                        className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold text-white shadow-sm"
+                        style={{ backgroundColor: display.color }}
+                      >
+                        <span>{display.label}</span>
+                        <span className="rounded-full bg-black/20 px-1.5 py-0.5 text-[10px] font-medium">
+                          {count}
+                        </span>
+                      </span>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">User Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-green-500" />
+                  <span className="text-xs sm:text-sm">Active (&lt;2m)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-orange-500" />
+                  <span className="text-xs sm:text-sm">Stale (&lt;10m)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-gray-500" />
+                  <span className="text-xs sm:text-sm">Offline (&gt;10m)</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   )
 }

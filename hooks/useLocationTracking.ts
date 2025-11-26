@@ -119,10 +119,18 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
   const isTrackingRef = useRef(false)
   const lastPermissionWarningRef = useRef<number>(0)
   const permissionPermanentlyDeniedRef = useRef(false)
+  const fatalPermissionErrorShownRef = useRef(false)
 
   // Request location permission
   const requestPermission = useCallback(async () => {
     try {
+      // If we've already seen a fatal permission error (user blocked location),
+      // avoid spamming additional prompts or toasts.
+      if (permissionPermanentlyDeniedRef.current || fatalPermissionErrorShownRef.current) {
+        console.warn('⚠️ Skipping geolocation permission request because it was previously denied or blocked.')
+        return false
+      }
+
       if (typeof window === 'undefined') {
         return false
       }
@@ -207,7 +215,8 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
       }
 
       setError(friendlyMessage)
-      if (shouldNotify) {
+      if (shouldNotify && !fatalPermissionErrorShownRef.current) {
+        fatalPermissionErrorShownRef.current = true
         const notify = severity === 'warning' ? toast.warning : toast.error
         notify(toastMessage ?? friendlyMessage)
       }

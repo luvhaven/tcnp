@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Hotel, Plus, Edit, Trash2 } from "lucide-react"
 import { toast } from "sonner"
+import { canManageNests } from "@/lib/utils"
 
 export default function NestsPage() {
   const supabase = createClient()
@@ -26,9 +27,35 @@ export default function NestsPage() {
     rating: 5,
     amenities: ''
   })
+  const [currentRole, setCurrentRole] = useState<string | null>(null)
+
+  const canManage = currentRole ? canManageNests(currentRole) : false
 
   useEffect(() => {
-    loadData()
+    const init = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (user) {
+          const { data } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', user.id)
+            .single()
+
+          if (data?.role) {
+            setCurrentRole(data.role)
+          }
+        }
+
+        await loadData()
+      } catch (error) {
+        console.error('Error loading current user for NestsPage:', error)
+        await loadData()
+      }
+    }
+
+    init()
   }, [])
 
   const loadData = async () => {
@@ -52,6 +79,11 @@ export default function NestsPage() {
     e.preventDefault()
     
     try {
+      if (!canManage) {
+        toast.error('You are not authorized to manage hotels')
+        return
+      }
+
       if (editing) {
         const { error } = await supabase
           .from('nests')
@@ -96,6 +128,11 @@ export default function NestsPage() {
     if (!confirm('Delete this hotel?')) return
 
     try {
+      if (!canManage) {
+        toast.error('You are not authorized to manage hotels')
+        return
+      }
+
       const { error } = await supabase
         .from('nests')
         .delete()
@@ -142,10 +179,12 @@ export default function NestsPage() {
           <h1 className="text-3xl font-bold">Nests (Hotels)</h1>
           <p className="text-muted-foreground">Manage accommodation facilities</p>
         </div>
-        <Button onClick={openDialog}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Hotel
-        </Button>
+        {canManage && (
+          <Button onClick={openDialog}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Hotel
+          </Button>
+        )}
       </div>
 
       <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
@@ -161,10 +200,12 @@ export default function NestsPage() {
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Hotel className="h-12 w-12 text-muted-foreground/50" />
               <p className="mt-4 text-sm font-medium">No hotels yet</p>
-              <Button className="mt-4" onClick={openDialog}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Hotel
-              </Button>
+              {canManage && (
+                <Button className="mt-4" onClick={openDialog}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Hotel
+                </Button>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -182,14 +223,16 @@ export default function NestsPage() {
                       ⭐ {nest.rating} stars {nest.phone && `• ${nest.phone}`}
                     </p>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(nest)}>
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(nest.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
+                  {canManage && (
+                    <div className="flex items-center space-x-2">
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(nest)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(nest.id)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

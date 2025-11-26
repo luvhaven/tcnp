@@ -16,6 +16,8 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import CallSignUpdater from '@/components/journeys/CallSignUpdater'
+import { formatDistanceToNow } from 'date-fns'
+import { getCallSignLabel } from '@/lib/constants/tncpCallSigns'
 
 type Journey = {
   id: string
@@ -38,6 +40,21 @@ type Journey = {
     special_requirements?: string
     notes?: string
   }
+  cheetahs?: {
+    id: string
+    call_sign?: string
+    registration_number?: string
+    driver_name?: string
+    driver_phone?: string
+  }
+}
+
+type JourneyEvent = {
+  id: string
+  journey_id: string
+  event_type: string
+  description: string | null
+  triggered_at: string | null
 }
 
 export default function MyAssignmentsPage() {
@@ -45,6 +62,7 @@ export default function MyAssignmentsPage() {
   const [journeys, setJourneys] = useState<Journey[]>([])
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [journeyEvents, setJourneyEvents] = useState<Record<string, JourneyEvent[]>>({})
 
   useEffect(() => {
     loadCurrentUser()
@@ -85,6 +103,13 @@ export default function MyAssignmentsPage() {
             nationality,
             special_requirements,
             notes
+          ),
+          cheetahs (
+            id,
+            call_sign,
+            registration_number,
+            driver_name,
+            driver_phone
           )
         `)
         .eq('assigned_do_id', (await supabase.auth.getUser()).data.user?.id)
@@ -94,6 +119,29 @@ export default function MyAssignmentsPage() {
 
       console.log('✅ Loaded assignments:', data)
       setJourneys(data || [])
+
+      if (data && data.length > 0) {
+        const journeyIds = (data as any[]).map((j) => j.id)
+
+        const { data: events, error: eventsError } = await supabase
+          .from('journey_events')
+          .select('id, journey_id, event_type, description, triggered_at')
+          .in('journey_id', journeyIds)
+          .order('triggered_at', { ascending: false })
+
+        if (eventsError) {
+          console.error('Error loading journey events:', eventsError)
+        } else if (events) {
+          const grouped: Record<string, JourneyEvent[]> = {}
+          for (const event of events as any[]) {
+            if (!grouped[event.journey_id]) grouped[event.journey_id] = []
+            grouped[event.journey_id].push(event as JourneyEvent)
+          }
+          setJourneyEvents(grouped)
+        }
+      } else {
+        setJourneyEvents({})
+      }
     } catch (error) {
       console.error('Error loading assignments:', error)
       toast.error('Failed to load assignments')
@@ -109,6 +157,10 @@ export default function MyAssignmentsPage() {
   const completedJourneys = journeys.filter(j => 
     ['completed', 'cancelled'].includes(j.status)
   )
+
+  const getEventLabel = (eventType: string) => {
+    return getCallSignLabel(eventType) || eventType
+  }
 
   if (loading) {
     return (
@@ -179,11 +231,11 @@ export default function MyAssignmentsPage() {
             </Card>
           ) : (
             activeJourneys.map((journey) => (
-              <div key={journey.id} className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-slide-up">
+              <div key={journey.id} className="grid grid-cols-1 lg:grid-cols-3 gap-4 animate-slide-up">
                 {/* Journey Status Card */}
                 <CallSignUpdater journey={journey} onUpdate={loadAssignments} />
 
-                {/* Papa Details Card */}
+                {/* Papa & Cheetah Details Card */}
                 <Card>
                   <CardHeader>
                     <div className="flex items-center gap-3">
@@ -191,12 +243,28 @@ export default function MyAssignmentsPage() {
                         <User className="h-5 w-5 text-primary" />
                       </div>
                       <div>
-                        <CardTitle className="text-lg">Papa Details</CardTitle>
-                        <CardDescription>Full information for your assignment</CardDescription>
+                        <CardTitle className="text-lg">Papa & Cheetah Details</CardTitle>
+                        <CardDescription>Context for your current assignment</CardDescription>
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {journey.cheetahs && (
+                      <div className="p-3 bg-muted/50 rounded-lg text-xs">
+                        <p className="font-semibold mb-1">Assigned Cheetah</p>
+                        <p className="text-sm">
+                          {journey.cheetahs.call_sign || 'Unassigned'}
+                          {journey.cheetahs.registration_number && ` • ${journey.cheetahs.registration_number}`}
+                        </p>
+                        {(journey.cheetahs.driver_name || journey.cheetahs.driver_phone) && (
+                          <p className="mt-1 text-muted-foreground">
+                            Driver: {journey.cheetahs.driver_name || 'N/A'}
+                            {journey.cheetahs.driver_phone && ` • ${journey.cheetahs.driver_phone}`}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                     {journey.papas ? (
                       <>
                         <div className="space-y-3">
@@ -253,6 +321,35 @@ export default function MyAssignmentsPage() {
                       </>
                     ) : (
                       <p className="text-sm text-muted-foreground">Papa details not available</p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Call-Sign History Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Call-Sign History</CardTitle>
+                    <CardDescription>Recent updates you've made on this journey</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    {journeyEvents[journey.id]?.length ? (
+                      journeyEvents[journey.id].slice(0, 3).map((event) => (
+                        <div key={event.id} className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-medium">{getEventLabel(event.event_type)}</p>
+                            {event.description && (
+                              <p className="text-xs text-muted-foreground">{event.description}</p>
+                            )}
+                          </div>
+                          {event.triggered_at && (
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {formatDistanceToNow(new Date(event.triggered_at), { addSuffix: true })}
+                            </span>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-muted-foreground">No call-sign history yet for this journey.</p>
                     )}
                   </CardContent>
                 </Card>

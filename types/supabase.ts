@@ -994,6 +994,7 @@ export type Database = {
           is_private: boolean | null
           mentions: Json | null
           program_id: string | null
+          papa_id: string | null
           read_by: Json | null
           reply_to_id: string | null
           sender_id: string
@@ -1008,6 +1009,7 @@ export type Database = {
           is_private?: boolean | null
           mentions?: Json | null
           program_id?: string | null
+          papa_id?: string | null
           read_by?: Json | null
           reply_to_id?: string | null
           sender_id: string
@@ -1022,6 +1024,7 @@ export type Database = {
           is_private?: boolean | null
           mentions?: Json | null
           program_id?: string | null
+          papa_id?: string | null
           read_by?: Json | null
           reply_to_id?: string | null
           sender_id?: string
@@ -1033,6 +1036,13 @@ export type Database = {
             columns: ["program_id"]
             isOneToOne: false
             referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_papa_id_fkey"
+            columns: ["papa_id"]
+            isOneToOne: false
+            referencedRelation: "papas"
             referencedColumns: ["id"]
           },
           {

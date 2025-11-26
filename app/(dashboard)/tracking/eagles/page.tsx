@@ -17,6 +17,7 @@ import {
   type FlightState
 } from '@/lib/opensky-api'
 import { createClient } from '@/lib/supabase/client'
+import { canManageEagles } from '@/lib/utils'
 import dynamic from 'next/dynamic'
 
 const MapContainer = dynamic(
@@ -43,6 +44,10 @@ export default function EagleTrackingPage() {
   const [selectedFlight, setSelectedFlight] = useState<FlightState | null>(null)
   const [loading, setLoading] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(false)
+  const [currentRole, setCurrentRole] = useState<string | null>(null)
+  const [roleChecked, setRoleChecked] = useState(false)
+
+  const canManage = currentRole ? canManageEagles(currentRole) : false
 
   useEffect(() => {
     if (!autoRefresh || !selectedFlight) return
@@ -54,7 +59,37 @@ export default function EagleTrackingPage() {
     return () => clearInterval(interval)
   }, [autoRefresh, selectedFlight])
 
+  useEffect(() => {
+    const loadRole = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', user.id)
+            .single()
+
+          if (data?.role) {
+            setCurrentRole(data.role)
+          }
+        }
+      } catch (error) {
+        console.error('Error loading current user for EagleTrackingPage:', error)
+      } finally {
+        setRoleChecked(true)
+      }
+    }
+
+    loadRole()
+  }, [])
+
   const handleSearch = async () => {
+    if (!canManage) {
+      toast.error('You are not authorized to manage Eagle tracking')
+      return
+    }
+
     if (!searchTerm.trim()) {
       toast.error('Please enter a flight ID or callsign')
       return
@@ -104,7 +139,7 @@ export default function EagleTrackingPage() {
   }
 
   const refreshSelectedFlight = async () => {
-    if (!selectedFlight) return
+    if (!selectedFlight || !canManage) return
 
     try {
       const flight = await getFlightByIcao24(selectedFlight.icao24)
@@ -123,51 +158,45 @@ export default function EagleTrackingPage() {
     ? [selectedFlight.latitude, selectedFlight.longitude]
     : [0, 0]
 
+  if (!roleChecked) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Eagle Tracking</h1>
         <p className="text-sm text-muted-foreground mt-1 max-w-xl">Track flights in real-time using OpenSky Network</p>
       </div>
 
-      {/* Search */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col gap-4 md:flex-row">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Enter flight callsign or ICAO24 (e.g., AAL123 or a1b2c3)"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                className="pl-10"
-              />
-            </div>
-            <Button onClick={handleSearch} disabled={loading}>
-              {loading ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Searching...
-                </>
-              ) : (
-                <>
-                  <Search className="h-4 w-4 mr-2" />
-                  Search
-                </>
-              )}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Results */}
-      {selectedFlight && (
+      {!canManage ? (
+        <Card>
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            Access to Eagle tracking is restricted to Alpha Oscars and admin leadership.
+          </CardContent>
+        </Card>
+      ) : (
         <>
-          {/* Flight Info */}
+          {/* Search */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex flex-col gap-4 md:flex-row">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Enter flight callsign or ICAO24 (e.g., AAL123 or a1b2c3)"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                    className="pl-10"
+                  />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
+            <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Callsign</CardTitle>
               </CardHeader>
@@ -181,7 +210,7 @@ export default function EagleTrackingPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Altitude</CardTitle>
               </CardHeader>
@@ -195,7 +224,7 @@ export default function EagleTrackingPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Speed</CardTitle>
               </CardHeader>
@@ -209,7 +238,7 @@ export default function EagleTrackingPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Origin</CardTitle>
               </CardHeader>
@@ -225,7 +254,7 @@ export default function EagleTrackingPage() {
           </div>
 
           {/* Detailed Info */}
-          <Card>
+          <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Flight Details</CardTitle>
@@ -285,7 +314,7 @@ export default function EagleTrackingPage() {
 
           {/* Map */}
           {selectedFlight.latitude && selectedFlight.longitude && (
-            <Card>
+            <Card className="overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
               <CardHeader>
                 <CardTitle>Flight Position</CardTitle>
               </CardHeader>

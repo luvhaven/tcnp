@@ -43,7 +43,7 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
   }
 
   return (
-    <header className="flex h-16 items-center justify-between border-b bg-card/95 backdrop-blur-sm px-4 md:px-6">
+    <header className="flex h-16 items-center justify-between border-b bg-gradient-to-r from-background/95 via-card/95 to-background/95 backdrop-blur-md px-4 md:px-6 shadow-sm">
       <div className="flex items-center space-x-3">
         <button
           type="button"
@@ -86,8 +86,12 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
             </AvatarFallback>
           </Avatar>
           <div className="hidden md:block">
-            <p className="text-sm font-medium">{profile?.full_name || 'User'}</p>
-            <p className="text-xs text-muted-foreground">{user?.email}</p>
+            <p className="text-sm font-medium truncate">{user?.email}</p>
+            {profile?.role && (
+              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">
+                {profile.role}
+              </p>
+            )}
           </div>
         </div>
 

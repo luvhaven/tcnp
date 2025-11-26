@@ -227,7 +227,7 @@ export function generateColor(str: string): string {
 }
 
 export function isAdmin(role: string): boolean {
-  return ['super_admin', 'admin', 'captain', 'head_of_command'].includes(role);
+  return ['super_admin', 'admin', 'captain', 'head_of_command', 'head_of_operations'].includes(role);
 }
 
 export function canManageJourney(role: string, isAssignedDO: boolean): boolean {
@@ -237,9 +237,27 @@ export function canManageJourney(role: string, isAssignedDO: boolean): boolean {
 }
 
 export function canManageFleet(role: string): boolean {
-  return ['super_admin', 'admin', 'tango_oscar', 'head_tango_oscar'].includes(role);
+  if (isAdmin(role)) return true;
+  return ['tango_oscar', 'head_tango_oscar'].includes(role);
 }
 
 export function canManageUsers(role: string): boolean {
-  return ['super_admin', 'admin', 'captain', 'head_of_command'].includes(role);
+  return isAdmin(role);
+}
+
+export function canManagePapas(role: string): boolean {
+  // Papas are primarily managed by admin-level roles
+  return isAdmin(role);
+}
+
+export function canManageNests(role: string): boolean {
+  // Nests (hotels) are managed by admins and November Oscars
+  if (isAdmin(role)) return true;
+  return role === 'november_oscar';
+}
+
+export function canManageEagles(role: string): boolean {
+  // Eagle Squares and flight tracking are managed by admins and Alpha Oscars
+  if (isAdmin(role)) return true;
+  return role === 'alpha_oscar';
 }

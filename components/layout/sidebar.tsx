@@ -89,7 +89,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   return (
     <div
       className={cn(
-        "flex h-full flex-col border-r bg-card transition-all duration-300 ease-in-out",
+        "flex h-full flex-col border-r border-border/60 bg-gradient-to-b from-background via-card/95 to-background/95 shadow-lg transition-all duration-300 ease-in-out",
         isMobile ? "w-64" : collapsed ? "w-16" : "w-64"
       )}
     >
@@ -145,11 +145,11 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
               href={item.href}
               onClick={isMobile ? onClose : undefined}
               className={cn(
-                "flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 border border-transparent",
+                "flex items-center rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 border border-transparent",
                 collapsed ? "justify-center" : "space-x-3",
                 isActive
-                  ? "bg-primary/10 text-primary border-primary/40 shadow-sm"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:border-primary/20"
+                  ? "bg-gradient-to-r from-primary/20 via-primary/10 to-primary/5 text-primary border-primary/50 shadow-md"
+                  : "text-muted-foreground hover:bg-accent/70 hover:text-accent-foreground hover:border-primary/30"
               )}
               title={collapsed ? item.name : undefined}
             >

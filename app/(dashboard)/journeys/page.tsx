@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { cn } from "@/lib/utils"
+import { cn, canManageJourney, isAdmin } from "@/lib/utils"
 import { 
   MapPin, 
   Plus, 
@@ -52,7 +52,6 @@ const getStatusColor = (status: string): string => {
   if (key) {
     return TNCP_CALL_SIGN_COLORS[key]
   }
-
   return FALLBACK_STATUS_COLORS[status] || "bg-gray-500 text-white"
 }
 
@@ -70,6 +69,7 @@ type Journey = {
   papa_id: string
   cheetah_id: string
   status: string
+  assigned_do_id?: string | null
   origin: string
   destination: string
   scheduled_departure: string
@@ -91,6 +91,8 @@ export default function JourneysPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [callSignDialogOpen, setCallSignDialogOpen] = useState(false)
   const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [currentRole, setCurrentRole] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     papa_id: '',
     cheetah_id: '',
@@ -101,8 +103,34 @@ export default function JourneysPage() {
     notes: ''
   })
 
+  const canCreateJourney = currentRole ? isAdmin(currentRole) : false
+
   useEffect(() => {
-    loadData()
+    const init = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (user) {
+          setCurrentUserId(user.id)
+
+          const { data: userRow, error } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', user.id)
+            .single<any>()
+
+          if (!error && userRow?.role) {
+            setCurrentRole(userRow.role)
+          }
+        }
+      } catch (error) {
+        console.error('Error loading current user for JourneysPage:', error)
+      } finally {
+        await loadData()
+      }
+    }
+
+    init()
     
     // Subscribe to real-time updates
     const channel = supabase
@@ -146,8 +174,13 @@ export default function JourneysPage() {
   const handleCreateJourney = async (e: React.FormEvent) => {
     e.preventDefault()
     
+    if (!canCreateJourney) {
+      toast.error('You are not authorized to create journeys')
+      return
+    }
+    
     try {
-      const { error } = await supabase.from('journeys').insert([
+      const { error } = await (supabase as any).from('journeys').insert([
         {
           ...formData,
           status: 'planned'
@@ -174,31 +207,32 @@ export default function JourneysPage() {
     }
   }
 
-  const handleCallSign = async (journeyId: string, newStatus: string) => {
+  const handleCallSign = async (journey: Journey, newStatus: string) => {
     try {
-      const updates: any = { status: newStatus }
-      
-      // Set actual times based on call-sign
-      if (newStatus === 'first_course' || newStatus === 'in_progress') {
-        updates.actual_departure = new Date().toISOString()
-      } else if (newStatus === 'completed') {
-        updates.actual_arrival = new Date().toISOString()
+      const canUpdate = currentRole && currentUserId
+        ? canManageJourney(currentRole, journey.assigned_do_id === currentUserId)
+        : false
+
+      if (!canUpdate) {
+        toast.error('You are not authorized to update this journey')
+        return
       }
 
-      const { error } = await supabase
-        .from('journeys')
-        .update(updates)
-        .eq('id', journeyId)
+      const { data, error } = await (supabase as any).rpc('update_journey_call_sign', {
+        journey_uuid: journey.id,
+        new_status: newStatus
+      })
 
-      if (error) throw error
+      if (error) {
+        throw error
+      }
 
-      // Create journey event
-      await supabase.from('journey_events').insert([
+      await (supabase as any).from('journey_events').insert([
         {
-          journey_id: journeyId,
+          journey_id: journey.id,
           event_type: newStatus,
           description: `Journey status updated to ${newStatus}`,
-          location: selectedJourney?.origin
+          triggered_at: new Date().toISOString(),
         }
       ])
 
@@ -251,6 +285,10 @@ export default function JourneysPage() {
     return workflow[currentStatus] || []
   }
 
+  const canUpdateSelectedJourney = selectedJourney && currentRole && currentUserId
+    ? canManageJourney(currentRole, selectedJourney.assigned_do_id === currentUserId)
+    : false
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -270,10 +308,12 @@ export default function JourneysPage() {
           <h1 className="text-3xl font-bold">Journeys</h1>
           <p className="text-muted-foreground">Manage all Papa journeys and call-signs</p>
         </div>
-        <Button onClick={() => setCreateDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Journey
-        </Button>
+        {canCreateJourney && (
+          <Button onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Journey
+          </Button>
+        )}
       </div>
 
       {/* Stats */}
@@ -330,10 +370,12 @@ export default function JourneysPage() {
               <MapPin className="h-12 w-12 text-muted-foreground/50" />
               <p className="mt-4 text-sm font-medium">No journeys yet</p>
               <p className="text-xs text-muted-foreground">Create your first journey to get started</p>
-              <Button className="mt-4" onClick={() => setCreateDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Journey
-              </Button>
+              {canCreateJourney && (
+                <Button className="mt-4" onClick={() => setCreateDialogOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Journey
+                </Button>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -505,7 +547,7 @@ export default function JourneysPage() {
             </DialogDescription>
           </DialogHeader>
           
-          {selectedJourney && (
+          {selectedJourney && canUpdateSelectedJourney && (
             <div className="space-y-4 mt-4">
               <div className="rounded-lg border p-4 space-y-2">
                 <div className="flex items-center justify-between">
@@ -526,7 +568,7 @@ export default function JourneysPage() {
                       key={callSign}
                       variant={callSign === 'broken_arrow' ? 'destructive' : 'outline'}
                       className="justify-start"
-                      onClick={() => handleCallSign(selectedJourney.id, callSign)}
+                      onClick={() => handleCallSign(selectedJourney, callSign)}
                     >
                       {callSign === 'first_course' && <Navigation className="mr-2 h-4 w-4" />}
                       {callSign === 'chapman' && <Flag className="mr-2 h-4 w-4" />}
@@ -539,6 +581,11 @@ export default function JourneysPage() {
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+          {selectedJourney && !canUpdateSelectedJourney && (
+            <div className="mt-4 text-sm text-muted-foreground">
+              You do not have permission to execute call-signs for this journey.
             </div>
           )}
         </DialogContent>

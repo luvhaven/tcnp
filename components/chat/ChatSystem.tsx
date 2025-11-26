@@ -102,7 +102,7 @@ type ChatParticipant = {
   last_seen: string | null
 }
 
-export default function ChatSystem({ programId }: { programId?: string }) {
+export default function ChatSystem({ programId, papaId }: { programId?: string; papaId?: string }) {
   const supabase = useMemo(() => createClient(), [])
   const [messages, setMessages] = useState<Message[]>([])
   const [users, setUsers] = useState<User[]>([])
@@ -123,6 +123,8 @@ export default function ChatSystem({ programId }: { programId?: string }) {
   const markedMessagesRef = useRef<Set<string>>(new Set())
   const missingUsersRef = useRef<Set<string>>(new Set())
   const onlineUserIdsRef = useRef<string[]>([])
+  const [canChatInProgram, setCanChatInProgram] = useState(true)
+  const [programAccessChecked, setProgramAccessChecked] = useState(false)
 
   const userDirectory = useMemo<Record<string, MessageUserMeta>>(() => {
     const directory: Record<string, MessageUserMeta> = {}
@@ -165,7 +167,7 @@ export default function ChatSystem({ programId }: { programId?: string }) {
       }
 
       if (data) {
-        setUsers((prev) => {
+        setUsers((prev: User[]) => {
           if (prev.some((user) => user.id === userId)) {
             return prev.map((user) =>
               user.id === userId
@@ -198,6 +200,52 @@ export default function ChatSystem({ programId }: { programId?: string }) {
       missingUsersRef.current.delete(userId)
     }
   }, [supabase, userDirectory])
+
+  const evaluateProgramAccess = useCallback(async () => {
+    // Global chat or no specific program: allow by default
+    if (!programId) {
+      setCanChatInProgram(true)
+      setProgramAccessChecked(true)
+      return
+    }
+
+    if (!currentUser?.id) {
+      setCanChatInProgram(false)
+      setProgramAccessChecked(true)
+      return
+    }
+
+    if (['super_admin', 'admin'].includes(currentUser.role)) {
+      setCanChatInProgram(true)
+      setProgramAccessChecked(true)
+      return
+    }
+
+    try {
+      setProgramAccessChecked(false)
+      const { data, error } = await (supabase as any)
+        .from('current_title_assignments')
+        .select('program_id')
+        .eq('user_id', currentUser.id)
+        .eq('program_id', programId)
+
+      if (error) {
+        console.error('❌ Error checking program chat access:', error)
+        setCanChatInProgram(false)
+      } else {
+        setCanChatInProgram(Array.isArray(data) && data.length > 0)
+      }
+    } catch (error) {
+      console.error('❌ Unexpected error checking program chat access:', error)
+      setCanChatInProgram(false)
+    } finally {
+      setProgramAccessChecked(true)
+    }
+  }, [supabase, programId, currentUser?.id, currentUser?.role])
+
+  useEffect(() => {
+    void evaluateProgramAccess()
+  }, [evaluateProgramAccess])
 
   const playNotification = useCallback(() => {
     try {
@@ -341,7 +389,7 @@ export default function ChatSystem({ programId }: { programId?: string }) {
       const participants = (data ?? []) as ChatParticipant[]
       const onlineIds = onlineUserIdsRef.current
 
-      setUsers((prev) => {
+      setUsers((prev: User[]) => {
         const merged = new Map<string, User>()
         prev.forEach((user) => {
           merged.set(user.id, user)
@@ -378,15 +426,38 @@ export default function ChatSystem({ programId }: { programId?: string }) {
     
     void initializeChat()
 
-    const channel = supabase.channel(`chat-messages-${programId || 'global'}`, {
-      config: {
-        broadcast: { self: true },
-        presence: { key: currentUser?.id || 'anonymous' }
+    const channel = supabase.channel(
+      `chat-messages-${programId || 'global'}-${papaId || 'none'}`,
+      {
+        config: {
+          broadcast: { self: true },
+          presence: { key: currentUser?.id || 'anonymous' }
+        }
       }
-    })
+    )
 
-    const handlePayload = async (payload: RealtimePostgresChangesPayload<ChatMessageRow>) => {
+    const handlePayload = async (
+      payload: RealtimePostgresChangesPayload<ChatMessageRow>
+    ) => {
       console.log('📨 Realtime payload received:', payload.eventType, payload)
+
+      const newRow = payload.new as ChatMessageRow
+
+      // Ensure we only process messages for the active chat context
+      if (papaId) {
+        if (newRow.papa_id !== papaId) {
+          return
+        }
+      } else if (programId) {
+        if (newRow.program_id !== programId || newRow.papa_id !== null) {
+          return
+        }
+      } else {
+        if (newRow.program_id !== null || newRow.papa_id !== null) {
+          return
+        }
+      }
+
       const raw = payload.new as RawMessage
       
       // For INSERT events, fetch the full message with user data
@@ -439,7 +510,9 @@ export default function ChatSystem({ programId }: { programId?: string }) {
       table: 'chat_messages'
     }
 
-    if (programId) {
+    if (papaId) {
+      subscriptionConfig.filter = `papa_id=eq.${papaId}`
+    } else if (programId) {
       subscriptionConfig.filter = `program_id=eq.${programId}`
     }
 
@@ -480,7 +553,7 @@ export default function ChatSystem({ programId }: { programId?: string }) {
         channelRef.current = null
       }
     }
-  }, [supabase, programId])
+  }, [supabase, programId, papaId])
 
   useEffect(() => {
     if (!currentUser?.id) return
@@ -624,10 +697,15 @@ export default function ChatSystem({ programId }: { programId?: string }) {
         .order('created_at', { ascending: true })
         .limit(100)
 
-      if (programId) {
-        query = query.eq('program_id', programId)
+      if (papaId) {
+        query = query.eq('papa_id', papaId)
+        if (programId) {
+          query = query.eq('program_id', programId)
+        }
+      } else if (programId) {
+        query = query.eq('program_id', programId).is('papa_id', null)
       } else {
-        query = query.is('program_id', null)
+        query = query.is('program_id', null).is('papa_id', null)
       }
 
       const { data, error } = await query
@@ -635,19 +713,37 @@ export default function ChatSystem({ programId }: { programId?: string }) {
       if (error) throw error
       
       // Safely transform messages with null checks
-      const transformedMessages = (data || []).map((msg) => {
-        try {
-          return transformMessage(msg as RawMessage)
-        } catch (err) {
-          console.error('Error transforming message:', msg, err)
-          return null
-        }
-      }).filter((msg): msg is Message => msg !== null)
+      const transformedMessages = (data || [])
+        .map((msg) => {
+          try {
+            return transformMessage(msg as RawMessage)
+          } catch (err) {
+            console.error('Error transforming message:', msg, err)
+            return null
+          }
+        })
+        .filter((msg): msg is Message => msg !== null)
       
       setMessages(transformedMessages)
-    } catch (error) {
-      console.error('Error loading messages:', error)
-      toast.error('Failed to load messages')
+    } catch (error: any) {
+      const supabaseError = error || {}
+      console.error('❌ Error loading messages:', {
+        error: supabaseError,
+        message: supabaseError.message,
+        details: supabaseError.details,
+        hint: supabaseError.hint,
+        code: supabaseError.code,
+        programId,
+        papaId
+      })
+
+      const friendlyMessage =
+        supabaseError.message ||
+        supabaseError.details ||
+        supabaseError.hint ||
+        'Failed to load messages'
+
+      toast.error(friendlyMessage)
     } finally {
       setLoadingMessages(false)
     }
@@ -659,6 +755,17 @@ export default function ChatSystem({ programId }: { programId?: string }) {
     if (!currentUser?.id) {
       toast.error('You must be logged in to send messages')
       return
+    }
+
+    if (programId && !['super_admin', 'admin'].includes(currentUser.role)) {
+      if (!programAccessChecked) {
+        toast.warning('Checking your permission for this program. Please wait a moment and try again.')
+        return
+      }
+      if (!canChatInProgram) {
+        toast.error('You are not assigned to this program as a protocol officer, so chat is read-only.')
+        return
+      }
     }
 
     const sanitizedMentions = selectedMentions.filter((id) => id !== currentUser.id)
@@ -675,7 +782,8 @@ export default function ChatSystem({ programId }: { programId?: string }) {
         content: newMessage,
         mentions: sanitizedMentions as unknown as ChatMessageInsert['mentions'],
         is_private: isPrivate,
-        program_id: programId || null
+        program_id: programId || null,
+        papa_id: papaId || null
       }
 
       console.log('Sending message:', payload)
@@ -872,6 +980,13 @@ export default function ChatSystem({ programId }: { programId?: string }) {
     return false
   }
 
+  const isReadOnlyProgramChat =
+    Boolean(programId) &&
+    !!currentUser &&
+    !['super_admin', 'admin'].includes(currentUser.role) &&
+    programAccessChecked &&
+    !canChatInProgram
+
   return (
     <div className="relative flex flex-col h-[calc(100vh-12rem)] min-h-[500px] max-h-[800px] bg-card/95 rounded-lg border shadow-sm backdrop-blur-sm">
       {/* Header */}
@@ -886,6 +1001,11 @@ export default function ChatSystem({ programId }: { programId?: string }) {
               <p className="text-xs text-muted-foreground">
                 {messages.filter(canViewMessage).length} messages
               </p>
+              {isReadOnlyProgramChat && (
+                <p className="text-[11px] text-amber-700 mt-0.5">
+                  You are not assigned to this program. Chat is read-only.
+                </p>
+              )}
             </div>
           </div>
           <Button
@@ -1076,7 +1196,11 @@ export default function ChatSystem({ programId }: { programId?: string }) {
           <div className="relative flex-1">
             <Input
               ref={inputRef}
-              placeholder="Type your message..."
+              placeholder={
+                isReadOnlyProgramChat
+                  ? 'You are not assigned to this program; chat is read-only.'
+                  : 'Type your message...'
+              }
               value={newMessage}
               onChange={handleMessageChange}
               onKeyPress={(e) => {
@@ -1088,6 +1212,7 @@ export default function ChatSystem({ programId }: { programId?: string }) {
                 }
               }}
               className="pr-12 h-11"
+              disabled={isReadOnlyProgramChat}
             />
             
             {/* Mention Suggestions Dropdown */}
@@ -1135,7 +1260,7 @@ export default function ChatSystem({ programId }: { programId?: string }) {
           </div>
           <Button 
             onClick={handleSendMessage} 
-            disabled={!newMessage.trim()}
+            disabled={isReadOnlyProgramChat || !newMessage.trim()}
             size="lg"
             className="h-11 px-6"
           >

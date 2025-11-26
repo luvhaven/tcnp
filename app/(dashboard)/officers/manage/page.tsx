@@ -37,14 +37,22 @@ type OfficialTitle = {
   max_positions: number
 }
 
+type Program = {
+  id: string
+  name: string
+  status: string
+}
+
 export default function ManageOfficersPage() {
   const supabase = createClient()
   const [officers, setOfficers] = useState<Officer[]>([])
   const [titles, setTitles] = useState<OfficialTitle[]>([])
+  const [programs, setPrograms] = useState<Program[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [titleDialogOpen, setTitleDialogOpen] = useState(false)
+  const [assignFromDirectoryOpen, setAssignFromDirectoryOpen] = useState(false)
   const [editing, setEditing] = useState<Officer | null>(null)
   const [assigningTitleFor, setAssigningTitleFor] = useState<Officer | null>(null)
   const [formData, setFormData] = useState({
@@ -62,6 +70,7 @@ export default function ManageOfficersPage() {
     const roleCode = role.toUpperCase().replace('_', '-')
     return `OSCAR-${initials}-${roleCode}`
   }
+
   const [titleFormData, setTitleFormData] = useState({
     title_id: '',
     program_id: ''
@@ -85,6 +94,31 @@ export default function ManageOfficersPage() {
     { value: 'victor_oscar', label: 'Victor Oscar (VO)' },
     { value: 'viewer', label: 'Viewer' }
   ]
+
+  const [assignForm, setAssignForm] = useState({
+    officer_id: "",
+    title_id: "",
+    program_id: "",
+  })
+  const [assignSearch, setAssignSearch] = useState("")
+
+  const filteredOfficersForAssign = officers
+    .slice()
+    .sort((a, b) => Number(b.is_active) - Number(a.is_active))
+    .filter((officer) => {
+      if (!assignSearch.trim()) return true
+      const query = assignSearch.toLowerCase()
+      const name = (officer.full_name || "").toLowerCase()
+      const email = (officer.email || "").toLowerCase()
+      const oscar = (officer.oscar || "").toLowerCase()
+      const role = (officer.role || "").toLowerCase()
+      return (
+        name.includes(query) ||
+        email.includes(query) ||
+        oscar.includes(query) ||
+        role.includes(query)
+      )
+    })
 
   useEffect(() => {
     loadData()
@@ -118,13 +152,17 @@ export default function ManageOfficersPage() {
         return
       }
 
-      // Load officers (via admin-backed API) and titles
-      const [officersResponse, titlesRes] = await Promise.all([
+      // Load officers (via admin-backed API), titles, and programs
+      const [officersResponse, titlesRes, programsRes] = await Promise.all([
         fetch('/api/officers/list'),
         supabase
           .from('official_titles')
           .select('*')
-          .order('unit, name')
+          .order('unit, name'),
+        supabase
+          .from('programs')
+          .select('id, name, status')
+          .order('created_at', { ascending: false })
       ])
 
       if (!officersResponse.ok) {
@@ -135,6 +173,7 @@ export default function ManageOfficersPage() {
       }
 
       if (titlesRes.data) setTitles(titlesRes.data as OfficialTitle[])
+      if (programsRes.data) setPrograms(programsRes.data as Program[])
     } catch (error) {
       console.error('Error:', error)
       toast.error('Failed to load data')
@@ -147,46 +186,23 @@ export default function ManageOfficersPage() {
     e.preventDefault()
     
     try {
-      if (editing) {
-        // Update existing officer
-        const oscar = generateOscar(formData.full_name, formData.role)
-        
-        const { error } = await supabase
-          .from('users')
-          .update({
-            full_name: formData.full_name,
-            phone: formData.phone,
-            oscar: oscar,
-            role: formData.role as any
-          } as any)
-          .eq('id', editing.id)
+      if (!editing) return
 
-        if (error) throw error
-        toast.success('Officer updated successfully!')
-      } else {
-        // Create new officer via secure admin endpoint (auto-confirmed, immediate access)
-        const response = await fetch('/api/admin/create-user', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            email: formData.email,
-            password: formData.password,
-            full_name: formData.full_name,
-            phone: formData.phone,
-            role: formData.role
-          })
-        })
+      // Update existing officer details only
+      const oscar = generateOscar(formData.full_name, formData.role)
+      
+      const { error } = await supabase
+        .from('users')
+        .update({
+          full_name: formData.full_name,
+          phone: formData.phone,
+          oscar: oscar,
+          role: formData.role as any
+        } as any)
+        .eq('id', editing.id)
 
-        const result = await response.json()
-
-        if (!response.ok) {
-          throw new Error(result.error || 'Failed to create officer')
-        }
-
-        toast.success('Officer created successfully!')
-      }
+      if (error) throw error
+      toast.success('Officer updated successfully!')
 
       setDialogOpen(false)
       setEditing(null)
@@ -224,6 +240,40 @@ export default function ManageOfficersPage() {
     }
   }
 
+  const handleAssignFromDirectory = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    try {
+      if (!assignForm.officer_id || !assignForm.title_id) {
+        toast.error('Select an officer and a title')
+        return
+      }
+
+      const title = titles.find(t => t.id === assignForm.title_id)
+      if (!title) {
+        toast.error('Selected title not found')
+        return
+      }
+
+      const { error } = await (supabase as any).rpc('assign_title', {
+        p_user_id: assignForm.officer_id,
+        p_title_code: title.code,
+        p_program_id: assignForm.program_id || null,
+        p_assigned_by: currentUser?.id
+      })
+
+      if (error) throw error
+
+      toast.success('Title assigned successfully!')
+      setAssignFromDirectoryOpen(false)
+      setAssignForm({ officer_id: '', title_id: '', program_id: '' })
+      loadData()
+    } catch (error: any) {
+      console.error('Error assigning from directory:', error)
+      toast.error(error.message || 'Failed to assign title')
+    }
+  }
+
   const handleEdit = (officer: Officer) => {
     setEditing(officer)
     setFormData({
@@ -238,6 +288,11 @@ export default function ManageOfficersPage() {
 
   const handleAssignTitleClick = (officer: Officer) => {
     setAssigningTitleFor(officer)
+    const preferredProgram = programs.find(p => p.status === 'active') || programs[0] || null
+    setTitleFormData({
+      title_id: '',
+      program_id: preferredProgram?.id || ''
+    })
     setTitleDialogOpen(true)
   }
 
@@ -357,17 +412,17 @@ export default function ManageOfficersPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Manage Protocol Officers</h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-xl">
-            Create, edit, and manage Protocol Officers and their titles
+            Edit officer details and assign titles and duties across programs
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)} className="gap-2">
-          <Plus className="h-4 w-4" />
-          <span>Add Protocol Officer</span>
+        <Button onClick={() => setAssignFromDirectoryOpen(true)} className="gap-2">
+          <UserCheck className="h-4 w-4" />
+          <span>Assign Officer to Program</span>
         </Button>
       </div>
 
@@ -515,41 +570,16 @@ export default function ManageOfficersPage() {
         ))}
       </div>
 
-      {/* Add/Edit Officer Dialog */}
+      {/* Edit Officer Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Officer' : 'Add Protocol Officer'}</DialogTitle>
+            <DialogTitle>Edit Officer</DialogTitle>
             <DialogDescription>
-              {editing ? 'Update officer details' : 'Create a new Protocol Officer account'}
+              Update officer details and role.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-            {!editing && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email *</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password *</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    required
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  />
-                </div>
-              </>
-            )}
-            
             <div className="space-y-2">
               <Label htmlFor="full_name">Full Name *</Label>
               <Input
@@ -595,7 +625,7 @@ export default function ManageOfficersPage() {
                 Cancel
               </Button>
               <Button type="submit" className="flex-1">
-                {editing ? 'Update' : 'Create'} Officer
+                Update Officer
               </Button>
             </div>
           </form>
@@ -652,6 +682,48 @@ export default function ManageOfficersPage() {
               </Select>
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="program">Program</Label>
+              <Select
+                id="program"
+                value={titleFormData.program_id}
+                onChange={(e) => setTitleFormData({ ...titleFormData, program_id: e.target.value })}
+              >
+                <option value="">No specific program</option>
+                {programs.length > 0 && (
+                  <>
+                    <optgroup label="Active Programs">
+                      {programs
+                        .filter((program) => program.status === 'active')
+                        .map((program) => (
+                          <option key={program.id} value={program.id}>
+                            {program.name}
+                          </option>
+                        ))}
+                    </optgroup>
+                    <optgroup label="Planning / Upcoming">
+                      {programs
+                        .filter((program) => program.status === 'planning')
+                        .map((program) => (
+                          <option key={program.id} value={program.id}>
+                            {program.name}
+                          </option>
+                        ))}
+                    </optgroup>
+                    <optgroup label="Completed / Archived">
+                      {programs
+                        .filter((program) => program.status !== 'active' && program.status !== 'planning')
+                        .map((program) => (
+                          <option key={program.id} value={program.id}>
+                            {program.name}
+                          </option>
+                        ))}
+                    </optgroup>
+                  </>
+                )}
+              </Select>
+            </div>
+
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
               <p className="font-medium text-blue-900 mb-1">Title Assignment Rules:</p>
               <ul className="text-blue-700 space-y-1 text-xs">
@@ -668,6 +740,95 @@ export default function ManageOfficersPage() {
                 setAssigningTitleFor(null)
                 setTitleFormData({ title_id: '', program_id: '' })
               }} className="flex-1">
+                Cancel
+              </Button>
+              <Button type="submit" className="flex-1">
+                Assign Title
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign Officer from Directory Dialog */}
+      <Dialog open={assignFromDirectoryOpen} onOpenChange={setAssignFromDirectoryOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign Officer to Program</DialogTitle>
+            <DialogDescription>
+              Choose any existing Protocol Officer and assign them an official title for a specific program.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAssignFromDirectory} className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label htmlFor="officer">Protocol Officer *</Label>
+              <Input
+                id="officer_search"
+                placeholder="Search by name, email, OSCAR or role"
+                value={assignSearch}
+                onChange={(e) => setAssignSearch(e.target.value)}
+                className="text-sm"
+              />
+              <Select
+                id="officer"
+                required
+                value={assignForm.officer_id}
+                onChange={(e) => setAssignForm({ ...assignForm, officer_id: e.target.value })}
+              >
+                <option value="">Select an officer...</option>
+                {filteredOfficersForAssign.map((officer) => (
+                  <option key={officer.id} value={officer.id}>
+                    {officer.full_name || officer.email}
+                    {officer.oscar ? ` • ${officer.oscar}` : ""}
+                    {officer.is_active ? "" : " • (inactive)"}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="assign_title">Official Title *</Label>
+              <Select
+                id="assign_title"
+                required
+                value={assignForm.title_id}
+                onChange={(e) => setAssignForm({ ...assignForm, title_id: e.target.value })}
+              >
+                <option value="">Select a title...</option>
+                {titles.map((title) => (
+                  <option key={title.id} value={title.id}>
+                    {title.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="assign_program">Program</Label>
+              <Select
+                id="assign_program"
+                value={assignForm.program_id}
+                onChange={(e) => setAssignForm({ ...assignForm, program_id: e.target.value })}
+              >
+                <option value="">No specific program</option>
+                {programs.map((program) => (
+                  <option key={program.id} value={program.id}>
+                    {program.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setAssignFromDirectoryOpen(false)
+                  setAssignForm({ officer_id: '', title_id: '', program_id: '' })
+                }}
+                className="flex-1"
+              >
                 Cancel
               </Button>
               <Button type="submit" className="flex-1">

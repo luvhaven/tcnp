@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import type { Database } from "@/types/supabase"
+import { canManageFleet } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -64,6 +65,7 @@ export default function CheetahsPage() {
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingCheetah, setEditingCheetah] = useState<Cheetah | null>(null)
+  const [currentRole, setCurrentRole] = useState<string | null>(null)
   const [formData, setFormData] = useState<CheetahFormState>({
     registration_number: '',
     driver_name: '',
@@ -82,7 +84,29 @@ export default function CheetahsPage() {
   })
 
   useEffect(() => {
-    loadCheetahs()
+    const loadInitial = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (user) {
+          const { data } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', user.id)
+            .single()
+
+          if (data?.role) {
+            setCurrentRole(data.role)
+          }
+        }
+      } catch (error) {
+        console.error('Error loading current user for CheetahsPage:', error)
+      } finally {
+        await loadCheetahs()
+      }
+    }
+
+    loadInitial()
   }, [])
 
   const loadCheetahs = async () => {
@@ -251,6 +275,8 @@ export default function CheetahsPage() {
     setDialogOpen(true)
   }
 
+  const canManage = currentRole ? canManageFleet(currentRole) : false
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -269,10 +295,12 @@ export default function CheetahsPage() {
           <h1 className="text-3xl font-bold">Fleet (Cheetahs)</h1>
           <p className="text-muted-foreground">Manage protocol vehicles</p>
         </div>
-        <Button onClick={openCreateDialog}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add New Cheetah
-        </Button>
+        {canManage && (
+          <Button onClick={openCreateDialog}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add New Cheetah
+          </Button>
+        )}
       </div>
 
       {/* Stats */}
@@ -358,12 +386,16 @@ export default function CheetahsPage() {
                     <Badge variant={cheetah.status === 'available' ? 'success' : cheetah.status === 'in_use' ? 'warning' : 'secondary'}>
                       {cheetah.status}
                     </Badge>
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(cheetah)}>
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(cheetah.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    {canManage && (
+                      <>
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(cheetah)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(cheetah.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}

@@ -199,7 +199,7 @@ export default function CheetahTrackingPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 animate-fade-in">
         <div>
           <div className="h-7 w-56 rounded-md skeleton" />
           <div className="mt-2 h-4 w-80 rounded-md skeleton" />
@@ -233,7 +233,7 @@ export default function CheetahTrackingPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Cheetah Tracking</h1>
         <p className="text-sm text-muted-foreground max-w-xl">Real-time location tracking for all Cheetahs</p>
@@ -377,7 +377,7 @@ export default function CheetahTrackingPage() {
 
       {/* Live Map - For all users */}
       {locations.length > 0 && (
-        <Card>
+        <Card className="group overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
           <CardHeader>
             <CardTitle>Live Map View</CardTitle>
             <CardDescription>

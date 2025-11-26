@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Users, Plus, Edit, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import PapaFormTabs from "@/components/papas/PapaFormTabs"
+import { canManagePapas } from "@/lib/utils"
 
 type Papa = {
   id: string
@@ -49,10 +50,37 @@ export default function PapasPage() {
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingPapa, setEditingPapa] = useState<Papa | null>(null)
+  const [currentRole, setCurrentRole] = useState<string | null>(null)
+
+  const canManage = currentRole ? canManagePapas(currentRole) : false
 
   useEffect(() => {
-    loadPapas()
-    loadPrograms()
+    const init = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (user) {
+          const { data } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', user.id)
+            .single()
+
+          if (data?.role) {
+            setCurrentRole(data.role)
+          }
+        }
+
+        await loadPapas()
+        await loadPrograms()
+      } catch (error) {
+        console.error('Error loading current user for PapasPage:', error)
+        await loadPapas()
+        await loadPrograms()
+      }
+    }
+
+    init()
   }, [])
 
   const loadPapas = async () => {
@@ -88,13 +116,26 @@ export default function PapasPage() {
 
   const handleSubmit = async (data: any) => {
     try {
+      if (!canManage) {
+        toast.error('You are not authorized to manage Papas')
+        return
+      }
+
       console.log('Papa form data received:', data)
       
-      // Convert arrays to JSONB
+      // Extract event/program and convert arrays to JSONB
+      const {
+        event_id,
+        speaking_schedule,
+        personal_assistants,
+        ...rest
+      } = data
+
       const papaData = {
-        ...data,
-        speaking_schedule: data.speaking_schedule || [],
-        personal_assistants: data.personal_assistants || []
+        ...rest,
+        program_id: event_id || null,
+        speaking_schedule: speaking_schedule || [],
+        personal_assistants: personal_assistants || []
       }
       
       console.log('Papa data to save:', papaData)
@@ -148,6 +189,11 @@ export default function PapasPage() {
     if (!confirm('Are you sure you want to delete this Papa?')) return
 
     try {
+      if (!canManage) {
+        toast.error('You are not authorized to manage Papas')
+        return
+      }
+
       const { error } = await supabase
         .from('papas')
         .delete()
@@ -185,10 +231,12 @@ export default function PapasPage() {
           <h1 className="text-3xl font-bold">Papas</h1>
           <p className="text-muted-foreground">Manage guest ministers and VIPs</p>
         </div>
-        <Button onClick={openCreateDialog}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Papa
-        </Button>
+        {canManage && (
+          <Button onClick={openCreateDialog}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Papa
+          </Button>
+        )}
       </div>
 
       {/* Stats */}
@@ -227,10 +275,12 @@ export default function PapasPage() {
               <Users className="h-12 w-12 text-muted-foreground/50" />
               <p className="mt-4 text-sm font-medium">No Papas yet</p>
               <p className="text-xs text-muted-foreground">Add your first Papa to get started</p>
-              <Button className="mt-4" onClick={openCreateDialog}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Papa
-              </Button>
+              {canManage && (
+                <Button className="mt-4" onClick={openCreateDialog}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Papa
+                </Button>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -252,14 +302,16 @@ export default function PapasPage() {
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(papa)}>
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(papa.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
+                  {canManage && (
+                    <div className="flex items-center space-x-2">
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(papa)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(papa.id)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

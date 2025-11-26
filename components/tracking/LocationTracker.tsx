@@ -14,6 +14,7 @@ import { toast } from 'sonner'
  */
 export function LocationTracker() {
   const [hasShownPermissionPrompt, setHasShownPermissionPrompt] = useState(false)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
   
   const {
     location,
@@ -26,6 +27,8 @@ export function LocationTracker() {
     updateInterval: 10000, // 10 seconds
     highAccuracy: true
   })
+
+  const showTrackingBanner = isTracking && permissionStatus === 'granted' && !bannerDismissed
 
   // Show permission prompt on first load
   useEffect(() => {
@@ -70,6 +73,19 @@ export function LocationTracker() {
     }
   }, [isTracking])
 
-  // This component doesn't render anything
-  return null
+  return showTrackingBanner ? (
+    <div className="pointer-events-none fixed bottom-4 left-1/2 z-40 -translate-x-1/2 px-3 sm:px-4">
+      <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-2 text-xs text-white shadow-lg sm:text-sm">
+        <span className="inline-flex h-2 w-2 rounded-full bg-emerald-300" />
+        <span>Live location sharing is active on this device.</span>
+        <button
+          type="button"
+          onClick={() => setBannerDismissed(true)}
+          className="ml-1 text-xs font-medium text-emerald-100 hover:text-white"
+        >
+          Hide
+        </button>
+      </div>
+    </div>
+  ) : null
 }

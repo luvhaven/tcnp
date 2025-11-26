@@ -42,7 +42,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 via-white to-slate-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-900 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 via-white to-slate-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-900 p-4 md:p-6 animate-fade-in">
       <div className="w-full max-w-md animate-slide-up">
         <div className="bg-white/90 dark:bg-gray-900/80 rounded-2xl shadow-2xl border border-orange-100/60 dark:border-orange-500/20 p-8 backdrop-blur-sm">
           <div className="text-center mb-8">
