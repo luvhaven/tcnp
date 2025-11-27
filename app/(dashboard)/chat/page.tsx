@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { Card } from '@/components/ui/card'
 import ChatSystem from '@/components/chat/ChatSystem'
 import { createClient } from '@/lib/supabase/client'
@@ -18,7 +18,7 @@ type ChatPapa = {
   title: string | null
 }
 
-export default function ChatPage() {
+function ChatContent() {
   const supabase = createClient()
   const searchParams = useSearchParams()
   const initialMessage = searchParams.get('message') || undefined
@@ -258,5 +258,13 @@ export default function ChatPage() {
         )}
       </Card>
     </div>
+  )
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={<div className="h-[600px] w-full rounded-lg skeleton" />}>
+      <ChatContent />
+    </Suspense>
   )
 }
