@@ -102,12 +102,20 @@ type ChatParticipant = {
   last_seen: string | null
 }
 
-export default function ChatSystem({ programId, papaId }: { programId?: string; papaId?: string }) {
+export default function ChatSystem({
+  programId,
+  papaId,
+  initialMessage
+}: {
+  programId?: string;
+  papaId?: string;
+  initialMessage?: string;
+}) {
   const supabase = useMemo(() => createClient(), [])
   const [messages, setMessages] = useState<Message[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
-  const [newMessage, setNewMessage] = useState('')
+  const [newMessage, setNewMessage] = useState(initialMessage || '')
   const [loadingMessages, setLoadingMessages] = useState(true)
   const [showUserList, setShowUserList] = useState(false)
   const [selectedMentions, setSelectedMentions] = useState<string[]>([])
@@ -172,11 +180,11 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
             return prev.map((user) =>
               user.id === userId
                 ? {
-                    ...user,
-                    full_name: data.full_name || user.full_name || 'Unknown User',
-                    oscar: data.oscar || user.oscar,
-                    role: data.role || user.role
-                  }
+                  ...user,
+                  full_name: data.full_name || user.full_name || 'Unknown User',
+                  oscar: data.oscar || user.oscar,
+                  role: data.role || user.role
+                }
                 : user
             )
           }
@@ -274,10 +282,10 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
   const transformMessage = useCallback((message: RawMessage): Message => {
     const mentions = parseJsonArray(message.mentions)
     const readBy = parseJsonArray(message.read_by)
-    
+
     // Safely extract user metadata with fallbacks
     let userMeta: MessageUserMeta = { full_name: 'Unknown User', oscar: '', role: '' }
-    
+
     if (message.users) {
       userMeta = {
         full_name: message.users.full_name || 'Unknown User',
@@ -423,7 +431,7 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
       await loadMessages()
       await loadParticipants()
     }
-    
+
     void initializeChat()
 
     const channel = supabase.channel(
@@ -459,7 +467,7 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
       }
 
       const raw = payload.new as RawMessage
-      
+
       // For INSERT events, fetch the full message with user data
       if (payload.eventType === 'INSERT' && raw.id) {
         try {
@@ -480,7 +488,7 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
               console.log('💬 Messages updated, count:', updated.length)
               return updated
             })
-            
+
             // Only mark as read if not sent by current user
             if (message.sender_id !== currentUser?.id) {
               void markMessageRead(message)
@@ -493,7 +501,7 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
           console.error('❌ Error fetching full message:', err)
         }
       }
-      
+
       // Fallback to raw payload transformation
       console.log('⚠️ Using fallback transformation for message')
       const message = transformMessage(raw)
@@ -669,12 +677,12 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
           .select('id, full_name, oscar, role, email')
           .eq('id', user.id)
           .single()
-        
+
         if (error) {
           console.error('❌ Error loading current user:', error)
           return
         }
-        
+
         console.log('✅ Current user loaded:', data)
         setCurrentUser(data)
       }
@@ -711,7 +719,7 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
       const { data, error } = await query
 
       if (error) throw error
-      
+
       // Safely transform messages with null checks
       const transformedMessages = (data || [])
         .map((msg) => {
@@ -723,7 +731,7 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
           }
         })
         .filter((msg): msg is Message => msg !== null)
-      
+
       setMessages(transformedMessages)
     } catch (error: any) {
       const supabaseError = error || {}
@@ -751,7 +759,7 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
 
   const handleSendMessage = async () => {
     if (!newMessage.trim()) return
-    
+
     if (!currentUser?.id) {
       toast.error('You must be logged in to send messages')
       return
@@ -855,10 +863,10 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
     // Check for @ or @@ mentions
     const textBeforeCursor = value.substring(0, cursorPos)
     const lastAtIndex = textBeforeCursor.lastIndexOf('@')
-    
+
     if (lastAtIndex !== -1) {
       const textAfterAt = textBeforeCursor.substring(lastAtIndex)
-      
+
       // Check if it's @@ or @
       if (textAfterAt.startsWith('@@')) {
         const searchText = textAfterAt.substring(2)
@@ -878,7 +886,7 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
         }
       }
     }
-    
+
     setShowMentionSuggestions(false)
   }
 
@@ -886,7 +894,7 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
     const textBeforeCursor = newMessage.substring(0, cursorPosition)
     const textAfterCursor = newMessage.substring(cursorPosition)
     const lastAtIndex = textBeforeCursor.lastIndexOf('@')
-    
+
     if (lastAtIndex !== -1) {
       if (user.id === currentUser?.id) {
         toast.warning('You cannot mention yourself')
@@ -896,15 +904,15 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
       const beforeAt = textBeforeCursor.substring(0, lastAtIndex)
       const mentionText = mentionType === '@@' ? `@@${user.full_name.split(' ')[0]} ` : `@${user.full_name.split(' ')[0]} `
       const newText = beforeAt + mentionText + textAfterCursor
-      
+
       setNewMessage(newText)
       if (!selectedMentions.includes(user.id)) {
         setSelectedMentions([...selectedMentions, user.id])
       }
-      
+
       setShowMentionSuggestions(false)
       setMentionSearch('')
-      
+
       // Focus back on input
       setTimeout(() => {
         if (inputRef.current) {
@@ -964,19 +972,19 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
 
   const canViewMessage = (message: Message) => {
     if (!currentUser) return false
-    
+
     // Admins can see all messages
     if (['super_admin', 'admin'].includes(currentUser.role)) return true
-    
+
     // Sender can see their own messages
     if (message.sender_id === currentUser.id) return true
-    
+
     // Public messages
     if (!message.is_private) return true
-    
+
     // Private messages where user is mentioned
     if (message.is_private && message.mentions.includes(currentUser.id)) return true
-    
+
     return false
   }
 
@@ -1066,21 +1074,18 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
             return (
               <div
                 key={message.id}
-                className={`flex items-end gap-3 animate-in slide-in-from-bottom-2 duration-300 ${
-                  isOwn ? 'flex-row-reverse' : ''
-                }`}
+                className={`flex items-end gap-3 animate-in slide-in-from-bottom-2 duration-300 ${isOwn ? 'flex-row-reverse' : ''
+                  }`}
               >
                 <Avatar className="h-9 w-9 border-2 border-background shadow-sm">
-                  <AvatarFallback className={`text-xs font-semibold ${
-                    isOwn ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                  }`}>
+                  <AvatarFallback className={`text-xs font-semibold ${isOwn ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                    }`}>
                     {getInitials(displayName)}
                   </AvatarFallback>
                 </Avatar>
                 <div className={`flex flex-col gap-1 max-w-[70%] ${isOwn ? 'items-end' : 'items-start'}`}>
-                  <div className={`flex items-center gap-2 px-1 ${
-                    isOwn ? 'flex-row-reverse' : ''
-                  }`}>
+                  <div className={`flex items-center gap-2 px-1 ${isOwn ? 'flex-row-reverse' : ''
+                    }`}>
                     <span className="text-xs font-semibold">{displayName}</span>
                     {message.is_private && (
                       <div className="flex items-center gap-1 text-amber-600">
@@ -1090,11 +1095,10 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
                     )}
                   </div>
                   <div
-                    className={`rounded-2xl px-4 py-2.5 shadow-sm ${
-                      isOwn
+                    className={`rounded-2xl px-4 py-2.5 shadow-sm ${isOwn
                         ? 'bg-primary text-primary-foreground rounded-br-sm'
                         : 'bg-background border rounded-bl-sm'
-                    }`}
+                      }`}
                   >
                     <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.content}</p>
                   </div>
@@ -1133,9 +1137,8 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
                           {getInitials(user.full_name)}
                         </AvatarFallback>
                       </Avatar>
-                      <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${
-                        user.is_online ? 'bg-green-500' : 'bg-gray-400'
-                      }`} />
+                      <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${user.is_online ? 'bg-green-500' : 'bg-gray-400'
+                        }`} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{user.full_name}</p>
@@ -1214,7 +1217,7 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
               className="pr-12 h-11"
               disabled={isReadOnlyProgramChat}
             />
-            
+
             {/* Mention Suggestions Dropdown */}
             {showMentionSuggestions && filteredUsers.length > 0 && (
               <div className="absolute bottom-full left-0 right-0 mb-2 bg-background border rounded-xl shadow-2xl overflow-hidden z-50 animate-in slide-in-from-bottom-2 duration-200">
@@ -1258,8 +1261,8 @@ export default function ChatSystem({ programId, papaId }: { programId?: string; 
               </div>
             )}
           </div>
-          <Button 
-            onClick={handleSendMessage} 
+          <Button
+            onClick={handleSendMessage}
             disabled={isReadOnlyProgramChat || !newMessage.trim()}
             size="lg"
             className="h-11 px-6"

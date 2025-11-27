@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Location Tracking Test</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background: #F26522;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        button:hover {
+            background: #ea580c;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status {
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 12px;
+        }
+
+        .success {
+            background: #065f46;
+            border: 1px solid #10b981;
+        }
+
+        .error {
+            background: #7f1d1d;
+            border: 1px solid #ef4444;
+        }
+
+        .info {
+            background: #1e3a8a;
+            border: 1px solid #3b82f6;
+        }
+
+        pre {
+            background: #020617;
+            padding: 12px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 13px;
+        }
+
+        .log {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #020617;
+            padding: 12px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 12px;
+        }
+
+        .log-entry {
+            margin: 4px 0;
+            padding: 4px 8px;
+            border-radius: 3px;
+        }
+
+        .log-success {
+            background: #065f46;
+        }
+
+        .log-error {
+            background: #7f1d1d;
+        }
+
+        .log-info {
+            background: #1e3a8a;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🗺️ Location Tracking Test</h1>
+
+    <div class="card">
+        <h2>Permission Status</h2>
+        <div id="permissionStatus" class="status info">
+            Checking permission...
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Controls</h2>
+        <button id="requestBtn" onclick="testRequestPermission()">
+            Request Location Permission
+        </button>
+        <button id="getLocationBtn" onclick="testGetLocation()" style="margin-left: 10px;">
+            Get Current Location
+        </button>
+    </div>
+
+    <div class="card">
+        <h2>Current Location</h2>
+        <div id="locationData">
+            <p>No location data yet</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Console Log</h2>
+        <div id="logContainer" class="log"></div>
+    </div>
+
+    <script>
+        const logs = [];
+
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            logs.unshift({ message, type, timestamp });
+            if (logs.length > 50) logs.pop();
+
+            const logContainer = document.getElementById('logContainer');
+            logContainer.innerHTML = logs.map(log =>
+                `<div class="log-entry log-${log.type}">[${log.timestamp}] ${log.message}</div>`
+            ).join('');
+
+            console.log(`[${type.toUpperCase()}]`, message);
+        }
+
+        // Check initial permission status
+        async function checkPermissionStatus() {
+            try {
+                if (!('permissions' in navigator)) {
+                    addLog('Permissions API not available', 'error');
+                    document.getElementById('permissionStatus').innerHTML =
+                        '<p class="error">Permissions API not supported</p>';
+                    return;
+                }
+
+                const result = await navigator.permissions.query({ name: 'geolocation' });
+                updatePermissionDisplay(result.state);
+
+                result.addEventListener('change', () => {
+                    addLog(`Permission changed to: ${result.state}`, 'info');
+                    updatePermissionDisplay(result.state);
+                });
+            } catch (err) {
+                addLog(`Error checking permission: ${err.message}`, 'error');
+            }
+        }
+
+        function updatePermissionDisplay(state) {
+            const statusEl = document.getElementById('permissionStatus');
+            const classes = {
+                'granted': 'success',
+                'denied': 'error',
+                'prompt': 'info'
+            };
+
+            statusEl.className = `status ${classes[state] || 'info'}`;
+            statusEl.innerHTML = `<p><strong>Permission State:</strong> ${state.toUpperCase()}</p>`;
+
+            addLog(`Permission status: ${state}`, state === 'granted' ? 'success' : state === 'denied' ? 'error' : 'info');
+        }
+
+        async function testRequestPermission() {
+            addLog('Requesting geolocation permission...', 'info');
+
+            if (!('geolocation' in navigator)) {
+                addLog('Geolocation not supported!', 'error');
+                alert('Geolocation is not supported by your browser');
+                return;
+            }
+
+            try {
+                const position = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    });
+                });
+
+                addLog('✅ Permission granted!', 'success');
+                displayLocation(position);
+            } catch (err) {
+                addLog(`❌ Permission error: ${err.message} (code: ${err.code})`, 'error');
+
+                if (err.code === 1) {
+                    alert('Location permission denied. Please enable it in your browser settings.');
+                } else if (err.code === 2) {
+                    alert('Location unavailable. Please turn on your device location services.');
+                } else if (err.code === 3) {
+                    alert('Location request timed out. Please try again.');
+                }
+            }
+        }
+
+        async function testGetLocation() {
+            addLog('Getting current location...', 'info');
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    addLog('✅ Location retrieved successfully!', 'success');
+                    displayLocation(position);
+                },
+                (error) => {
+                    addLog(`❌ Error getting location: ${error.message}`, 'error');
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        }
+
+        function displayLocation(position) {
+            const locationDiv = document.getElementById('locationData');
+            locationDiv.innerHTML = `
+        <pre>{
+  "latitude": ${position.coords.latitude},
+  "longitude": ${position.coords.longitude},
+  "accuracy": ${position.coords.accuracy.toFixed(2)}m,
+  "altitude": ${position.coords.altitude ?? 'null'},
+  "heading": ${position.coords.heading ?? 'null'},
+  "speed": ${position.coords.speed ?? 'null'},
+  "timestamp": "${new Date(position.timestamp).toISOString()}"
+}</pre>
+      `;
+
+            addLog(`📍 Lat: ${position.coords.latitude.toFixed(6)}, Lng: ${position.coords.longitude.toFixed(6)}`, 'success');
+        }
+
+        // Initialize
+        addLog('Location Tracking Test initialized', 'info');
+        addLog(`Protocol: ${window.location.protocol}`, 'info');
+        addLog(`Hostname: ${window.location.hostname}`, 'info');
+        addLog(`Secure context: ${window.isSecureContext ? 'Yes ✅' : 'No ❌'}`, window.isSecureContext ? 'success' : 'error');
+        addLog(`Geolocation supported: ${('geolocation' in navigator) ? 'Yes ✅' : 'No ❌'}`, 'geolocation' in navigator ? 'success' : 'error');
+
+        checkPermissionStatus();
+    </script>
+</body>
+
+</html>

@@ -139,7 +139,7 @@ export default function CheetahsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     try {
       const trimmedRegNo = formData.registration_number.trim()
       const trimmedDriverName = formData.driver_name.trim()
@@ -184,7 +184,7 @@ export default function CheetahsPage() {
         const { count } = await supabase
           .from('cheetahs')
           .select('*', { count: 'exact', head: true })
-        
+
         const nextNumber = (count || 0) + 1
         const callSign = `CHEETAH-${nextNumber.toString().padStart(3, '0')}`
 
@@ -279,21 +279,64 @@ export default function CheetahsPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-          <p className="mt-4 text-sm text-muted-foreground">Loading vehicles...</p>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="h-8 w-48 rounded-md skeleton" />
+            <div className="mt-2 h-4 w-64 rounded-md skeleton" />
+          </div>
+          <div className="h-10 w-32 rounded-md skeleton" />
         </div>
+
+        {/* Stats skeleton */}
+        <div className="grid gap-4 md:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="pb-2">
+                <div className="h-4 w-24 rounded-md skeleton" />
+              </CardHeader>
+              <CardContent>
+                <div className="h-6 w-12 rounded-md skeleton" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Content skeleton */}
+        <Card>
+          <CardHeader>
+            <div className="h-5 w-32 rounded-md skeleton" />
+            <div className="mt-2 h-4 w-48 rounded-md skeleton" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-2">
+                    <div className="h-5 w-32 rounded-md skeleton" />
+                    <div className="h-4 w-48 rounded-md skeleton" />
+                    <div className="h-3 w-40 rounded-md skeleton" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-6 w-20 rounded-full skeleton" />
+                    <div className="h-8 w-8 rounded-md skeleton" />
+                    <div className="h-8 w-8 rounded-md skeleton" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Fleet (Cheetahs)</h1>
-          <p className="text-muted-foreground">Manage protocol vehicles</p>
+          <h1 className="text-3xl font-bold tracking-tight">Fleet (Cheetahs)</h1>
+          <p className="text-sm text-muted-foreground max-w-xl">Manage protocol vehicles</p>
         </div>
         {canManage && (
           <Button onClick={openCreateDialog}>
@@ -305,40 +348,56 @@ export default function CheetahsPage() {
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-primary/60 border-2">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">Total Fleet</CardTitle>
+            <div className="p-2 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors">
+              <Car className="h-4 w-4 text-primary group-hover:scale-110 transition-transform" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{cheetahs.length}</div>
+          <CardContent className="relative z-10">
+            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-primary group-hover:to-primary/70 transition-all duration-500">{cheetahs.length}</div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-green-500/60 border-2">
+          <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">Available</CardTitle>
+            <div className="p-2 rounded-full bg-green-500/10 group-hover:bg-green-500/20 transition-colors">
+              <Car className="h-4 w-4 text-green-500 group-hover:scale-110 transition-transform" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className="relative z-10">
+            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-green-500 group-hover:to-green-600 transition-all duration-500">
               {cheetahs.filter(c => c.status === 'available').length}
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-blue-500/60 border-2">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">In Use</CardTitle>
+            <div className="p-2 rounded-full bg-blue-500/10 group-hover:bg-blue-500/20 transition-colors">
+              <Car className="h-4 w-4 text-blue-500 group-hover:scale-110 transition-transform" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className="relative z-10">
+            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-blue-500 group-hover:to-blue-600 transition-all duration-500">
               {cheetahs.filter(c => c.status === 'in_use').length}
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-orange-500/60 border-2">
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">Maintenance</CardTitle>
+            <div className="p-2 rounded-full bg-orange-500/10 group-hover:bg-orange-500/20 transition-colors">
+              <Car className="h-4 w-4 text-orange-500 group-hover:scale-110 transition-transform" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className="relative z-10">
+            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-orange-500 group-hover:to-orange-600 transition-all duration-500">
               {cheetahs.filter(c => c.status === 'maintenance').length}
             </div>
           </CardContent>
@@ -369,7 +428,7 @@ export default function CheetahsPage() {
               {cheetahs.map((cheetah) => (
                 <div
                   key={cheetah.id}
-                  className="flex items-center justify-between rounded-lg border p-4"
+                  className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:-translate-y-0.5 hover:shadow-md hover:border-primary/30 animate-slide-up"
                 >
                   <div className="flex-1">
                     <p className="font-medium text-lg">
@@ -388,10 +447,10 @@ export default function CheetahsPage() {
                     </Badge>
                     {canManage && (
                       <>
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(cheetah)}>
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(cheetah)} className="hover:bg-primary/10">
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(cheetah.id)}>
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(cheetah.id)} className="hover:bg-destructive/10">
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </>

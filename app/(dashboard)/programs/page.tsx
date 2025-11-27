@@ -72,7 +72,7 @@ export default function ProgramsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     try {
       const data = {
         ...formData,
@@ -183,18 +183,64 @@ export default function ProgramsPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="h-8 w-32 rounded-md skeleton" />
+            <div className="mt-2 h-4 w-48 rounded-md skeleton" />
+          </div>
+          <div className="h-10 w-32 rounded-md skeleton" />
+        </div>
+
+        {/* Stats skeleton */}
+        <div className="grid gap-4 md:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="pb-2">
+                <div className="h-4 w-24 rounded-md skeleton" />
+              </CardHeader>
+              <CardContent>
+                <div className="h-6 w-12 rounded-md skeleton" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Content skeleton */}
+        <Card>
+          <CardHeader>
+            <div className="h-5 w-40 rounded-md skeleton" />
+            <div className="mt-2 h-4 w-56 rounded-md skeleton" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-2">
+                    <div className="h-5 w-48 rounded-md skeleton" />
+                    <div className="h-4 w-64 rounded-md skeleton" />
+                    <div className="h-3 w-32 rounded-md skeleton" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-6 w-20 rounded-full skeleton" />
+                    <div className="h-8 w-8 rounded-md skeleton" />
+                    <div className="h-8 w-8 rounded-md skeleton" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Programs</h1>
-          <p className="text-muted-foreground">Manage events and programs</p>
+          <h1 className="text-3xl font-bold tracking-tight">Programs</h1>
+          <p className="text-sm text-muted-foreground max-w-xl">Manage events and programs</p>
         </div>
         <Button onClick={openDialog}>
           <Plus className="mr-2 h-4 w-4" />
@@ -204,42 +250,58 @@ export default function ProgramsPage() {
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-blue-500/60 border-2">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">Planning</CardTitle>
+            <div className="p-2 rounded-full bg-blue-500/10 group-hover:bg-blue-500/20 transition-colors">
+              <Calendar className="h-4 w-4 text-blue-500 group-hover:scale-110 transition-transform" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className="relative z-10">
+            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-blue-500 group-hover:to-blue-600 transition-all duration-500">
               {programs.filter(p => p.status === 'planning').length}
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-green-500/60 border-2">
+          <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">Active</CardTitle>
+            <div className="p-2 rounded-full bg-green-500/10 group-hover:bg-green-500/20 transition-colors">
+              <CheckCircle className="h-4 w-4 text-green-500 group-hover:scale-110 transition-transform" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className="relative z-10">
+            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-green-500 group-hover:to-green-600 transition-all duration-500">
               {programs.filter(p => p.status === 'active').length}
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-purple-500/60 border-2">
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">Completed</CardTitle>
+            <div className="p-2 rounded-full bg-purple-500/10 group-hover:bg-purple-500/20 transition-colors">
+              <CheckCircle className="h-4 w-4 text-purple-500 group-hover:scale-110 transition-transform" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className="relative z-10">
+            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-purple-500 group-hover:to-purple-600 transition-all duration-500">
               {programs.filter(p => p.status === 'completed').length}
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-gray-500/60 border-2">
+          <div className="absolute inset-0 bg-gradient-to-br from-gray-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">Archived</CardTitle>
+            <div className="p-2 rounded-full bg-gray-500/10 group-hover:bg-gray-500/20 transition-colors">
+              <Archive className="h-4 w-4 text-gray-500 group-hover:scale-110 transition-transform" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className="relative z-10">
+            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-gray-500 group-hover:to-gray-600 transition-all duration-500">
               {programs.filter(p => p.status === 'archived').length}
             </div>
           </CardContent>
@@ -269,7 +331,7 @@ export default function ProgramsPage() {
               {programs.map((program) => (
                 <div
                   key={program.id}
-                  className="flex items-center justify-between rounded-lg border p-4"
+                  className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:-translate-y-0.5 hover:shadow-md hover:border-primary/30 animate-slide-up"
                 >
                   <div className="flex-1">
                     <div className="flex items-center space-x-3">
@@ -289,7 +351,7 @@ export default function ProgramsPage() {
                     <Badge variant="secondary">
                       {getStatusLabel(program.status)}
                     </Badge>
-                    
+
                     {/* Export Button for Completed/Archived Programs */}
                     {(program.status === 'completed' || program.status === 'archived') && (
                       <ProgramExport
@@ -298,7 +360,7 @@ export default function ProgramsPage() {
                         status={program.status}
                       />
                     )}
-                    
+
                     {program.status === 'planning' && (
                       <Button
                         variant="outline"
@@ -308,7 +370,7 @@ export default function ProgramsPage() {
                         Activate
                       </Button>
                     )}
-                    
+
                     {program.status === 'active' && (
                       <Button
                         variant="outline"
@@ -319,7 +381,7 @@ export default function ProgramsPage() {
                         Complete
                       </Button>
                     )}
-                    
+
                     {program.status === 'completed' && (
                       <Button
                         variant="outline"
@@ -330,11 +392,11 @@ export default function ProgramsPage() {
                         Archive
                       </Button>
                     )}
-                    
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(program)}>
+
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(program)} className="hover:bg-primary/10">
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(program.id)}>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(program.id)} className="hover:bg-destructive/10">
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>

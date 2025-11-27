@@ -1,35 +1,35 @@
 "use client"
 
- import { useEffect, useState } from "react"
- import dynamic from "next/dynamic"
- import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
+import dynamic from "next/dynamic"
+import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/lib/constants/tncpCallSigns"
-import { 
-  Users, 
-  Car, 
-  MapPin, 
+import {
+  Users,
+  Car,
+  MapPin,
   AlertTriangle,
   TrendingUp,
   Clock,
   CheckCircle,
   XCircle
 } from "lucide-react"
- import { formatDistanceToNow } from "date-fns"
- import { toast } from "sonner"
+import { formatDistanceToNow } from "date-fns"
+import { toast } from "sonner"
 
- const DashboardCharts = dynamic(
-   () => import("@/components/dashboard/DashboardCharts").then((m) => m.DashboardCharts),
-   {
-     ssr: false,
-   }
- )
+const DashboardCharts = dynamic(
+  () => import("@/components/dashboard/DashboardCharts").then((m) => m.DashboardCharts),
+  {
+    ssr: false,
+  }
+)
 
- export default function DashboardPage() {
+export default function DashboardPage() {
   const router = useRouter()
   const supabase = createClient()
   const [stats, setStats] = useState({
@@ -253,8 +253,8 @@ import {
               {installHelpPlatform === "ios"
                 ? "iPhone / iPad (Safari)"
                 : installHelpPlatform === "android"
-                ? "Android (Chrome)"
-                : "Desktop browser"}
+                  ? "Android (Chrome)"
+                  : "Desktop browser"}
             </p>
             {installHelpPlatform === "ios" && (
               <ol className="list-decimal space-y-0.5 pl-4">
@@ -290,53 +290,73 @@ import {
 
       {/* Stats Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-primary/60 border-2">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">Total Papas</CardTitle>
-            <Users className="h-4 w-4 text-primary/70" />
+            <div className="p-2 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors">
+              <Users className="h-4 w-4 text-primary group-hover:scale-110 transition-transform" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalPapas}</div>
-            <p className="text-xs text-muted-foreground">
+          <CardContent className="relative z-10">
+            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-primary group-hover:to-primary/70 transition-all duration-500 animate-[countUp_0.8s_ease-out]">
+              {stats.totalPapas}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
               Registered guests
             </p>
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-emerald-500/60 border-2">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">Fleet Size</CardTitle>
-            <Car className="h-4 w-4 text-emerald-500" />
+            <div className="p-2 rounded-full bg-emerald-500/10 group-hover:bg-emerald-500/20 transition-colors">
+              <Car className="h-4 w-4 text-emerald-500 group-hover:scale-110 transition-transform" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalCheetahs}</div>
-            <p className="text-xs text-muted-foreground">
+          <CardContent className="relative z-10">
+            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-emerald-500 group-hover:to-emerald-600 transition-all duration-500 animate-[countUp_0.8s_ease-out_0.1s_both]">
+              {stats.totalCheetahs}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
               Active vehicles
             </p>
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-sky-500/60 border-2">
+          <div className="absolute inset-0 bg-gradient-to-br from-sky-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">Active Journeys</CardTitle>
-            <MapPin className="h-4 w-4 text-sky-500" />
+            <div className="p-2 rounded-full bg-sky-500/10 group-hover:bg-sky-500/20 transition-colors">
+              <MapPin className="h-4 w-4 text-sky-500 group-hover:scale-110 transition-transform" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.activeJourneys}</div>
-            <p className="text-xs text-muted-foreground">
+          <CardContent className="relative z-10">
+            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-sky-500 group-hover:to-sky-600 transition-all duration-500 animate-[countUp_0.8s_ease-out_0.2s_both]">
+              {stats.activeJourneys}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
               In progress or planned
             </p>
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-amber-500/60 border-2">
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">Open Incidents</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            <div className="p-2 rounded-full bg-amber-500/10 group-hover:bg-amber-500/20 transition-colors">
+              <AlertTriangle className="h-4 w-4 text-amber-500 group-hover:scale-110 transition-transform" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.incidents}</div>
-            <p className="text-xs text-muted-foreground">
+          <CardContent className="relative z-10">
+            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-amber-500 group-hover:to-amber-600 transition-all duration-500 animate-[countUp_0.8s_ease-out_0.3s_both]">
+              {stats.incidents}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
               Requires attention
             </p>
           </CardContent>
@@ -397,7 +417,7 @@ import {
 
       {/* Quick Actions */}
       <div className="grid gap-6 md:grid-cols-3">
-        <Card 
+        <Card
           className="cursor-pointer transition-all hover:bg-accent hover:shadow-lg hover:-translate-y-0.5"
           onClick={() => router.push('/journeys')}
         >
@@ -410,7 +430,7 @@ import {
           </CardHeader>
         </Card>
 
-        <Card 
+        <Card
           className="cursor-pointer transition-all hover:bg-accent hover:shadow-lg hover:-translate-y-0.5"
           onClick={() => router.push('/papas')}
         >
@@ -423,7 +443,7 @@ import {
           </CardHeader>
         </Card>
 
-        <Card 
+        <Card
           className="cursor-pointer transition-all hover:bg-accent hover:shadow-lg hover:-translate-y-0.5"
           onClick={() => router.push('/cheetahs')}
         >
@@ -435,9 +455,9 @@ import {
             <CardDescription>Register a new Cheetah</CardDescription>
           </CardHeader>
         </Card>
-  
+
         {!isInstalled && (
-          <Card 
+          <Card
             className="cursor-pointer transition-all hover:bg-accent hover:shadow-lg hover:-translate-y-0.5"
             onClick={handleInstallClick}
           >

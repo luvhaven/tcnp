@@ -4,15 +4,20 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { 
-  User, 
-  MapPin, 
+import {
+  User,
+  MapPin,
   Calendar,
   Phone,
   Mail,
   FileText,
-  Navigation
+  Navigation,
+  Hotel,
+  Plane,
+  Car,
+  MessageCircle
 } from 'lucide-react'
 import { toast } from 'sonner'
 import CallSignUpdater from '@/components/journeys/CallSignUpdater'
@@ -30,6 +35,8 @@ type Journey = {
   actual_departure: string | null
   actual_arrival: string | null
   notes: string | null
+  eta: string | null
+  etd: string | null
   papas?: {
     id: string
     full_name: string
@@ -46,6 +53,22 @@ type Journey = {
     registration_number?: string
     driver_name?: string
     driver_phone?: string
+  }
+  nests?: {
+    id: string
+    name: string
+    address: string
+    city?: string
+    contact?: string
+    email?: string
+  }
+  eagle_squares?: {
+    id: string
+    name: string
+    code: string
+    city: string
+    country: string
+    contact?: string
   }
 }
 
@@ -88,13 +111,16 @@ export default function MyAssignmentsPage() {
   const loadAssignments = async () => {
     try {
       setLoading(true)
-      
+
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
       // Load journeys assigned to current user
       const { data, error } = await supabase
         .from('journeys')
         .select(`
           *,
-          papas:papa_id (
+          papas:papas!papa_id (
             id,
             full_name,
             title,
@@ -104,16 +130,32 @@ export default function MyAssignmentsPage() {
             special_requirements,
             notes
           ),
-          cheetahs (
+          cheetahs:cheetahs!assigned_cheetah_id (
             id,
             call_sign,
             registration_number,
             driver_name,
             driver_phone
+          ),
+          nests:nests!assigned_nest_id (
+            id,
+            name,
+            address,
+            city,
+            contact,
+            email
+          ),
+          eagle_squares:eagle_squares!assigned_eagle_square_id (
+            id,
+            name,
+            code,
+            city,
+            country,
+            contact
           )
         `)
-        .eq('assigned_do_id', (await supabase.auth.getUser()).data.user?.id)
-        .order('scheduled_departure', { ascending: true })
+        .eq('assigned_do_id', user.id)
+        .order('etd', { ascending: true, nullsFirst: false })
 
       if (error) throw error
 
@@ -150,11 +192,11 @@ export default function MyAssignmentsPage() {
     }
   }
 
-  const activeJourneys = journeys.filter(j => 
+  const activeJourneys = journeys.filter(j =>
     ['planned', 'first_course', 'in_progress'].includes(j.status)
   )
-  
-  const completedJourneys = journeys.filter(j => 
+
+  const completedJourneys = journeys.filter(j =>
     ['completed', 'cancelled'].includes(j.status)
   )
 
@@ -164,10 +206,71 @@ export default function MyAssignmentsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center space-y-3">
-          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
-          <p className="text-sm text-muted-foreground">Loading your assignments...</p>
+      <div className="space-y-6">
+        {/* Header skeleton */}
+        <div>
+          <div className="h-8 w-56 rounded-md skeleton" />
+          <div className="mt-2 h-4 w-80 rounded-md skeleton" />
+        </div>
+
+        {/* Tabs skeleton */}
+        <div className="flex gap-2">
+          <div className="h-9 w-36 rounded-md skeleton" />
+          <div className="h-9 w-40 rounded-md skeleton" />
+        </div>
+
+        {/* Journey cards skeleton */}
+        <div className="space-y-6">
+          {[...Array(2)].map((_, index) => (
+            <div key={index} className="space-y-4">
+              {/* Call-Sign Updater skeleton */}
+              <Card>
+                <CardHeader>
+                  <div className="h-5 w-40 rounded-md skeleton" />
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i} className="h-9 rounded-md skeleton" />
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Papa Details skeleton */}
+              <Card>
+                <CardHeader>
+                  <div className="h-5 w-32 rounded-md skeleton" />
+                  <div className="mt-2 h-4 w-48 rounded-md skeleton" />
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4">
+                    {[...Array(6)].map((_, i) => (
+                      <div key={i} className="space-y-2">
+                        <div className="h-3 w-20 rounded-md skeleton" />
+                        <div className="h-4 w-32 rounded-md skeleton" />
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Quick Communication skeleton */}
+              <Card>
+                <CardHeader>
+                  <div className="h-5 w-48 rounded-md skeleton" />
+                  <div className="mt-2 h-4 w-56 rounded-md skeleton" />
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i} className="h-9 rounded-md skeleton" />
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          ))}
         </div>
       </div>
     )
@@ -251,7 +354,9 @@ export default function MyAssignmentsPage() {
                   <CardContent className="space-y-4">
                     {journey.cheetahs && (
                       <div className="p-3 bg-muted/50 rounded-lg text-xs">
-                        <p className="font-semibold mb-1">Assigned Cheetah</p>
+                        <p className="font-semibold mb-1 flex items-center gap-2">
+                          <Car className="h-3 w-3" /> Assigned Cheetah
+                        </p>
                         <p className="text-sm">
                           {journey.cheetahs.call_sign || 'Unassigned'}
                           {journey.cheetahs.registration_number && ` • ${journey.cheetahs.registration_number}`}
@@ -262,6 +367,29 @@ export default function MyAssignmentsPage() {
                             {journey.cheetahs.driver_phone && ` • ${journey.cheetahs.driver_phone}`}
                           </p>
                         )}
+                      </div>
+                    )}
+
+                    {journey.nests && (
+                      <div className="p-3 bg-blue-50/50 dark:bg-blue-900/10 rounded-lg text-xs">
+                        <p className="font-semibold mb-1 flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                          <Hotel className="h-3 w-3" /> Assigned Nest
+                        </p>
+                        <p className="text-sm font-medium">{journey.nests.name}</p>
+                        <p className="text-muted-foreground">{journey.nests.address}</p>
+                        {journey.nests.contact && (
+                          <p className="mt-1 text-muted-foreground">Contact: {journey.nests.contact}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {journey.eagle_squares && (
+                      <div className="p-3 bg-sky-50/50 dark:bg-sky-900/10 rounded-lg text-xs">
+                        <p className="font-semibold mb-1 flex items-center gap-2 text-sky-700 dark:text-sky-300">
+                          <Plane className="h-3 w-3" /> Eagle Square
+                        </p>
+                        <p className="text-sm font-medium">{journey.eagle_squares.name} ({journey.eagle_squares.code})</p>
+                        <p className="text-muted-foreground">{journey.eagle_squares.city}, {journey.eagle_squares.country}</p>
                       </div>
                     )}
 
@@ -322,6 +450,93 @@ export default function MyAssignmentsPage() {
                     ) : (
                       <p className="text-sm text-muted-foreground">Papa details not available</p>
                     )}
+                  </CardContent>
+                </Card>
+
+                {/* Quick Communication Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <MessageCircle className="h-5 w-5" />
+                      Quick Communication
+                    </CardTitle>
+                    <CardDescription>Contact team members about this journey</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        asChild
+                        className="justify-start"
+                      >
+                        <a href={`/chat?message=Regarding ${journey.papas?.full_name || 'journey'}: `}>
+                          <User className="h-4 w-4 mr-2" />
+                          Contact Admin
+                        </a>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        asChild
+                        className="justify-start"
+                      >
+                        <a href={`/chat?message=Command - Journey for ${journey.papas?.full_name || 'Papa'}: `}>
+                          <Navigation className="h-4 w-4 mr-2" />
+                          Contact Command
+                        </a>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        asChild
+                        className="justify-start"
+                      >
+                        <a href={`/chat?message=HOP - Need assistance with ${journey.papas?.full_name || 'journey'}: `}>
+                          <User className="h-4 w-4 mr-2" />
+                          Contact HOP
+                        </a>
+                      </Button>
+                      {journey.cheetahs && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          asChild
+                          className="justify-start"
+                        >
+                          <a href={`/chat?message=Tango - ${journey.cheetahs.call_sign} for ${journey.papas?.full_name || 'Papa'}: `}>
+                            <Car className="h-4 w-4 mr-2" />
+                            Contact Tango
+                          </a>
+                        </Button>
+                      )}
+                      {journey.nests && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          asChild
+                          className="justify-start"
+                        >
+                          <a href={`/chat?message=Nest - ${journey.nests.name} for ${journey.papas?.full_name || 'Papa'}: `}>
+                            <Hotel className="h-4 w-4 mr-2" />
+                            Contact Nest
+                          </a>
+                        </Button>
+                      )}
+                      {journey.eagle_squares && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          asChild
+                          className="justify-start"
+                        >
+                          <a href={`/chat?message=Eagle - ${journey.eagle_squares.code} for ${journey.papas?.full_name || 'Papa'}: `}>
+                            <Plane className="h-4 w-4 mr-2" />
+                            Contact Eagle
+                          </a>
+                        </Button>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
 

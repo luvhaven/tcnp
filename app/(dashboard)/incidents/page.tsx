@@ -10,9 +10,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
-import { 
-  AlertTriangle, 
-  Plus, 
+import {
+  AlertTriangle,
+  Plus,
   Radio,
   CheckCircle,
   Clock,
@@ -97,7 +97,7 @@ export default function IncidentsPage() {
   useEffect(() => {
     loadData()
     const channel = subscribeToIncidents()
-    
+
     return () => {
       if (channel) {
         supabase.removeChannel(channel)
@@ -108,14 +108,14 @@ export default function IncidentsPage() {
   const loadData = async () => {
     try {
       setLoading(true)
-      
+
       const { data: { user } } = await supabase.auth.getUser()
       const { data: userData } = await supabase
         .from('users')
         .select('*')
         .eq('id', user?.id)
         .single()
-      
+
       setCurrentUser(userData)
 
       const canManageIncidents = ['super_admin', 'admin'].includes(userData?.role)
@@ -134,7 +134,7 @@ export default function IncidentsPage() {
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      
+
       console.log('✅ Loaded incidents:', incidentsData)
       setIncidents(incidentsData || [])
 
@@ -147,7 +147,7 @@ export default function IncidentsPage() {
         `)
         .order('created_at', { ascending: false })
         .limit(50)
-      
+
       setJourneys(journeysData || [])
     } catch (error) {
       console.error('❌ Error loading incidents:', error)
@@ -169,7 +169,7 @@ export default function IncidentsPage() {
         }
       )
       .subscribe()
-    
+
     return channel
   }
 
@@ -227,7 +227,7 @@ export default function IncidentsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     try {
       if (editing) {
         const { error } = await supabase
@@ -339,7 +339,7 @@ export default function IncidentsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -388,8 +388,8 @@ export default function IncidentsPage() {
                     const StatusIcon = statusConfig.icon
 
                     return (
-                      <tr 
-                        key={incident.id} 
+                      <tr
+                        key={incident.id}
                         className="border-b hover:bg-muted/50 cursor-pointer transition-colors"
                         onClick={() => openDialog(incident)}
                       >
@@ -454,8 +454,8 @@ export default function IncidentsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Journey (Optional)</Label>
-                <Select 
-                  value={formData.journey_id} 
+                <Select
+                  value={formData.journey_id}
                   onChange={(e) => setFormData({ ...formData, journey_id: e.target.value })}
                 >
                   <option value="">None</option>
@@ -469,9 +469,9 @@ export default function IncidentsPage() {
 
               <div className="space-y-2">
                 <Label>Type *</Label>
-                <Select 
-                  value={formData.type} 
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value })} 
+                <Select
+                  value={formData.type}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                   required
                 >
                   <option value="">Select type</option>
@@ -487,9 +487,9 @@ export default function IncidentsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Severity *</Label>
-                <Select 
-                  value={formData.severity} 
-                  onChange={(e) => setFormData({ ...formData, severity: e.target.value as any })} 
+                <Select
+                  value={formData.severity}
+                  onChange={(e) => setFormData({ ...formData, severity: e.target.value as any })}
                   required
                 >
                   {Object.entries(SEVERITY_CONFIG).map(([key, config]) => (
@@ -503,8 +503,8 @@ export default function IncidentsPage() {
               {editing && (
                 <div className="space-y-2">
                   <Label>Status</Label>
-                  <Select 
-                    value={formData.status} 
+                  <Select
+                    value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
                   >
                     {Object.entries(STATUS_CONFIG).map(([key, config]) => (

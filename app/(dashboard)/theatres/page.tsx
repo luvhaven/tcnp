@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { MapPin, Plus, Edit, Trash2 } from "lucide-react"
+import { MapPin, Plus, Edit, Trash2, Users } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 
 export default function TheatresPage() {
@@ -49,7 +50,7 @@ export default function TheatresPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     try {
       if (editing) {
         const { error } = await supabase
@@ -126,23 +127,114 @@ export default function TheatresPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="h-8 w-32 rounded-md skeleton" />
+            <div className="mt-2 h-4 w-48 rounded-md skeleton" />
+          </div>
+          <div className="h-10 w-28 rounded-md skeleton" />
+        </div>
+
+        {/* Content skeleton */}
+        <Card>
+          <CardHeader>
+            <div className="h-5 w-32 rounded-md skeleton" />
+            <div className="mt-2 h-4 w-40 rounded-md skeleton" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-2">
+                    <div className="h-5 w-48 rounded-md skeleton" />
+                    <div className="h-4 w-64 rounded-md skeleton" />
+                    <div className="h-3 w-32 rounded-md skeleton" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-md skeleton" />
+                    <div className="h-8 w-8 rounded-md skeleton" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Theatres (Venues)</h1>
-          <p className="text-muted-foreground">Manage event venues and locations</p>
+          <h1 className="text-3xl font-bold tracking-tight">Theatres</h1>
+          <p className="text-sm text-muted-foreground max-w-xl">Manage event venues and locations</p>
         </div>
         <Button onClick={openDialog}>
           <Plus className="mr-2 h-4 w-4" />
           Add Venue
         </Button>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-primary/60 border-2">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+            <CardTitle className="text-sm font-medium">Total Venues</CardTitle>
+            <div className="p-2 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors">
+              <MapPin className="h-4 w-4 text-primary group-hover:scale-110 transition-transform" />
+            </div>
+          </CardHeader>
+          <CardContent className="relative z-10">
+            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-primary group-hover:to-primary/70 transition-all duration-500">
+              {theatres.length}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Registered locations
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-emerald-500/60 border-2">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+            <CardTitle className="text-sm font-medium">Total Capacity</CardTitle>
+            <div className="p-2 rounded-full bg-emerald-500/10 group-hover:bg-emerald-500/20 transition-colors">
+              <Users className="h-4 w-4 text-emerald-500 group-hover:scale-110 transition-transform" />
+            </div>
+          </CardHeader>
+          <CardContent className="relative z-10">
+            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-emerald-500 group-hover:to-emerald-600 transition-all duration-500">
+              {theatres.reduce((sum, t) => sum + (t.capacity || 0), 0).toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Combined seating
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-purple-500/60 border-2">
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+            <CardTitle className="text-sm font-medium">Average Capacity</CardTitle>
+            <div className="p-2 rounded-full bg-purple-500/10 group-hover:bg-purple-500/20 transition-colors">
+              <MapPin className="h-4 w-4 text-purple-500 group-hover:scale-110 transition-transform" />
+            </div>
+          </CardHeader>
+          <CardContent className="relative z-10">
+            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-purple-500 group-hover:to-purple-600 transition-all duration-500">
+              {theatres.length > 0
+                ? Math.round(theatres.reduce((sum, t) => sum + (t.capacity || 0), 0) / theatres.length).toLocaleString()
+                : 0
+              }
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Per venue
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
@@ -168,22 +260,27 @@ export default function TheatresPage() {
               {theatres.map((theatre) => (
                 <div
                   key={theatre.id}
-                  className="flex items-center justify-between rounded-lg border p-4"
+                  className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:border-primary/30 hover:shadow-sm hover:-translate-y-0.5 animate-slide-up"
                 >
                   <div className="flex-1">
                     <p className="font-medium text-lg">{theatre.name}</p>
                     <p className="text-sm text-muted-foreground">
                       {theatre.address}, {theatre.city}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {theatre.venue_type} • Capacity: {theatre.capacity} people
-                    </p>
+                    <div className="flex items-center gap-3 mt-2">
+                      <Badge variant="secondary" className="text-xs">
+                        {theatre.venue_type || 'Venue'}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        Capacity: <span className="font-semibold">{theatre.capacity}</span> people
+                      </span>
+                    </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(theatre)}>
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(theatre)} className="hover:bg-primary/10">
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(theatre.id)}>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(theatre.id)} className="hover:bg-destructive/10">
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>

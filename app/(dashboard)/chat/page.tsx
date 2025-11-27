@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import ChatSystem from '@/components/chat/ChatSystem'
 import { createClient } from '@/lib/supabase/client'
+import { useSearchParams } from 'next/navigation'
 
 type ChatProgram = {
   id: string
@@ -19,6 +20,9 @@ type ChatPapa = {
 
 export default function ChatPage() {
   const supabase = createClient()
+  const searchParams = useSearchParams()
+  const initialMessage = searchParams.get('message') || undefined
+
   const [programs, setPrograms] = useState<ChatProgram[]>([])
   const [program, setProgram] = useState<ChatProgram | null>(null)
   const [papas, setPapas] = useState<ChatPapa[]>([])
@@ -154,6 +158,26 @@ export default function ChatPage() {
     setPapaId(value || null)
   }
 
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="h-8 w-48 rounded-md skeleton" />
+            <div className="mt-2 h-4 w-64 rounded-md skeleton" />
+          </div>
+          <div className="flex gap-4">
+            <div className="h-8 w-48 rounded-md skeleton" />
+            <div className="h-8 w-48 rounded-md skeleton" />
+          </div>
+        </div>
+        <Card>
+          <div className="h-[600px] w-full rounded-lg skeleton" />
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -226,7 +250,11 @@ export default function ChatPage() {
               : 'No programs found. Create a program first, then use this page to chat with the program team.'}
           </div>
         ) : (
-          <ChatSystem programId={program?.id} papaId={papaId || undefined} />
+          <ChatSystem
+            programId={program?.id}
+            papaId={papaId || undefined}
+            initialMessage={initialMessage}
+          />
         )}
       </Card>
     </div>

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react'
 
-export type AppTheme = 'light' | 'dark' | 'auto' | 'tcnp' | string
+export type AppTheme = 'light' | 'dark' | 'auto'
 
 type ThemeContextValue = {
   theme: AppTheme
@@ -10,8 +10,8 @@ type ThemeContextValue = {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  theme: 'tcnp',
-  setTheme: () => {},
+  theme: 'light',
+  setTheme: () => { },
 })
 
 const THEME_KEY = 'tcnp-theme'
@@ -20,7 +20,7 @@ function applyTheme(next: AppTheme) {
   if (typeof document === 'undefined') return
 
   const root = document.documentElement
-  root.classList.remove('dark', 'theme-tcnp')
+  root.classList.remove('dark')
 
   let resolved = next
 
@@ -31,8 +31,6 @@ function applyTheme(next: AppTheme) {
 
   if (resolved === 'dark') {
     root.classList.add('dark')
-  } else if (resolved === 'tcnp') {
-    root.classList.add('theme-tcnp')
   }
 
   try {
@@ -43,15 +41,15 @@ function applyTheme(next: AppTheme) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<AppTheme>('tcnp')
+  const [theme, setThemeState] = useState<AppTheme>('light')
 
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    let initial: AppTheme = 'tcnp'
+    let initial: AppTheme = 'light'
     try {
       const stored = window.localStorage.getItem(THEME_KEY) as AppTheme | null
-      if (stored) {
+      if (stored && ['light', 'dark', 'auto'].includes(stored)) {
         initial = stored
       }
     } catch {

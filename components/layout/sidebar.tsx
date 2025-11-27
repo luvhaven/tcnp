@@ -29,19 +29,17 @@ import {
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "My Assignments", href: "/my-assignments", icon: Navigation },
   { name: "Programs", href: "/programs", icon: Calendar },
   { name: "Journeys", href: "/journeys", icon: MapPin },
-  { name: "Papas (Guests)", href: "/papas", icon: Users },
-  { name: "Fleet (Cheetahs)", href: "/cheetahs", icon: Car },
-  { name: "Cheetah Tracking", href: "/tracking/cheetahs", icon: Navigation },
-  { name: "Eagle Tracking", href: "/tracking/eagles", icon: Plane },
+  { name: "Papas", href: "/papas", icon: Users },
+  { name: "Cheetahs", href: "/cheetahs", icon: Car },
+  { name: "Eagle Operations", href: "/eagles", icon: Plane },
   { name: "Live Tracking", href: "/tracking/live", icon: MapPin },
   { name: "Team Chat", href: "/chat", icon: MessageCircle },
-  { name: "Protocol Officers", href: "/officers", icon: UserCircle },
-  { name: "Manage Officers", href: "/officers/manage", icon: Settings },
-  { name: "Eagle Squares", href: "/eagle-squares", icon: Plane },
-  { name: "Nests (Hotels)", href: "/nests", icon: Hotel },
-  { name: "Theatres (Venues)", href: "/theatres", icon: MapPin },
+  { name: "Officers", href: "/officers", icon: UserCircle },
+  { name: "Nests", href: "/nests", icon: Hotel },
+  { name: "Theatres", href: "/theatres", icon: MapPin },
   { name: "Incidents", href: "/incidents", icon: AlertTriangle },
   { name: "Audit Logs", href: "/audit-logs", icon: FileText },
   { name: "Settings", href: "/settings", icon: Settings },
@@ -58,13 +56,34 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const { count: unreadCount } = useUnreadChatCount()
   const [currentUser, setCurrentUser] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [userOscar, setUserOscar] = useState<string | null>(null)
 
   useEffect(() => {
     const loadUser = async () => {
       const {
         data: { user }
       } = await supabase.auth.getUser()
-      setCurrentUser(user?.id ?? null)
+
+      if (!user) {
+        setCurrentUser(null)
+        setUserRole(null)
+        setUserOscar(null)
+        return
+      }
+
+      setCurrentUser(user.id)
+
+      const { data: profile, error } = await supabase
+        .from('users')
+        .select('role, oscar')
+        .eq('id', user.id)
+        .single<{ role: string | null; oscar: string | null }>()
+
+      if (!error && profile) {
+        setUserRole(profile.role ?? null)
+        setUserOscar(profile.oscar ?? null)
+      }
     }
 
     void loadUser()
@@ -85,6 +104,18 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
       supabase.removeChannel(channel)
     }
   }, [supabase, currentUser])
+
+  const isDeltaOscar = (userRole === 'delta_oscar') || (userOscar === 'delta_oscar')
+
+  const visibleNavigation = useMemo(
+    () =>
+      isDeltaOscar
+        ? navigation.filter((item) =>
+          item.href === '/my-assignments' || item.href === '/chat'
+        )
+        : navigation,
+    [isDeltaOscar]
+  )
 
   return (
     <div
@@ -137,7 +168,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">
-        {navigation.map((item) => {
+        {visibleNavigation.map((item) => {
           const isActive = pathname === item.href
           return (
             <Link
@@ -158,8 +189,8 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
                 <span className="flex items-center justify-between w-full animate-fade-in">
                   <span>{item.name}</span>
                   {item.name === "Team Chat" && unreadCount > 0 && (
-                    <Badge 
-                      variant="destructive" 
+                    <Badge
+                      variant="destructive"
                       className="ml-auto bg-red-500 text-white font-semibold animate-pulse shadow-lg"
                     >
                       {unreadCount > 99 ? '99+' : unreadCount}

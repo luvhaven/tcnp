@@ -13,98 +13,14 @@ interface LocationData {
 
 interface UseLocationTrackingOptions {
   enableTracking?: boolean
-  updateInterval?: number // milliseconds
+  updateInterval?: number
   highAccuracy?: boolean
-}
-
-const GEO_PERMISSION_DENIED = 1
-const GEO_POSITION_UNAVAILABLE = 2
-const GEO_TIMEOUT = 3
-
-const isSecureGeolocationContext = (): boolean => {
-  if (typeof window === 'undefined') {
-    return false
-  }
-
-  if (window.isSecureContext) {
-    return true
-  }
-
-  const hostname = window.location.hostname
-  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]'
-}
-
-const normalizePermissionError = (
-  code: number | undefined,
-  rawMessage: string,
-  permissionStatus: PermissionState | null
-) => {
-  const normalizedRaw = rawMessage?.trim() ?? ''
-  const lower = normalizedRaw.toLowerCase()
-
-  if (code === GEO_TIMEOUT || /timeout/i.test(lower)) {
-    return {
-      message: 'Location permission request timed out.',
-      toastMessage: 'Location permission timed out. Approve the location prompt to enable live tracking.',
-      severity: 'warning' as const,
-      recoverable: true,
-      shouldNotify: permissionStatus !== 'granted'
-    }
-  }
-
-  if (code === GEO_PERMISSION_DENIED || permissionStatus === 'denied' || /denied/i.test(lower)) {
-    return {
-      message: 'Location permission is blocked. Enable location access in your browser settings.',
-      toastMessage: 'Enable location access in your browser settings and reload to share your position.',
-      severity: 'error' as const,
-      recoverable: false,
-      shouldNotify: true
-    }
-  }
-
-  if (code === GEO_POSITION_UNAVAILABLE || /position unavailable/i.test(lower)) {
-    return {
-      message: "Location information unavailable. Turn on your device's location services and try again.",
-      toastMessage: 'Turn on GPS or location services, then refresh to resume live tracking.',
-      severity: 'error' as const,
-      recoverable: false,
-      shouldNotify: true
-    }
-  }
-
-  if (lower.includes('secure origin') || lower.includes('https')) {
-    return {
-      message: 'Location tracking requires a secure origin (HTTPS or localhost).',
-      toastMessage: 'Open the app over HTTPS or localhost to enable location tracking.',
-      severity: 'error' as const,
-      recoverable: false,
-      shouldNotify: true
-    }
-  }
-
-  if (normalizedRaw.length > 0) {
-    return {
-      message: normalizedRaw,
-      toastMessage: normalizedRaw,
-      severity: 'error' as const,
-      recoverable: false,
-      shouldNotify: true
-    }
-  }
-
-  return {
-    message: 'We could not access your location. Verify that location services are enabled and refresh the page.',
-    toastMessage: 'Enable location services in your browser and reload to resume live tracking.',
-    severity: 'error' as const,
-    recoverable: false,
-    shouldNotify: true
-  }
 }
 
 export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
   const {
     enableTracking = true,
-    updateInterval = 10000, // 10 seconds
+    updateInterval = 10000,
     highAccuracy = true
   } = options
 
@@ -114,153 +30,16 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
   const [permissionStatus, setPermissionStatus] = useState<PermissionState | null>(null)
   const [isTracking, setIsTracking] = useState(false)
   const watchIdRef = useRef<number | null>(null)
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  const lastReminderRef = useRef<number>(0)
-  const isTrackingRef = useRef(false)
-  const lastPermissionWarningRef = useRef<number>(0)
-  const permissionPermanentlyDeniedRef = useRef(false)
-  const fatalPermissionErrorShownRef = useRef(false)
-
-  // Request location permission
-  const requestPermission = useCallback(async () => {
-    try {
-      // If we've already seen a fatal permission error (user blocked location),
-      // avoid spamming additional prompts or toasts.
-      if (permissionPermanentlyDeniedRef.current || fatalPermissionErrorShownRef.current) {
-        console.warn('⚠️ Skipping geolocation permission request because it was previously denied or blocked.')
-        return false
-      }
-
-      if (typeof window === 'undefined') {
-        return false
-      }
-
-      if (!isSecureGeolocationContext()) {
-        const message = 'Location tracking requires a secure origin (HTTPS or localhost).'
-        console.error('❌ Location permission error:', message)
-        setError(message)
-        toast.error('Open the app over HTTPS or localhost to enable location tracking.')
-        return false
-      }
-
-      if (!('geolocation' in navigator)) {
-        throw new Error('Geolocation is not supported by your browser')
-      }
-
-      // Check permission status
-      const permissionsApi = (navigator as any).permissions
-      if (permissionsApi && typeof permissionsApi.query === 'function') {
-        try {
-          const result = await permissionsApi.query({ name: 'geolocation' })
-          setPermissionStatus(result.state)
-
-          result.addEventListener('change', () => {
-            setPermissionStatus(result.state)
-          })
-        } catch (permissionError) {
-          console.warn('⚠️ Unable to query geolocation permission status:', permissionError)
-        }
-      }
-
-      // Request position to trigger permission prompt
-      await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: highAccuracy,
-          timeout: 10000,
-          maximumAge: 0
-        })
-      })
-
-      console.log('✅ Location permission granted')
-      return true
-    } catch (err: any) {
-      const geolocationError = err as GeolocationPositionError | Error
-      const code = typeof geolocationError === 'object' && geolocationError !== null && typeof (geolocationError as GeolocationPositionError).code === 'number'
-        ? (geolocationError as GeolocationPositionError).code
-        : undefined
-      const rawMessage =
-        typeof geolocationError === 'object' && geolocationError !== null && 'message' in geolocationError && typeof (geolocationError as any).message === 'string'
-          ? (geolocationError as any).message
-          : typeof err === 'string'
-            ? err
-            : ''
-      const {
-        message: friendlyMessage,
-        toastMessage,
-        severity,
-        recoverable,
-        shouldNotify
-      } = normalizePermissionError(code, rawMessage, permissionStatus)
-
-      if (!recoverable) {
-        permissionPermanentlyDeniedRef.current = true
-      }
-
-      const logPrefix = severity === 'warning' ? '⚠️ Location permission warning:' : '❌ Location permission error:'
-      // Always log location permission issues as warnings to avoid red noise,
-      // while keeping the severity distinction in the prefix and toast behavior.
-      const logFn = console.warn
-      logFn(logPrefix, friendlyMessage, geolocationError)
-
-      if (recoverable) {
-        setError(null)
-        if (!isTrackingRef.current && shouldNotify) {
-          const now = Date.now()
-          if (now - lastPermissionWarningRef.current > 60000) {
-            lastPermissionWarningRef.current = now
-            toast.warning(toastMessage ?? friendlyMessage)
-          }
-        }
-        return true
-      }
-
-      setError(friendlyMessage)
-      if (shouldNotify && !fatalPermissionErrorShownRef.current) {
-        fatalPermissionErrorShownRef.current = true
-        const notify = severity === 'warning' ? toast.warning : toast.error
-        notify(toastMessage ?? friendlyMessage)
-      }
-      return false
-    }
-  }, [highAccuracy, permissionStatus])
-
-  const remindEnableLocation = useCallback(
-    (reason: 'denied' | 'unavailable' | 'stopped' = 'denied') => {
-      if (permissionPermanentlyDeniedRef.current) {
-        // User has explicitly denied location; avoid further toasts.
-        return
-      }
-
-      const now = Date.now()
-      if (now - lastReminderRef.current < 10000) {
-        return
-      }
-      lastReminderRef.current = now
-
-      const baseMessage =
-        reason === 'unavailable'
-          ? 'Unable to read your location. Please turn location services back on to stay visible.'
-          : reason === 'stopped'
-            ? 'Location tracking paused. Enable location services to continue sharing your position.'
-            : 'Location access is disabled. Turn it back on to stay visible on the live map.'
-
-      toast.warning(baseMessage, {
-        action: {
-          label: 'Enable',
-          onClick: () => {
-            void requestPermission()
-          }
-        }
-      })
-    },
-    [requestPermission]
-  )
+  const updateIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   // Update location in database
   const updateLocationInDB = useCallback(async (locationData: LocationData) => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) {
+        console.warn('⚠️ User not authenticated, skipping location update')
+        return
+      }
 
       // Get battery level if available
       let batteryLevel: number | undefined
@@ -273,28 +52,28 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
         }
       }
 
-      const { error } = await (supabase as any).rpc('upsert_user_location', {
+      const { error: rpcError } = await (supabase as any).rpc('upsert_user_location', {
         p_user_id: user.id,
         p_latitude: locationData.latitude,
         p_longitude: locationData.longitude,
         p_accuracy: locationData.accuracy,
-        p_altitude: locationData.altitude || null,
-        p_heading: locationData.heading || null,
-        p_speed: locationData.speed || null,
-        p_battery_level: batteryLevel || null
+        p_altitude: locationData.altitude ?? null,
+        p_heading: locationData.heading ?? null,
+        p_speed: locationData.speed ?? null,
+        p_battery_level: batteryLevel ?? null
       })
 
-      if (error) {
-        console.error('❌ Error updating location:', error)
+      if (rpcError) {
+        console.error('❌ Failed to update location in database:', rpcError)
       } else {
-        console.log('📍 Location updated:', locationData)
+        console.log('✅ Location updated in database')
       }
     } catch (err) {
-      console.error('❌ Error in updateLocationInDB:', err)
+      console.error('❌ Error updating location:', err)
     }
   }, [supabase])
 
-  // Handle position update
+  // Handle successful position
   const handlePosition = useCallback((position: GeolocationPosition) => {
     const locationData: LocationData = {
       latitude: position.coords.latitude,
@@ -307,183 +86,226 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
 
     setLocation(locationData)
     setError(null)
-    
-    // Update in database
-    void updateLocationInDB(locationData)
+    console.log('📍 Location updated:', {
+      lat: locationData.latitude.toFixed(6),
+      lng: locationData.longitude.toFixed(6),
+      accuracy: `${locationData.accuracy.toFixed(0)}m`
+    })
+
+    updateLocationInDB(locationData)
   }, [updateLocationInDB])
 
   // Handle position error
   const handleError = useCallback((err: GeolocationPositionError) => {
-    let message = 'Failed to get location'
+    let errorMessage = 'Unable to get your location'
 
     switch (err.code) {
       case err.PERMISSION_DENIED:
-        message = 'Location permission denied'
+        errorMessage = 'Location permission denied. Please enable location access in your browser settings.'
+        setPermissionStatus('denied')
         break
       case err.POSITION_UNAVAILABLE:
-        message = 'Location information unavailable'
+        errorMessage = 'Location information unavailable. Please turn on your device location services.'
         break
       case err.TIMEOUT:
-        message = 'Location request timed out'
-        break
+        errorMessage = 'Location request timed out. Trying again...'
+        console.warn('⏱️ Location timeout, will retry automatically')
+        return // Don't set error for timeouts, just retry
     }
 
-    if (err.code === err.TIMEOUT) {
-      console.warn('⏱️ Geolocation timed out; will retry automatically')
-      setError(null)
-      return
-    } else {
-      console.error('❌ Geolocation error:', message, err)
-    }
+    console.error('❌ Location error:', errorMessage, err)
+    setError(errorMessage)
+  }, [])
 
-    setError(message)
+  // Request permission
+  const requestPermission = useCallback(async (): Promise<boolean> => {
+    try {
+      if (typeof window === 'undefined' || !('geolocation' in navigator)) {
+        toast.error('Geolocation is not supported by your browser')
+        return false
+      }
 
-    if (err.code === err.PERMISSION_DENIED) {
-      remindEnableLocation('denied')
-    }
+      // Check if we're on HTTPS or localhost
+      const isSecure = window.location.protocol === 'https:' ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1'
 
-    if (err.code === err.POSITION_UNAVAILABLE) {
-      remindEnableLocation('unavailable')
+      if (!isSecure) {
+        toast.error('Location tracking requires HTTPS or localhost')
+        return false
+      }
+
+      // Query permission API if available (just for logging/state, don't block)
+      if ('permissions' in navigator) {
+        try {
+          const result = await navigator.permissions.query({ name: 'geolocation' as PermissionName })
+          setPermissionStatus(result.state)
+
+          // Listen for permission changes
+          result.addEventListener('change', () => {
+            setPermissionStatus(result.state)
+            console.log('📍 Permission changed:', result.state)
+          })
+
+          // We log it but we DON'T return false here anymore. 
+          // We'll let getCurrentPosition fail if it's truly denied.
+          if (result.state === 'denied') {
+            console.warn('⚠️ Permission API reports denied, but we will try to request anyway.')
+          }
+        } catch (e) {
+          console.warn('⚠️ Permission API not available:', e)
+        }
+      }
+
+      // Helper to get position with fallback
+      const getPosition = async (): Promise<GeolocationPosition> => {
+        return new Promise((resolve, reject) => {
+          // Attempt 1: High Accuracy
+          navigator.geolocation.getCurrentPosition(
+            resolve,
+            (error) => {
+              // If timeout and we wanted high accuracy, try again with low accuracy
+              if (error.code === error.TIMEOUT && highAccuracy) {
+                console.warn('⚠️ High accuracy timed out, falling back to low accuracy')
+                toast('High precision location unavailable, using approximate location.', {
+                  description: 'Move outdoors for better accuracy.'
+                })
+
+                navigator.geolocation.getCurrentPosition(
+                  resolve,
+                  reject,
+                  {
+                    enableHighAccuracy: false,
+                    timeout: 20000,
+                    maximumAge: 0
+                  }
+                )
+              } else {
+                reject(error)
+              }
+            },
+            {
+              enableHighAccuracy: highAccuracy,
+              timeout: 15000, // 15s for high accuracy attempt
+              maximumAge: 0
+            }
+          )
+        })
+      }
+
+      try {
+        const position = await getPosition()
+        console.log('✅ Location permission granted (forced)')
+        setPermissionStatus('granted')
+        handlePosition(position)
+        return true
+      } catch (error: any) {
+        console.error('❌ Geolocation error:', error.message, error.code)
+        if (error.code === error.PERMISSION_DENIED) {
+          toast.error('Location access denied. Please allow location access in your browser address bar.')
+          setPermissionStatus('denied')
+          return false
+        } else {
+          // For other errors (like persistent timeout), we still consider it "allowed" but failed
+          console.warn('⚠️ Permission granted but location unavailable:', error.message)
+          // Return true so we can try again later via the interval/watch
+          return true
+        }
+      }
+    } catch (err) {
+      console.error('❌ Error requesting permission:', err)
+      return false
     }
-  }, [remindEnableLocation])
+  }, [highAccuracy, handlePosition])
 
   // Start tracking
   const startTracking = useCallback(async () => {
-    if (!enableTracking) return
-    if (isTracking) return
-
-    console.log('🎯 Starting location tracking...')
-
-    // Request permission first
-    const hasPermission = await requestPermission()
-    if (!hasPermission) return
-
-    // Start watching position
-    if ('geolocation' in navigator) {
-      watchIdRef.current = navigator.geolocation.watchPosition(
-        handlePosition,
-        handleError,
-        {
-          enableHighAccuracy: highAccuracy,
-          timeout: 10000,
-          maximumAge: 0
-        }
-      )
-
-      setIsTracking(true)
-      console.log('✅ Location tracking started')
-    }
-  }, [enableTracking, isTracking, requestPermission, handlePosition, handleError, highAccuracy])
-
-  // Stop tracking
-  const stopTracking = useCallback((options?: { silent?: boolean }) => {
-    if (watchIdRef.current !== null) {
-      navigator.geolocation.clearWatch(watchIdRef.current)
-      watchIdRef.current = null
-    }
-
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
-
-    setIsTracking(false)
-    console.log('⏹️ Location tracking stopped')
-    if (!options?.silent) {
-      remindEnableLocation('stopped')
-    }
-  }, [remindEnableLocation])
-
-  useEffect(() => {
-    isTrackingRef.current = isTracking
-  }, [isTracking])
-
-  // Auto-start tracking on mount
-  useEffect(() => {
-    if (enableTracking) {
-      void startTracking()
-    }
-
-    return () => {
-      stopTracking({ silent: true })
-    }
-  }, [enableTracking, startTracking, stopTracking])
-
-  // Periodic updates (backup to watchPosition)
-  useEffect(() => {
-    if (!isTracking || !enableTracking) return
-
-    intervalRef.current = setInterval(() => {
-      if ('geolocation' in navigator) {
-        navigator.geolocation.getCurrentPosition(
-          handlePosition,
-          handleError,
-          {
-            enableHighAccuracy: highAccuracy,
-            timeout: 5000,
-            maximumAge: 0
-          }
-        )
-      }
-    }, updateInterval)
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-      }
-    }
-  }, [isTracking, enableTracking, updateInterval, handlePosition, handleError, highAccuracy])
-
-  // Proactively remind when permissions change
-  useEffect(() => {
-    if (!enableTracking) return
-    if (permissionStatus === 'denied') {
-      // Mark as permanently denied; rely on the initial error toast only.
-      permissionPermanentlyDeniedRef.current = true
+    if (isTracking) {
+      console.log('ℹ️ Tracking already active')
       return
     }
 
-    if (permissionStatus === 'prompt') {
-      // Soft reminder while permission is still undecided.
-      remindEnableLocation('denied')
+    if (!('geolocation' in navigator)) {
+      toast.error('Geolocation not supported')
+      return
     }
-  }, [permissionStatus, enableTracking, remindEnableLocation])
 
-  // Attempt to restart tracking when visibility or connectivity returns
-  useEffect(() => {
-    if (!enableTracking) return
+    // Request permission first
+    const hasPermission = await requestPermission()
+    if (!hasPermission) {
+      console.warn('⚠️ Cannot start tracking without permission')
+      return
+    }
 
-    const attemptRestart = () => {
-      if (!isTrackingRef.current) {
-        void startTracking()
+    console.log('🚀 Starting location tracking...')
+
+    // Use watchPosition for continuous tracking
+    const watchId = navigator.geolocation.watchPosition(
+      handlePosition,
+      handleError,
+      {
+        enableHighAccuracy: highAccuracy,
+        timeout: 30000,
+        maximumAge: 0 // Force fresh location every time
       }
+    )
+
+    watchIdRef.current = watchId
+    setIsTracking(true)
+    console.log('✅ Location tracking started (watchId:', watchId, ')')
+
+    // Also update periodically to ensure fresh data
+    updateIntervalRef.current = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(
+        handlePosition,
+        (error) => {
+          if (error.code !== error.TIMEOUT) {
+            handleError(error)
+          }
+        },
+        {
+          enableHighAccuracy: highAccuracy,
+          timeout: 30000,
+          maximumAge: 0
+        }
+      )
+    }, updateInterval)
+  }, [isTracking, highAccuracy, updateInterval, requestPermission, handlePosition, handleError])
+
+  // Stop tracking
+  const stopTracking = useCallback(() => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current)
+      watchIdRef.current = null
+      console.log('⏹️ Location tracking stopped')
     }
 
-    document.addEventListener('visibilitychange', attemptRestart)
-    window.addEventListener('focus', attemptRestart)
-    window.addEventListener('online', attemptRestart)
-
-    return () => {
-      document.removeEventListener('visibilitychange', attemptRestart)
-      window.removeEventListener('focus', attemptRestart)
-      window.removeEventListener('online', attemptRestart)
+    if (updateIntervalRef.current) {
+      clearInterval(updateIntervalRef.current)
+      updateIntervalRef.current = null
     }
-  }, [enableTracking, startTracking])
 
-  // Periodically ensure tracking stays active in background
+    setIsTracking(false)
+  }, [])
+
+  // Auto-start tracking when component mounts
   useEffect(() => {
-    if (!enableTracking) return
+    if (enableTracking && !isTracking) {
+      // Small delay to allow component to mount fully
+      const timer = setTimeout(() => {
+        startTracking()
+      }, 1000)
 
-    const watchdog = setInterval(() => {
-      if (!isTrackingRef.current) {
-        void startTracking()
-      }
-    }, 60000)
-
-    return () => {
-      clearInterval(watchdog)
+      return () => clearTimeout(timer)
     }
-  }, [enableTracking, startTracking])
+  }, [enableTracking, isTracking, startTracking])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopTracking()
+    }
+  }, [stopTracking])
 
   return {
     location,

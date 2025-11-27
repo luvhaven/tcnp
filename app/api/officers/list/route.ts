@@ -13,9 +13,20 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Check if user is admin
+    const { data: userData } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (!userData || !['super_admin', 'admin'].includes(userData.role)) {
+      return NextResponse.json({ error: 'Unauthorized - Admin access required' }, { status: 403 })
+    }
+
     const { data, error } = await adminClient
       .from('users')
-      .select('id, full_name, email, phone, role, is_active, oscar, activation_status, unit, current_title_id, is_online, last_seen')
+      .select('id, full_name, email, phone, role, is_active, oscar, activation_status, unit, current_title_id, is_online, last_seen, created_at')
       .order('full_name')
 
     if (error) {

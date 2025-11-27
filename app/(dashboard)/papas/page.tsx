@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Users, Plus, Edit, Trash2 } from "lucide-react"
+import { Users, Plus, Edit, Trash2, Plane } from "lucide-react"
 import { toast } from "sonner"
 import PapaFormTabs from "@/components/papas/PapaFormTabs"
 import { canManagePapas } from "@/lib/utils"
@@ -122,7 +122,7 @@ export default function PapasPage() {
       }
 
       console.log('Papa form data received:', data)
-      
+
       // Extract event/program and convert arrays to JSONB
       const {
         event_id,
@@ -137,7 +137,7 @@ export default function PapasPage() {
         speaking_schedule: speaking_schedule || [],
         personal_assistants: personal_assistants || []
       }
-      
+
       console.log('Papa data to save:', papaData)
 
       if (editingPapa) {
@@ -215,11 +215,53 @@ export default function PapasPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-          <p className="mt-4 text-sm text-muted-foreground">Loading Papas...</p>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="h-8 w-32 rounded-md skeleton" />
+            <div className="mt-2 h-4 w-48 rounded-md skeleton" />
+          </div>
+          <div className="h-10 w-28 rounded-md skeleton" />
         </div>
+
+        {/* Stats skeleton */}
+        <div className="grid gap-4 md:grid-cols-2">
+          {[...Array(2)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="pb-2">
+                <div className="h-4 w-24 rounded-md skeleton" />
+              </CardHeader>
+              <CardContent>
+                <div className="h-6 w-12 rounded-md skeleton" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Content skeleton */}
+        <Card>
+          <CardHeader>
+            <div className="h-5 w-40 rounded-md skeleton" />
+            <div className="mt-2 h-4 w-56 rounded-md skeleton" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-2">
+                    <div className="h-5 w-48 rounded-md skeleton" />
+                    <div className="h-4 w-64 rounded-md skeleton" />
+                    <div className="h-3 w-32 rounded-md skeleton" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-md skeleton" />
+                    <div className="h-8 w-8 rounded-md skeleton" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -228,8 +270,8 @@ export default function PapasPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Papas</h1>
-          <p className="text-muted-foreground">Manage guest ministers and VIPs</p>
+          <h1 className="text-3xl font-bold tracking-tight">Papas</h1>
+          <p className="text-sm text-muted-foreground max-w-xl">Manage guest ministers and VIPs</p>
         </div>
         {canManage && (
           <Button onClick={openCreateDialog}>
@@ -241,22 +283,38 @@ export default function PapasPage() {
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-          <CardHeader className="pb-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-primary/60 border-2">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">Total Papas</CardTitle>
+            <div className="p-2 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors">
+              <Users className="h-4 w-4 text-primary group-hover:scale-110 transition-transform" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{papas.length}</div>
+          <CardContent className="relative z-10">
+            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-primary group-hover:to-primary/70 transition-all duration-500">
+              {papas.length}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Registered guests
+            </p>
           </CardContent>
         </Card>
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-          <CardHeader className="pb-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-sky-500/60 border-2">
+          <div className="absolute inset-0 bg-gradient-to-br from-sky-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">With Flights</CardTitle>
+            <div className="p-2 rounded-full bg-sky-500/10 group-hover:bg-sky-500/20 transition-colors">
+              <Plane className="h-4 w-4 text-sky-500 group-hover:scale-110 transition-transform" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className="relative z-10">
+            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-sky-500 group-hover:to-sky-600 transition-all duration-500">
               {papas.filter(p => p.flight_number).length}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Arriving by air
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -287,15 +345,22 @@ export default function PapasPage() {
               {papas.map((papa) => (
                 <div
                   key={papa.id}
-                  className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:-translate-y-0.5 hover:shadow-md animate-slide-up"
+                  className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:-translate-y-0.5 hover:shadow-md hover:border-primary/30 animate-slide-up"
                 >
                   <div className="flex-1">
                     <p className="font-medium text-lg">
                       {papa.title} {papa.full_name}
                     </p>
-                    <p className="text-sm text-muted-foreground">
-                      {papa.nationality || 'Nationality not set'} {papa.flight_number && `• Flight: ${papa.flight_number}`}
-                    </p>
+                    <div className="flex items-center gap-3 mt-1">
+                      <p className="text-sm text-muted-foreground">
+                        {papa.nationality || 'Nationality not set'}
+                      </p>
+                      {papa.flight_number && (
+                        <Badge variant="secondary" className="text-xs">
+                          Flight: {papa.flight_number}
+                        </Badge>
+                      )}
+                    </div>
                     {papa.phone && (
                       <p className="text-xs text-muted-foreground mt-1">
                         📞 {papa.phone}
@@ -304,10 +369,10 @@ export default function PapasPage() {
                   </div>
                   {canManage && (
                     <div className="flex items-center space-x-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(papa)}>
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(papa)} className="hover:bg-primary/10">
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(papa.id)}>
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(papa.id)} className="hover:bg-destructive/10">
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>

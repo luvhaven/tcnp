@@ -77,7 +77,7 @@ export default function NestsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     try {
       if (!canManage) {
         toast.error('You are not authorized to manage hotels')
@@ -166,8 +166,39 @@ export default function NestsPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="h-8 w-32 rounded-md skeleton" />
+            <div className="mt-2 h-4 w-48 rounded-md skeleton" />
+          </div>
+          <div className="h-10 w-28 rounded-md skeleton" />
+        </div>
+
+        {/* Content skeleton */}
+        <Card>
+          <CardHeader>
+            <div className="h-5 w-40 rounded-md skeleton" />
+            <div className="mt-2 h-4 w-56 rounded-md skeleton" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-2">
+                    <div className="h-5 w-48 rounded-md skeleton" />
+                    <div className="h-4 w-64 rounded-md skeleton" />
+                    <div className="h-3 w-32 rounded-md skeleton" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-md skeleton" />
+                    <div className="h-8 w-8 rounded-md skeleton" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -176,8 +207,8 @@ export default function NestsPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Nests (Hotels)</h1>
-          <p className="text-muted-foreground">Manage accommodation facilities</p>
+          <h1 className="text-3xl font-bold tracking-tight">Nests</h1>
+          <p className="text-sm text-muted-foreground max-w-xl">Manage accommodation facilities for guests</p>
         </div>
         {canManage && (
           <Button onClick={openDialog}>
@@ -212,7 +243,7 @@ export default function NestsPage() {
               {nests.map((nest) => (
                 <div
                   key={nest.id}
-                  className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:-translate-y-0.5 hover:shadow-md animate-slide-up"
+                  className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:-translate-y-0.5 hover:shadow-md hover:border-primary/30 animate-slide-up"
                 >
                   <div className="flex-1">
                     <p className="font-medium text-lg">{nest.name}</p>
@@ -225,10 +256,10 @@ export default function NestsPage() {
                   </div>
                   {canManage && (
                     <div className="flex items-center space-x-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(nest)}>
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(nest)} className="hover:bg-primary/10">
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(nest.id)}>
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(nest.id)} className="hover:bg-destructive/10">
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>

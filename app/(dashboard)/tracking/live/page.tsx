@@ -11,7 +11,17 @@ type CurrentUser = {
   role: string | null
 }
 
-const ALLOWED_ROLES = ['super_admin', 'admin']
+const ALLOWED_ROLES = [
+  'super_admin',
+  'admin',
+  'captain',
+  'head_of_command',
+  'head_of_operations',
+  'tango_oscar',
+  'head_tango_oscar',
+  'alpha_oscar',
+  'november_oscar'
+]
 
 export default function LiveTrackingPage() {
   const supabase = createClient()

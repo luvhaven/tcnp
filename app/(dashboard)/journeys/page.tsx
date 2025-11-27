@@ -11,16 +11,22 @@ import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { cn, canManageJourney, isAdmin } from "@/lib/utils"
-import { 
-  MapPin, 
-  Plus, 
-  Radio, 
-  AlertTriangle, 
+import {
+  MapPin,
+  Plus,
+  Radio,
+  AlertTriangle,
   CheckCircle,
   Clock,
   Navigation,
-  Flag
+  Flag,
+  User,
+  Car,
+  Hotel,
+  Plane,
+  Calendar
 } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/lib/constants/tncpCallSigns"
@@ -78,8 +84,13 @@ type Journey = {
   actual_arrival: string | null
   notes: string | null
   created_at: string
+  eta: string | null
+  etd: string | null
   papas: { full_name: string; title: string } | null
-  cheetahs: { call_sign: string; registration_number: string } | null
+  cheetahs: { call_sign: string; registration_number: string; driver_name?: string; driver_phone?: string } | null
+  assigned_do?: { full_name: string; oscar: string } | null
+  nests?: { name: string } | null
+  eagle_squares?: { name: string; code: string } | null
 }
 
 export default function JourneysPage() {
@@ -131,7 +142,7 @@ export default function JourneysPage() {
     }
 
     init()
-    
+
     // Subscribe to real-time updates
     const channel = supabase
       .channel('journeys_changes')
@@ -152,8 +163,11 @@ export default function JourneysPage() {
           .from('journeys')
           .select(`
             *,
-            papas(full_name, title),
-            cheetahs(call_sign, registration_number)
+            papas:papa_id(full_name, title),
+            cheetahs:assigned_cheetah_id(call_sign, registration_number, driver_name, driver_phone),
+            assigned_do:users!assigned_do_id(full_name, oscar),
+            nests:assigned_nest_id(name),
+            eagle_squares:assigned_eagle_square_id(name, code)
           `)
           .order('created_at', { ascending: false }),
         supabase.from('papas').select('*').order('full_name'),
@@ -173,12 +187,12 @@ export default function JourneysPage() {
 
   const handleCreateJourney = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!canCreateJourney) {
       toast.error('You are not authorized to create journeys')
       return
     }
-    
+
     try {
       const { error } = await (supabase as any).from('journeys').insert([
         {
@@ -291,10 +305,73 @@ export default function JourneysPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-          <p className="mt-4 text-sm text-muted-foreground">Loading journeys...</p>
+      <div className="space-y-6">
+        {/* Header skeleton */}
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="h-8 w-48 rounded-md skeleton" />
+            <div className="mt-2 h-4 w-96 rounded-md skeleton" />
+          </div>
+          <div className="h-10 w-36 rounded-md skeleton" />
+        </div>
+
+        {/* Stats cards skeleton */}
+        <div className="grid gap-6 md:grid-cols-4">
+          {[...Array(4)].map((_, index) => (
+            <Card key={index}>
+              <CardHeader className="pb-2">
+                <div className="h-4 w-28 rounded-md skeleton" />
+              </CardHeader>
+              <CardContent>
+                <div className="h-7 w-16 rounded-md skeleton" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Tabs skeleton */}
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <div className="h-9 w-32 rounded-md skeleton" />
+            <div className="h-9 w-40 rounded-md skeleton" />
+          </div>
+
+          {/* Journey cards skeleton */}
+          <Card>
+            <CardHeader>
+              <div className="h-5 w-36 rounded-md skeleton" />
+              <div className="mt-2 h-4 w-48 rounded-md skeleton" />
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {[...Array(3)].map((_, index) => (
+                  <div
+                    key={index}
+                    className="flex flex-col gap-4 rounded-lg border p-4"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="h-6 w-24 rounded-md skeleton" />
+                        <div className="h-4 w-32 rounded-md skeleton" />
+                      </div>
+                      <div className="h-4 w-28 rounded-md skeleton" />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {[...Array(4)].map((_, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <div className="mt-1 h-8 w-8 rounded-full skeleton" />
+                          <div className="flex-1 space-y-2">
+                            <div className="h-4 w-32 rounded-md skeleton" />
+                            <div className="h-3 w-24 rounded-md skeleton" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     )
@@ -358,73 +435,169 @@ export default function JourneysPage() {
         </Card>
       </div>
 
-      {/* Journeys List */}
-      <Card>
-        <CardHeader>
-          <CardTitle>All Journeys</CardTitle>
-          <CardDescription>Click on a journey to execute call-signs</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {journeys.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <MapPin className="h-12 w-12 text-muted-foreground/50" />
-              <p className="mt-4 text-sm font-medium">No journeys yet</p>
-              <p className="text-xs text-muted-foreground">Create your first journey to get started</p>
-              {canCreateJourney && (
-                <Button className="mt-4" onClick={() => setCreateDialogOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Journey
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {journeys.map((journey) => (
-                <div
-                  key={journey.id}
-                  className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:-translate-y-0.5 hover:shadow-md cursor-pointer animate-slide-up"
-                  onClick={() => {
-                    setSelectedJourney(journey)
-                    setCallSignDialogOpen(true)
-                  }}
-                >
-                  <div className="flex items-center space-x-4">
-                    <div
-                    className={cn(
-                      'h-3 w-3 rounded-full',
-                      getStatusIndicatorClass(journey.status),
-                      journey.status === 'broken_arrow' && 'animate-pulse'
-                    )}
-                  />
-                    <div>
-                      <p className="font-medium">
-                        {journey.papas?.title} {journey.papas?.full_name}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {journey.cheetahs?.call_sign} • {journey.origin} → {journey.destination}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-4">
-                    <Badge
-                      variant="secondary"
-                      className={cn(
-                        getStatusColor(journey.status),
-                        journey.status === 'broken_arrow' && 'animate-pulse'
-                      )}
-                    >
-                      {getStatusLabel(journey.status)}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {formatDistanceToNow(new Date(journey.created_at), { addSuffix: true })}
-                    </span>
-                  </div>
+      {/* Journeys Tabs */}
+      <Tabs defaultValue="active" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="active">Active Journeys</TabsTrigger>
+          <TabsTrigger value="completed">Completed / Archived</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="active" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Active Journeys</CardTitle>
+              <CardDescription>Live monitoring of ongoing movements</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {journeys.filter(j => ['planned', 'in_progress', 'first_course', 'chapman', 'dessert', 'broken_arrow'].includes(j.status)).length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <MapPin className="h-12 w-12 text-muted-foreground/50" />
+                  <p className="mt-4 text-sm font-medium">No active journeys</p>
+                  <p className="text-xs text-muted-foreground">Create a new journey to get started</p>
+                  {canCreateJourney && (
+                    <Button className="mt-4" onClick={() => setCreateDialogOpen(true)}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create Journey
+                    </Button>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              ) : (
+                <div className="space-y-4">
+                  {journeys
+                    .filter(j => ['planned', 'in_progress', 'first_course', 'chapman', 'dessert', 'broken_arrow'].includes(j.status))
+                    .map((journey) => (
+                      <div
+                        key={journey.id}
+                        className="flex flex-col gap-4 rounded-lg border p-4 transition-all hover:bg-accent/50 hover:shadow-md cursor-pointer animate-slide-up"
+                        onClick={() => {
+                          setSelectedJourney(journey)
+                          setCallSignDialogOpen(true)
+                        }}
+                      >
+                        {/* Header Row: Status & Time */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Badge
+                              variant="secondary"
+                              className={cn(
+                                getStatusColor(journey.status),
+                                "px-3 py-1 text-sm font-medium text-white"
+                              )}
+                            >
+                              {getStatusLabel(journey.status)}
+                            </Badge>
+                            <span className="text-sm text-muted-foreground flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {journey.etd ? `ETD: ${new Date(journey.etd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'No ETD'}
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Updated {formatDistanceToNow(new Date(journey.created_at), { addSuffix: true })}
+                          </div>
+                        </div>
+
+                        {/* Main Info Row */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                          {/* Papa */}
+                          <div className="flex items-start gap-2">
+                            <div className="mt-1 p-1.5 bg-primary/10 rounded-full">
+                              <User className="h-4 w-4 text-primary" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold">{journey.papas?.title} {journey.papas?.full_name}</p>
+                              <p className="text-xs text-muted-foreground">Guest</p>
+                            </div>
+                          </div>
+
+                          {/* Route */}
+                          <div className="flex items-start gap-2">
+                            <div className="mt-1 p-1.5 bg-orange-100 dark:bg-orange-900/30 rounded-full">
+                              <MapPin className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">{journey.origin} → {journey.destination}</p>
+                              <p className="text-xs text-muted-foreground">Route</p>
+                            </div>
+                          </div>
+
+                          {/* DO & Cheetah */}
+                          <div className="flex items-start gap-2">
+                            <div className="mt-1 p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+                              <Car className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">{journey.cheetahs?.call_sign} ({journey.cheetahs?.registration_number})</p>
+                              <p className="text-xs text-muted-foreground">
+                                DO: {journey.assigned_do?.full_name || 'Unassigned'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Nest/Eagle */}
+                          <div className="flex items-start gap-2">
+                            <div className="mt-1 p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-full">
+                              <Hotel className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">{journey.nests?.name || journey.eagle_squares?.name || 'No Base'}</p>
+                              <p className="text-xs text-muted-foreground">Base Location</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="completed">
+          <Card>
+            <CardHeader>
+              <CardTitle>Completed & Archived</CardTitle>
+              <CardDescription>History of past journeys</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {journeys
+                  .filter(j => ['completed', 'cancelled'].includes(j.status))
+                  .map((journey) => (
+                    <div
+                      key={journey.id}
+                      className="flex items-center justify-between rounded-lg border p-4 opacity-75 hover:opacity-100 transition-all"
+                    >
+                      <div className="flex items-center space-x-4">
+                        <div className={cn('h-3 w-3 rounded-full', getStatusIndicatorClass(journey.status))} />
+                        <div>
+                          <p className="font-medium">
+                            {journey.papas?.title} {journey.papas?.full_name}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {journey.origin} → {journey.destination}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-4">
+                        <Badge variant="outline">
+                          {getStatusLabel(journey.status)}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(journey.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                {journeys.filter(j => ['completed', 'cancelled'].includes(j.status)).length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No completed journeys found
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Create Journey Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
@@ -546,7 +719,7 @@ export default function JourneysPage() {
               Update journey status for {selectedJourney?.papas?.title} {selectedJourney?.papas?.full_name}
             </DialogDescription>
           </DialogHeader>
-          
+
           {selectedJourney && canUpdateSelectedJourney && (
             <div className="space-y-4 mt-4">
               <div className="rounded-lg border p-4 space-y-2">
