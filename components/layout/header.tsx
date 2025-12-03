@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import InstallButton from "@/components/pwa/InstallButton"
+import NotificationCenter from "@/components/notifications/NotificationCenter"
 
 export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
   const router = useRouter()
@@ -20,12 +21,16 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
       setUser(user)
 
       if (user) {
-        const { data: profile } = await supabase
-  .from('users')
-  .select('*')
-  .eq('id', user.id)
-  .single()
-        
+        const { data: profile, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', user.id)
+          .single()
+
+        if (error) {
+          console.error('Error loading user profile:', error)
+        }
+
         setProfile(profile)
       }
     }
@@ -43,7 +48,7 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
   }
 
   return (
-    <header className="flex h-16 items-center justify-between border-b bg-gradient-to-r from-background/95 via-card/95 to-background/95 backdrop-blur-md px-4 md:px-6 shadow-sm">
+    <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-background/80 backdrop-blur-md px-6 shadow-sm transition-all duration-200">
       <div className="flex items-center space-x-3">
         <button
           type="button"
@@ -69,13 +74,7 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
         <InstallButton />
 
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute right-1 top-1 flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500"></span>
-          </span>
-        </Button>
+        <NotificationCenter />
 
         {/* User Menu */}
         <div className="flex items-center space-x-3">

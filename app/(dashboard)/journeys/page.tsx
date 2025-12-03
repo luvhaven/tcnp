@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { cn, canManageJourney, isAdmin } from "@/lib/utils"
 import {
@@ -98,6 +97,8 @@ export default function JourneysPage() {
   const [journeys, setJourneys] = useState<Journey[]>([])
   const [papas, setPapas] = useState<any[]>([])
   const [cheetahs, setCheetahs] = useState<any[]>([])
+  const [programs, setPrograms] = useState<any[]>([])
+  const [officers, setOfficers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [callSignDialogOpen, setCallSignDialogOpen] = useState(false)
@@ -107,6 +108,8 @@ export default function JourneysPage() {
   const [formData, setFormData] = useState({
     papa_id: '',
     cheetah_id: '',
+    program_id: '',
+    assigned_duty_officer_id: '',
     origin: '',
     destination: '',
     scheduled_departure: '',
@@ -158,27 +161,29 @@ export default function JourneysPage() {
 
   const loadData = async () => {
     try {
-      const [journeysRes, papasRes, cheetahsRes] = await Promise.all([
-        supabase
-          .from('journeys')
-          .select(`
-            *,
-            papas:papa_id(full_name, title),
-            cheetahs:assigned_cheetah_id(call_sign, registration_number, driver_name, driver_phone),
-            assigned_do:users!assigned_do_id(full_name, oscar),
-            nests:assigned_nest_id(name),
-            eagle_squares:assigned_eagle_square_id(name, code)
-          `)
-          .order('created_at', { ascending: false }),
+      const [journeysRes, papasRes, cheetahsRes, programsRes, officersRes] = await Promise.all([
+        supabase.from('journeys').select(`
+          *,
+          papas (title, full_name),
+          cheetahs (registration_number, driver_name, driver_phone),
+          assigned_do:users!journeys_assigned_duty_officer_id_fkey (full_name),
+          nests (name),
+          eagle_squares (name, code),
+          programs (name, status)
+        `).order('created_at', { ascending: false }),
         supabase.from('papas').select('*').order('full_name'),
-        supabase.from('cheetahs').select('*').eq('status', 'available').order('call_sign')
+        supabase.from('cheetahs').select('*').order('registration_number'),
+        supabase.from('programs').select('*').order('name'),
+        supabase.from('users').select('id, full_name, role').eq('role', 'delta_oscar').order('full_name')
       ])
 
-      if (journeysRes.data) setJourneys(journeysRes.data as Journey[])
+      if (journeysRes.data) setJourneys(journeysRes.data as any)
       if (papasRes.data) setPapas(papasRes.data)
       if (cheetahsRes.data) setCheetahs(cheetahsRes.data)
+      if (programsRes.data) setPrograms(programsRes.data)
+      if (officersRes.data) setOfficers(officersRes.data)
     } catch (error) {
-      console.error('Error loading data:', error)
+      console.error('Error loading journeys data:', error)
       toast.error('Failed to load journeys')
     } finally {
       setLoading(false)
@@ -208,6 +213,8 @@ export default function JourneysPage() {
       setFormData({
         papa_id: '',
         cheetah_id: '',
+        program_id: '',
+        assigned_duty_officer_id: '',
         origin: '',
         destination: '',
         scheduled_departure: '',
@@ -609,10 +616,48 @@ export default function JourneysPage() {
           <form onSubmit={handleCreateJourney} className="space-y-4 mt-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
+                <Label htmlFor="program_id">Program *</Label>
+                <select
+                  id="program_id"
+                  required
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={formData.program_id}
+                  onChange={(e) => setFormData({ ...formData, program_id: e.target.value })}
+                >
+                  <option value="">Select Program</option>
+                  {programs.map((program) => (
+                    <option key={program.id} value={program.id}>
+                      {program.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="assigned_duty_officer_id">Designated Officer (DO)</Label>
+                <select
+                  id="assigned_duty_officer_id"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={formData.assigned_duty_officer_id}
+                  onChange={(e) => setFormData({ ...formData, assigned_duty_officer_id: e.target.value })}
+                >
+                  <option value="">No DO assigned</option>
+                  {officers.map((officer) => (
+                    <option key={officer.id} value={officer.id}>
+                      {officer.full_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
                 <Label htmlFor="papa_id">Papa (Guest) *</Label>
-                <Select
+                <select
                   id="papa_id"
                   required
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={formData.papa_id}
                   onChange={(e) => setFormData({ ...formData, papa_id: e.target.value })}
                 >
@@ -622,14 +667,15 @@ export default function JourneysPage() {
                       {papa.title} {papa.full_name}
                     </option>
                   ))}
-                </Select>
+                </select>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="cheetah_id">Cheetah (Vehicle) *</Label>
-                <Select
+                <select
                   id="cheetah_id"
                   required
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={formData.cheetah_id}
                   onChange={(e) => setFormData({ ...formData, cheetah_id: e.target.value })}
                 >
@@ -639,7 +685,7 @@ export default function JourneysPage() {
                       {cheetah.call_sign} - {cheetah.registration_number}
                     </option>
                   ))}
-                </Select>
+                </select>
               </div>
             </div>
 

@@ -69,7 +69,7 @@ function ChatContent() {
 
         let visiblePrograms = (allPrograms || []) as ChatProgram[]
 
-        if (!['super_admin', 'admin'].includes(userRow.role ?? '')) {
+        if (!['dev_admin', 'admin'].includes(userRow.role ?? '')) {
           // Restrict officers to programs they are assigned to via current_title_assignments
           const { data: assignments, error: assignError } = await (supabase as any)
             .from('current_title_assignments')
@@ -182,7 +182,7 @@ function ChatContent() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">{title}</h1>
+          <h1 className="text-3xl font-bold break-words leading-tight">{title}</h1>
           {program && !activePapa && (
             <p className="text-sm text-muted-foreground mt-1">
               Program team chat for this TCNP event
@@ -245,7 +245,7 @@ function ChatContent() {
           <div className="h-[320px] w-full rounded-lg skeleton" />
         ) : programs.length === 0 ? (
           <div className="p-6 text-sm text-muted-foreground">
-            {role && !['super_admin', 'admin'].includes(role)
+            {role && !['dev_admin', 'admin'].includes(role)
               ? 'You have no program assignments yet. Once you are added to a program, you will be able to chat with that program team here.'
               : 'No programs found. Create a program first, then use this page to chat with the program team.'}
           </div>

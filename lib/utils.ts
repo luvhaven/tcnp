@@ -12,30 +12,30 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatDate(date: string | Date, format: 'short' | 'long' | 'time' = 'short'): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  
+
   if (format === 'time') {
-    return d.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
+    return d.toLocaleTimeString('en-US', {
+      hour: '2-digit',
       minute: '2-digit',
-      hour12: true 
+      hour12: true
     });
   }
-  
+
   if (format === 'long') {
-    return d.toLocaleDateString('en-US', { 
+    return d.toLocaleDateString('en-US', {
       weekday: 'long',
-      year: 'numeric', 
-      month: 'long', 
+      year: 'numeric',
+      month: 'long',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
     });
   }
-  
-  return d.toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'short', 
-    day: 'numeric' 
+
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
   });
 }
 
@@ -51,7 +51,7 @@ export function formatRelativeTime(date: string | Date): string {
   if (diffMins < 60) return `${diffMins}m ago`;
   if (diffHours < 24) return `${diffHours}h ago`;
   if (diffDays < 7) return `${diffDays}d ago`;
-  
+
   return formatDate(d, 'short');
 }
 
@@ -66,7 +66,7 @@ export function getInitials(name: string): string {
 
 export function getRoleDisplayName(role: string): string {
   const roleMap: Record<string, string> = {
-    super_admin: 'Super Admin',
+    dev_admin: 'Dev Admin',
     admin: 'Admin',
     captain: 'Captain',
     head_of_command: 'Head of Command',
@@ -80,7 +80,7 @@ export function getRoleDisplayName(role: string): string {
     media: 'Media',
     external: 'External',
   };
-  
+
   return roleMap[role] || role;
 }
 
@@ -98,7 +98,7 @@ export function getStatusColor(status: string): string {
     cancelled: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
     distress: 'bg-red-600 text-white animate-pulse',
   };
-  
+
   return statusColors[status] || 'bg-gray-100 text-gray-800';
 }
 
@@ -119,7 +119,7 @@ export function getSeverityColor(severity: string): string {
     high: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
     critical: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
   };
-  
+
   return severityColors[severity] || 'bg-gray-100 text-gray-800';
 }
 
@@ -130,7 +130,7 @@ export function getVehicleStatusColor(status: string): string {
     maintenance: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
     disabled: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
   };
-  
+
   return statusColors[status] || 'bg-gray-100 text-gray-800';
 }
 
@@ -146,9 +146,9 @@ export function calculateDistance(
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(toRad(lat1)) *
-      Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos(toRad(lat2)) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -183,13 +183,13 @@ export function debounce<T extends (...args: any[]) => any>(
   wait: number
 ): (...args: Parameters<T>) => void {
   let timeout: NodeJS.Timeout | null = null;
-  
+
   return function executedFunction(...args: Parameters<T>) {
     const later = () => {
       timeout = null;
       func(...args);
     };
-    
+
     if (timeout) clearTimeout(timeout);
     timeout = setTimeout(later, wait);
   };
@@ -203,16 +203,16 @@ export function truncate(str: string, length: number): string {
 export function parsePhoneNumber(phone: string): string {
   // Remove all non-digit characters
   const digits = phone.replace(/\D/g, '');
-  
+
   // Format Nigerian numbers
   if (digits.startsWith('234')) {
     return `+${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 9)} ${digits.slice(9)}`;
   }
-  
+
   if (digits.startsWith('0')) {
     return `+234 ${digits.slice(1, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
   }
-  
+
   return phone;
 }
 
@@ -221,13 +221,13 @@ export function generateColor(str: string): string {
   for (let i = 0; i < str.length; i++) {
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
   }
-  
+
   const hue = hash % 360;
   return `hsl(${hue}, 70%, 50%)`;
 }
 
 export function isAdmin(role: string): boolean {
-  return ['super_admin', 'admin', 'captain', 'head_of_command', 'head_of_operations'].includes(role);
+  return ['dev_admin', 'super_admin', 'admin', 'captain', 'head_of_command', 'head_of_operations'].includes(role);
 }
 
 export function canManageJourney(role: string, isAssignedDO: boolean): boolean {

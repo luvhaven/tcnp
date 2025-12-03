@@ -5,51 +5,60 @@
 @layer base {
   :root {
     /* TCNP Light Theme - Premium branded colors */
-    --background: 0 0% 100%;
+    --background: 210 40% 98%;
+    /* Slightly off-white for premium feel */
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    /* TCNP Brand Orange */
-    --primary: 20 88% 54%;
+    /* TCNP Brand Orange - Vibrant & Professional */
+    --primary: 22 90% 55%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 20 95% 96%;
-    --secondary-foreground: 20 88% 20%;
-    --muted: 210 40% 97%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
-    --accent: 20 95% 96%;
-    --accent-foreground: 20 88% 35%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214 32% 92%;
-    --input: 214 32% 92%;
-    --ring: 20 88% 54%;
-    --radius: 0.5rem;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 22 90% 55%;
+    --radius: 0.75rem;
+    /* More rounded corners */
   }
 
   .dark {
-    /* Premium Dark Theme - Enhanced depth and contrast */
-    --background: 222 47% 6%;
+    /* Premium Dark Theme - Deep Blue/Slate with Better Contrast */
+    --background: 222 47% 8%;
+    /* Darker main background */
     --foreground: 210 40% 98%;
-    --card: 222 47% 8%;
+    --card: 222 47% 13%;
+    /* Much lighter than background for clear distinction */
     --card-foreground: 210 40% 98%;
-    --popover: 222 47% 7%;
+    --popover: 222 47% 13%;
     --popover-foreground: 210 40% 98%;
-    /* Vibrant orange in dark mode*/
-    --primary: 20 91% 58%;
+    /* Softer Coral-Orange for Dark Mode */
+    --primary: 25 95% 60%;
     --primary-foreground: 222 47% 11%;
-    --secondary: 217 33% 15%;
+    --secondary: 217 33% 17%;
+    /* Lighter secondary */
     --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 14%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 33% 16%;
+    --muted: 217 33% 17%;
+    /* Lighter muted */
+    --muted-foreground: 215 20% 70%;
+    /* Higher contrast text */
+    --accent: 217 33% 17%;
     --accent-foreground: 210 40% 98%;
-    --destructive: 0 63% 31%;
+    --destructive: 0 62% 30%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217 33% 18%;
-    --input: 217 33% 16%;
-    --ring: 20 91% 58%;
+    --border: 217 33% 22%;
+    /* More visible borders */
+    --input: 217 33% 22%;
+    /* More visible inputs */
+    --ring: 25 95% 60%;
   }
 }
 

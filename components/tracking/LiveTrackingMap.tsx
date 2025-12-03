@@ -81,7 +81,7 @@ const ROLE_METADATA: Record<string, { label: string; color: string }> = {
   head_of_command: { label: 'Head of Command', color: '#0F172A' },
   command: { label: 'Command', color: '#1D4ED8' },
   admin: { label: 'Admin', color: '#1F2937' },
-  super_admin: { label: 'Super Admin', color: '#111827' },
+  dev_admin: { label: 'Dev Admin', color: '#111827' },
   prof: { label: 'Prof', color: '#7C3AED' },
   duchess: { label: 'Duchess', color: '#DB2777' },
   viewer: { label: 'Viewer', color: '#6B7280' },
@@ -135,7 +135,7 @@ export default function LiveTrackingMap() {
 
   useEffect(() => {
     loadData()
-    
+
     // Subscribe to real-time location updates
     const locationChannel = supabase
       .channel('user-locations-realtime')
@@ -215,7 +215,7 @@ export default function LiveTrackingMap() {
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      
+
       console.log('✅ Loaded journeys:', data)
       const journeysData = (data ?? []) as Journey[]
       const normalizedJourneys: Journey[] = journeysData.map((journey) => {

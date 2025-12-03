@@ -5,7 +5,7 @@ const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'X-XSS-Protection', value: '1; mode=block' },
-  { key: 'Permissions-Policy', value: 'geolocation=(self), microphone=(), camera=()' },
+  { key: 'Permissions-Policy', value: 'geolocation=(self), microphone=(self)' },
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
 ]
 
@@ -37,6 +37,7 @@ const nextConfig = {
     config.resolve = config.resolve || {}
     config.resolve.alias = config.resolve.alias || {}
     config.resolve.alias['./icons/triangle-alert.js'] = 'lucide-react/dist/esm/icons/alert-triangle.js'
+
     return config
   },
   async headers() {

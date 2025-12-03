@@ -8,9 +8,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Hotel, Plus, Edit, Trash2 } from "lucide-react"
+import { Hotel, Plus, Edit, Trash2, Home, Building } from "lucide-react"
 import { toast } from "sonner"
 import { canManageNests } from "@/lib/utils"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function NestsPage() {
   const supabase = createClient()
@@ -25,7 +26,8 @@ export default function NestsPage() {
     phone: '',
     email: '',
     rating: 5,
-    amenities: ''
+    amenities: '',
+    type: 'nest' // Default type
   })
   const [currentRole, setCurrentRole] = useState<string | null>(null)
 
@@ -37,7 +39,7 @@ export default function NestsPage() {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (user) {
-          const { data } = await supabase
+          const { data } = await (supabase as any)
             .from('users')
             .select('role')
             .eq('id', user.id)
@@ -85,7 +87,7 @@ export default function NestsPage() {
       }
 
       if (editing) {
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('nests')
           .update(formData)
           .eq('id', editing.id)
@@ -93,7 +95,7 @@ export default function NestsPage() {
         if (error) throw error
         toast.success('Hotel updated!')
       } else {
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('nests')
           .insert([formData])
 
@@ -207,81 +209,133 @@ export default function NestsPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Nests</h1>
-          <p className="text-sm text-muted-foreground max-w-xl">Manage accommodation facilities for guests</p>
+          <h2 className="text-3xl font-bold tracking-tight">NOscar Management</h2>
+          <p className="text-muted-foreground">
+            Manage NOscar Dens and Nests
+          </p>
         </div>
         {canManage && (
-          <Button onClick={openDialog}>
+          <Button onClick={() => {
+            setEditing(null)
+            setFormData({
+              name: '',
+              address: '',
+              city: '',
+              phone: '',
+              email: '',
+              rating: 5,
+              amenities: '',
+              type: 'nest'
+            })
+            setDialogOpen(true)
+          }}>
             <Plus className="mr-2 h-4 w-4" />
-            Add Hotel
+            Add NOscar
           </Button>
         )}
       </div>
 
-      <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Hotel className="h-5 w-5" />
-            <span>Hotels</span>
-          </CardTitle>
-          <CardDescription>All registered hotels</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {nests.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Hotel className="h-12 w-12 text-muted-foreground/50" />
-              <p className="mt-4 text-sm font-medium">No hotels yet</p>
-              {canManage && (
-                <Button className="mt-4" onClick={openDialog}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Hotel
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {nests.map((nest) => (
-                <div
-                  key={nest.id}
-                  className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:-translate-y-0.5 hover:shadow-md hover:border-primary/30 animate-slide-up"
-                >
-                  <div className="flex-1">
-                    <p className="font-medium text-lg">{nest.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {nest.address}, {nest.city}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      ⭐ {nest.rating} stars {nest.phone && `• ${nest.phone}`}
-                    </p>
+      <Tabs defaultValue="den" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="den">
+            <Home className="mr-2 h-4 w-4" />
+            NOscar Den
+          </TabsTrigger>
+          <TabsTrigger value="nest">
+            <Building className="mr-2 h-4 w-4" />
+            NOscar Nest
+          </TabsTrigger>
+        </TabsList>
+
+        {['den', 'nest'].map((type) => (
+          <TabsContent key={type} value={type}>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  {type === 'den' ? <Home className="h-5 w-5" /> : <Building className="h-5 w-5" />}
+                  <span>{type === 'den' ? 'NOscar Dens' : 'NOscar Nests'}</span>
+                </CardTitle>
+                <CardDescription>
+                  {type === 'den' ? 'Private residences and secure locations' : 'Hotels and public accommodation'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {nests.filter(n => n.type === type || (!n.type && type === 'nest')).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <Hotel className="h-12 w-12 text-muted-foreground/50" />
+                    <p className="mt-4 text-sm font-medium">No {type === 'den' ? 'Dens' : 'Nests'} found</p>
                   </div>
-                  {canManage && (
-                    <div className="flex items-center space-x-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(nest)} className="hover:bg-primary/10">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(nest.id)} className="hover:bg-destructive/10">
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {nests
+                      .filter(n => n.type === type || (!n.type && type === 'nest'))
+                      .map((nest) => (
+                        <Card key={nest.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                          <CardHeader className="pb-2">
+                            <div className="flex justify-between items-start">
+                              <CardTitle className="text-lg">{nest.name}</CardTitle>
+                              {canManage && (
+                                <div className="flex gap-1">
+                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                                    setEditing(nest)
+                                    setFormData({
+                                      name: nest.name,
+                                      address: nest.address || '',
+                                      city: nest.city || '',
+                                      phone: nest.phone || '',
+                                      email: nest.email || '',
+                                      rating: nest.rating || 5,
+                                      amenities: nest.amenities || '',
+                                      type: nest.type || 'nest'
+                                    })
+                                    setDialogOpen(true)
+                                  }}>
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(nest.id)}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                            <CardDescription>{nest.city}</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-2 text-sm">
+                              <p className="text-muted-foreground">{nest.address}</p>
+                              {nest.phone && <p>📞 {nest.phone}</p>}
+                              {nest.amenities && (
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {nest.amenities.split(',').map((item: string, i: number) => (
+                                    <span key={i} className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80">
+                                      {item.trim()}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        ))}
+      </Tabs>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Hotel' : 'Add Hotel'}</DialogTitle>
+            <DialogTitle>{editing ? 'Edit NOscar' : 'Add NOscar'}</DialogTitle>
             <DialogDescription>
-              {editing ? 'Update hotel information' : 'Add a new hotel'}
+              {editing ? 'Update NOscar information' : 'Add a new NOscar location'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Hotel Name *</Label>
+              <Label htmlFor="name">Name *</Label>
               <Input
                 id="name"
                 required
@@ -353,7 +407,19 @@ export default function NestsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="amenities">Amenities</Label>
+              <Label htmlFor="type">Type</Label>
+              <select
+                id="type"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                value={formData.type}
+                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+              >
+                <option value="nest">NOscar Nest (Hotel)</option>
+                <option value="den">NOscar Den (Private)</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="amenities">Amenities (comma separated)</Label>
               <Textarea
                 id="amenities"
                 placeholder="e.g., Pool, Gym, Spa, Restaurant, Conference rooms..."

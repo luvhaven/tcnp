@@ -76,4 +76,19 @@ const DialogDescription = React.forwardRef<
 ))
 DialogDescription.displayName = "DialogDescription"
 
-export { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription }
+const DialogTrigger = ({
+  asChild,
+  children,
+  ...props
+}: {
+  asChild?: boolean
+  children: React.ReactNode
+} & React.HTMLAttributes<HTMLElement>) => {
+  if (asChild) {
+    return <>{children}</>
+  }
+  return <div {...props}>{children}</div>
+}
+DialogTrigger.displayName = "DialogTrigger"
+
+export { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription }

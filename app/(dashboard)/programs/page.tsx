@@ -14,6 +14,7 @@ import { Calendar, Plus, Edit, Trash2, Archive, CheckCircle } from "lucide-react
 import { toast } from "sonner"
 import { formatDistanceToNow } from "date-fns"
 import ProgramExport from "@/components/programs/ProgramExport"
+import ProgramSchedule from "@/components/programs/ProgramSchedule"
 
 type Program = {
   id: string
@@ -42,6 +43,8 @@ export default function ProgramsPage() {
     end_date: '',
     status: 'planning'
   })
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [scheduleProgram, setScheduleProgram] = useState<Program | null>(null)
 
   useEffect(() => {
     loadData()
@@ -392,7 +395,13 @@ export default function ProgramsPage() {
                         Archive
                       </Button>
                     )}
-
+                    <Button variant="outline" size="sm" onClick={() => {
+                      setScheduleProgram(program)
+                      setScheduleOpen(true)
+                    }}>
+                      <Calendar className="mr-2 h-4 w-4" />
+                      Schedule
+                    </Button>
                     <Button variant="ghost" size="icon" onClick={() => handleEdit(program)} className="hover:bg-primary/10">
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -504,6 +513,18 @@ export default function ProgramsPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Manage Schedule: {scheduleProgram?.name}</DialogTitle>
+            <DialogDescription>
+              Manage days, sessions, and speaker assignments for this program.
+            </DialogDescription>
+          </DialogHeader>
+          {scheduleProgram && <ProgramSchedule programId={scheduleProgram.id} />}
         </DialogContent>
       </Dialog>
     </div>

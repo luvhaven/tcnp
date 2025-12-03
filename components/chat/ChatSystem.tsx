@@ -223,7 +223,7 @@ export default function ChatSystem({
       return
     }
 
-    if (['super_admin', 'admin'].includes(currentUser.role)) {
+    if (['dev_admin', 'admin'].includes(currentUser.role)) {
       setCanChatInProgram(true)
       setProgramAccessChecked(true)
       return
@@ -765,7 +765,7 @@ export default function ChatSystem({
       return
     }
 
-    if (programId && !['super_admin', 'admin'].includes(currentUser.role)) {
+    if (programId && !['dev_admin', 'admin'].includes(currentUser.role)) {
       if (!programAccessChecked) {
         toast.warning('Checking your permission for this program. Please wait a moment and try again.')
         return
@@ -974,7 +974,7 @@ export default function ChatSystem({
     if (!currentUser) return false
 
     // Admins can see all messages
-    if (['super_admin', 'admin'].includes(currentUser.role)) return true
+    if (['dev_admin', 'admin'].includes(currentUser.role)) return true
 
     // Sender can see their own messages
     if (message.sender_id === currentUser.id) return true
@@ -991,7 +991,7 @@ export default function ChatSystem({
   const isReadOnlyProgramChat =
     Boolean(programId) &&
     !!currentUser &&
-    !['super_admin', 'admin'].includes(currentUser.role) &&
+    !['dev_admin', 'admin'].includes(currentUser.role) &&
     programAccessChecked &&
     !canChatInProgram
 
@@ -1096,8 +1096,8 @@ export default function ChatSystem({
                   </div>
                   <div
                     className={`rounded-2xl px-4 py-2.5 shadow-sm ${isOwn
-                        ? 'bg-primary text-primary-foreground rounded-br-sm'
-                        : 'bg-background border rounded-bl-sm'
+                      ? 'bg-primary text-primary-foreground rounded-br-sm'
+                      : 'bg-background border rounded-bl-sm'
                       }`}
                   >
                     <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.content}</p>

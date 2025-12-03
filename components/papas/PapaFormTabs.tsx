@@ -6,7 +6,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Plus, X } from 'lucide-react'
@@ -25,7 +24,7 @@ type PapaFormData = {
   arrival_country: string
   nationality: string
   short_bio: string
-  
+
   // Presentation
   uses_stage_props: boolean
   needs_water_on_stage: boolean
@@ -35,20 +34,20 @@ type PapaFormData = {
   mic_preference: string
   presentation_style: string
   special_requirements: string
-  
+
   // Preferences
   food_preferences: string
   dietary_restrictions: string
   accommodation_preferences: string
   additional_notes: string
-  
+
   // Speaking
   speaking_schedule: Array<{
     day: string
     time: string
     topic: string
   }>
-  
+
   // Entourage
   entourage_count: number
   personal_assistants: Array<{
@@ -173,11 +172,12 @@ export default function PapaFormTabs({
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="event_id">Event *</Label>
-                  <Select
+                  <select
                     id="event_id"
                     required
                     value={formData.event_id}
                     onChange={(e) => setFormData({ ...formData, event_id: e.target.value })}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
                     <option value="">Select event</option>
                     {events.map((event) => (
@@ -185,7 +185,7 @@ export default function PapaFormTabs({
                         {event.name}
                       </option>
                     ))}
-                  </Select>
+                  </select>
                 </div>
 
                 <div className="space-y-2">
@@ -370,15 +370,16 @@ export default function PapaFormTabs({
 
               <div className="space-y-2">
                 <Label htmlFor="water_temperature">Water Temperature</Label>
-                <Select
+                <select
                   id="water_temperature"
                   value={formData.water_temperature}
                   onChange={(e) => setFormData({ ...formData, water_temperature: e.target.value })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   <option value="Room Temperature">Room Temperature</option>
                   <option value="Cold">Cold</option>
                   <option value="Warm">Warm</option>
-                </Select>
+                </select>
               </div>
 
               <div className="space-y-2">

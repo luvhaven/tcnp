@@ -8,9 +8,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { MapPin, Plus, Edit, Trash2, Users } from "lucide-react"
+import { MapPin, Plus, Edit, Trash2, Users, Scan } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import VIPManagementPanel from "@/components/theatre/VIPManagementPanel"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function TheatresPage() {
   const supabase = createClient()
@@ -26,6 +29,13 @@ export default function TheatresPage() {
     venue_type: '',
     facilities: ''
   })
+  const [selectedTheatreId, setSelectedTheatreId] = useState<string>("")
+
+  useEffect(() => {
+    if (theatres.length > 0 && !selectedTheatreId) {
+      setSelectedTheatreId(theatres[0].id)
+    }
+  }, [theatres])
 
   useEffect(() => {
     loadData()
@@ -237,59 +247,104 @@ export default function TheatresPage() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <MapPin className="h-5 w-5" />
-            <span>Venues</span>
-          </CardTitle>
-          <CardDescription>All registered venues</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {theatres.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <MapPin className="h-12 w-12 text-muted-foreground/50" />
-              <p className="mt-4 text-sm font-medium">No venues yet</p>
-              <Button className="mt-4" onClick={openDialog}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Venue
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {theatres.map((theatre) => (
-                <div
-                  key={theatre.id}
-                  className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:border-primary/30 hover:shadow-sm hover:-translate-y-0.5 animate-slide-up"
-                >
-                  <div className="flex-1">
-                    <p className="font-medium text-lg">{theatre.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {theatre.address}, {theatre.city}
-                    </p>
-                    <div className="flex items-center gap-3 mt-2">
-                      <Badge variant="secondary" className="text-xs">
-                        {theatre.venue_type || 'Venue'}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        Capacity: <span className="font-semibold">{theatre.capacity}</span> people
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(theatre)} className="hover:bg-primary/10">
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(theatre.id)} className="hover:bg-destructive/10">
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
+
+
+      <Tabs defaultValue="venues" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="venues">Venues Management</TabsTrigger>
+          <TabsTrigger value="vip-access">
+            <Scan className="mr-2 h-4 w-4" />
+            VIP Access
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="venues">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <MapPin className="h-5 w-5" />
+                <span>Venues</span>
+              </CardTitle>
+              <CardDescription>All registered venues</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {theatres.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <MapPin className="h-12 w-12 text-muted-foreground/50" />
+                  <p className="mt-4 text-sm font-medium">No venues yet</p>
+                  <Button className="mt-4" onClick={openDialog}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Venue
+                  </Button>
                 </div>
-              ))}
+              ) : (
+                <div className="space-y-3">
+                  {theatres.map((theatre) => (
+                    <div
+                      key={theatre.id}
+                      className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:border-primary/30 hover:shadow-sm hover:-translate-y-0.5 animate-slide-up"
+                    >
+                      <div className="flex-1">
+                        <p className="font-medium text-lg">{theatre.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {theatre.address}, {theatre.city}
+                        </p>
+                        <div className="flex items-center gap-3 mt-2">
+                          <Badge variant="secondary" className="text-xs">
+                            {theatre.venue_type || 'Venue'}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            Capacity: <span className="font-semibold">{theatre.capacity}</span> people
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(theatre)} className="hover:bg-primary/10">
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(theatre.id)} className="hover:bg-destructive/10">
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="vip-access">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold tracking-tight">VIP Management</h2>
+              <div className="w-[300px]">
+                <Select value={selectedTheatreId} onValueChange={setSelectedTheatreId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Theatre" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {theatres.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+
+            {selectedTheatreId ? (
+              <VIPManagementPanel />
+            ) : (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <MapPin className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                  <p>Select a theatre to manage VIP access</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl">
@@ -381,6 +436,6 @@ export default function TheatresPage() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </div >
   )
 }

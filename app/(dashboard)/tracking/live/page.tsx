@@ -12,7 +12,7 @@ type CurrentUser = {
 }
 
 const ALLOWED_ROLES = [
-  'super_admin',
+  'dev_admin',
   'admin',
   'captain',
   'head_of_command',

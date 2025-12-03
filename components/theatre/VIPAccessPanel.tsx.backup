@@ -1,0 +1,567 @@
+"use client"
+
+import { useState, useRef, useEffect } from "react"
+import Webcam from "react-webcam"
+import { motion, AnimatePresence } from "framer-motion"
+import { createClient } from "@/lib/supabase/client"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { toast } from "sonner"
+import { Scan, UserCheck, UserX, Camera, ShieldCheck, Loader2, Search, Plus, Upload } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import * as faceapi from 'face-api.js'
+
+// Sci-fi scanning animation variants
+const scanVariants = {
+    scanning: {
+        top: ["0%", "100%", "0%"],
+        transition: {
+            duration: 2,
+            repeat: Infinity,
+            ease: "linear"
+        }
+    }
+}
+
+const hudVariants = {
+    initial: { opacity: 0, scale: 0.9 },
+    animate: { opacity: 1, scale: 1, transition: { duration: 0.5 } }
+}
+
+export default function VIPAccessPanel() {
+    const supabase = createClient()
+    const webcamRef = useRef<Webcam>(null)
+    const [selectedProgramId, setSelectedProgramId] = useState<string>("")
+    const [programs, setPrograms] = useState<any[]>([])
+    const [scanning, setScanning] = useState(false)
+    const [matchResult, setMatchResult] = useState<'match' | 'no-match' | null>(null)
+    const [matchedVIP, setMatchedVIP] = useState<any>(null)
+    const [vips, setVips] = useState<any[]>([])
+    const [loading, setLoading] = useState(false)
+    const [addDialogOpen, setAddDialogOpen] = useState(false)
+    const [newVIP, setNewVIP] = useState({ full_name: '', title: '', access_level: 'standard', notes: '' })
+    const [modelsLoaded, setModelsLoaded] = useState(false)
+    const [labeledDescriptors, setLabeledDescriptors] = useState<faceapi.LabeledFaceDescriptors[]>([])
+    const [selectedImage, setSelectedImage] = useState<File | null>(null)
+    const [imagePreview, setImagePreview] = useState<string | null>(null)
+    const [scannerActive, setScannerActive] = useState(false)
+    const scanIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+    useEffect(() => {
+        loadModels()
+        loadPrograms()
+    }, [])
+
+    useEffect(() => {
+        if (selectedProgramId) {
+            loadVIPs()
+        }
+    }, [selectedProgramId])
+
+    useEffect(() => {
+        // Start/stop continuous scanning based on scanner state
+        if (scannerActive && modelsLoaded && selectedProgramId && !matchResult) {
+            scanIntervalRef.current = setInterval(() => {
+                performScan()
+            }, 1000) // Check for faces every 1 second for faster response
+        } else {
+            if (scanIntervalRef.current) {
+                clearInterval(scanIntervalRef.current)
+                scanIntervalRef.current = null
+            }
+        }
+
+        return () => {
+            if (scanIntervalRef.current) {
+                clearInterval(scanIntervalRef.current)
+            }
+        }
+    }, [scannerActive, modelsLoaded, selectedProgramId, matchResult, labeledDescriptors])
+
+    const loadModels = async () => {
+        try {
+            const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model'
+            await Promise.all([
+                faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+                faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+            ])
+            setModelsLoaded(true)
+            console.log("Face API models loaded from CDN")
+            toast.success("Facial recognition ready")
+        } catch (error) {
+            console.error("Error loading models:", error)
+            toast.error("Failed to load facial recognition models. Please refresh.")
+        }
+    }
+
+    const loadPrograms = async () => {
+        const { data, error } = await supabase
+            .from('programs')
+            .select('id, name, status, start_date')
+            .in('status', ['planning', 'active'])
+            .order('start_date', { ascending: false })
+
+        if (error) {
+            console.error("Error loading programs:", error)
+            return
+        }
+
+        if (data) {
+            setPrograms(data)
+        }
+    }
+
+    const loadVIPs = async () => {
+        if (!selectedProgramId) return
+
+        const { data, error } = await supabase
+            .from('theatre_vips')
+            .select('*')
+            .eq('program_id', selectedProgramId)
+            .order('full_name')
+
+        if (error) {
+            console.error("Error loading VIPs:", error)
+            return
+        }
+
+        if (data) {
+            setVips(data)
+            // Pre-load descriptors
+            const descriptors = data
+                .filter((vip: any) => vip.face_descriptor)
+                .map((vip: any) => {
+                    return new faceapi.LabeledFaceDescriptors(
+                        vip.id,
+                        [new Float32Array(vip.face_descriptor)]
+                    )
+                })
+            setLabeledDescriptors(descriptors)
+        }
+    }
+
+    const performScan = async () => {
+        if (!modelsLoaded || !webcamRef.current?.video || scanning) return
+        if (!selectedProgramId) return
+
+        setScanning(true)
+
+        try {
+            const video = webcamRef.current.video
+
+            // Detect face in current frame
+            const detection = await faceapi.detectSingleFace(video).withFaceLandmarks().withFaceDescriptor()
+
+            if (detection) {
+                // Face detected! Now match against database
+                if (labeledDescriptors.length > 0) {
+                    const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6)
+                    const match = faceMatcher.findBestMatch(detection.descriptor)
+
+                    if (match.label !== 'unknown') {
+                        const vip = vips.find(v => v.id === match.label)
+                        if (vip) {
+                            setMatchedVIP(vip)
+                            setMatchResult('match')
+                            setScannerActive(false) // Stop scanning after match
+                            toast.success(`✓ Access Granted: ${vip.full_name}`, {
+                                duration: 5000,
+                            })
+                        }
+                    } else {
+                        // Face detected but no match
+                        setMatchResult('no-match')
+                        setScannerActive(false)
+                        toast.error("✗ Access Denied: Unknown individual", {
+                            duration: 5000,
+                        })
+                    }
+                }
+            }
+            // If no face detected, continue scanning silently
+        } catch (error) {
+            console.error("Scan error:", error)
+        } finally {
+            setScanning(false)
+        }
+    }
+
+    const handleScan = async () => {
+        if (!selectedProgramId) {
+            toast.error("Please select a program first")
+            return
+        }
+        if (labeledDescriptors.length === 0) {
+            toast.error("No VIPs registered for this program")
+            return
+        }
+
+        // Toggle scanner on/off
+        setScannerActive(!scannerActive)
+        if (!scannerActive) {
+            toast.info("📷 Scanner active - Point camera at guest", {
+                duration: 3000,
+            })
+        }
+    }
+
+    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (file) {
+            setSelectedImage(file)
+            const reader = new FileReader()
+            reader.onloadend = () => {
+                setImagePreview(reader.result as string)
+            }
+            reader.readAsDataURL(file)
+        }
+    }
+
+    const handleAddVIP = async () => {
+        if (!newVIP.full_name) {
+            toast.error("Please enter VIP name")
+            return
+        }
+        if (!selectedImage) {
+            toast.error("Please upload a photo")
+            return
+        }
+        if (!selectedProgramId) {
+            toast.error("Please select a program")
+            return
+        }
+        if (!modelsLoaded) {
+            toast.error("Facial recognition models are still loading. Please wait.")
+            return
+        }
+
+        setLoading(true)
+        try {
+            // 1. Load image into HTMLImageElement for face-api.js
+            const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+                const imageElement = document.createElement('img')
+                const url = URL.createObjectURL(selectedImage)
+
+                imageElement.onload = () => {
+                    URL.revokeObjectURL(url)
+                    resolve(imageElement)
+                }
+                imageElement.onerror = () => {
+                    URL.revokeObjectURL(url)
+                    reject(new Error("Failed to load image"))
+                }
+                imageElement.src = url
+            })
+
+            // 2. Detect face
+            const detection = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor()
+
+            if (!detection) {
+                throw new Error("No face detected in the uploaded photo. Please upload a clear photo with a visible face.")
+            }
+
+            // 3. Upload photo to storage
+            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('vip-photos')
+                .upload(fileName, selectedImage)
+
+            if (uploadError) throw uploadError
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('vip-photos')
+                .getPublicUrl(fileName)
+
+            // 4. Save to DB with descriptor
+            const { error: dbError } = await supabase.from('theatre_vips').insert([
+                {
+                    ...newVIP,
+                    program_id: selectedProgramId,
+                    photo_url: publicUrl,
+                    face_descriptor: Array.from(detection.descriptor)
+                }
+            ])
+
+            if (dbError) throw dbError
+
+            toast.success("VIP added successfully with facial recognition")
+            setAddDialogOpen(false)
+            setNewVIP({ full_name: '', title: '', access_level: 'standard', notes: '' })
+            setSelectedImage(null)
+            setImagePreview(null)
+            loadVIPs()
+
+        } catch (error: any) {
+            console.error("Add VIP error:", error)
+            toast.error(error.message || "Failed to add VIP")
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <div className="space-y-6">
+            {/* Program Selector */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Select Program</CardTitle>
+                    <CardDescription>Choose the program to manage VIP access for</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Select value={selectedProgramId} onValueChange={setSelectedProgramId}>
+                        <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select a program..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {programs.map((program) => (
+                                <SelectItem key={program.id} value={program.id}>
+                                    {program.name} ({program.status})
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </CardContent>
+            </Card>
+
+            {selectedProgramId && (
+                <div className="grid gap-6 lg:grid-cols-2 h-[600px]">
+                    {/* Left Panel: Scanner Interface */}
+                    <Card className="border-primary/20 bg-black/40 backdrop-blur-sm overflow-hidden relative">
+                        <div className="absolute inset-0 bg-[url('/grid-pattern.png')] opacity-10 pointer-events-none" />
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-primary">
+                                <Scan className="h-5 w-5" />
+                                Biometric Access Control
+                            </CardTitle>
+                            <CardDescription className="text-primary/60">
+                                Status: {!modelsLoaded ? "LOADING MODELS..." : scannerActive ? "MONITORING - Waiting for face..." : "READY"}
+                            </CardDescription>
+                        </CardHeader>
+                                            initial={{ opacity: 0, scale: 0.8 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0 }}
+                                            className={`absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-10`}
+                                        >
+                                            <div className={`p-8 rounded-xl border-2 ${matchResult === 'match' ? 'border-green-500 bg-green-500/10' : 'border-red-500 bg-red-500/10'} text-center w-full max-w-md mx-4`}>
+                                                {matchResult === 'match' ? (
+                                                    <>
+                                                        <div className="relative w-32 h-32 mx-auto mb-4 rounded-full overflow-hidden border-4 border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.5)]">
+                                                            <img src={matchedVIP?.photo_url} alt={matchedVIP?.full_name} className="w-full h-full object-cover" />
+                                                        </div>
+                                                        <h3 className="text-3xl font-bold text-green-500 tracking-widest mb-1">ACCESS GRANTED</h3>
+                                                        <p className="text-white text-xl font-semibold">{matchedVIP?.full_name}</p>
+                                                        {matchedVIP?.title && (
+                                                            <p className="text-green-400 text-sm mb-2">{matchedVIP.title}</p>
+                                                        )}
+                                                        <p className="text-green-400/80 text-sm mb-4">{matchedVIP?.notes}</p>
+                                                        <Badge className="bg-green-500/20 text-green-400 border-green-500/50 px-4 py-1 text-lg">
+                                                            {matchedVIP?.access_level?.toUpperCase()}
+                                                        </Badge>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <UserX className="h-24 w-24 text-red-500 mx-auto mb-4 animate-pulse" />
+                                                        <h3 className="text-3xl font-bold text-red-500 tracking-widest mb-2">ACCESS DENIED</h3>
+                                                        <p className="text-white/80 text-lg">Identity Verification Failed</p>
+                                                        <p className="text-red-400/60 text-sm mt-2">No authorized match found in database</p>
+                                                    </>
+                                                )}
+                                                <Button
+                                                    className="mt-8 w-full font-bold tracking-wider"
+                                                    variant={matchResult === 'match' ? "default" : "destructive"}
+                                                    onClick={() => {
+                                                        setMatchResult(null)
+                                                        setMatchedVIP(null)
+                                                        setScannerActive(true) // Resume scanning after reset
+                                                    }}
+                                                >
+                                                    RESET SCANNER
+                                                </Button>
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+
+                            <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-4 z-20">
+                                <Button
+                                    size="lg"
+                                    className={`w-48 font-bold tracking-wider ${scannerActive ? 'bg-red-600 hover:bg-red-700 animate-pulse' : ''
+                                        }`}
+                                    onClick={handleScan}
+                                    disabled={!modelsLoaded || !!matchResult}
+                                    variant={scannerActive ? "destructive" : "default"}
+                                >
+                                    {scannerActive ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            STOP SCANNER
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Camera className="mr-2 h-4 w-4" />
+                                            START SCANNER
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        </CardContent >
+                    </Card >
+
+        {/* Right Panel: VIP List & Management */ }
+        < Card className = "flex flex-col h-full" >
+                        <CardHeader>
+                            <div className="flex flex-row items-start justify-between gap-4 mb-4">
+                                <div className="flex-1">
+                                    <CardTitle className="text-xl font-bold">Authorized Personnel</CardTitle>
+                                    <CardDescription className="text-sm">VIPs registered for this program</CardDescription>
+                                </div>
+                                <Button
+                                    variant="default"
+                                    onClick={() => setAddDialogOpen(true)}
+                                    className="bg-primary text-primary-foreground hover:bg-primary/90 whitespace-nowrap"
+                                >
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Add VIP
+                                </Button>
+                            </div>
+                            <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+                                <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+                                    <DialogHeader>
+                                        <DialogTitle>Add Authorized VIP</DialogTitle>
+                                    </DialogHeader>
+                                    <div className="space-y-4 py-4">
+                                        <div className="space-y-2">
+                                            <Label>Full Name*</Label>
+                                            <Input
+                                                value={newVIP.full_name}
+                                                onChange={(e) => setNewVIP({ ...newVIP, full_name: e.target.value })}
+                                                placeholder="e.g. John Doe"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Title/Position</Label>
+                                            <Input
+                                                value={newVIP.title}
+                                                onChange={(e) => setNewVIP({ ...newVIP, title: e.target.value })}
+                                                placeholder="e.g. Hon. Minister, Senator, CEO"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Access Level</Label>
+                                            <select
+                                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                                value={newVIP.access_level}
+                                                onChange={(e) => setNewVIP({ ...newVIP, access_level: e.target.value })}
+                                            >
+                                                <option value="standard">Standard VIP</option>
+                                                <option value="vip">High Priority (VIP)</option>
+                                                <option value="vvip">Critical (VVIP)</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Notes</Label>
+                                            <Input
+                                                value={newVIP.notes}
+                                                onChange={(e) => setNewVIP({ ...newVIP, notes: e.target.value })}
+                                                placeholder="Additional information..."
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label>VIP Photo*</Label>
+                                            <div className="flex flex-col gap-2">
+                                                <Input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={handleImageSelect}
+                                                    className="cursor-pointer"
+                                                />
+                                                {imagePreview && (
+                                                    <div className="relative w-full h-48 rounded-md overflow-hidden border border-border">
+                                                        <img
+                                                            src={imagePreview}
+                                                            alt="VIP Preview"
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">
+                                                Upload a clear photo with visible face for biometric recognition
+                                            </p>
+                                        </div>
+
+                                        <Button className="w-full" onClick={handleAddVIP} disabled={loading || !modelsLoaded || !selectedImage}>
+                                            {loading ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    Processing Biometrics...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Upload className="mr-2 h-4 w-4" />
+                                                    Add VIP with Facial Recognition
+                                                </>
+                                            )}
+                                        </Button>
+                                    </div>
+                                </DialogContent>
+                            </Dialog>
+                        </CardHeader>
+                        <CardContent className="flex-1 overflow-y-auto">
+                            <div className="relative mb-4">
+                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input placeholder="Search database..." className="pl-8" />
+                            </div>
+
+                            <div className="space-y-2">
+                                {vips.length === 0 ? (
+                                    <div className="text-center py-12 text-muted-foreground">
+                                        <ShieldCheck className="h-12 w-12 mx-auto mb-2 opacity-20" />
+                                        <p className="mb-4">No authorized VIPs found</p>
+                                        <Button variant="outline" onClick={() => setAddDialogOpen(true)}>
+                                            <Plus className="mr-2 h-4 w-4" />
+                                            Add First VIP
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    vips.map((vip) => (
+                                        <div
+                                            key={vip.id}
+                                            className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-10 w-10 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center text-primary font-bold border border-primary/20">
+                                                    {vip.photo_url ? (
+                                                        <img src={vip.photo_url} alt={vip.full_name} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        vip.full_name.charAt(0)
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <p className="font-medium">{vip.full_name}</p>
+                                                    {vip.title && <p className="text-xs text-muted-foreground">{vip.title}</p>}
+                                                    <p className="text-xs text-muted-foreground">{vip.notes || "No notes"}</p>
+                                                </div>
+                                            </div>
+                                            <Badge variant={vip.access_level === 'vvip' ? 'destructive' : vip.access_level === 'vip' ? 'default' : 'secondary'}>
+                                                {vip.access_level.toUpperCase()}
+                                            </Badge>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card >
+                </div >
+            )
+}
+        </div >
+    )
+}

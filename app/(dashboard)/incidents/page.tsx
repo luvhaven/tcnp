@@ -118,7 +118,7 @@ export default function IncidentsPage() {
 
       setCurrentUser(userData)
 
-      const canManageIncidents = ['super_admin', 'admin'].includes(userData?.role)
+      const canManageIncidents = ['dev_admin', 'admin'].includes(userData?.role)
       setCanManage(Boolean(canManageIncidents))
 
       const { data: incidentsData, error } = await supabase

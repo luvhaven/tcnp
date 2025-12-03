@@ -46,7 +46,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    let initial: AppTheme = 'light'
+    let initial: AppTheme = 'dark'
     try {
       const stored = window.localStorage.getItem(THEME_KEY) as AppTheme | null
       if (stored && ['light', 'dark', 'auto'].includes(stored)) {

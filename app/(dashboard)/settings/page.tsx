@@ -13,7 +13,7 @@ import { Settings, Save, RotateCcw, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { useTheme } from "@/components/theme/ThemeProvider"
 import { settingsSchema, defaultSettings, type SettingsFormValues } from "./schema"
-import { cn } from "@/lib/utils"
+import { cn, isAdmin as checkIsAdmin } from "@/lib/utils"
 
 export default function SettingsPage() {
   const supabase = createClient()
@@ -60,24 +60,46 @@ export default function SettingsPage() {
 
       setCurrentUser(userData)
 
-      // Get all settings (KV store)
+      // Get settings for this user (column-based schema)
       const { data: settingsData, error } = await supabase
         .from('settings')
-        .select('key, value')
+        .select('*')
+        .eq('user_id', user.id)
+        .single()
 
-      if (error) throw error
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        throw error
+      }
 
-      if (settingsData && settingsData.length > 0) {
-        // Transform KV array to object
-        const settingsMap = settingsData.reduce((acc: any, item: any) => {
-          // Parse JSON value if needed, or use as is
-          // The schema says value is JSONB, so supabase client might return it as object/primitive
-          acc[item.key] = item.value
-          return acc
-        }, {})
-
-        // Merge with defaults to ensure all fields exist
-        reset({ ...defaultSettings, ...settingsMap })
+      if (settingsData) {
+        // Map database columns to form fields
+        reset({
+          theme: settingsData.theme || defaultSettings.theme,
+          organization_name: settingsData.organization_name || defaultSettings.organization_name,
+          organization_email: settingsData.organization_email || defaultSettings.organization_email,
+          organization_phone: settingsData.organization_phone || defaultSettings.organization_phone,
+          address: settingsData.address || defaultSettings.address,
+          email_notifications: settingsData.email_notifications ?? defaultSettings.email_notifications,
+          sms_notifications: settingsData.sms_notifications ?? defaultSettings.sms_notifications,
+          push_notifications: settingsData.push_notifications ?? defaultSettings.push_notifications,
+          notification_sound: settingsData.notification_sound ?? defaultSettings.notification_sound,
+          default_journey_duration: settingsData.default_journey_duration || defaultSettings.default_journey_duration,
+          auto_assign_vehicles: settingsData.auto_assign_vehicles ?? defaultSettings.auto_assign_vehicles,
+          require_journey_approval: settingsData.require_journey_approval ?? defaultSettings.require_journey_approval,
+          session_timeout: settingsData.session_timeout || defaultSettings.session_timeout,
+          require_2fa: settingsData.require_2fa ?? defaultSettings.require_2fa,
+          password_expiry_days: settingsData.password_expiry_days || defaultSettings.password_expiry_days,
+          language: settingsData.language || defaultSettings.language,
+          timezone: settingsData.timezone || defaultSettings.timezone,
+          date_format: settingsData.date_format || defaultSettings.date_format,
+          time_format: settingsData.time_format || defaultSettings.time_format,
+          default_map_center_lat: settingsData.default_map_center_lat || defaultSettings.default_map_center_lat,
+          default_map_center_lng: settingsData.default_map_center_lng || defaultSettings.default_map_center_lng,
+          default_map_zoom: settingsData.default_map_zoom || defaultSettings.default_map_zoom,
+          map_provider: settingsData.map_provider || defaultSettings.map_provider,
+          location_update_interval: settingsData.location_update_interval || defaultSettings.location_update_interval,
+          enable_offline_mode: settingsData.enable_offline_mode ?? defaultSettings.enable_offline_mode,
+        })
       } else {
         reset(defaultSettings)
       }
@@ -96,17 +118,15 @@ export default function SettingsPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('User not authenticated')
 
-      // Transform form data to KV array for upsert
-      const updates = Object.entries(data).map(([key, value]) => ({
-        key,
-        value: value, // Supabase handles JSONB conversion
-        updated_by: user.id,
-        updated_at: new Date().toISOString()
-      }))
+      // Map form fields to database columns
+      const settingsUpdate = {
+        user_id: user.id,
+        ...data
+      }
 
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('settings')
-        .upsert(updates, { onConflict: 'key' })
+        .upsert(settingsUpdate, { onConflict: 'user_id' })
 
       if (error) throw error
 
@@ -123,7 +143,7 @@ export default function SettingsPage() {
     }
   }
 
-  const isAdmin = currentUser && ['super_admin', 'admin'].includes(currentUser.role)
+  const isAdmin = currentUser && checkIsAdmin(currentUser.role)
 
   if (loading) {
     return (

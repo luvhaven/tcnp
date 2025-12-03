@@ -20,7 +20,7 @@ export async function GET() {
       .eq('id', user.id)
       .single()
 
-    if (!userData || !['super_admin', 'admin'].includes(userData.role)) {
+    if (!userData || !['dev_admin', 'admin'].includes(userData.role)) {
       return NextResponse.json({ error: 'Unauthorized - Admin access required' }, { status: 403 })
     }
 

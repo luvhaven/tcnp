@@ -35,7 +35,7 @@ export default function AuditLogsPage() {
         .eq('id', user.id)
         .single()
 
-      if (!userData || !['super_admin', 'admin'].includes((userData as any).role)) {
+      if (!userData || !['dev_admin', 'admin'].includes((userData as any).role)) {
         setAuthorized(false)
         toast.error('Access denied. Admin privileges required to view audit logs.')
         return
@@ -53,7 +53,7 @@ export default function AuditLogsPage() {
         console.error('Supabase error:', JSON.stringify(error))
         throw error
       }
-      
+
       setLogs(data || [])
     } catch (error: any) {
       console.error('Error loading logs:', JSON.stringify(error))
@@ -117,9 +117,9 @@ export default function AuditLogsPage() {
     const targetType = formatTargetType(log.target_type)
     const userName = log.user_full_name || log.user_email || 'System'
     const userRole = log.user_role || ''
-    
+
     let description = ''
-    
+
     switch (action) {
       case 'create':
         description = `${userName} created a new ${targetType}`
@@ -133,7 +133,7 @@ export default function AuditLogsPage() {
       default:
         description = log.description || `${userName} performed ${action} on ${targetType}`
     }
-    
+
     return description
   }
 

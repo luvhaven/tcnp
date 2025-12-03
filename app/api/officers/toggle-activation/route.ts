@@ -22,7 +22,7 @@ export async function POST(request: Request) {
 
     const role = (currentUser as { role?: string } | null)?.role
 
-    if (!role || !['admin', 'super_admin'].includes(role)) {
+    if (!role || !['admin', 'dev_admin'].includes(role)) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
     }
 

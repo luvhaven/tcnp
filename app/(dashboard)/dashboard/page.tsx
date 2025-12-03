@@ -216,11 +216,74 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-          <p className="mt-4 text-sm text-muted-foreground">Loading dashboard...</p>
+      <div className="space-y-6">
+        {/* Header Skeleton */}
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="h-8 w-32 rounded-md skeleton" />
+            <div className="mt-2 h-4 w-64 rounded-md skeleton" />
+          </div>
         </div>
+
+        {/* Stats Cards Skeleton */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div className="h-4 w-24 rounded-md skeleton" />
+                <div className="h-8 w-8 rounded-md skeleton" />
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 w-16 rounded-md skeleton mb-1" />
+                <div className="h-3 w-32 rounded-md skeleton" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Charts Skeleton */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <div className="h-5 w-32 rounded-md skeleton" />
+              <div className="h-4 w-48 rounded-md skeleton mt-2" />
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px] rounded-md skeleton" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <div className="h-5 w-32 rounded-md skeleton" />
+              <div className="h-4 w-48 rounded-md skeleton mt-2" />
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px] rounded-md skeleton" />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Recent Journeys Skeleton */}
+        <Card>
+          <CardHeader>
+            <div className="h-5 w-32 rounded-md skeleton" />
+            <div className="h-4 w-48 rounded-md skeleton mt-2" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-2 flex-1">
+                    <div className="h-5 w-48 rounded-md skeleton" />
+                    <div className="h-4 w-64 rounded-md skeleton" />
+                    <div className="h-3 w-32 rounded-md skeleton" />
+                  </div>
+                  <div className="h-8 w-20 rounded-md skeleton" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }

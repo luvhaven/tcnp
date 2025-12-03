@@ -8,10 +8,10 @@ export async function POST(request: Request) {
     const supabase = await createClient()
     const adminClient = createAdminClient()
     const db = adminClient as any
-    
-    // Verify the requesting user is admin or super_admin
+
+    // Verify the requesting user is admin or dev_admin
     const { data: { user } } = await supabase.auth.getUser()
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
 
     const currentRole = (currentUser as { role?: string } | null)?.role
 
-    if (!currentRole || !['admin', 'super_admin'].includes(currentRole)) {
+    if (!currentRole || !['admin', 'dev_admin'].includes(currentRole)) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
     }
 

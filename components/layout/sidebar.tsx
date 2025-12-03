@@ -25,11 +25,13 @@ import {
   MessageCircle,
   ChevronLeft,
   ChevronRight,
+  Activity,
 } from "lucide-react"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "My Assignments", href: "/my-assignments", icon: Navigation },
+  { name: "My Operations", href: "/my-operations", icon: Navigation },
+  { name: "Ops Monitor", href: "/operations-monitor", icon: Activity },
   { name: "Programs", href: "/programs", icon: Calendar },
   { name: "Journeys", href: "/journeys", icon: MapPin },
   { name: "Papas", href: "/papas", icon: Users },
@@ -38,7 +40,7 @@ const navigation = [
   { name: "Live Tracking", href: "/tracking/live", icon: MapPin },
   { name: "Team Chat", href: "/chat", icon: MessageCircle },
   { name: "Officers", href: "/officers", icon: UserCircle },
-  { name: "Nests", href: "/nests", icon: Hotel },
+  { name: "NOscar", href: "/nests", icon: Hotel },
   { name: "Theatres", href: "/theatres", icon: MapPin },
   { name: "Incidents", href: "/incidents", icon: AlertTriangle },
   { name: "Audit Logs", href: "/audit-logs", icon: FileText },
@@ -120,8 +122,8 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   return (
     <div
       className={cn(
-        "flex h-full flex-col border-r border-border/60 bg-gradient-to-b from-background via-card/95 to-background/95 shadow-lg transition-all duration-300 ease-in-out",
-        isMobile ? "w-64" : collapsed ? "w-16" : "w-64"
+        "flex h-full flex-col border-r border-border/60 bg-gradient-to-b from-background via-card/95 to-background/95 shadow-xl backdrop-blur-sm transition-all duration-300 ease-in-out",
+        isMobile ? "w-64" : collapsed ? "w-20" : "w-72"
       )}
     >
       {/* Logo */}
@@ -179,8 +181,8 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
                 "flex items-center rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 border border-transparent",
                 collapsed ? "justify-center" : "space-x-3",
                 isActive
-                  ? "bg-gradient-to-r from-primary/20 via-primary/10 to-primary/5 text-primary border-primary/50 shadow-md"
-                  : "text-muted-foreground hover:bg-accent/70 hover:text-accent-foreground hover:border-primary/30"
+                  ? "bg-gradient-to-r from-primary/15 to-primary/5 text-primary border-l-4 border-primary shadow-sm"
+                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground hover:pl-4"
               )}
               title={collapsed ? item.name : undefined}
             >

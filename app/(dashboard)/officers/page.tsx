@@ -78,7 +78,7 @@ export default function OfficersPage() {
   const [assignSearch, setAssignSearch] = useState("")
 
   const roles = [
-    { value: 'super_admin', label: 'Super Admin' },
+    // dev_admin is hidden from UI - only for developers
     { value: 'admin', label: 'Admin' },
     { value: 'prof', label: 'Prof (View Only)' },
     { value: 'duchess', label: 'Duchess (View Only)' },
@@ -91,8 +91,15 @@ export default function OfficersPage() {
     { value: 'tango_oscar', label: 'Tango Oscar (TO)' },
     { value: 'head_tango_oscar', label: 'Head, Tango Oscar' },
     { value: 'alpha_oscar', label: 'Alpha Oscar (AO)' },
-    { value: 'november_oscar', label: 'November Oscar (NO)' },
+    { value: 'head_alpha_oscar', label: 'Head, Alpha Oscar' },
+    { value: 'noscar_den', label: 'NOscar Den' },
+    { value: 'head_noscar_den', label: 'Head, NOscar Den' },
+    { value: 'noscar_nest', label: 'NOscar Nest' },
+    { value: 'head_noscar_nest', label: 'Head, NOscar Nest' },
     { value: 'victor_oscar', label: 'Victor Oscar (VO)' },
+    { value: 'head_victor_oscar', label: 'Head, Victor Oscar' },
+    { value: 'echo_oscar', label: 'Echo Oscar (EO)' },
+    { value: 'head_echo_oscar', label: 'Head, Echo Oscar' },
     { value: 'viewer', label: 'Viewer' }
   ]
 
@@ -144,7 +151,7 @@ export default function OfficersPage() {
       setOfficers(body.officers || [])
 
       // Load titles and programs for manage tab
-      if (currentUser && ['super_admin', 'admin'].includes(currentUser.role)) {
+      if (currentUser && ['dev_admin', 'admin'].includes(currentUser.role)) {
         const [titlesRes, programsRes] = await Promise.all([
           supabase
             .from('official_titles')
@@ -185,7 +192,7 @@ export default function OfficersPage() {
 
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
-      case 'super_admin': return 'bg-purple-500'
+      case 'dev_admin': return 'bg-purple-500'
       case 'admin': return 'bg-blue-500'
       case 'captain': return 'bg-green-500'
       default: return 'bg-gray-500'
@@ -386,7 +393,7 @@ export default function OfficersPage() {
   }
 
   const handleDelete = async (officer: Officer) => {
-    if (officer.role === 'super_admin') {
+    if (officer.role === 'dev_admin') {
       toast.error('Cannot delete Super Admin account')
       return
     }
@@ -401,21 +408,25 @@ export default function OfficersPage() {
     }
 
     try {
-      const { error } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', officer.id)
+      const response = await fetch(`/api/admin/delete-user?id=${officer.id}`, {
+        method: 'DELETE',
+      })
 
-      if (error) throw error
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete officer')
+      }
+
       toast.success('Officer deleted successfully!')
       loadData()
     } catch (error: any) {
       console.error('Error:', error)
-      toast.error('Failed to delete officer')
+      toast.error(error.message || 'Failed to delete officer')
     }
   }
 
-  const canManageOfficers = currentUser && ['super_admin', 'admin'].includes(currentUser.role)
+  const canManageOfficers = currentUser && ['dev_admin', 'admin'].includes(currentUser.role)
 
   if (loading) {
     return (
@@ -679,7 +690,7 @@ export default function OfficersPage() {
                       >
                         {officer.is_active ? <UserX className="h-3 w-3" /> : <UserCheck className="h-3 w-3" />}
                       </Button>
-                      {officer.role !== 'super_admin' && officer.id !== currentUser?.id && (
+                      {officer.role !== 'dev_admin' && officer.id !== currentUser?.id && (
                         <Button
                           size="sm"
                           variant="outline"
