@@ -57,3 +57,19 @@ export function canManageNOscar(role: string | null | undefined): boolean {
   if (!role) return false
   return ['admin', 'dev_admin', 'head_of_command', 'head_of_operations', 'november_oscar'].includes(role)
 }
+
+/**
+ * Check if a user can manage Nests (hotels/accommodation)
+ * Alias for canManageNOscar for compatibility
+ */
+export function canManageNests(role: string | null | undefined): boolean {
+  return canManageNOscar(role)
+}
+
+/**
+ * Check if a user can manage Fleet (vehicles/cheetahs)
+ * Alias for canManageCheetahs for compatibility
+ */
+export function canManageFleet(role: string | null | undefined): boolean {
+  return canManageCheetahs(role)
+}
