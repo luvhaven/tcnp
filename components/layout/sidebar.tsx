@@ -136,12 +136,13 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
           <div className="relative h-8 w-8 flex-shrink-0">
             <Image src="/tcnp_logo.png" alt="The Covenant Nation" fill className="object-contain" priority />
           </div>
-          {!collapsed && (
-            <div className="flex flex-col animate-fade-in">
-              <span className="text-sm font-semibold">The Covenant Nation</span>
-              <span className="text-xs text-muted-foreground">Journey Management</span>
-            </div>
-          )}
+          <div className={cn(
+            "flex flex-col transition-all duration-300 overflow-hidden whitespace-nowrap",
+            collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
+          )}>
+            <span className="text-sm font-semibold">The Covenant Nation</span>
+            <span className="text-xs text-muted-foreground">Journey Management</span>
+          </div>
         </Link>
         {isMobile ? (
           <Button
@@ -187,19 +188,20 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
               title={collapsed ? item.name : undefined}
             >
               <item.icon className={cn("h-5 w-5 flex-shrink-0", collapsed && "mx-auto")} />
-              {!collapsed && (
-                <span className="flex items-center justify-between w-full animate-fade-in">
-                  <span>{item.name}</span>
-                  {item.name === "Team Chat" && unreadCount > 0 && (
-                    <Badge
-                      variant="destructive"
-                      className="ml-auto bg-red-500 text-white font-semibold animate-pulse shadow-lg"
-                    >
-                      {unreadCount > 99 ? '99+' : unreadCount}
-                    </Badge>
-                  )}
-                </span>
-              )}
+              <span className={cn(
+                "flex items-center justify-between w-full transition-all duration-300 overflow-hidden whitespace-nowrap",
+                collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
+              )}>
+                <span>{item.name}</span>
+                {item.name === "Team Chat" && unreadCount > 0 && (
+                  <Badge
+                    variant="destructive"
+                    className="ml-auto bg-red-500 text-white font-semibold animate-pulse shadow-lg"
+                  >
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </Badge>
+                )}
+              </span>
             </Link>
           )
         })}

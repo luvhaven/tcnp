@@ -30,7 +30,7 @@ export async function POST(request: Request) {
 
     // Get request body
     const body = await request.json()
-    const { email, password, full_name, phone, role } = body
+    const { email, password, full_name, phone, role, photo_url } = body
 
     if (!email || !password || !full_name || !role) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -78,6 +78,7 @@ export async function POST(request: Request) {
           phone: phone || null,
           oscar,
           role,
+          photo_url: photo_url || null,
           activation_status: 'active',
           is_active: true,
           created_by: user.id

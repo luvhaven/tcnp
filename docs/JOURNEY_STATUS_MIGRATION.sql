@@ -1,6 +1,7 @@
 -- =====================================================
--- Journey Status Tracking System Migration
+-- Journey Status Tracking System Migration (Idempotent)
 -- =====================================================
+-- This script can be run multiple times safely
 
 -- 1. Add status tracking columns to journeys table
 ALTER TABLE journeys
@@ -30,21 +31,22 @@ CREATE INDEX IF NOT EXISTS idx_journey_status_updates_created_at ON journey_stat
 -- 4. Enable RLS on new table
 ALTER TABLE journey_status_updates ENABLE ROW LEVEL SECURITY;
 
--- 5. Create RLS policies for journey_status_updates
+-- 5. Drop existing policies if they exist, then recreate
+DROP POLICY IF EXISTS "Authenticated users can view status updates" ON journey_status_updates;
+DROP POLICY IF EXISTS "Authenticated users can insert status updates" ON journey_status_updates;
 
--- Policy: Authenticated users can view status updates (needed for monitoring)
+-- Recreate policies
 CREATE POLICY "Authenticated users can view status updates"
 ON journey_status_updates FOR SELECT
 TO authenticated
 USING (true);
 
--- Policy: Authenticated users can insert status updates (DOs updating their journeys)
 CREATE POLICY "Authenticated users can insert status updates"
 ON journey_status_updates FOR INSERT
 TO authenticated
 WITH CHECK (true);
 
--- 6. Create helper functions
+-- 6. Create or replace helper functions
 
 -- Function to update journey status and log history
 CREATE OR REPLACE FUNCTION update_journey_status(
@@ -95,9 +97,6 @@ CREATE OR REPLACE FUNCTION archive_journey(
   p_journey_id UUID
 ) RETURNS VOID AS $$
 BEGIN
-  -- Check if user is admin or dev_admin (simplified check, ideally check role table)
-  -- For now, we'll rely on app-level checks or assume authorized users call this
-  
   UPDATE journeys
   SET 
     archived_at = NOW(),
@@ -106,6 +105,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Grant permissions
+-- 7. Grant permissions
 GRANT ALL ON journey_status_updates TO authenticated;
 GRANT ALL ON journey_status_updates TO service_role;
+
+-- Success message
+DO $$
+BEGIN
+  RAISE NOTICE 'Journey Status Tracking migration completed successfully!';
+END $$;

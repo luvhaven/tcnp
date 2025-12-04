@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { UserCircle, Plus, Edit, Trash2, UserCheck, UserX, Award } from "lucide-react"
 import { toast } from "sonner"
@@ -62,7 +62,8 @@ export default function OfficersPage() {
     password: '',
     full_name: '',
     phone: '',
-    role: 'delta_oscar'
+    role: 'delta_oscar',
+    photo_url: ''
   })
 
   const [titleFormData, setTitleFormData] = useState({
@@ -210,7 +211,47 @@ export default function OfficersPage() {
       full_name: '',
       phone: '',
       role: 'delta_oscar',
+      photo_url: ''
     })
+  }
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file')
+      return
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be less than 5MB')
+      return
+    }
+
+    try {
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
+      const filePath = `${fileName}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('officer-photos')
+        .upload(filePath, file)
+
+      if (uploadError) throw uploadError
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('officer-photos')
+        .getPublicUrl(filePath)
+
+      setFormData({ ...formData, photo_url: publicUrl })
+      toast.success('Photo uploaded successfully')
+    } catch (error: any) {
+      console.error('Error uploading photo:', error)
+      toast.error(error.message || 'Failed to upload photo')
+    }
   }
 
   const handleCreateOfficer = async (e: React.FormEvent) => {
@@ -228,6 +269,7 @@ export default function OfficersPage() {
           full_name: formData.full_name,
           phone: formData.phone,
           role: formData.role,
+          photo_url: formData.photo_url,
         }),
       })
 
@@ -767,17 +809,40 @@ export default function OfficersPage() {
             <div className="space-y-2">
               <Label htmlFor="role">{editing ? 'Role *' : 'Default Role *'}</Label>
               <Select
-                id="role"
-                required
                 value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                onValueChange={(value) => setFormData({ ...formData, role: value })}
               >
-                {roles.map((role) => (
-                  <option key={role.value} value={role.value}>
-                    {role.label}
-                  </option>
-                ))}
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a role..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {roles.map((role) => (
+                    <SelectItem key={role.value} value={role.value}>
+                      {role.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="photo">Officer Photo (Optional)</Label>
+              <Input
+                id="photo"
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoUpload}
+                className="cursor-pointer"
+              />
+              {formData.photo_url && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage src={formData.photo_url} />
+                    <AvatarFallback>Photo</AvatarFallback>
+                  </Avatar>
+                  <span>Photo uploaded</span>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 pt-4">

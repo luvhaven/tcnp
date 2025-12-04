@@ -114,6 +114,8 @@ export default function JourneysPage() {
     destination: '',
     scheduled_departure: '',
     scheduled_arrival: '',
+    etd: '',
+    eta: '',
     notes: ''
   })
 
@@ -219,6 +221,8 @@ export default function JourneysPage() {
         destination: '',
         scheduled_departure: '',
         scheduled_arrival: '',
+        etd: '',
+        eta: '',
         notes: ''
       })
       loadData()
@@ -733,6 +737,30 @@ export default function JourneysPage() {
                   value={formData.scheduled_arrival}
                   onChange={(e) => setFormData({ ...formData, scheduled_arrival: e.target.value })}
                 />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="etd">ETD (Estimated Time of Departure)</Label>
+                <Input
+                  id="etd"
+                  type="datetime-local"
+                  value={formData.etd}
+                  onChange={(e) => setFormData({ ...formData, etd: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">When DO should depart</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="eta">ETA (Estimated Time of Arrival)</Label>
+                <Input
+                  id="eta"
+                  type="datetime-local"
+                  value={formData.eta}
+                  onChange={(e) => setFormData({ ...formData, eta: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">When DO should arrive</p>
               </div>
             </div>
 
