@@ -127,7 +127,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
       )}
     >
       {/* Logo */}
-      <div className="flex h-16 items-center border-b px-4 justify-between">
+      <div className="flex h-16 items-center border-b px-4">
         <Link
           href="/dashboard"
           className="flex items-center space-x-2 overflow-hidden"
@@ -144,30 +144,28 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
             <span className="text-xs text-muted-foreground">Journey Management</span>
           </div>
         </Link>
-        {isMobile ? (
+      </div>
+
+      {/* Collapse Toggle - Below Logo */}
+      {!isMobile && (
+        <div className="px-2 py-2 border-b">
           <Button
             variant="ghost"
-            size="icon"
-            onClick={onClose}
-            className="h-8 w-8 flex-shrink-0"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-        ) : (
-          <Button
-            variant="ghost"
-            size="icon"
+            size="sm"
             onClick={() => setCollapsed(!collapsed)}
-            className="h-8 w-8 flex-shrink-0"
+            className="w-full justify-start"
           >
             {collapsed ? (
               <ChevronRight className="h-4 w-4" />
             ) : (
-              <ChevronLeft className="h-4 w-4" />
+              <>
+                <ChevronLeft className="h-4 w-4 mr-2" />
+                <span className="text-xs">Collapse</span>
+              </>
             )}
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">
@@ -179,11 +177,11 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
               href={item.href}
               onClick={isMobile ? onClose : undefined}
               className={cn(
-                "flex items-center rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 border border-transparent",
+                "flex items-center px-3 py-2 text-sm font-medium transition-all duration-200 border-l-4",
                 collapsed ? "justify-center" : "space-x-3",
                 isActive
-                  ? "bg-gradient-to-r from-primary/15 to-primary/5 text-primary border-l-4 border-primary shadow-sm"
-                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground hover:pl-4"
+                  ? "text-primary border-primary"
+                  : "text-muted-foreground border-transparent hover:text-foreground hover:border-muted-foreground/30"
               )}
               title={collapsed ? item.name : undefined}
             >

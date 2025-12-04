@@ -13,7 +13,7 @@ import { Settings, Save, RotateCcw, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { useTheme } from "@/components/theme/ThemeProvider"
 import { settingsSchema, defaultSettings, type SettingsFormValues } from "./schema"
-import { cn, isAdmin as checkIsAdmin } from "@/lib/utils"
+import { cn, isAdmin } from "@/lib/utils"
 
 export default function SettingsPage() {
   const supabase = createClient()
@@ -143,7 +143,7 @@ export default function SettingsPage() {
     }
   }
 
-  const isAdmin = currentUser && checkIsAdmin(currentUser.role)
+  const isAdminUser = currentUser && isAdmin(currentUser.role)
 
   if (loading) {
     return (

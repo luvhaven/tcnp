@@ -19,6 +19,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { Search, Filter, Archive, Eye, CheckCircle, Loader2 } from 'lucide-react'
 import { getCallSignLabel, getCallSignColor } from '@/lib/constants/call-signs'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 
 interface Journey {
     id: string
@@ -82,7 +83,7 @@ export default function JourneyStatusTable() {
           created_at,
           papa:papas(full_name, title),
           cheetah:cheetahs(call_sign, vehicle_type),
-          delta_oscar:users!journeys_user_id_fkey(full_name, oscar)
+          delta_oscar:users!assigned_do_id(full_name, oscar)
         `)
                 .is('completed_at', null)
                 .is('archived_at', null)
@@ -249,9 +250,4 @@ export default function JourneyStatusTable() {
             </div>
         </div>
     )
-}
-
-// Helper for class names
-function cn(...classes: (string | undefined | null | false)[]) {
-    return classes.filter(Boolean).join(' ')
 }
