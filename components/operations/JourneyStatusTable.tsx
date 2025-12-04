@@ -155,6 +155,9 @@ export default function JourneyStatusTable() {
                         <SelectItem value="first_course">First Course</SelectItem>
                         <SelectItem value="dessert">Dessert</SelectItem>
                         <SelectItem value="cocktail">Cocktail</SelectItem>
+                        <SelectItem value="blue_cocktail">Blue Cocktail</SelectItem>
+                        <SelectItem value="red_cocktail">Red Cocktail</SelectItem>
+                        <SelectItem value="re_order">Re-order</SelectItem>
                         <SelectItem value="chapman">Chapman</SelectItem>
                         <SelectItem value="broken_arrow">Broken Arrow</SelectItem>
                     </SelectContent>

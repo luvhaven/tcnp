@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Select } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   AlertTriangle,
   Plus,
@@ -346,7 +346,7 @@ export default function IncidentsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Incident Management</h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-xl">Track and resolve journey incidents</p>
         </div>
-        <Button onClick={() => openDialog()} className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold">
+        <Button onClick={() => openDialog()} className="bg-primary hover:bg-primary/90">
           <Plus className="h-4 w-4 mr-2" />
           Report Incident
         </Button>
@@ -456,14 +456,19 @@ export default function IncidentsPage() {
                 <Label>Journey (Optional)</Label>
                 <Select
                   value={formData.journey_id}
-                  onChange={(e) => setFormData({ ...formData, journey_id: e.target.value })}
+                  onValueChange={(value) => setFormData({ ...formData, journey_id: value })}
                 >
-                  <option value="">None</option>
-                  {journeys.map((journey) => (
-                    <option key={journey.id} value={journey.id}>
-                      {journey.papas?.full_name || 'Unknown'} - {journey.cheetahs?.call_sign || 'No call sign'}
-                    </option>
-                  ))}
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select journey" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    {journeys.map((journey) => (
+                      <SelectItem key={journey.id} value={journey.id}>
+                        {journey.papas?.full_name || 'Unknown'} - {journey.cheetahs?.call_sign || 'No call sign'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
 
@@ -471,15 +476,18 @@ export default function IncidentsPage() {
                 <Label>Type *</Label>
                 <Select
                   value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                  required
+                  onValueChange={(value) => setFormData({ ...formData, type: value })}
                 >
-                  <option value="">Select type</option>
-                  {INCIDENT_TYPES.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INCIDENT_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
             </div>
@@ -489,14 +497,18 @@ export default function IncidentsPage() {
                 <Label>Severity *</Label>
                 <Select
                   value={formData.severity}
-                  onChange={(e) => setFormData({ ...formData, severity: e.target.value as any })}
-                  required
+                  onValueChange={(value) => setFormData({ ...formData, severity: value as any })}
                 >
-                  {Object.entries(SEVERITY_CONFIG).map(([key, config]) => (
-                    <option key={key} value={key}>
-                      {config.label}
-                    </option>
-                  ))}
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(SEVERITY_CONFIG).map(([key, config]) => (
+                      <SelectItem key={key} value={key}>
+                        {config.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
 
@@ -505,13 +517,18 @@ export default function IncidentsPage() {
                   <Label>Status</Label>
                   <Select
                     value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                    onValueChange={(value) => setFormData({ ...formData, status: value as any })}
                   >
-                    {Object.entries(STATUS_CONFIG).map(([key, config]) => (
-                      <option key={key} value={key}>
-                        {config.label}
-                      </option>
-                    ))}
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+                        <SelectItem key={key} value={key}>
+                          {config.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                 </div>
               )}
@@ -541,7 +558,7 @@ export default function IncidentsPage() {
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold">
+              <Button type="submit" className="bg-primary hover:bg-primary/90">
                 {editing ? 'Update Incident' : 'Report Incident'}
               </Button>
             </div>

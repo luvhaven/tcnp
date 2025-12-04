@@ -33,3 +33,27 @@ export function canManageJourney(role: string | null | undefined, isAssignedDO: 
 
   return false
 }
+
+/**
+ * Check if a user can manage Papas (guest ministers)
+ */
+export function canManagePapas(role: string | null | undefined): boolean {
+  if (!role) return false
+  return ['admin', 'dev_admin', 'head_of_command', 'head_of_operations', 'head_tango_oscar'].includes(role)
+}
+
+/**
+ * Check if a user can manage Cheetahs (vehicles)
+ */
+export function canManageCheetahs(role: string | null | undefined): boolean {
+  if (!role) return false
+  return ['admin', 'dev_admin', 'head_of_command', 'head_of_operations', 'tango_oscar', 'head_tango_oscar'].includes(role)
+}
+
+/**
+ * Check if a user can manage NOscar (hotels/nests)
+ */
+export function canManageNOscar(role: string | null | undefined): boolean {
+  if (!role) return false
+  return ['admin', 'dev_admin', 'head_of_command', 'head_of_operations', 'november_oscar'].includes(role)
+}
