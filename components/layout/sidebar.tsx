@@ -127,7 +127,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
       )}
     >
       {/* Logo */}
-      <div className="flex h-16 items-center border-b px-4">
+      <div className="flex h-16 items-center border-b px-4 justify-between">
         <Link
           href="/dashboard"
           className="flex items-center space-x-2 overflow-hidden"
@@ -144,25 +144,28 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
             <span className="text-xs text-muted-foreground">Journey Management</span>
           </div>
         </Link>
-      </div>
-
-      {/* Collapse Toggle - Below Logo */}
-      {!isMobile && (
-        <div className="px-2 py-2 border-b">
+        {!isMobile && !collapsed && (
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
             onClick={() => setCollapsed(!collapsed)}
-            className="w-full justify-start"
+            className="h-8 w-8 flex-shrink-0"
           >
-            {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <>
-                <ChevronLeft className="h-4 w-4 mr-2" />
-                <span className="text-xs">Collapse</span>
-              </>
-            )}
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+
+      {/* Collapse Toggle - Only visible when collapsed */}
+      {!isMobile && collapsed && (
+        <div className="px-2 py-2 border-b flex justify-center">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setCollapsed(!collapsed)}
+            className="h-8 w-8"
+          >
+            <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       )}

@@ -213,6 +213,7 @@ export default function OfficersPage() {
       role: 'delta_oscar',
       photo_url: ''
     })
+    setEditing(null)
   }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -293,10 +294,11 @@ export default function OfficersPage() {
     setEditing(officer)
     setFormData({
       email: officer.email,
-      password: '',
+      password: '', // Password empty by default for security
       full_name: officer.full_name || '',
       phone: officer.phone || '',
-      role: officer.role
+      role: officer.role,
+      photo_url: officer.photo_url || ''
     })
     setDialogOpen(true)
   }
@@ -310,23 +312,32 @@ export default function OfficersPage() {
         return
       }
 
-      const oscar = generateOscar(formData.full_name, formData.role)
-
-      const { error } = await supabase
-        .from('users')
-        .update({
+      // Use the admin update-user API
+      const response = await fetch("/api/admin/update-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: editing.id,
+          email: formData.email,
+          password: formData.password, // Only sent if not empty
           full_name: formData.full_name,
           phone: formData.phone,
-          oscar: oscar,
-          role: formData.role as any
-        } as any)
-        .eq('id', editing.id)
+          role: formData.role,
+          photo_url: formData.photo_url
+        }),
+      })
 
-      if (error) throw error
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to update officer")
+      }
+
       toast.success('Officer updated successfully!')
 
       setDialogOpen(false)
-      setEditing(null)
       resetForm()
       loadData()
     } catch (error: any) {
@@ -773,18 +784,19 @@ export default function OfficersPage() {
               </div>
             )}
 
-            {!editing && (
-              <div className="space-y-2">
-                <Label htmlFor="password">Temporary Password *</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  required
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                />
-              </div>
-            )}
+            <div className="space-y-2">
+              <Label htmlFor="password">
+                {editing ? 'New Password (leave blank to keep current)' : 'Temporary Password *'}
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                required={!editing}
+                placeholder={editing ? "Enter new password to change" : "Enter temporary password"}
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              />
+            </div>
 
             <div className="space-y-2">
               <Label htmlFor="full_name">Full Name *</Label>
