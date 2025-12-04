@@ -42,7 +42,7 @@ export default function MyOperationsPage() {
           papa:papas(full_name, title),
           cheetah:cheetahs(call_sign, vehicle_type)
         `)
-                .eq('user_id', user.id) // DO assignment
+                .eq('assigned_do_id', user.id) // DO assignment
                 .is('completed_at', null)
                 .is('archived_at', null)
                 .order('created_at', { ascending: false })
