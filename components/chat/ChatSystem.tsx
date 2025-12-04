@@ -16,6 +16,7 @@ import type {
   RealtimePresenceState
 } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
+import { notificationService } from '@/lib/services/notificationService'
 
 type ChatMessageRow = Database['public']['Tables']['chat_messages']['Row']
 type ChatMessageInsert = Database['public']['Tables']['chat_messages']['Insert']
@@ -509,6 +510,20 @@ export default function ChatSystem({
 
       if (payload.eventType === 'INSERT' && message.sender_id !== currentUser?.id) {
         void markMessageRead(message)
+
+        // Show notification for new message
+        const senderName = message.users?.full_name || 'Someone'
+        const isMentioned = message.mentions.includes(currentUser?.id || '')
+        const isPrivate = message.is_private
+
+        // Only notify if user is mentioned or it's a private message to them
+        if (isMentioned || isPrivate) {
+          void notificationService.notifyNewMessage(
+            senderName,
+            message.content,
+            isPrivate
+          )
+        }
       }
     }
 

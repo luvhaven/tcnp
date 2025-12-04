@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 import { LocationTracker } from "@/components/tracking/LocationTracker"
+import NotificationPermissionBanner from "@/components/notifications/NotificationPermissionBanner"
 
 export default function DashboardLayout({
   children,
@@ -40,6 +41,7 @@ export default function DashboardLayout({
           </div>
         </main>
       </div>
+      <NotificationPermissionBanner />
     </div>
   )
 }

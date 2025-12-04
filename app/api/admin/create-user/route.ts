@@ -68,22 +68,26 @@ export async function POST(request: Request) {
     const oscar = generateOscar(full_name, role)
 
     // Insert into users table using the admin client (bypasses RLS, but route is already admin-guarded)
+    const insertData: any = {
+      id: authData.user.id,
+      email,
+      full_name,
+      phone: phone || null,
+      oscar,
+      role,
+      activation_status: 'active',
+      is_active: true,
+      created_by: user.id
+    }
+
+    // Only add photo_url if provided (for backwards compatibility)
+    if (photo_url) {
+      insertData.photo_url = photo_url
+    }
+
     const { error: userError } = await db
       .from('users')
-      .insert([
-        {
-          id: authData.user.id,
-          email,
-          full_name,
-          phone: phone || null,
-          oscar,
-          role,
-          photo_url: photo_url || null,
-          activation_status: 'active',
-          is_active: true,
-          created_by: user.id
-        }
-      ] as Database['public']['Tables']['users']['Insert'][])
+      .insert([insertData] as Database['public']['Tables']['users']['Insert'][])
 
     if (userError) {
       console.error('User table error:', userError)
