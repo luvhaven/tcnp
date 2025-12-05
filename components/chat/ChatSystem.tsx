@@ -425,6 +425,46 @@ export default function ChatSystem({
     }
   }, [supabase])
 
+  const [typingUsers, setTypingUsers] = useState<Record<string, number>>({})
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastTypingBroadcastRef = useRef<number>(0)
+
+  // Cleanup old typing statuses
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now()
+      setTypingUsers(prev => {
+        const next = { ...prev }
+        let changed = false
+        Object.entries(next).forEach(([userId, timestamp]) => {
+          if (now - timestamp > 3000) {
+            delete next[userId]
+            changed = true
+          }
+        })
+        return changed ? next : prev
+      })
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const handleTyping = useCallback(async () => {
+    if (!channelRef.current || !currentUser?.id) return
+
+    const now = Date.now()
+    if (now - lastTypingBroadcastRef.current < 2000) return // Debounce 2s
+
+    lastTypingBroadcastRef.current = now
+    await channelRef.current.send({
+      type: 'broadcast',
+      event: 'typing',
+      payload: {
+        userId: currentUser.id,
+        fullName: currentUser.full_name || 'Someone'
+      }
+    })
+  }, [currentUser])
+
   useEffect(() => {
     // Load current user first, then set up subscriptions
     const initializeChat = async () => {
@@ -439,7 +479,7 @@ export default function ChatSystem({
       `chat-messages-${programId || 'global'}-${papaId || 'none'}`,
       {
         config: {
-          broadcast: { self: true },
+          broadcast: { self: false }, // Don't receive own typing events
           presence: { key: currentUser?.id || 'anonymous' }
         }
       }
@@ -494,6 +534,14 @@ export default function ChatSystem({
             if (message.sender_id !== currentUser?.id) {
               void markMessageRead(message)
             }
+
+            // Remove sender from typing users immediately when message received
+            setTypingUsers(prev => {
+              const next = { ...prev }
+              delete next[message.sender_id]
+              return next
+            })
+
             return
           } else if (error) {
             console.error('❌ Error fetching full message:', error)
@@ -541,6 +589,15 @@ export default function ChatSystem({
 
     channel
       .on('postgres_changes', subscriptionConfig, handlePayload)
+      .on('broadcast', { event: 'typing' }, (payload) => {
+        const { userId, fullName } = payload.payload
+        if (userId === currentUser?.id) return
+
+        setTypingUsers(prev => ({
+          ...prev,
+          [userId]: Date.now()
+        }))
+      })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           console.log('✅ Chat realtime subscription active')
@@ -576,7 +633,7 @@ export default function ChatSystem({
         channelRef.current = null
       }
     }
-  }, [supabase, programId, papaId])
+  }, [supabase, programId, papaId, currentUser?.id])
 
   useEffect(() => {
     if (!currentUser?.id) return
@@ -925,6 +982,9 @@ export default function ChatSystem({
     setNewMessage(value)
     setCursorPosition(cursorPos)
 
+    // Broadcast typing status
+    void handleTyping()
+
     // Check for @ or @@ mentions
     const textBeforeCursor = value.substring(0, cursorPos)
     const lastAtIndex = textBeforeCursor.lastIndexOf('@')
@@ -1059,6 +1119,12 @@ export default function ChatSystem({
     !['dev_admin', 'admin'].includes(currentUser.role) &&
     programAccessChecked &&
     !canChatInProgram
+
+  // Get typing users list
+  const typingUserNames = Object.keys(typingUsers).map(userId => {
+    const user = users.find(u => u.id === userId)
+    return user ? user.full_name.split(' ')[0] : 'Someone'
+  })
 
   return (
     <div className="relative flex flex-col h-[calc(100vh-12rem)] min-h-[500px] max-h-[800px] bg-card/95 rounded-lg border shadow-sm backdrop-blur-sm">
@@ -1286,6 +1352,25 @@ export default function ChatSystem({
 
       {/* Input */}
       <div className="border-t bg-background p-4">
+        {/* Typing Indicator */}
+        {typingUserNames.length > 0 && (
+          <div className="absolute bottom-[4.5rem] left-6 text-xs text-muted-foreground animate-pulse flex items-center gap-1">
+            <span className="flex gap-0.5">
+              <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+              <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+              <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce"></span>
+            </span>
+            <span>
+              {typingUserNames.length === 1
+                ? `${typingUserNames[0]} is typing...`
+                : typingUserNames.length === 2
+                  ? `${typingUserNames[0]} and ${typingUserNames[1]} are typing...`
+                  : `${typingUserNames.length} people are typing...`
+              }
+            </span>
+          </div>
+        )}
+
         {/* Reply/Edit Indicator */}
         {replyTo && (
           <div className="flex items-center justify-between bg-muted/50 px-3 py-2 rounded-t-lg border-b mb-2 text-xs">
