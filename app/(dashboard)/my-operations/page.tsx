@@ -59,6 +59,20 @@ export default function MyOperationsPage() {
         } catch (error) {
             console.error('Unexpected error:', error)
         } finally {
+            setLoading(false)
+        }
+    }
+
+    if (loading) {
+        return (
+            <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        )
+    }
+
+    if (!journey) {
+        return (
             <div className="space-y-6">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">My Operations</h1>
@@ -78,63 +92,63 @@ export default function MyOperationsPage() {
                 </Card>
             </div>
         )
-}
+    }
 
-return (
-    <div className="space-y-6">
-        <div>
-            <h1 className="text-3xl font-bold tracking-tight">My Operations</h1>
-            <p className="text-muted-foreground">
-                {journey.program?.name} • {format(new Date(), 'EEEE, MMMM do')}
-            </p>
-        </div>
+    return (
+        <div className="space-y-6">
+            <div>
+                <h1 className="text-3xl font-bold tracking-tight">My Operations</h1>
+                <p className="text-muted-foreground">
+                    {journey.program?.name} • {format(new Date(), 'EEEE, MMMM do')}
+                </p>
+            </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
-            {/* Journey Info Card */}
-            <Card className="md:col-span-1 h-fit">
-                <CardHeader>
-                    <CardTitle className="text-lg">Assignment Details</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                    <div className="flex items-start gap-3">
-                        <div className="bg-primary/10 p-2 rounded-md">
-                            <User className="h-5 w-5 text-primary" />
+            <div className="grid gap-6 md:grid-cols-3">
+                {/* Journey Info Card */}
+                <Card className="md:col-span-1 h-fit">
+                    <CardHeader>
+                        <CardTitle className="text-lg">Assignment Details</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <div className="flex items-start gap-3">
+                            <div className="bg-primary/10 p-2 rounded-md">
+                                <User className="h-5 w-5 text-primary" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-muted-foreground">Principal (Papa)</p>
+                                <p className="font-semibold text-lg">{journey.papa?.full_name}</p>
+                                <p className="text-sm text-muted-foreground">{journey.papa?.title}</p>
+                            </div>
                         </div>
-                        <div>
-                            <p className="text-sm font-medium text-muted-foreground">Principal (Papa)</p>
-                            <p className="font-semibold text-lg">{journey.papa?.full_name}</p>
-                            <p className="text-sm text-muted-foreground">{journey.papa?.title}</p>
-                        </div>
-                    </div>
 
-                    <div className="flex items-start gap-3">
-                        <div className="bg-primary/10 p-2 rounded-md">
-                            <Car className="h-5 w-5 text-primary" />
+                        <div className="flex items-start gap-3">
+                            <div className="bg-primary/10 p-2 rounded-md">
+                                <Car className="h-5 w-5 text-primary" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-muted-foreground">Vehicle (Cheetah)</p>
+                                <p className="font-semibold">{journey.cheetah?.call_sign}</p>
+                                <p className="text-sm text-muted-foreground">{journey.cheetah?.vehicle_type}</p>
+                            </div>
                         </div>
-                        <div>
-                            <p className="text-sm font-medium text-muted-foreground">Vehicle (Cheetah)</p>
-                            <p className="font-semibold">{journey.cheetah?.call_sign}</p>
-                            <p className="text-sm text-muted-foreground">{journey.cheetah?.vehicle_type}</p>
+
+                        <div className="pt-4 border-t">
+                            <Badge variant="outline" className="w-full justify-center py-1">
+                                Journey ID: {journey.id.slice(0, 8)}
+                            </Badge>
                         </div>
-                    </div>
+                    </CardContent>
+                </Card>
 
-                    <div className="pt-4 border-t">
-                        <Badge variant="outline" className="w-full justify-center py-1">
-                            Journey ID: {journey.id.slice(0, 8)}
-                        </Badge>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* Status Control Panel */}
-            <div className="md:col-span-2">
-                <CallSignPanel
-                    journeyId={journey.id}
-                    papaName={journey.papa?.full_name}
-                    cheetahName={journey.cheetah?.call_sign}
-                />
+                {/* Status Control Panel */}
+                <div className="md:col-span-2">
+                    <CallSignPanel
+                        journeyId={journey.id}
+                        papaName={journey.papa?.full_name}
+                        cheetahName={journey.cheetah?.call_sign}
+                    />
+                </div>
             </div>
         </div>
-    </div>
-)
+    )
 }
