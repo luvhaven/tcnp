@@ -145,8 +145,9 @@ export default function LiveTrackingMap() {
         event: '*',
         schema: 'public',
         table: 'user_locations'
-      }, () => {
-        console.log('📍 Location update received')
+      }, (payload) => {
+        console.log('📍 Location update received:', payload.eventType)
+        // Reload for both UPDATE and INSERT events
         loadUserLocations()
       })
       .subscribe()

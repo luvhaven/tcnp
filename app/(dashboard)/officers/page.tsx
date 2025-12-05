@@ -68,7 +68,8 @@ export default function OfficersPage() {
 
   const [titleFormData, setTitleFormData] = useState({
     title_id: '',
-    program_id: ''
+    program_id: '',
+    role: ''
   })
 
   const [assignForm, setAssignForm] = useState({
@@ -350,8 +351,9 @@ export default function OfficersPage() {
     setAssigningTitleFor(officer)
     const preferredProgram = programs.find(p => p.status === 'active') || programs[0] || null
     setTitleFormData({
-      title_id: '',
-      program_id: preferredProgram?.id || ''
+      title_id: officer.current_title_id || '',
+      program_id: preferredProgram?.id || '',
+      role: officer.role // Initialize with current role
     })
     setTitleDialogOpen(true)
   }
@@ -362,23 +364,42 @@ export default function OfficersPage() {
     if (!assigningTitleFor) return
 
     try {
-      const { data, error } = await (supabase as any).rpc('assign_title', {
-        p_user_id: assigningTitleFor.id,
-        p_title_code: titles.find(t => t.id === titleFormData.title_id)?.code,
-        p_program_id: titleFormData.program_id || null,
-        p_assigned_by: currentUser?.id
-      })
+      // 1. Update Role if changed
+      if (titleFormData.role && titleFormData.role !== assigningTitleFor.role) {
+        const response = await fetch("/api/admin/update-user", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: assigningTitleFor.id,
+            role: titleFormData.role
+          }),
+        })
 
-      if (error) throw error
+        if (!response.ok) {
+          throw new Error("Failed to update officer role")
+        }
+      }
 
-      toast.success('Title assigned successfully!')
+      // 2. Assign Title (if selected)
+      if (titleFormData.title_id) {
+        const { data, error } = await (supabase as any).rpc('assign_title', {
+          p_user_id: assigningTitleFor.id,
+          p_title_code: titles.find(t => t.id === titleFormData.title_id)?.code,
+          p_program_id: titleFormData.program_id || null,
+          p_assigned_by: currentUser?.id
+        })
+
+        if (error) throw error
+      }
+
+      toast.success('Officer updated successfully!')
       setTitleDialogOpen(false)
       setAssigningTitleFor(null)
-      setTitleFormData({ title_id: '', program_id: '' })
+      setTitleFormData({ title_id: '', program_id: '', role: '' })
       loadData()
     } catch (error: any) {
       console.error('Error:', error)
-      toast.error(error.message || 'Failed to assign title')
+      toast.error(error.message || 'Failed to update officer')
     }
   }
 
