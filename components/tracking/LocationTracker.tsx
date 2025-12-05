@@ -15,7 +15,7 @@ import { toast } from 'sonner'
 export function LocationTracker() {
   const [hasShownPermissionPrompt, setHasShownPermissionPrompt] = useState(false)
   const [bannerDismissed, setBannerDismissed] = useState(false)
-  
+
   const {
     location,
     error,
@@ -28,7 +28,7 @@ export function LocationTracker() {
     highAccuracy: true
   })
 
-  const showTrackingBanner = isTracking && permissionStatus === 'granted' && !bannerDismissed
+  const showTrackingBanner = isTracking && permissionStatus === 'granted' && !error && !bannerDismissed
 
   // Show permission prompt on first load
   useEffect(() => {

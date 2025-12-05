@@ -148,10 +148,11 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
             console.log('📍 Permission changed:', result.state)
           })
 
-          // We log it but we DON'T return false here anymore. 
-          // We'll let getCurrentPosition fail if it's truly denied.
+          // If explicitly denied, don't even try to request
           if (result.state === 'denied') {
-            console.warn('⚠️ Permission API reports denied, but we will try to request anyway.')
+            console.warn('⚠️ Permission API reports denied.')
+            setPermissionStatus('denied')
+            return false
           }
         } catch (e) {
           console.warn('⚠️ Permission API not available:', e)
@@ -209,8 +210,8 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
         } else {
           // For other errors (like persistent timeout), we still consider it "allowed" but failed
           console.warn('⚠️ Permission granted but location unavailable:', error.message)
-          // Return true so we can try again later via the interval/watch
-          return true
+          // Return false so we don't start tracking loop if we can't get location
+          return false
         }
       }
     } catch (err) {
