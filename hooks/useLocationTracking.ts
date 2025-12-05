@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { devLog } from '@/lib/utils/devLogger'
 
 interface LocationData {
   latitude: number
@@ -113,7 +114,7 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
         return // Don't set error for timeouts, just retry
     }
 
-    console.error('❌ Location error:', errorMessage, err)
+    devLog.error('❌ Location error:', errorMessage, err)
     setError(errorMessage)
   }, [])
 
@@ -200,7 +201,7 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
         handlePosition(position)
         return true
       } catch (error: any) {
-        console.error('❌ Geolocation error:', error.message, error.code)
+        devLog.error('❌ Geolocation error:', error.message, error.code)
         if (error.code === error.PERMISSION_DENIED) {
           toast.error('Location access denied. Please allow location access in your browser address bar.')
           setPermissionStatus('denied')

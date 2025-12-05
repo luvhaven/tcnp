@@ -11,7 +11,7 @@ import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { MapPin, Users, Car, Navigation, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { CallSignKey, getCallSignLabel, getCallSignColor } from '@/lib/constants/call-signs'
+import { CallSignKey, getCallSignLabel, getCallSignColor, CALL_SIGNS } from '@/lib/constants/call-signs'
 
 type UserLocation = {
   user_id: string
@@ -66,7 +66,8 @@ const getStatusCategory = (updatedAt: string): StatusCategory => {
   return 'offline'
 }
 
-const JOURNEY_PHASE_SET = new Set<string>(TNCP_JOURNEY_PHASE_KEYS)
+// Journey phase keys from call-signs
+const JOURNEY_PHASE_SET = new Set<string>(CALL_SIGNS.filter(cs => cs.category === 'movement').map(cs => cs.key))
 
 const ROLE_METADATA: Record<string, { label: string; color: string }> = {
   delta_oscar: { label: 'Delta Oscar', color: '#2563EB' },

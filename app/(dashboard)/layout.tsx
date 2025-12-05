@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 import { LocationTracker } from "@/components/tracking/LocationTracker"
 import NotificationPermissionBanner from "@/components/notifications/NotificationPermissionBanner"
+import { DevLoggerInit } from "@/components/utils/DevLoggerInit"
 
 export default function DashboardLayout({
   children,
@@ -15,6 +16,7 @@ export default function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden">
+      <DevLoggerInit />
       <LocationTracker />
 
       <div className="hidden h-full md:flex">
