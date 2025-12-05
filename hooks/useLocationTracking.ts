@@ -114,7 +114,7 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
         return // Don't set error for timeouts, just retry
     }
 
-    devLog.error('❌ Location error:', errorMessage, err)
+    devLog.warn('⚠️ Location issue:', errorMessage, err)
     setError(errorMessage)
   }, [])
 
@@ -201,7 +201,7 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
         handlePosition(position)
         return true
       } catch (error: any) {
-        devLog.error('❌ Geolocation error:', error.message, error.code)
+        devLog.warn('⚠️ Geolocation permission/error:', error.message, error.code)
         if (error.code === error.PERMISSION_DENIED) {
           toast.error('Location access denied. Please allow location access in your browser address bar.')
           setPermissionStatus('denied')

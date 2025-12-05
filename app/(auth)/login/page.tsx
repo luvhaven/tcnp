@@ -32,9 +32,14 @@ export default function LoginPage() {
       }
     } catch (error: any) {
       console.error("Login error:", error);
-      const message =
-        (error && typeof error.message === "string" && error.message) ||
-        "Failed to login";
+
+      let message = "Failed to login";
+      if (error?.message === "Failed to fetch") {
+        message = "Unable to connect to server. Please check your internet connection.";
+      } else if (error?.message) {
+        message = error.message;
+      }
+
       toast.error(message);
     } finally {
       setLoading(false);
