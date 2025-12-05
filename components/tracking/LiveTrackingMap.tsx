@@ -4,7 +4,6 @@ import { useEffect, useState, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import { formatDistanceToNow } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
-import { useLocationTracking } from '@/hooks/useLocationTracking'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -454,28 +453,14 @@ export default function LiveTrackingMap() {
               <CardTitle className="text-sm font-medium">Live Map</CardTitle>
             </CardHeader>
             <CardContent className="h-full p-0">
-              <div className="h-full w-full min-h-[360px] relative">
+              <div className="h-full w-full min-h-[360px]">
                 {isClient && (
-                  <>
-                    <LiveTrackingLeaflet
-                      center={mapCenter}
-                      locations={filteredLocations}
-                      getUserStatus={getUserStatus}
-                      getRoleDisplay={getRoleDisplayMeta}
-                    />
-                    {/* Map Controls Overlay */}
-                    <div className="absolute bottom-6 right-6 z-[400] flex flex-col gap-2">
-                      <Button
-                        size="icon"
-                        variant="secondary"
-                        className="h-10 w-10 rounded-full shadow-md bg-white dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700"
-                        onClick={handleLocateMe}
-                        title="Locate Me"
-                      >
-                        <Navigation className={cn("h-5 w-5", myLocation ? "text-blue-600" : "text-gray-400")} />
-                      </Button>
-                    </div>
-                  </>
+                  <LiveTrackingLeaflet
+                    center={mapCenter}
+                    locations={filteredLocations}
+                    getUserStatus={getUserStatus}
+                    getRoleDisplay={getRoleDisplayMeta}
+                  />
                 )}
               </div>
               {filteredLocations.length === 0 && (
