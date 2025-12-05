@@ -772,6 +772,33 @@ export default function ChatSystem({
     }
   }
 
+  const [replyTo, setReplyTo] = useState<Message | null>(null)
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null)
+
+  const handleReply = (message: Message) => {
+    setReplyTo(message)
+    if (inputRef.current) {
+      inputRef.current.focus()
+    }
+  }
+
+  const handleEdit = (message: Message) => {
+    setEditingMessage(message)
+    setNewMessage(message.content)
+    if (inputRef.current) {
+      inputRef.current.focus()
+    }
+  }
+
+  const cancelReply = () => {
+    setReplyTo(null)
+  }
+
+  const cancelEdit = () => {
+    setEditingMessage(null)
+    setNewMessage('')
+  }
+
   const handleSendMessage = async () => {
     if (!newMessage.trim()) return
 
@@ -791,57 +818,80 @@ export default function ChatSystem({
       }
     }
 
-    const sanitizedMentions = selectedMentions.filter((id) => id !== currentUser.id)
-    if (sanitizedMentions.length !== selectedMentions.length) {
-      toast.warning('You cannot mention yourself. Self-mentions were removed.')
-      setSelectedMentions(sanitizedMentions)
-    }
-
     try {
-      const isPrivate = sanitizedMentions.length > 0 && newMessage.includes('@@')
+      if (editingMessage) {
+        // Handle Edit
+        const { data, error } = await (supabase as any).rpc('edit_chat_message', {
+          message_id: editingMessage.id,
+          new_content: newMessage
+        })
 
-      const payload: ChatMessageInsert = {
-        sender_id: currentUser.id,
-        content: newMessage,
-        mentions: sanitizedMentions as unknown as ChatMessageInsert['mentions'],
-        is_private: isPrivate,
-        program_id: programId || null,
-        papa_id: papaId || null
+        if (error) throw error
+
+        // Update local state immediately for better UX
+        setMessages(prev => prev.map(m =>
+          m.id === editingMessage.id
+            ? { ...m, content: newMessage, edited_at: new Date().toISOString() }
+            : m
+        ))
+
+        toast.success('Message edited')
+        cancelEdit()
+      } else {
+        // Handle New Message
+        const sanitizedMentions = selectedMentions.filter((id) => id !== currentUser.id)
+        if (sanitizedMentions.length !== selectedMentions.length) {
+          toast.warning('You cannot mention yourself. Self-mentions were removed.')
+          setSelectedMentions(sanitizedMentions)
+        }
+
+        const isPrivate = sanitizedMentions.length > 0 && newMessage.includes('@@')
+
+        const payload: ChatMessageInsert = {
+          sender_id: currentUser.id,
+          content: newMessage,
+          mentions: sanitizedMentions as unknown as ChatMessageInsert['mentions'],
+          is_private: isPrivate,
+          program_id: programId || null,
+          papa_id: papaId || null,
+          reply_to_id: replyTo?.id || null
+        }
+
+        console.log('Sending message:', payload)
+
+        const { data, error } = await (supabase as any)
+          .from('chat_messages')
+          .insert([payload])
+          .select(`
+            *,
+            users:sender_id(full_name, oscar, role)
+          `)
+
+        if (error) {
+          console.error('Supabase error details:', error)
+          throw error
+        }
+
+        console.log('Message sent successfully:', data)
+
+        if (Array.isArray(data) && data.length > 0) {
+          const inserted = transformMessage(data[0] as RawMessage)
+          setMessages((prev) => upsertMessage(prev, inserted))
+        }
+
+        // Send notifications to mentioned users
+        if (sanitizedMentions.length > 0) {
+          await createNotifications(sanitizedMentions, newMessage)
+        }
+
+        setNewMessage('')
+        setSelectedMentions([])
+        setReplyTo(null)
+        toast.success('Message sent!')
       }
-
-      console.log('Sending message:', payload)
-
-      const { data, error } = await (supabase as any)
-        .from('chat_messages')
-        .insert([payload])
-        .select(`
-          *,
-          users:sender_id(full_name, oscar, role)
-        `)
-
-      if (error) {
-        console.error('Supabase error details:', error)
-        throw error
-      }
-
-      console.log('Message sent successfully:', data)
-
-      if (Array.isArray(data) && data.length > 0) {
-        const inserted = transformMessage(data[0] as RawMessage)
-        setMessages((prev) => upsertMessage(prev, inserted))
-      }
-
-      // Send notifications to mentioned users
-      if (sanitizedMentions.length > 0) {
-        await createNotifications(sanitizedMentions, newMessage)
-      }
-
-      setNewMessage('')
-      setSelectedMentions([])
-      toast.success('Message sent!')
     } catch (error: any) {
-      console.error('Error sending message:', error)
-      toast.error(error.message || 'Failed to send message')
+      console.error('Error sending/editing message:', error)
+      toast.error(error.message || 'Failed to process message')
     }
   }
 
@@ -1086,11 +1136,19 @@ export default function ChatSystem({
           messages.filter(canViewMessage).map((message) => {
             const isOwn = message.sender_id === currentUser?.id
             const displayName = getDisplayName(message.users)
+
+            // Check if message is editable (within 3 minutes)
+            const isEditable = isOwn && (new Date().getTime() - new Date(message.created_at).getTime()) < 3 * 60 * 1000
+
+            // Find replied message if any
+            const repliedMessage = (message as any).reply_to_id
+              ? messages.find(m => m.id === (message as any).reply_to_id)
+              : null
+
             return (
               <div
                 key={message.id}
-                className={`flex items-end gap-3 animate-in slide-in-from-bottom-2 duration-300 ${isOwn ? 'flex-row-reverse' : ''
-                  }`}
+                className={`flex items-end gap-3 animate-in slide-in-from-bottom-2 duration-300 group ${isOwn ? 'flex-row-reverse' : ''}`}
               >
                 <Avatar className="h-9 w-9 border-2 border-background shadow-sm">
                   <AvatarFallback className={`text-xs font-semibold ${isOwn ? 'bg-primary text-primary-foreground' : 'bg-muted'
@@ -1099,8 +1157,7 @@ export default function ChatSystem({
                   </AvatarFallback>
                 </Avatar>
                 <div className={`flex flex-col gap-1 max-w-[70%] ${isOwn ? 'items-end' : 'items-start'}`}>
-                  <div className={`flex items-center gap-2 px-1 ${isOwn ? 'flex-row-reverse' : ''
-                    }`}>
+                  <div className={`flex items-center gap-2 px-1 ${isOwn ? 'flex-row-reverse' : ''}`}>
                     <span className="text-xs font-semibold">{displayName}</span>
                     {message.is_private && (
                       <div className="flex items-center gap-1 text-amber-600">
@@ -1109,17 +1166,56 @@ export default function ChatSystem({
                       </div>
                     )}
                   </div>
-                  <div
-                    className={`rounded-2xl px-4 py-2.5 shadow-sm ${isOwn
-                      ? 'bg-primary text-primary-foreground rounded-br-sm'
-                      : 'bg-background border rounded-bl-sm'
-                      }`}
-                  >
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.content}</p>
+
+                  {/* Reply Context */}
+                  {repliedMessage && (
+                    <div className={`text-xs text-muted-foreground mb-1 px-2 py-1 border-l-2 border-primary/30 bg-muted/30 rounded-r-md ${isOwn ? 'mr-1' : 'ml-1'}`}>
+                      <span className="font-semibold">{getDisplayName(repliedMessage.users)}: </span>
+                      <span className="line-clamp-1">{repliedMessage.content}</span>
+                    </div>
+                  )}
+
+                  <div className="relative group/message">
+                    <div
+                      className={`rounded-2xl px-4 py-2.5 shadow-sm ${isOwn
+                        ? 'bg-primary text-primary-foreground rounded-br-sm'
+                        : 'bg-background border rounded-bl-sm'
+                        }`}
+                    >
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.content}</p>
+                    </div>
+
+                    {/* Message Actions (Reply/Edit) */}
+                    <div className={`absolute top-0 ${isOwn ? '-left-16' : '-right-16'} opacity-0 group-hover/message:opacity-100 transition-opacity flex gap-1 bg-background/80 backdrop-blur-sm rounded-md p-1 shadow-sm`}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => handleReply(message)}
+                        title="Reply"
+                      >
+                        <MessageCircle className="h-3 w-3" />
+                      </Button>
+                      {isEditable && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => handleEdit(message)}
+                          title="Edit"
+                        >
+                          <span className="text-[10px] font-bold">✎</span>
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  <span className="text-[10px] text-muted-foreground px-1">
-                    {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
-                  </span>
+
+                  <div className={`flex items-center gap-2 px-1 text-[10px] text-muted-foreground ${isOwn ? 'flex-row-reverse' : ''}`}>
+                    <span>{formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}</span>
+                    {(message as any).edited_at && (
+                      <span className="italic">(edited)</span>
+                    )}
+                  </div>
                 </div>
               </div>
             )
@@ -1190,6 +1286,25 @@ export default function ChatSystem({
 
       {/* Input */}
       <div className="border-t bg-background p-4">
+        {/* Reply/Edit Indicator */}
+        {replyTo && (
+          <div className="flex items-center justify-between bg-muted/50 px-3 py-2 rounded-t-lg border-b mb-2 text-xs">
+            <div className="flex items-center gap-2">
+              <MessageCircle className="h-3 w-3 text-primary" />
+              <span>Replying to <strong>{getDisplayName(replyTo.users)}</strong></span>
+            </div>
+            <button onClick={cancelReply} className="text-muted-foreground hover:text-foreground">×</button>
+          </div>
+        )}
+        {editingMessage && (
+          <div className="flex items-center justify-between bg-amber-500/10 px-3 py-2 rounded-t-lg border-b mb-2 text-xs text-amber-700">
+            <div className="flex items-center gap-2">
+              <span className="font-bold">✎ Editing message</span>
+            </div>
+            <button onClick={cancelEdit} className="text-amber-700 hover:text-amber-900">×</button>
+          </div>
+        )}
+
         {selectedMentions.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3 p-3 bg-muted/50 rounded-lg">
             <span className="text-xs font-medium text-muted-foreground">Mentioning:</span>
@@ -1217,7 +1332,7 @@ export default function ChatSystem({
               placeholder={
                 isReadOnlyProgramChat
                   ? 'You are not assigned to this program; chat is read-only.'
-                  : 'Type your message...'
+                  : editingMessage ? 'Edit your message...' : 'Type your message...'
               }
               value={newMessage}
               onChange={handleMessageChange}
