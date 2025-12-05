@@ -71,8 +71,8 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 1. In Supabase dashboard, go to Authentication > Users
 2. Click "Add User"
-3. Email: `doriazowan@gmail.com`
-4. Password: `&DannyDev1&`
+3. Email: `admin@example.com` (or your preferred email)
+4. Password: `[SecurePassword]`
 5. Click "Create User"
 
 The user profile will be automatically created via database triggers.
