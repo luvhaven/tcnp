@@ -45,7 +45,7 @@ const navigation = [
   { name: "NOscar", href: "/nests", icon: Hotel },
   { name: "Theatres", href: "/theatres", icon: Landmark },
   { name: "Incidents", href: "/incidents", icon: AlertTriangle },
-  { name: "Audit Logs", href: "/audit-logs", icon: FileText },
+  { name: "Audit Log", href: "/audit-logs", icon: FileText },
   { name: "Settings", href: "/settings", icon: Settings },
 ]
 
