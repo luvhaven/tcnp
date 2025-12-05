@@ -220,7 +220,7 @@ export default function AuditLogsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Audit Logs</h1>
+        <h1 className="text-3xl font-bold">Audit Log</h1>
         <p className="text-muted-foreground">View who did what, when, and where across the system</p>
       </div>
 
