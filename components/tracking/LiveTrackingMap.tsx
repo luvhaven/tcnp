@@ -220,7 +220,7 @@ export default function LiveTrackingMap() {
       console.log('✅ Loaded journeys:', data)
       const journeysData = (data ?? []) as Journey[]
       const normalizedJourneys: Journey[] = journeysData.map((journey) => {
-        const callSignKey = resolveCallSignKey(journey.status) ?? null
+        const callSignKey = journey.status as CallSignKey | null
         return {
           ...journey,
           callSignKey
@@ -257,19 +257,19 @@ export default function LiveTrackingMap() {
 
   const journeyCallSignList = useMemo(() => {
     return journeys.filter((journey) => {
-      const key = journey.callSignKey ?? resolveCallSignKey(journey.status)
+      const key = journey.callSignKey ?? journey.status
       return key ? JOURNEY_PHASE_SET.has(key) : false
     })
   }, [journeys])
 
   const journeyPhaseCounts = useMemo(() => {
-    const counts = TNCP_JOURNEY_PHASE_KEYS.reduce((acc, key) => {
-      acc[key] = 0
+    const counts = CALL_SIGNS.filter(cs => cs.category === 'movement').reduce((acc, cs) => {
+      acc[cs.key] = 0
       return acc
     }, {} as Record<CallSignKey, number>)
 
     journeyCallSignList.forEach((journey) => {
-      const key = (journey.callSignKey ?? resolveCallSignKey(journey.status)) as CallSignKey | undefined
+      const key = (journey.callSignKey ?? journey.status) as CallSignKey | undefined
       if (key && JOURNEY_PHASE_SET.has(key)) {
         counts[key] = (counts[key] ?? 0) + 1
       }
@@ -562,12 +562,12 @@ export default function LiveTrackingMap() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-3">
-                {TNCP_JOURNEY_PHASE_KEYS.map((key) => {
-                  const label = getJourneyCallSignLabel(key)
-                  const background = getCallSignBackgroundClass(key)
-                  const count = journeyPhaseCounts[key] ?? 0
+                {CALL_SIGNS.filter(cs => cs.category === 'movement').map((cs) => {
+                  const label = getCallSignLabel(cs.key)
+                  const background = getCallSignColor(cs.key)
+                  const count = journeyPhaseCounts[cs.key] ?? 0
                   return (
-                    <div key={key} className="flex items-center gap-2">
+                    <div key={cs.key} className="flex items-center gap-2">
                       <div className={cn('w-3 h-3 rounded-full', background)} />
                       <span className="text-xs sm:text-sm">
                         {label}
