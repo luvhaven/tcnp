@@ -35,16 +35,11 @@ export function LocationTracker() {
     if (!hasShownPermissionPrompt) {
       const timer = setTimeout(() => {
         if (permissionStatus === 'prompt') {
-          toast.info('Enable location tracking to be visible on the live map', {
-            duration: 5000,
-            action: {
-              label: 'Enable',
-              onClick: () => requestPermission()
-            }
-          })
+          // Trigger native browser prompt
+          requestPermission()
         }
         setHasShownPermissionPrompt(true)
-      }, 2000) // Wait 2 seconds after login
+      }, 1000) // Wait 1 second after login
 
       return () => clearTimeout(timer)
     }

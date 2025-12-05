@@ -112,8 +112,13 @@ export default function NotificationCenter() {
 
     const playNotificationSound = () => {
         try {
+            if (typeof window === 'undefined') return
+
             // Create a notification sound similar to Microsoft Teams
-            const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
+            if (!AudioContextClass) return
+
+            const audioContext = new AudioContextClass()
 
             // Create a more pleasant notification sound (two-tone chime)
             const playTone = (frequency: number, startTime: number, duration: number) => {
@@ -140,7 +145,8 @@ export default function NotificationCenter() {
             playTone(1000, now + 0.15, 0.2)  // Second tone (higher pitch)
 
         } catch (error) {
-            console.error('Error playing notification sound:', error)
+            // Silent fail for audio issues to prevent app crash
+            console.warn('Audio playback failed (non-fatal):', error)
         }
     }
 
@@ -257,7 +263,9 @@ export default function NotificationCenter() {
                                             {notification.message}
                                         </p>
                                         <p className="text-xs text-muted-foreground mt-1">
-                                            {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
+                                            {notification.created_at && !isNaN(new Date(notification.created_at).getTime())
+                                                ? formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })
+                                                : 'Just now'}
                                         </p>
                                     </div>
                                 </div>

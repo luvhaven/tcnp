@@ -468,7 +468,9 @@ export default function DashboardPage() {
                       {getStatusLabel(journey.status)}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
-                      {formatDistanceToNow(new Date(journey.created_at), { addSuffix: true })}
+                      {journey.created_at && !isNaN(new Date(journey.created_at).getTime())
+                        ? formatDistanceToNow(new Date(journey.created_at), { addSuffix: true })
+                        : 'Just now'}
                     </span>
                   </div>
                 </div>
