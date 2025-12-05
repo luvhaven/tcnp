@@ -10,8 +10,8 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { MapPin, Users, Car, Navigation, Search, ChevronLeft, ChevronRight } from 'lucide-react'
-import { cn, getCallSignColor } from '@/lib/utils'
-import { CallSignKey, getCallSignLabel, resolveCallSignKey, TNCP_JOURNEY_PHASE_KEYS } from '@/lib/constants/tncpCallSigns'
+import { cn } from '@/lib/utils'
+import { CallSignKey, getCallSignLabel, getCallSignColor } from '@/lib/constants/call-signs'
 
 type UserLocation = {
   user_id: string
