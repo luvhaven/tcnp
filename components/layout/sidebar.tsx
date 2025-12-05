@@ -23,9 +23,10 @@ import {
   Calendar,
   Navigation,
   MessageCircle,
-  ChevronLeft,
   ChevronRight,
   Activity,
+  Route,
+  Landmark,
 } from "lucide-react"
 
 const navigation = [
@@ -33,7 +34,7 @@ const navigation = [
   { name: "My Operations", href: "/my-operations", icon: Navigation },
   { name: "Ops Monitor", href: "/operations-monitor", icon: Activity },
   { name: "Programs", href: "/programs", icon: Calendar },
-  { name: "Journeys", href: "/journeys", icon: MapPin },
+  { name: "Journeys", href: "/journeys", icon: Route },
   { name: "Papas", href: "/papas", icon: Users },
   { name: "Cheetahs", href: "/cheetahs", icon: Car },
   { name: "Eagle Operations", href: "/eagles", icon: Plane },
@@ -41,7 +42,7 @@ const navigation = [
   { name: "Team Chat", href: "/chat", icon: MessageCircle },
   { name: "Officers", href: "/officers", icon: UserCircle },
   { name: "NOscar", href: "/nests", icon: Hotel },
-  { name: "Theatres", href: "/theatres", icon: MapPin },
+  { name: "Theatres", href: "/theatres", icon: Landmark },
   { name: "Incidents", href: "/incidents", icon: AlertTriangle },
   { name: "Audit Logs", href: "/audit-logs", icon: FileText },
   { name: "Settings", href: "/settings", icon: Settings },
