@@ -136,8 +136,12 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
         return false
       }
 
-      // Query permission API if available (just for logging/state, don't block)
-      if ('permissions' in navigator) {
+      // iOS Safari detection (approximate)
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+
+      // Query permission API if available (skip on iOS as it's often unsupported/flaky)
+      if ('permissions' in navigator && !isIOS) {
         try {
           const result = await navigator.permissions.query({ name: 'geolocation' as PermissionName })
           setPermissionStatus(result.state)

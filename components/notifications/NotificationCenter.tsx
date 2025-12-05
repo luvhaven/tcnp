@@ -115,6 +115,8 @@ export default function NotificationCenter() {
             if (typeof window === 'undefined') return
 
             // Create a notification sound similar to Microsoft Teams
+            // iOS requires AudioContext to be created or resumed from a user gesture event initially
+            // However, we wrap this in try/catch to prevent app crash if it fails
             const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
             if (!AudioContextClass) return
 
