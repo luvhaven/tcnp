@@ -115,7 +115,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
     () =>
       isDeltaOscar
         ? navigation.filter((item) =>
-          item.href === '/my-assignments' || item.href === '/chat'
+          item.href === '/dashboard' || item.href === '/my-operations' || item.href === '/chat'
         )
         : navigation,
     [isDeltaOscar]
