@@ -291,7 +291,11 @@ export default function LiveTrackingMap() {
       const matchesRole = roleFilter === 'all' || normalizedRole === roleFilter
       const matchesStatus =
         statusFilter === 'all' || getStatusCategory(loc.updated_at) === statusFilter
-      return matchesSearch && matchesRole && matchesStatus
+
+      // Ensure valid coordinates (filter out 0,0 or nulls)
+      const hasValidCoordinates = loc.latitude && loc.longitude && (loc.latitude !== 0 || loc.longitude !== 0)
+
+      return matchesSearch && matchesRole && matchesStatus && hasValidCoordinates
     })
   }, [userLocations, searchTerm, roleFilter, statusFilter])
 
