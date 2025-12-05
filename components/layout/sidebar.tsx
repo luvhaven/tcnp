@@ -23,6 +23,7 @@ import {
   Calendar,
   Navigation,
   MessageCircle,
+  ChevronLeft,
   ChevronRight,
   Activity,
   Route,
