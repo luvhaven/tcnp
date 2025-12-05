@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Calendar, Plus, Edit, Trash2, Archive, CheckCircle } from "lucide-react"
 import { toast } from "sonner"
@@ -451,31 +451,37 @@ export default function ProgramsPage() {
               <div className="space-y-2">
                 <Label htmlFor="theatre_id">Venue (Theatre)</Label>
                 <Select
-                  id="theatre_id"
                   value={formData.theatre_id}
-                  onChange={(e) => setFormData({ ...formData, theatre_id: e.target.value })}
+                  onValueChange={(value) => setFormData({ ...formData, theatre_id: value })}
                 >
-                  <option value="">Select venue</option>
-                  {theatres.map((theatre) => (
-                    <option key={theatre.id} value={theatre.id}>
-                      {theatre.name}
-                    </option>
-                  ))}
+                  <SelectTrigger id="theatre_id">
+                    <SelectValue placeholder="Select venue" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {theatres.map((theatre) => (
+                      <SelectItem key={theatre.id} value={theatre.id}>
+                        {theatre.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="status">Status *</Label>
                 <Select
-                  id="status"
-                  required
                   value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  onValueChange={(value) => setFormData({ ...formData, status: value })}
                 >
-                  <option value="planning">Planning</option>
-                  <option value="active">Active</option>
-                  <option value="completed">Completed</option>
-                  <option value="archived">Archived</option>
+                  <SelectTrigger id="status">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="planning">Planning</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="archived">Archived</SelectItem>
+                  </SelectContent>
                 </Select>
               </div>
             </div>
