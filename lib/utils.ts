@@ -10,7 +10,7 @@ export function cn(...inputs: ClassValue[]) {
  */
 export function isAdmin(role: string | null | undefined): boolean {
   if (!role) return false
-  return ['admin', 'dev_admin'].includes(role)
+  return ['admin', 'dev_admin', 'super_admin', 'captain', 'head_of_operations', 'head_of_command', 'command'].includes(role)
 }
 
 /**
@@ -21,8 +21,8 @@ export function isAdmin(role: string | null | undefined): boolean {
 export function canManageJourney(role: string | null | undefined, isAssignedDO: boolean = false): boolean {
   if (!role) return false
 
-  // Admins, HOC, and HOP can manage all journeys
-  if (['admin', 'dev_admin', 'head_of_command', 'head_of_operations'].includes(role)) {
+  // Admins can manage all journeys
+  if (isAdmin(role)) {
     return true
   }
 
@@ -39,7 +39,8 @@ export function canManageJourney(role: string | null | undefined, isAssignedDO: 
  */
 export function canManagePapas(role: string | null | undefined): boolean {
   if (!role) return false
-  return ['admin', 'dev_admin', 'head_of_command', 'head_of_operations', 'head_tango_oscar'].includes(role)
+  if (isAdmin(role)) return true
+  return ['head_tango_oscar'].includes(role)
 }
 
 /**
@@ -47,7 +48,8 @@ export function canManagePapas(role: string | null | undefined): boolean {
  */
 export function canManageCheetahs(role: string | null | undefined): boolean {
   if (!role) return false
-  return ['admin', 'dev_admin', 'head_of_command', 'head_of_operations', 'tango_oscar', 'head_tango_oscar'].includes(role)
+  if (isAdmin(role)) return true
+  return ['tango_oscar', 'head_tango_oscar'].includes(role)
 }
 
 /**
@@ -55,7 +57,8 @@ export function canManageCheetahs(role: string | null | undefined): boolean {
  */
 export function canManageNOscar(role: string | null | undefined): boolean {
   if (!role) return false
-  return ['admin', 'dev_admin', 'head_of_command', 'head_of_operations', 'november_oscar'].includes(role)
+  if (isAdmin(role)) return true
+  return ['november_oscar'].includes(role)
 }
 
 /**
