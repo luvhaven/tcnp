@@ -431,7 +431,7 @@ export default function ProgramsPage() {
               <Input
                 id="name"
                 required
-                placeholder="e.g., Presidential Visit 2024"
+                placeholder="e.g., WOFBEC 2026"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               />
@@ -449,13 +449,13 @@ export default function ProgramsPage() {
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="theatre_id">Venue (Theatre)</Label>
+                <Label htmlFor="theatre_id">Theatre</Label>
                 <Select
                   value={formData.theatre_id}
                   onValueChange={(value) => setFormData({ ...formData, theatre_id: value })}
                 >
                   <SelectTrigger id="theatre_id">
-                    <SelectValue placeholder="Select venue" />
+                    <SelectValue placeholder="Select theatre" />
                   </SelectTrigger>
                   <SelectContent>
                     {theatres.map((theatre) => (
