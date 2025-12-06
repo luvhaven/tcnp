@@ -77,6 +77,14 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Default behavior for everything else (API calls, etc.)
-  // Network only
+  // Explicitly exclude Supabase auth and Next.js internals from caching
+  if (
+    url.hostname.includes('supabase') ||
+    url.pathname.includes('/auth/') ||
+    url.pathname.includes('/_next/')
+  ) {
+    // Network only, no caching for auth and API calls
+    return;
+  }
 });
 

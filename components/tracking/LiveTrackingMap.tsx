@@ -137,9 +137,10 @@ export default function LiveTrackingMap() {
   const {
     permissionStatus,
     requestPermission,
-    isTracking
+    isTracking,
+    startTracking
   } = useLocationTracking({
-    enableTracking: true,
+    enableTracking: false, // Don't auto-start, modal will handle it
     highAccuracy: true
   })
 
@@ -160,6 +161,8 @@ export default function LiveTrackingMap() {
     const granted = await requestPermission()
     if (granted) {
       setShowPermissionModal(false)
+      // Start tracking after permission is granted
+      startTracking()
     }
   }
 

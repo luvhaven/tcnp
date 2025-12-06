@@ -32,5 +32,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     }, [router, supabase])
 
+    // Periodic session health check
+    useEffect(() => {
+        const checkSession = setInterval(async () => {
+            const { data: { session }, error } = await supabase.auth.getSession()
+            if (error) {
+                console.warn('⚠️ Session check error:', error.message)
+            }
+            if (!session) {
+                console.warn('⚠️ Session lost, user will be redirected on next auth state change')
+            }
+        }, 60000) // Check every minute
+
+        return () => clearInterval(checkSession)
+    }, [supabase])
+
     return <>{children}</>
 }
