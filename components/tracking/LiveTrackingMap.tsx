@@ -13,6 +13,8 @@ import { Button } from '@/components/ui/button'
 import { MapPin, Users, Car, Navigation, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CallSignKey, getCallSignLabel, getCallSignColor, CALL_SIGNS } from '@/lib/constants/call-signs'
+import { LocationPermissionModal } from './LocationPermissionModal'
+import { useLocationTracking } from '@/hooks/useLocationTracking'
 
 type UserLocation = {
   user_id: string
@@ -130,10 +132,43 @@ export default function LiveTrackingMap() {
   const [mapCenter, setMapCenter] = useState<[number, number]>([6.5244, 3.3792]) // Lagos, Nigeria
   const [isClient, setIsClient] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [showPermissionModal, setShowPermissionModal] = useState(false)
+
+  const {
+    permissionStatus,
+    requestPermission,
+    isTracking
+  } = useLocationTracking({
+    enableTracking: true,
+    highAccuracy: true
+  })
 
   useEffect(() => {
     setIsClient(true)
   }, [])
+
+  // Show modal if permission is denied or promptable, but only if we haven't dismissed it this session
+  useEffect(() => {
+    if (permissionStatus === 'denied' || (permissionStatus === 'prompt' && !isTracking)) {
+      setShowPermissionModal(true)
+    } else if (permissionStatus === 'granted') {
+      setShowPermissionModal(false)
+    }
+  }, [permissionStatus, isTracking])
+
+  const handleAllowLocation = async () => {
+    const granted = await requestPermission()
+    if (granted) {
+      setShowPermissionModal(false)
+    }
+  }
+
+  const handleDenyLocation = () => {
+    setShowPermissionModal(false)
+    toast.info('Live tracking disabled', {
+      description: 'You can enable it later by refreshing the page.'
+    })
+  }
 
   useEffect(() => {
     loadData()
@@ -381,7 +416,13 @@ export default function LiveTrackingMap() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-6rem)] flex-col gap-3 animate-fade-in">
+    <div className="flex h-[calc(100vh-6rem)] flex-col gap-3 animate-fade-in relative">
+      <LocationPermissionModal
+        isOpen={showPermissionModal}
+        onAllow={handleAllowLocation}
+        onDeny={handleDenyLocation}
+        permissionStatus={permissionStatus}
+      />
       {/* Compact header with inline stats and sidebar toggle */}
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
