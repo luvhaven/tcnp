@@ -297,10 +297,20 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
   // Auto-start tracking when component mounts
   useEffect(() => {
     if (enableTracking && !isTracking) {
-      // Small delay to allow component to mount fully
+      // Check if iOS to prevent aggressive prompts/crashes on load
+      const isIOS = typeof navigator !== 'undefined' &&
+        (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
+      // Delay significantly on iOS to allow hydration and other heavy tasks to finish
+      const delay = isIOS ? 5000 : 1000;
+
       const timer = setTimeout(() => {
-        startTracking()
-      }, 1000)
+        // Double check browser support before starting
+        if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+          startTracking().catch(e => console.warn("Auto-start tracking failed", e));
+        }
+      }, delay)
 
       return () => clearTimeout(timer)
     }

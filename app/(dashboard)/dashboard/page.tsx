@@ -465,37 +465,43 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {recentJourneys.map((journey) => (
-                <div
-                  key={journey.id}
-                  className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:border-primary/30 hover:shadow-sm"
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className={`h-2 w-2 rounded-full ${getStatusColor(journey.status)}`} />
-                    <div>
-                      <p className="font-medium">
-                        {journey.papas?.title} {journey.papas?.full_name}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {journey.cheetahs?.call_sign} • {journey.cheetahs?.registration_number}
-                      </p>
+              {recentJourneys.map((journey) => {
+                // iOS Saftey: Parse Date safely
+                const createdDate = journey.created_at ? new Date(journey.created_at) : null;
+                const isValidDate = createdDate && !isNaN(createdDate.getTime());
+
+                return (
+                  <div
+                    key={journey.id}
+                    className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:border-primary/30 hover:shadow-sm"
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className={`h-2 w-2 rounded-full ${getStatusColor(journey.status)}`} />
+                      <div>
+                        <p className="font-medium">
+                          {journey.papas?.title} {journey.papas?.full_name}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {journey.cheetahs?.call_sign} • {journey.cheetahs?.registration_number}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <Badge
+                        variant={journey.status === 'broken_arrow' ? 'destructive' : 'secondary'}
+                        className="uppercase tracking-wide text-[11px] px-3 py-1"
+                      >
+                        {getStatusLabel(journey.status)}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {isValidDate
+                          ? formatDistanceToNow(createdDate!, { addSuffix: true })
+                          : 'Just now'}
+                      </span>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-4">
-                    <Badge
-                      variant={journey.status === 'broken_arrow' ? 'destructive' : 'secondary'}
-                      className="uppercase tracking-wide text-[11px] px-3 py-1"
-                    >
-                      {getStatusLabel(journey.status)}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {journey.created_at && !isNaN(new Date(journey.created_at).getTime())
-                        ? formatDistanceToNow(new Date(journey.created_at), { addSuffix: true })
-                        : 'Just now'}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
