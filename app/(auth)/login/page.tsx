@@ -19,6 +19,8 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
 
+    let loginSuccess = false;
+
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
@@ -28,23 +30,34 @@ export default function LoginPage() {
       if (error) throw error;
 
       if (data.user) {
+        loginSuccess = true;
         toast.success("Login successful!");
+
+        // Small delay for iOS to process
+        await new Promise(resolve => setTimeout(resolve, 100));
+
         // Replace history entry so back button does not return to login
         router.replace("/dashboard");
       }
     } catch (error: any) {
-      console.error("Login error:", error);
+      // Only show error if login was not successful
+      if (!loginSuccess) {
+        console.error("Login error:", error);
 
-      let message = "Failed to login";
-      if (error?.message === "Failed to fetch") {
-        message = "Unable to connect to server. Please check your internet connection.";
-      } else if (error?.message) {
-        message = error.message;
+        let message = "Failed to login";
+        if (error?.message === "Failed to fetch") {
+          message = "Unable to connect to server. Please check your internet connection.";
+        } else if (error?.message) {
+          message = error.message;
+        }
+
+        toast.error(message);
       }
-
-      toast.error(message);
     } finally {
-      setLoading(false);
+      // Only reset loading if login failed
+      if (!loginSuccess) {
+        setLoading(false);
+      }
     }
   };
 
