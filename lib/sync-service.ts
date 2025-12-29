@@ -14,54 +14,30 @@ class SyncService {
         if (!navigator.onLine) return
 
         this.isSyncing = true
-        const supabase = createClient()
+        let processed = 0
+        let errors = 0
+        const supabase = createClient() // Initialize supabase here
 
         try {
             const pending = await offlineQueue.getAllPending()
 
-            if (pending.length === 0) {
-                this.isSyncing = false
-                return
-            }
-
-            console.log(`🔄 Syncing ${pending.length} queued submissions...`)
-
-            let successCount = 0
-            let failCount = 0
-
             for (const submission of pending) {
                 try {
-                    await this.syncSubmission(supabase, submission)
+                    await this.syncSubmission(supabase, submission) // Use existing syncSubmission
                     await offlineQueue.removeFromQueue(submission.id)
-                    successCount++
+                    processed++
                 } catch (error) {
                     console.error(`Failed to sync ${submission.type}:`, error)
                     await offlineQueue.incrementRetry(submission.id)
-                    failCount++
-
-                    // Remove after 3 failed attempts
-                    if (submission.retries >= 3) {
-                        await offlineQueue.removeFromQueue(submission.id)
-                        toast.error(`Failed to sync ${submission.type} after 3 attempts`)
-                    }
                 }
-            }
 
-            if (successCount > 0) {
-                toast.success(`✅ Synced ${successCount} submission${successCount > 1 ? 's' : ''}`)
+                this.notifyListeners()
+            } catch (error) {
+                console.error('Sync error:', error)
+            } finally {
+                this.isSyncing = false
             }
-
-            if (failCount > 0) {
-                toast.error(`❌ ${failCount} submission${failCount > 1 ? 's' : ''} failed to sync`)
-            }
-
-            this.notifyListeners()
-        } catch (error) {
-            console.error('Sync error:', error)
-        } finally {
-            this.isSyncing = false
         }
-    }
 
     private async syncSubmission(supabase: any, submission: QueuedSubmission): Promise<void> {
         switch (submission.type) {
