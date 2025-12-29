@@ -2,9 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import "leaflet/dist/leaflet.css";
-import { Toaster } from "sonner";
-import { ThemeProvider } from "@/components/theme/ThemeProvider";
-import { AuthProvider } from "@/components/providers/AuthProvider";
+import { SafeProviders } from "@/components/providers/SafeProviders";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -35,12 +33,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <ThemeProvider>
-          <AuthProvider>
-            {children}
-            <Toaster position="top-right" richColors />
-          </AuthProvider>
-        </ThemeProvider>
+        <SafeProviders>
+          {children}
+        </SafeProviders>
       </body>
     </html>
   );
