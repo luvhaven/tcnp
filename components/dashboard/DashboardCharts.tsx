@@ -229,6 +229,16 @@ export function DashboardCharts() {
         }));
         setRoleData(roleDataArr);
 
+        const safeDate = (dateStr: string | null | undefined): Date | null => {
+          if (!dateStr) return null;
+          try {
+            const d = new Date(dateStr);
+            return isNaN(d.getTime()) ? null : d;
+          } catch {
+            return null;
+          }
+        };
+
         const now = new Date();
         const start = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
 
@@ -249,8 +259,8 @@ export function DashboardCharts() {
         const journeyIndex = new Map(journeySeries.map((pt, idx) => [pt.date, idx]));
 
         journeysArr.forEach((j: any) => {
-          if (!j.created_at) return;
-          const d = new Date(j.created_at);
+          const d = safeDate(j.created_at);
+          if (!d) return;
           if (d < start || d > now) return;
           const key = makeKey(d);
           const idx = journeyIndex.get(key);
@@ -264,8 +274,8 @@ export function DashboardCharts() {
         const incidentIndex = new Map(incidentSeries.map((pt, idx) => [pt.date, idx]));
 
         incidentsArr.forEach((i: any) => {
-          if (!i.created_at) return;
-          const d = new Date(i.created_at);
+          const d = safeDate(i.created_at);
+          if (!d) return;
           if (d < start || d > now) return;
           const key = makeKey(d);
           const idx = incidentIndex.get(key);
@@ -415,10 +425,10 @@ export function DashboardCharts() {
                         severity === "low"
                           ? CHART_COLORS.green
                           : severity === "medium"
-                          ? CHART_COLORS.amber
-                          : severity === "high"
-                          ? CHART_COLORS.red
-                          : CHART_COLORS.purple;
+                            ? CHART_COLORS.amber
+                            : severity === "high"
+                              ? CHART_COLORS.red
+                              : CHART_COLORS.purple;
                       return <Cell key={`cell-${index}`} fill={color} />;
                     })}
                   </Pie>

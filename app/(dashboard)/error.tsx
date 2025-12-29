@@ -2,7 +2,8 @@
 
 import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { AlertTriangle } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { AlertTriangle, RefreshCcw } from 'lucide-react'
 
 export default function Error({
     error,
@@ -17,28 +18,39 @@ export default function Error({
     }, [error])
 
     return (
-        <div className="flex h-full flex-col items-center justify-center space-y-4 p-8 text-center animate-in fade-in zoom-in duration-300">
-            <div className="rounded-full bg-red-100 p-4 dark:bg-red-900/20">
-                <AlertTriangle className="h-8 w-8 text-red-600 dark:text-red-400" />
-            </div>
-            <div className="space-y-2">
-                <h2 className="text-2xl font-bold tracking-tight">Something went wrong!</h2>
-                <p className="text-muted-foreground max-w-[500px]">
-                    We encountered an unexpected error while loading this page. This might be a temporary glitch.
-                </p>
-                {process.env.NODE_ENV === 'development' && (
-                    <div className="mt-4 rounded-md bg-muted p-4 text-left text-xs font-mono overflow-auto max-w-[600px] max-h-[200px]">
-                        {error.message}
-                        {error.stack && <pre className="mt-2">{error.stack}</pre>}
-                    </div>
-                )}
-            </div>
-            <div className="flex gap-4 pt-4">
-                <Button onClick={() => window.location.reload()} variant="outline">
-                    Reload Page
-                </Button>
-                <Button onClick={() => reset()}>Try Again</Button>
-            </div>
+        <div className="flex h-[50vh] items-center justify-center p-4">
+            <Card className="max-w-md w-full border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/10">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                        <AlertTriangle className="h-5 w-5" />
+                        Something went wrong
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                        We encountered an unexpected error while loading the dashboard.
+                    </p>
+                    {process.env.NODE_ENV === 'development' && (
+                        <div className="rounded-md bg-black/5 p-2 text-xs font-mono text-red-600 dark:text-red-400 overflow-auto max-h-32">
+                            {error.message}
+                        </div>
+                    )}
+                    <Button
+                        onClick={() => {
+                            // Try to recover by reloading location which is more robust than just re-rendering
+                            if (typeof window !== 'undefined') {
+                                window.location.reload()
+                            } else {
+                                reset()
+                            }
+                        }}
+                        className="w-full gap-2"
+                    >
+                        <RefreshCcw className="h-4 w-4" />
+                        Reload Dashboard
+                    </Button>
+                </CardContent>
+            </Card>
         </div>
     )
 }

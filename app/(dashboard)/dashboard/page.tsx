@@ -46,7 +46,23 @@ export default function DashboardPage() {
   const [installHelpPlatform, setInstallHelpPlatform] = useState<"ios" | "android" | "desktop" | null>(null)
 
   useEffect(() => {
-    loadDashboardData()
+    let mounted = true
+
+    const safeLoad = async () => {
+      try {
+        if (mounted) {
+          await loadDashboardData()
+        }
+      } catch (error) {
+        console.error('Dashboard load failed:', error)
+      }
+    }
+
+    safeLoad()
+
+    return () => {
+      mounted = false
+    }
   }, [])
 
   useEffect(() => {
