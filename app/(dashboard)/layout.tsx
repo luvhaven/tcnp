@@ -6,6 +6,8 @@ import { Header } from "@/components/layout/header"
 import { LocationTracker } from "@/components/tracking/LocationTracker"
 import NotificationPermissionBanner from "@/components/notifications/NotificationPermissionBanner"
 import { DevLoggerInit } from "@/components/utils/DevLoggerInit"
+import { OnlineStatusBanner } from "@/components/ui/online-status-banner"
+import { SyncStatusBadge } from "@/components/ui/sync-status-badge"
 
 export default function DashboardLayout({
   children,
@@ -18,6 +20,7 @@ export default function DashboardLayout({
     <div className="flex h-screen overflow-hidden">
       <DevLoggerInit />
       <LocationTracker />
+      <OnlineStatusBanner />
 
       <div className="hidden h-full md:flex">
         <Sidebar />
@@ -44,6 +47,7 @@ export default function DashboardLayout({
         </main>
       </div>
       <NotificationPermissionBanner />
+      <SyncStatusBadge />
     </div>
   )
 }

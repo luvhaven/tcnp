@@ -13,23 +13,35 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
 import { formatDistanceToNow } from 'date-fns'
-import { Search, Filter, Archive, Eye, CheckCircle, Loader2 } from 'lucide-react'
-import { getCallSignLabel, getCallSignColor } from '@/lib/constants/call-signs'
+import { Search, Radio, Clock, Loader2, ChevronDown } from 'lucide-react'
+import { CALL_SIGNS, getCallSignLabel, getCallSignColor, type CallSignKey } from '@/lib/constants/call-signs'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
 interface Journey {
     id: string
     program_id: string
-    papa: { full_name: string, title: string }
-    cheetah: { call_sign: string, vehicle_type: string }
-    delta_oscar: { full_name: string, oscar: string }
-    current_status: string
+    papa_id: string
+    assigned_cheetah_id: string
+    assigned_duty_officer_id: string
+    current_call_sign: string
+    status: string
+    eta: string | null
+    etd: string | null
     status_updated_at: string
     created_at: string
+    papas: { full_name: string; title: string } | null
+    cheetahs: { call_sign: string; registration_number: string } | null
+    assigned_do: { full_name: string; oscar: string } | null
 }
 
 export default function JourneyStatusTable() {
@@ -40,8 +52,13 @@ export default function JourneyStatusTable() {
     const [statusFilter, setStatusFilter] = useState<string>('all')
     const [programs, setPrograms] = useState<any[]>([])
     const [selectedProgram, setSelectedProgram] = useState<string>('all')
+    const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null)
+    const [callSignDialogOpen, setCallSignDialogOpen] = useState(false)
+    const [currentUser, setCurrentUser] = useState<any>(null)
+    const [canUpdateCallSigns, setCanUpdateCallSigns] = useState(false)
 
     useEffect(() => {
+        loadCurrentUser()
         loadPrograms()
         loadActiveJourneys()
 
@@ -66,6 +83,27 @@ export default function JourneyStatusTable() {
         }
     }, [])
 
+    const loadCurrentUser = async () => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) return
+
+            const { data: userData } = await supabase
+                .from('users')
+                .select('id, full_name, role, oscar')
+                .eq('id', user.id)
+                .single()
+
+            setCurrentUser(userData)
+
+            // Check if user can update call signs (DO or admin)
+            const canUpdate = userData?.role && ['dev_admin', 'admin', 'delta_oscar', 'captain', 'head_of_command'].includes(userData.role)
+            setCanUpdateCallSigns(Boolean(canUpdate))
+        } catch (error) {
+            console.error('Error loading current user:', error)
+        }
+    }
+
     const loadPrograms = async () => {
         const { data } = await supabase.from('programs').select('id, name').eq('status', 'active')
         if (data) setPrograms(data)
@@ -76,50 +114,103 @@ export default function JourneyStatusTable() {
             const { data, error } = await supabase
                 .from('journeys')
                 .select(`
-          id,
-          program_id,
-          current_status,
-          status_updated_at,
-          created_at,
-          papa:papas(full_name, title),
-          cheetah:cheetahs(call_sign, vehicle_type),
-          delta_oscar:users!assigned_do_id(full_name, oscar)
-        `)
-                .is('completed_at', null)
-                .is('archived_at', null)
+                    *,
+                    papas (full_name, title),
+                    cheetahs (call_sign, registration_number),
+                    users:assigned_duty_officer_id (full_name, oscar)
+                `)
+                .in('status', ['planned', 'in_progress'])
                 .order('status_updated_at', { ascending: false })
 
-            if (error) throw error
-            setJourneys(data as any)
+            if (error) {
+                console.error('Supabase query error:', JSON.stringify(error, null, 2))
+                throw error
+            }
+
+            // Transform the data to match expected structure
+            const transformedData = data?.map(journey => ({
+                ...journey,
+                assigned_do: journey.users
+            })) || []
+
+            console.log('Successfully loaded journeys:', transformedData.length)
+            setJourneys(transformedData as any)
         } catch (error) {
-            console.error('Error loading journeys:', error)
+            console.error('Error loading journeys:', JSON.stringify(error, null, 2))
             toast.error('Failed to load active journeys')
         } finally {
             setLoading(false)
         }
     }
 
-    const handleArchive = async (id: string) => {
-        if (!confirm('Are you sure you want to archive this journey?')) return
+    const handleCallSignClick = (journey: Journey) => {
+        if (!canUpdateCallSigns) {
+            toast.error('You do not have permission to update call signs')
+            return
+        }
+
+        // Check if user is assigned DO or admin
+        const isAssignedDO = currentUser?.id === journey.assigned_duty_officer_id
+        const isAdmin = currentUser?.role && ['dev_admin', 'admin', 'captain', 'head_of_command'].includes(currentUser.role)
+
+        if (!isAssignedDO && !isAdmin) {
+            toast.error('Only the assigned DO or admins can update this journey')
+            return
+        }
+
+        setSelectedJourney(journey)
+        setCallSignDialogOpen(true)
+    }
+
+    const handleUpdateCallSign = async (newCallSign: string) => {
+        if (!selectedJourney) return
 
         try {
-            const { error } = await supabase.rpc('archive_journey', { p_journey_id: id })
+            const { error } = await supabase.rpc('update_journey_call_sign', {
+                journey_uuid: selectedJourney.id,
+                new_status: newCallSign
+            })
+
             if (error) throw error
-            toast.success('Journey archived')
+
+            toast.success(`Call sign updated to ${getCallSignLabel(newCallSign)}`)
+            setCallSignDialogOpen(false)
+            setSelectedJourney(null)
             loadActiveJourneys()
-        } catch (error) {
-            console.error('Error archiving journey:', error)
-            toast.error('Failed to archive journey')
+        } catch (error: any) {
+            console.error('Error updating call sign:', error)
+            toast.error(error.message || 'Failed to update call sign')
         }
+    }
+
+    const getCallSignBadgeColor = (callSign: string): string => {
+        const colorMap: Record<string, string> = {
+            'first_course': 'bg-blue-500 hover:bg-blue-600 text-white',
+            'dessert': 'bg-indigo-500 hover:bg-indigo-600 text-white',
+            'cocktail': 'bg-amber-500 hover:bg-amber-600 text-white',
+            'blue_cocktail': 'bg-cyan-500 hover:bg-cyan-600 text-white',
+            'red_cocktail': 'bg-orange-500 hover:bg-orange-600 text-white',
+            're_order': 'bg-purple-500 hover:bg-purple-600 text-white',
+            'chapman': 'bg-teal-500 hover:bg-teal-600 text-white',
+            'broken_arrow': 'bg-destructive hover:bg-destructive/90 text-white',
+        }
+        return colorMap[callSign] || 'bg-gray-500 hover:bg-gray-600 text-white'
+    }
+
+    const getStatusBadgeColor = (status: string): string => {
+        if (status === 'broken_arrow') return 'bg-destructive text-white'
+        if (status === 'chapman' || status === 'cocktail') return 'bg-teal-500 text-white'
+        if (status.includes('route')) return 'bg-blue-500 text-white'
+        return 'bg-green-500 text-white'
     }
 
     const filteredJourneys = journeys.filter(journey => {
         const matchesSearch =
-            journey.papa?.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            journey.delta_oscar?.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            journey.cheetah?.call_sign.toLowerCase().includes(searchQuery.toLowerCase())
+            journey.papas?.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            journey.assigned_do?.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            journey.cheetahs?.call_sign.toLowerCase().includes(searchQuery.toLowerCase())
 
-        const matchesStatus = statusFilter === 'all' || journey.current_status === statusFilter
+        const matchesStatus = statusFilter === 'all' || journey.current_call_sign === statusFilter
         const matchesProgram = selectedProgram === 'all' || journey.program_id === selectedProgram
 
         return matchesSearch && matchesStatus && matchesProgram
@@ -147,110 +238,156 @@ export default function JourneyStatusTable() {
                     />
                 </div>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Filter Status" />
+                    <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Filter by Status" />
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Statuses</SelectItem>
-                        <SelectItem value="first_course">First Course</SelectItem>
-                        <SelectItem value="dessert">Dessert</SelectItem>
-                        <SelectItem value="cocktail">Cocktail</SelectItem>
-                        <SelectItem value="blue_cocktail">Blue Cocktail</SelectItem>
-                        <SelectItem value="red_cocktail">Red Cocktail</SelectItem>
-                        <SelectItem value="re_order">Re-order</SelectItem>
-                        <SelectItem value="chapman">Chapman</SelectItem>
-                        <SelectItem value="broken_arrow">Broken Arrow</SelectItem>
+                        {CALL_SIGNS.filter(cs => cs.category === 'movement').map(cs => (
+                            <SelectItem key={cs.key} value={cs.key}>
+                                {cs.label}
+                            </SelectItem>
+                        ))}
                     </SelectContent>
                 </Select>
                 <Select value={selectedProgram} onValueChange={setSelectedProgram}>
                     <SelectTrigger className="w-[200px]">
-                        <SelectValue placeholder="Filter Program" />
+                        <SelectValue placeholder="Filter by Program" />
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Programs</SelectItem>
-                        {programs.map(p => (
-                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        {programs.map(program => (
+                            <SelectItem key={program.id} value={program.id}>
+                                {program.name}
+                            </SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
             </div>
 
-            {/* Table */}
-            <div className="rounded-md border">
+            {/* Journey Table */}
+            <div className="border rounded-lg overflow-hidden">
                 <Table>
                     <TableHeader>
-                        <TableRow>
-                            <TableHead>Papa</TableHead>
-                            <TableHead>Delta Oscar (DO)</TableHead>
-                            <TableHead>Cheetah</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Last Update</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
+                        <TableRow className="bg-muted/50">
+                            <TableHead className="font-semibold">Papa</TableHead>
+                            <TableHead className="font-semibold">Duty Officer (DO)</TableHead>
+                            <TableHead className="font-semibold">Status</TableHead>
+                            <TableHead className="font-semibold">Call Sign</TableHead>
+                            <TableHead className="font-semibold">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {filteredJourneys.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                                    No active journeys found matching your criteria
+                                <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                                    <Radio className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                                    <p>No active journeys at the moment</p>
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            filteredJourneys.map((journey) => (
-                                <TableRow key={journey.id}>
-                                    <TableCell>
-                                        <div className="font-medium">{journey.papa?.full_name}</div>
-                                        <div className="text-xs text-muted-foreground">{journey.papa?.title}</div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="font-medium">{journey.delta_oscar?.full_name}</div>
-                                        <div className="text-xs text-muted-foreground">{journey.delta_oscar?.oscar}</div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="font-medium">{journey.cheetah?.call_sign}</div>
-                                        <div className="text-xs text-muted-foreground">{journey.cheetah?.vehicle_type}</div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge
-                                            className={cn(
-                                                "text-white whitespace-nowrap",
-                                                getCallSignColor(journey.current_status)
-                                            )}
-                                        >
-                                            {getCallSignLabel(journey.current_status)}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="text-sm">
-                                            {journey.status_updated_at ? (
-                                                formatDistanceToNow(new Date(journey.status_updated_at), { addSuffix: true })
-                                            ) : (
-                                                <span className="text-muted-foreground">-</span>
-                                            )}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        <div className="flex justify-end gap-2">
-                                            <Button variant="ghost" size="icon" title="View Details">
-                                                <Eye className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                title="Archive"
-                                                onClick={() => handleArchive(journey.id)}
-                                                className="text-muted-foreground hover:text-destructive"
+                            filteredJourneys.map((journey) => {
+                                const callSign = journey.current_call_sign || 'planned'
+                                const callSignLabel = getCallSignLabel(callSign)
+                                const callSignColor = getCallSignBadgeColor(callSign)
+
+                                return (
+                                    <TableRow key={journey.id} className="hover:bg-muted/30 transition-colors">
+                                        <TableCell>
+                                            <div className="flex flex-col">
+                                                <span className="font-medium">{journey.papas?.full_name || 'Unknown Papa'}</span>
+                                                <span className="text-xs text-muted-foreground">{journey.papas?.title}</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-col">
+                                                <span className="font-medium">{journey.assigned_do?.full_name || 'Unassigned'}</span>
+                                                {journey.assigned_do?.oscar && (
+                                                    <span className="text-xs text-muted-foreground">{journey.assigned_do.oscar}</span>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant="outline" className={cn("capitalize whitespace-nowrap", getStatusBadgeColor(journey.status))}>
+                                                {journey.status === 'in_progress' ? 'En Route' : journey.status.replace('_', ' ')}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            <button
+                                                onClick={() => handleCallSignClick(journey)}
+                                                disabled={!canUpdateCallSigns}
+                                                className={cn(
+                                                    "px-3 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2",
+                                                    callSignColor,
+                                                    canUpdateCallSigns ? "cursor-pointer" : "cursor-default opacity-80"
+                                                )}
                                             >
-                                                <Archive className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))
+                                                <Radio className="h-3 w-3" />
+                                                {callSignLabel}
+                                                {canUpdateCallSigns && <ChevronDown className="h-3 w-3" />}
+                                            </button>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-8 text-xs"
+                                                >
+                                                    <Clock className="h-3 w-3 mr-1" />
+                                                    {journey.eta ? 'ETA/ETD' : 'Set Times'}
+                                                </Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                )
+                            })
                         )}
                     </TableBody>
                 </Table>
             </div>
+
+            {/* Summary Stats */}
+            <div className="flex items-center justify-between text-sm text-muted-foreground border-t pt-4">
+                <span>
+                    Showing {filteredJourneys.length} of {journeys.length} active {journeys.length === 1 ? 'journey' : 'journeys'}
+                </span>
+                <span className="flex items-center gap-2">
+                    <Radio className="h-4 w-4 text-green-500 animate-pulse" />
+                    Live updates enabled
+                </span>
+            </div>
+
+            {/* Call Sign Update Dialog */}
+            <Dialog open={callSignDialogOpen} onOpenChange={setCallSignDialogOpen}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle>Update Call Sign</DialogTitle>
+                        <DialogDescription>
+                            Select the new call sign for {selectedJourney?.papas?.full_name}'s journey
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid grid-cols-2 gap-3 py-4">
+                        {CALL_SIGNS.filter(cs => cs.category !== 'time').map((callSign) => (
+                            <button
+                                key={callSign.key}
+                                onClick={() => handleUpdateCallSign(callSign.key)}
+                                className={cn(
+                                    "p-4 rounded-lg border-2 transition-all hover:scale-105 flex flex-col items-start text-left",
+                                    getCallSignBadgeColor(callSign.key),
+                                    selectedJourney?.current_call_sign === callSign.key && "ring-2 ring-primary ring-offset-2"
+                                )}
+                            >
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Radio className="h-4 w-4" />
+                                    <span className="font-semibold">{callSign.label}</span>
+                                </div>
+                                <span className="text-xs opacity-90">{callSign.description}</span>
+                            </button>
+                        ))}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

@@ -29,6 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/lib/constants/tncpCallSigns"
+import { DateTimePicker } from "@/components/ui/date-time-picker"
 
 const FALLBACK_STATUS_LABELS: Record<string, string> = {
   planned: "Planned",
@@ -72,7 +73,7 @@ const getStatusLabel = (status: string): string =>
 type Journey = {
   id: string
   papa_id: string
-  cheetah_id: string
+  assigned_cheetah_id: string
   status: string
   assigned_do_id?: string | null
   origin: string
@@ -107,7 +108,7 @@ export default function JourneysPage() {
   const [currentRole, setCurrentRole] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     papa_id: '',
-    cheetah_id: '',
+    assigned_cheetah_id: '',
     program_id: '',
     assigned_duty_officer_id: '',
     origin: '',
@@ -214,7 +215,7 @@ export default function JourneysPage() {
       setCreateDialogOpen(false)
       setFormData({
         papa_id: '',
-        cheetah_id: '',
+        assigned_cheetah_id: '',
         program_id: '',
         assigned_duty_officer_id: '',
         origin: '',
@@ -675,13 +676,13 @@ export default function JourneysPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="cheetah_id">Cheetah (Vehicle) *</Label>
+                <Label htmlFor="assigned_cheetah_id">Cheetah (Vehicle) *</Label>
                 <select
-                  id="cheetah_id"
+                  id="assigned_cheetah_id"
                   required
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={formData.cheetah_id}
-                  onChange={(e) => setFormData({ ...formData, cheetah_id: e.target.value })}
+                  value={formData.assigned_cheetah_id}
+                  onChange={(e) => setFormData({ ...formData, assigned_cheetah_id: e.target.value })}
                 >
                   <option value="">Select Cheetah</option>
                   {cheetahs.map((cheetah) => (
@@ -720,22 +721,19 @@ export default function JourneysPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="scheduled_departure">Scheduled Departure *</Label>
-                <Input
-                  id="scheduled_departure"
-                  type="datetime-local"
-                  required
+                <DateTimePicker
                   value={formData.scheduled_departure}
-                  onChange={(e) => setFormData({ ...formData, scheduled_departure: e.target.value })}
+                  onChange={(value) => setFormData({ ...formData, scheduled_departure: value })}
+                  placeholder="Select departure date & time"
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="scheduled_arrival">Scheduled Arrival</Label>
-                <Input
-                  id="scheduled_arrival"
-                  type="datetime-local"
+                <DateTimePicker
                   value={formData.scheduled_arrival}
-                  onChange={(e) => setFormData({ ...formData, scheduled_arrival: e.target.value })}
+                  onChange={(value) => setFormData({ ...formData, scheduled_arrival: value })}
+                  placeholder="Select arrival date & time"
                 />
               </div>
             </div>
@@ -743,22 +741,20 @@ export default function JourneysPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="etd">ETD (Estimated Time of Departure)</Label>
-                <Input
-                  id="etd"
-                  type="datetime-local"
+                <DateTimePicker
                   value={formData.etd}
-                  onChange={(e) => setFormData({ ...formData, etd: e.target.value })}
+                  onChange={(value) => setFormData({ ...formData, etd: value })}
+                  placeholder="Select estimated departure"
                 />
                 <p className="text-xs text-muted-foreground">When DO should depart</p>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="eta">ETA (Estimated Time of Arrival)</Label>
-                <Input
-                  id="eta"
-                  type="datetime-local"
+                <DateTimePicker
                   value={formData.eta}
-                  onChange={(e) => setFormData({ ...formData, eta: e.target.value })}
+                  onChange={(value) => setFormData({ ...formData, eta: value })}
+                  placeholder="Select estimated arrival"
                 />
                 <p className="text-xs text-muted-foreground">When DO should arrive</p>
               </div>
