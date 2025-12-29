@@ -76,3 +76,12 @@ export function canManageNests(role: string | null | undefined): boolean {
 export function canManageFleet(role: string | null | undefined): boolean {
   return canManageCheetahs(role)
 }
+
+/**
+ * Check if a user can manage Eagles (tracking/operations)
+ */
+export function canManageEagles(role: string | null | undefined): boolean {
+  if (!role) return false
+  if (isAdmin(role)) return true
+  return ['delta_oscar', 'tango_oscar', 'head_tango_oscar'].includes(role)
+}
