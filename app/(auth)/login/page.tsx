@@ -34,10 +34,15 @@ export default function LoginPage() {
         toast.success("Login successful!");
 
         // Small delay for iOS to process
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 200));
 
-        // Replace history entry so back button does not return to login
-        router.replace("/dashboard");
+        // Use window.location for iOS Safari compatibility
+        // This is more reliable than Next.js router on iOS
+        if (typeof window !== 'undefined') {
+          window.location.href = '/dashboard';
+        } else {
+          router.replace("/dashboard");
+        }
       }
     } catch (error: any) {
       // Only show error if login was not successful
@@ -58,6 +63,7 @@ export default function LoginPage() {
       if (!loginSuccess) {
         setLoading(false);
       }
+      // If success, keep loading during redirect
     }
   };
 
