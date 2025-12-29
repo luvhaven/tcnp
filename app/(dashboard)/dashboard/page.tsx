@@ -75,10 +75,15 @@ export default function DashboardPage() {
 
     // Only register the service worker in production builds to avoid
     // interfering with local development and Next.js chunk loading.
+    // Wrapped in try-catch for iOS Safari compatibility
     if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch((error) => {
-        console.error("Error registering service worker:", error)
-      })
+      try {
+        navigator.serviceWorker.register("/sw.js").catch((error) => {
+          console.warn("Service worker registration failed:", error)
+        })
+      } catch (error) {
+        console.warn("Service worker not supported:", error)
+      }
     }
 
     return () => {
