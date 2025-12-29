@@ -16,28 +16,60 @@ class SyncService {
         this.isSyncing = true
         let processed = 0
         let errors = 0
-        const supabase = createClient() // Initialize supabase here
 
         try {
-            const pending = await offlineQueue.getAllPending()
+            // Check queue availability first (safeguard for iOS private mode)
+            let pending: QueuedSubmission[] = []
+            try {
+                const count = await offlineQueue.getQueueCount()
+                if (count === 0) {
+                    this.isSyncing = false
+                    return
+                }
+                pending = await offlineQueue.getAllPending()
+            } catch (e) {
+                console.warn('Sync skipped - queue not available', e)
+                this.isSyncing = false
+                return
+            }
+
+            console.log(`🔄 Syncing ${pending.length} queued submissions...`)
+
+            const supabase = createClient()
 
             for (const submission of pending) {
                 try {
-                    await this.syncSubmission(supabase, submission) // Use existing syncSubmission
+                    await this.syncSubmission(supabase, submission)
                     await offlineQueue.removeFromQueue(submission.id)
                     processed++
                 } catch (error) {
                     console.error(`Failed to sync ${submission.type}:`, error)
                     await offlineQueue.incrementRetry(submission.id)
-                }
+                    errors++
 
-                this.notifyListeners()
-            } catch (error) {
-                console.error('Sync error:', error)
-            } finally {
-                this.isSyncing = false
+                    // Remove after 3 failed attempts
+                    if (submission.retries >= 3) {
+                        await offlineQueue.removeFromQueue(submission.id)
+                        toast.error(`Failed to sync ${submission.type} after 3 attempts`)
+                    }
+                }
             }
+
+            if (processed > 0) {
+                toast.success(`✅ Synced ${processed} submission${processed > 1 ? 's' : ''}`)
+            }
+
+            if (errors > 0) {
+                toast.error(`❌ ${errors} submission${errors > 1 ? 's' : ''} failed to sync`)
+            }
+
+            this.notifyListeners()
+        } catch (error) {
+            console.error('Sync error:', error)
+        } finally {
+            this.isSyncing = false
         }
+    }
 
     private async syncSubmission(supabase: any, submission: QueuedSubmission): Promise<void> {
         switch (submission.type) {
@@ -76,7 +108,11 @@ class SyncService {
     }
 
     async getPendingCount(): Promise<number> {
-        return offlineQueue.getQueueCount()
+        try {
+            return await offlineQueue.getQueueCount()
+        } catch (e) {
+            return 0
+        }
     }
 }
 
