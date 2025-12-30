@@ -1,16 +1,16 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useIsClient } from '@/hooks/useIsClient'
 
 /**
- * iOS-Safe LocationTracker Component
+ * iOS-Safe LocationTracker Component with Permission Requests
  * 
- * This version is specifically designed to NOT crash on iOS Safari by:
- * 1. Waiting 10 seconds before attempting any geolocation operations
- * 2. Wrapping ALL geolocation calls in try-catch blocks
- * 3. Never auto-requesting permissions - only works if permission already granted
- * 4. Failing silently with console warnings instead of throwing errors
+ * This version:
+ * 1. Waits 10 seconds on iOS before starting (3 seconds on other devices)
+ * 2. Actively requests permission (like other devices)
+ * 3. Wraps ALL operations in try-catch to prevent crashes
+ * 4. Uses low accuracy on iOS to improve reliability
  */
 export function LocationTracker() {
   const isClient = useIsClient()
@@ -18,7 +18,9 @@ export function LocationTracker() {
   const [isReady, setIsReady] = useState(false)
   const [isTracking, setIsTracking] = useState(false)
   const [bannerDismissed, setBannerDismissed] = useState(false)
-  const [permissionGranted, setPermissionGranted] = useState(false)
+  const [permissionRequested, setPermissionRequested] = useState(false)
+  const watchIdRef = useRef<number | null>(null)
+  const mountedRef = useRef(true)
 
   // Detect iOS on mount
   useEffect(() => {
@@ -34,7 +36,7 @@ export function LocationTracker() {
     }
   }, [isClient])
 
-  // Wait significantly longer on iOS before doing anything
+  // Wait before starting - longer on iOS
   useEffect(() => {
     if (!isClient) return
 
@@ -42,82 +44,44 @@ export function LocationTracker() {
     const delay = isIOS ? 10000 : 3000
 
     const timer = setTimeout(() => {
-      setIsReady(true)
+      if (mountedRef.current) {
+        setIsReady(true)
+      }
     }, delay)
 
     return () => clearTimeout(timer)
   }, [isClient, isIOS])
 
-  // Check if we already have permission (don't request it)
+  // Cleanup on unmount
   useEffect(() => {
-    if (!isReady) return
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      if (watchIdRef.current !== null) {
+        try {
+          navigator.geolocation.clearWatch(watchIdRef.current)
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      }
+    }
+  }, [])
 
-    const checkPermission = async () => {
+  // Start tracking with permission request
+  useEffect(() => {
+    if (!isReady || permissionRequested) return
+
+    const startTracking = async () => {
+      setPermissionRequested(true)
+
       try {
-        // Check if geolocation is even available
+        // Check if geolocation is available
         if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
           console.log('📍 Geolocation not available on this device')
           return
         }
 
-        // On iOS, skip the permissions API as it's often unreliable
-        if (isIOS) {
-          // Instead, try to get a single position with a short timeout
-          // If it works, we have permission
-          try {
-            await new Promise<GeolocationPosition>((resolve, reject) => {
-              navigator.geolocation.getCurrentPosition(
-                resolve,
-                reject,
-                { timeout: 5000, enableHighAccuracy: false, maximumAge: 60000 }
-              )
-            })
-            setPermissionGranted(true)
-            console.log('📍 iOS location permission confirmed')
-          } catch (e) {
-            console.log('📍 iOS location not available or denied')
-            // Don't crash - just don't track
-          }
-          return
-        }
-
-        // On non-iOS, check permissions API
-        if ('permissions' in navigator) {
-          try {
-            const result = await navigator.permissions.query({ name: 'geolocation' as PermissionName })
-            if (result.state === 'granted') {
-              setPermissionGranted(true)
-              console.log('📍 Location permission already granted')
-            } else {
-              console.log('📍 Location permission not granted:', result.state)
-            }
-          } catch (e) {
-            console.warn('Permissions API not available (non-fatal)')
-          }
-        }
-      } catch (error) {
-        // Never crash - just log
-        console.warn('📍 Permission check failed (non-fatal):', error)
-      }
-    }
-
-    checkPermission()
-  }, [isReady, isIOS])
-
-  // Start tracking only if permission is already granted
-  useEffect(() => {
-    if (!isReady || !permissionGranted) return
-
-    let watchId: number | null = null
-    let mounted = true
-
-    const startTracking = async () => {
-      try {
-        if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
-          return
-        }
-
-        // Import the Supabase client and tracking logic only when needed
+        // Import Supabase only when needed
         const { createClient } = await import('@/lib/supabase/client')
         const supabase = createClient()
 
@@ -127,8 +91,9 @@ export function LocationTracker() {
           return
         }
 
+        // Function to update location in database
         const updateLocation = async (position: GeolocationPosition) => {
-          if (!mounted) return
+          if (!mountedRef.current) return
 
           try {
             const { error } = await (supabase as any).rpc('upsert_user_location', {
@@ -143,7 +108,7 @@ export function LocationTracker() {
             })
 
             if (error) {
-              console.warn('📍 Location update failed (non-fatal):', error)
+              console.warn('📍 Location update failed (non-fatal):', error.message)
             } else {
               console.log('📍 Location updated successfully')
             }
@@ -152,49 +117,74 @@ export function LocationTracker() {
           }
         }
 
-        // Use watchPosition with generous timeouts
-        watchId = navigator.geolocation.watchPosition(
-          (position) => {
-            if (mounted) {
-              setIsTracking(true)
-              updateLocation(position)
-            }
-          },
-          (error) => {
-            // Don't crash on errors - just log them
-            console.warn('📍 Geolocation error (non-fatal):', error.message)
-            if (error.code === error.PERMISSION_DENIED) {
-              setPermissionGranted(false)
-              setIsTracking(false)
-            }
-          },
-          {
-            enableHighAccuracy: !isIOS, // Low accuracy on iOS to reduce crashes
-            timeout: 30000,
-            maximumAge: 10000
-          }
-        )
+        // Request permission by getting current position first
+        // This triggers the browser's permission dialog
+        console.log('📍 Requesting location permission...')
 
-        setIsTracking(true)
-        console.log('📍 Location tracking started')
+        try {
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(
+              resolve,
+              reject,
+              {
+                enableHighAccuracy: !isIOS, // Low accuracy on iOS
+                timeout: 15000,
+                maximumAge: 0
+              }
+            )
+          })
+
+          if (!mountedRef.current) return
+
+          console.log('📍 Initial location obtained, starting continuous tracking')
+          await updateLocation(position)
+
+          // Start continuous tracking
+          watchIdRef.current = navigator.geolocation.watchPosition(
+            async (pos) => {
+              if (mountedRef.current) {
+                setIsTracking(true)
+                await updateLocation(pos)
+              }
+            },
+            (error) => {
+              // Don't crash on watch errors
+              console.warn('📍 Watch position error (non-fatal):', error.message)
+              if (error.code === error.PERMISSION_DENIED) {
+                setIsTracking(false)
+              }
+            },
+            {
+              enableHighAccuracy: !isIOS,
+              timeout: 30000,
+              maximumAge: 10000
+            }
+          )
+
+          setIsTracking(true)
+          console.log('📍 Location tracking active')
+
+        } catch (error: any) {
+          // Handle permission denial and other errors gracefully
+          if (error?.code === 1) {
+            console.log('📍 Location permission denied by user')
+          } else if (error?.code === 2) {
+            console.log('📍 Location unavailable (device may have location disabled)')
+          } else if (error?.code === 3) {
+            console.log('📍 Location request timed out')
+          } else {
+            console.warn('📍 Location permission request failed (non-fatal):', error?.message || error)
+          }
+          // Never crash - just don't track
+        }
+
       } catch (error) {
-        console.warn('📍 Failed to start tracking (non-fatal):', error)
+        console.warn('📍 Location tracking setup failed (non-fatal):', error)
       }
     }
 
     startTracking()
-
-    return () => {
-      mounted = false
-      if (watchId !== null) {
-        try {
-          navigator.geolocation.clearWatch(watchId)
-        } catch (e) {
-          // Ignore cleanup errors
-        }
-      }
-    }
-  }, [isReady, permissionGranted, isIOS])
+  }, [isReady, permissionRequested, isIOS])
 
   // Only show banner if tracking is active and not dismissed
   const showBanner = isTracking && !bannerDismissed
