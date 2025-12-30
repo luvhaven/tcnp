@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Car, Plus, Edit, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -633,21 +634,19 @@ export default function CheetahsPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="last_maintenance">Last Maintenance</Label>
-                <Input
-                  id="last_maintenance"
-                  type="date"
+                <DatePicker
                   value={formData.last_maintenance}
-                  onChange={(e) => setFormData({ ...formData, last_maintenance: e.target.value })}
+                  onChange={(value) => setFormData({ ...formData, last_maintenance: value })}
+                  placeholder="Select date"
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="next_maintenance">Next Maintenance</Label>
-                <Input
-                  id="next_maintenance"
-                  type="date"
+                <DatePicker
                   value={formData.next_maintenance}
-                  onChange={(e) => setFormData({ ...formData, next_maintenance: e.target.value })}
+                  onChange={(value) => setFormData({ ...formData, next_maintenance: value })}
+                  placeholder="Select date"
                 />
               </div>
             </div>
