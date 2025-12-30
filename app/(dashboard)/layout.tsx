@@ -84,8 +84,8 @@ export default function DashboardLayout({
         {/* Dev tools - DISABLED on iOS */}
         {canMountExtras && !isIOS && <DevLoggerInit />}
 
-        {/* Location tracking - COMPLETELY DISABLED on iOS */}
-        {canMountExtras && !isIOS && (
+        {/* Location tracking - NOW SAFE ON iOS */}
+        {canMountExtras && (
           <ErrorBoundary>
             <LocationTracker />
           </ErrorBoundary>
