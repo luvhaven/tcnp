@@ -154,7 +154,7 @@ export default function MyAssignmentsPage() {
             contact
           )
         `)
-        .eq('assigned_do_id', user.id)
+        .eq('assigned_duty_officer_id', user.id)
         .order('etd', { ascending: true, nullsFirst: false })
 
       if (error) throw error

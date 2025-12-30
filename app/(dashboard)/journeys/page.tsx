@@ -23,7 +23,8 @@ import {
   Car,
   Hotel,
   Plane,
-  Calendar
+  Calendar,
+  Pencil
 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatDistanceToNow } from "date-fns"
@@ -102,6 +103,7 @@ export default function JourneysPage() {
   const [officers, setOfficers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [callSignDialogOpen, setCallSignDialogOpen] = useState(false)
   const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -232,607 +234,830 @@ export default function JourneysPage() {
       toast.error(error.message || 'Failed to create journey')
     }
   }
+}
 
-  const handleCallSign = async (journey: Journey, newStatus: string) => {
-    try {
-      const canUpdate = currentRole && currentUserId
-        ? canManageJourney(currentRole, journey.assigned_do_id === currentUserId)
-        : false
+const handleEditClick = (journey: Journey, e: React.MouseEvent) => {
+  e.stopPropagation() // Prevent card click
+  setSelectedJourney(journey)
+  setFormData({
+    papa_id: journey.papa_id || '',
+    assigned_cheetah_id: journey.assigned_cheetah_id || '',
+    // @ts-ignore
+    program_id: journey.program_id || '',
+    assigned_duty_officer_id: journey.assigned_duty_officer_id || journey.assigned_do_id || '',
+    origin: journey.origin || '',
+    destination: journey.destination || '',
+    scheduled_departure: journey.scheduled_departure ? new Date(journey.scheduled_departure).toISOString().slice(0, 16) : '',
+    scheduled_arrival: journey.scheduled_arrival ? new Date(journey.scheduled_arrival).toISOString().slice(0, 16) : '',
+    etd: journey.etd || '',
+    eta: journey.eta || '',
+    notes: journey.notes || ''
+  })
+  setEditDialogOpen(true)
+}
 
-      if (!canUpdate) {
-        toast.error('You are not authorized to update this journey')
-        return
-      }
+const handleUpdateJourney = async (e: React.FormEvent) => {
+  e.preventDefault()
 
-      const { data, error } = await (supabase as any).rpc('update_journey_call_sign', {
-        journey_uuid: journey.id,
-        new_status: newStatus
+  if (!selectedJourney) return
+  if (!canCreateJourney) { // Re-use admin check for editing
+    toast.error('You are not authorized to edit journeys')
+    return
+  }
+
+  try {
+    const { error } = await supabase
+      .from('journeys')
+      .update({
+        ...formData,
+        updated_at: new Date().toISOString()
       })
+      .eq('id', selectedJourney.id)
 
-      if (error) {
-        throw error
+    if (error) throw error
+
+    toast.success('Journey updated successfully!')
+    setEditDialogOpen(false)
+    setSelectedJourney(null)
+    loadData()
+  } catch (error: any) {
+    console.error('Error updating journey:', error)
+    toast.error(error.message || 'Failed to update journey')
+  }
+}
+
+const handleCallSign = async (journey: Journey, newStatus: string) => {
+  try {
+    const canUpdate = currentRole && currentUserId
+      ? canManageJourney(currentRole, journey.assigned_do_id === currentUserId)
+      : false
+
+    if (!canUpdate) {
+      toast.error('You are not authorized to update this journey')
+      return
+    }
+
+    const { data, error } = await (supabase as any).rpc('update_journey_call_sign', {
+      journey_uuid: journey.id,
+      new_status: newStatus
+    })
+
+    if (error) {
+      throw error
+    }
+
+    await (supabase as any).from('journey_events').insert([
+      {
+        journey_id: journey.id,
+        event_type: newStatus,
+        description: `Journey status updated to ${newStatus}`,
+        triggered_at: new Date().toISOString(),
       }
+    ])
 
-      await (supabase as any).from('journey_events').insert([
-        {
-          journey_id: journey.id,
-          event_type: newStatus,
-          description: `Journey status updated to ${newStatus}`,
-          triggered_at: new Date().toISOString(),
-        }
-      ])
-
-      toast.success(`Call-sign ${newStatus.toUpperCase()} executed!`)
-      setCallSignDialogOpen(false)
-      setSelectedJourney(null)
-      loadData()
-    } catch (error: any) {
-      console.error('Error updating journey:', error)
-      toast.error(error.message || 'Failed to update journey')
-    }
+    toast.success(`Call-sign ${newStatus.toUpperCase()} executed!`)
+    setCallSignDialogOpen(false)
+    setSelectedJourney(null)
+    loadData()
+  } catch (error: any) {
+    console.error('Error updating journey:', error)
+    toast.error(error.message || 'Failed to update journey')
   }
+}
 
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      planned: 'bg-blue-500',
-      in_progress: 'bg-yellow-500',
-      first_course: 'bg-orange-500',
-      chapman: 'bg-purple-500',
-      dessert: 'bg-indigo-500',
-      completed: 'bg-green-500',
-      cancelled: 'bg-red-500',
-      broken_arrow: 'bg-red-600',
-    }
-    return colors[status] || 'bg-gray-500'
+const getStatusColor = (status: string) => {
+  const colors: Record<string, string> = {
+    planned: 'bg-blue-500',
+    in_progress: 'bg-yellow-500',
+    first_course: 'bg-orange-500',
+    chapman: 'bg-purple-500',
+    dessert: 'bg-indigo-500',
+    completed: 'bg-green-500',
+    cancelled: 'bg-red-500',
+    broken_arrow: 'bg-red-600',
   }
+  return colors[status] || 'bg-gray-500'
+}
 
-  const getStatusLabel = (status: string) => {
-    const labels: Record<string, string> = {
-      planned: 'Planned',
-      in_progress: 'In Progress',
-      first_course: 'First Course',
-      chapman: 'Chapman',
-      dessert: 'Dessert',
-      completed: 'Completed',
-      cancelled: 'Cancelled',
-      broken_arrow: 'BROKEN ARROW',
-    }
-    return labels[status] || status
+const getStatusLabel = (status: string) => {
+  const labels: Record<string, string> = {
+    planned: 'Planned',
+    in_progress: 'In Progress',
+    first_course: 'First Course',
+    chapman: 'Chapman',
+    dessert: 'Dessert',
+    completed: 'Completed',
+    cancelled: 'Cancelled',
+    broken_arrow: 'BROKEN ARROW',
   }
+  return labels[status] || status
+}
 
-  const getAvailableCallSigns = (currentStatus: string) => {
-    const workflow: Record<string, string[]> = {
-      planned: ['first_course', 'in_progress', 'cancelled'],
-      in_progress: ['first_course', 'chapman', 'broken_arrow', 'cancelled'],
-      first_course: ['chapman', 'broken_arrow', 'cancelled'],
-      chapman: ['dessert', 'broken_arrow', 'cancelled'],
-      dessert: ['completed', 'broken_arrow'],
-    }
-    return workflow[currentStatus] || []
+const getAvailableCallSigns = (currentStatus: string) => {
+  const workflow: Record<string, string[]> = {
+    planned: ['first_course', 'in_progress', 'cancelled'],
+    in_progress: ['first_course', 'chapman', 'broken_arrow', 'cancelled'],
+    first_course: ['chapman', 'broken_arrow', 'cancelled'],
+    chapman: ['dessert', 'broken_arrow', 'cancelled'],
+    dessert: ['completed', 'broken_arrow'],
   }
+  return workflow[currentStatus] || []
+}
 
-  const canUpdateSelectedJourney = selectedJourney && currentRole && currentUserId
-    ? canManageJourney(currentRole, selectedJourney.assigned_do_id === currentUserId)
-    : false
+const canUpdateSelectedJourney = selectedJourney && currentRole && currentUserId
+  ? canManageJourney(currentRole, selectedJourney.assigned_do_id === currentUserId)
+  : false
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        {/* Header skeleton */}
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="h-8 w-48 rounded-md skeleton" />
-            <div className="mt-2 h-4 w-96 rounded-md skeleton" />
-          </div>
-          <div className="h-10 w-36 rounded-md skeleton" />
-        </div>
-
-        {/* Stats cards skeleton */}
-        <div className="grid gap-6 md:grid-cols-4">
-          {[...Array(4)].map((_, index) => (
-            <Card key={index}>
-              <CardHeader className="pb-2">
-                <div className="h-4 w-28 rounded-md skeleton" />
-              </CardHeader>
-              <CardContent>
-                <div className="h-7 w-16 rounded-md skeleton" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Tabs skeleton */}
-        <div className="space-y-4">
-          <div className="flex gap-2">
-            <div className="h-9 w-32 rounded-md skeleton" />
-            <div className="h-9 w-40 rounded-md skeleton" />
-          </div>
-
-          {/* Journey cards skeleton */}
-          <Card>
-            <CardHeader>
-              <div className="h-5 w-36 rounded-md skeleton" />
-              <div className="mt-2 h-4 w-48 rounded-md skeleton" />
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {[...Array(3)].map((_, index) => (
-                  <div
-                    key={index}
-                    className="flex flex-col gap-4 rounded-lg border p-4"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="h-6 w-24 rounded-md skeleton" />
-                        <div className="h-4 w-32 rounded-md skeleton" />
-                      </div>
-                      <div className="h-4 w-28 rounded-md skeleton" />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {[...Array(4)].map((_, i) => (
-                        <div key={i} className="flex items-start gap-2">
-                          <div className="mt-1 h-8 w-8 rounded-full skeleton" />
-                          <div className="flex-1 space-y-2">
-                            <div className="h-4 w-32 rounded-md skeleton" />
-                            <div className="h-3 w-24 rounded-md skeleton" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
-  }
-
+if (loading) {
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header */}
+    <div className="space-y-6">
+      {/* Header skeleton */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Journeys</h1>
-          <p className="text-muted-foreground">Manage all Papa journeys and call-signs</p>
+          <div className="h-8 w-48 rounded-md skeleton" />
+          <div className="mt-2 h-4 w-96 rounded-md skeleton" />
         </div>
-        {canCreateJourney && (
-          <Button onClick={() => setCreateDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Journey
-          </Button>
-        )}
+        <div className="h-10 w-36 rounded-md skeleton" />
       </div>
 
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Journeys</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{journeys.length}</div>
-          </CardContent>
-        </Card>
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Active</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {journeys.filter(j => ['in_progress', 'first_course', 'chapman', 'dessert'].includes(j.status)).length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Completed</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {journeys.filter(j => j.status === 'completed').length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Incidents</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {journeys.filter(j => j.status === 'broken_arrow').length}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Journeys Tabs */}
-      <Tabs defaultValue="active" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="active">Active Journeys</TabsTrigger>
-          <TabsTrigger value="completed">Completed / Archived</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="active" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Active Journeys</CardTitle>
-              <CardDescription>Live monitoring of ongoing movements</CardDescription>
+      {/* Stats cards skeleton */}
+      <div className="grid gap-6 md:grid-cols-4">
+        {[...Array(4)].map((_, index) => (
+          <Card key={index}>
+            <CardHeader className="pb-2">
+              <div className="h-4 w-28 rounded-md skeleton" />
             </CardHeader>
             <CardContent>
-              {journeys.filter(j => ['planned', 'in_progress', 'first_course', 'chapman', 'dessert', 'broken_arrow'].includes(j.status)).length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <MapPin className="h-12 w-12 text-muted-foreground/50" />
-                  <p className="mt-4 text-sm font-medium">No active journeys</p>
-                  <p className="text-xs text-muted-foreground">Create a new journey to get started</p>
-                  {canCreateJourney && (
-                    <Button className="mt-4" onClick={() => setCreateDialogOpen(true)}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create Journey
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {journeys
-                    .filter(j => ['planned', 'in_progress', 'first_course', 'chapman', 'dessert', 'broken_arrow'].includes(j.status))
-                    .map((journey) => (
-                      <div
-                        key={journey.id}
-                        className="flex flex-col gap-4 rounded-lg border p-4 transition-all hover:bg-accent/50 hover:shadow-md cursor-pointer animate-slide-up"
-                        onClick={() => {
-                          setSelectedJourney(journey)
-                          setCallSignDialogOpen(true)
-                        }}
-                      >
-                        {/* Header Row: Status & Time */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <Badge
-                              variant="secondary"
-                              className={cn(
-                                getStatusColor(journey.status),
-                                "px-3 py-1 text-sm font-medium text-white"
-                              )}
-                            >
-                              {getStatusLabel(journey.status)}
-                            </Badge>
-                            <span className="text-sm text-muted-foreground flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {journey.etd ? `ETD: ${new Date(journey.etd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'No ETD'}
-                            </span>
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            Updated {formatDistanceToNow(new Date(journey.created_at), { addSuffix: true })}
-                          </div>
-                        </div>
+              <div className="h-7 w-16 rounded-md skeleton" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
-                        {/* Main Info Row */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                          {/* Papa */}
-                          <div className="flex items-start gap-2">
-                            <div className="mt-1 p-1.5 bg-primary/10 rounded-full">
-                              <User className="h-4 w-4 text-primary" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold">{journey.papas?.title} {journey.papas?.full_name}</p>
-                              <p className="text-xs text-muted-foreground">Guest</p>
-                            </div>
-                          </div>
+      {/* Tabs skeleton */}
+      <div className="space-y-4">
+        <div className="flex gap-2">
+          <div className="h-9 w-32 rounded-md skeleton" />
+          <div className="h-9 w-40 rounded-md skeleton" />
+        </div>
 
-                          {/* Route */}
-                          <div className="flex items-start gap-2">
-                            <div className="mt-1 p-1.5 bg-orange-100 dark:bg-orange-900/30 rounded-full">
-                              <MapPin className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium">{journey.origin} → {journey.destination}</p>
-                              <p className="text-xs text-muted-foreground">Route</p>
-                            </div>
-                          </div>
-
-                          {/* DO & Cheetah */}
-                          <div className="flex items-start gap-2">
-                            <div className="mt-1 p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-full">
-                              <Car className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium">{journey.cheetahs?.call_sign} ({journey.cheetahs?.registration_number})</p>
-                              <p className="text-xs text-muted-foreground">
-                                DO: {journey.assigned_do?.full_name || 'Unassigned'}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Nest/Eagle */}
-                          <div className="flex items-start gap-2">
-                            <div className="mt-1 p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-full">
-                              <Hotel className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium">{journey.nests?.name || journey.eagle_squares?.name || 'No Base'}</p>
-                              <p className="text-xs text-muted-foreground">Base Location</p>
-                            </div>
-                          </div>
+        {/* Journey cards skeleton */}
+        <Card>
+          <CardHeader>
+            <div className="h-5 w-36 rounded-md skeleton" />
+            <div className="mt-2 h-4 w-48 rounded-md skeleton" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {[...Array(3)].map((_, index) => (
+                <div
+                  key={index}
+                  className="flex flex-col gap-4 rounded-lg border p-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-6 w-24 rounded-md skeleton" />
+                      <div className="h-4 w-32 rounded-md skeleton" />
+                    </div>
+                    <div className="h-4 w-28 rounded-md skeleton" />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <div className="mt-1 h-8 w-8 rounded-full skeleton" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-4 w-32 rounded-md skeleton" />
+                          <div className="h-3 w-24 rounded-md skeleton" />
                         </div>
                       </div>
                     ))}
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
 
-        <TabsContent value="completed">
-          <Card>
-            <CardHeader>
-              <CardTitle>Completed & Archived</CardTitle>
-              <CardDescription>History of past journeys</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
+return (
+  <div className="space-y-6 animate-fade-in">
+    {/* Header */}
+    <div className="flex items-center justify-between">
+      <div>
+        <h1 className="text-3xl font-bold">Journeys</h1>
+        <p className="text-muted-foreground">Manage all Papa journeys and call-signs</p>
+      </div>
+      {canCreateJourney && (
+        <Button onClick={() => setCreateDialogOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Create Journey
+        </Button>
+      )}
+    </div>
+
+    {/* Stats */}
+    <div className="grid gap-4 md:grid-cols-4">
+      <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Total Journeys</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{journeys.length}</div>
+        </CardContent>
+      </Card>
+      <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Active</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">
+            {journeys.filter(j => ['in_progress', 'first_course', 'chapman', 'dessert'].includes(j.status)).length}
+          </div>
+        </CardContent>
+      </Card>
+      <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Completed</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">
+            {journeys.filter(j => j.status === 'completed').length}
+          </div>
+        </CardContent>
+      </Card>
+      <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Incidents</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">
+            {journeys.filter(j => j.status === 'broken_arrow').length}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+
+    {/* Journeys Tabs */}
+    <Tabs defaultValue="active" className="space-y-4">
+      <TabsList>
+        <TabsTrigger value="active">Active Journeys</TabsTrigger>
+        <TabsTrigger value="completed">Completed / Archived</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="active" className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Active Journeys</CardTitle>
+            <CardDescription>Live monitoring of ongoing movements</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {journeys.filter(j => ['planned', 'in_progress', 'first_course', 'chapman', 'dessert', 'broken_arrow'].includes(j.status)).length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <MapPin className="h-12 w-12 text-muted-foreground/50" />
+                <p className="mt-4 text-sm font-medium">No active journeys</p>
+                <p className="text-xs text-muted-foreground">Create a new journey to get started</p>
+                {canCreateJourney && (
+                  <Button className="mt-4" onClick={() => setCreateDialogOpen(true)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Journey
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
                 {journeys
-                  .filter(j => ['completed', 'cancelled'].includes(j.status))
+                  .filter(j => ['planned', 'in_progress', 'first_course', 'chapman', 'dessert', 'broken_arrow'].includes(j.status))
                   .map((journey) => (
                     <div
                       key={journey.id}
-                      className="flex items-center justify-between rounded-lg border p-4 opacity-75 hover:opacity-100 transition-all"
+                      className="flex flex-col gap-4 rounded-lg border p-4 transition-all hover:bg-accent/50 hover:shadow-md cursor-pointer animate-slide-up"
+                      onClick={() => {
+                        setSelectedJourney(journey)
+                        setCallSignDialogOpen(true)
+                      }}
                     >
-                      <div className="flex items-center space-x-4">
-                        <div className={cn('h-3 w-3 rounded-full', getStatusIndicatorClass(journey.status))} />
-                        <div>
-                          <p className="font-medium">
-                            {journey.papas?.title} {journey.papas?.full_name}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {journey.origin} → {journey.destination}
-                          </p>
+                      {/* Header Row: Status & Time */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Badge
+                            variant="secondary"
+                            className={cn(
+                              getStatusColor(journey.status),
+                              "px-3 py-1 text-sm font-medium text-white"
+                            )}
+                          >
+                            {getStatusLabel(journey.status)}
+                          </Badge>
+                          <span className="text-sm text-muted-foreground flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {journey.etd ? `ETD: ${new Date(journey.etd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'No ETD'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <div className="text-xs text-muted-foreground">
+                            Updated {formatDistanceToNow(new Date(journey.created_at), { addSuffix: true })}
+                          </div>
+                          {canCreateJourney && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 hover:bg-muted"
+                              onClick={(e) => handleEditClick(journey, e)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                              <span className="sr-only">Edit</span>
+                            </Button>
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center space-x-4">
-                        <Badge variant="outline">
-                          {getStatusLabel(journey.status)}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(journey.created_at).toLocaleDateString()}
-                        </span>
+
+                      {/* Main Info Row */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {/* Papa */}
+                        <div className="flex items-start gap-2">
+                          <div className="mt-1 p-1.5 bg-primary/10 rounded-full">
+                            <User className="h-4 w-4 text-primary" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold">{journey.papas?.title} {journey.papas?.full_name}</p>
+                            <p className="text-xs text-muted-foreground">Guest</p>
+                          </div>
+                        </div>
+
+                        {/* Route */}
+                        <div className="flex items-start gap-2">
+                          <div className="mt-1 p-1.5 bg-orange-100 dark:bg-orange-900/30 rounded-full">
+                            <MapPin className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">{journey.origin} → {journey.destination}</p>
+                            <p className="text-xs text-muted-foreground">Route</p>
+                          </div>
+                        </div>
+
+                        {/* DO & Cheetah */}
+                        <div className="flex items-start gap-2">
+                          <div className="mt-1 p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+                            <Car className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">
+                              {journey.cheetahs?.call_sign || 'No Vehicle'}
+                              {journey.cheetahs?.registration_number && ` (${journey.cheetahs.registration_number})`}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              DO: {journey.assigned_do?.full_name || 'Unassigned'}
+                              {journey.assigned_do?.oscar && ` (${journey.assigned_do.oscar})`}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Nest/Eagle */}
+                        <div className="flex items-start gap-2">
+                          <div className="mt-1 p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-full">
+                            <Hotel className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">{journey.nests?.name || journey.eagle_squares?.name || 'Not Assigned'}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {journey.nests?.name ? 'Nest' : journey.eagle_squares?.name ? 'Eagle Square' : 'Base Location'}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))}
-                {journeys.filter(j => ['completed', 'cancelled'].includes(j.status)).length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No completed journeys found
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="completed">
+        <Card>
+          <CardHeader>
+            <CardTitle>Completed & Archived</CardTitle>
+            <CardDescription>History of past journeys</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {journeys
+                .filter(j => ['completed', 'cancelled'].includes(j.status))
+                .map((journey) => (
+                  <div
+                    key={journey.id}
+                    className="flex items-center justify-between rounded-lg border p-4 opacity-75 hover:opacity-100 transition-all"
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className={cn('h-3 w-3 rounded-full', getStatusIndicatorClass(journey.status))} />
+                      <div>
+                        <p className="font-medium">
+                          {journey.papas?.title} {journey.papas?.full_name}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {journey.origin} → {journey.destination}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <Badge variant="outline">
+                        {getStatusLabel(journey.status)}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(journey.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                ))}
+              {journeys.filter(j => ['completed', 'cancelled'].includes(j.status)).length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  No completed journeys found
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
 
-      {/* Create Journey Dialog */}
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create New Journey</DialogTitle>
-            <DialogDescription>Plan a new journey for a Papa</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleCreateJourney} className="space-y-4 mt-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="program_id">Program *</Label>
-                <select
-                  id="program_id"
-                  required
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={formData.program_id}
-                  onChange={(e) => setFormData({ ...formData, program_id: e.target.value })}
-                >
-                  <option value="">Select Program</option>
-                  {programs.map((program) => (
-                    <option key={program.id} value={program.id}>
-                      {program.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="assigned_duty_officer_id">Designated Officer (DO)</Label>
-                <select
-                  id="assigned_duty_officer_id"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={formData.assigned_duty_officer_id}
-                  onChange={(e) => setFormData({ ...formData, assigned_duty_officer_id: e.target.value })}
-                >
-                  <option value="">No DO assigned</option>
-                  {officers.map((officer) => (
-                    <option key={officer.id} value={officer.id}>
-                      {officer.full_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+    {/* Create Journey Dialog */}
+    <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Create New Journey</DialogTitle>
+          <DialogDescription>Plan a new journey for a Papa</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleCreateJourney} className="space-y-4 mt-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="program_id">Program *</Label>
+              <select
+                id="program_id"
+                required
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                value={formData.program_id}
+                onChange={(e) => setFormData({ ...formData, program_id: e.target.value })}
+              >
+                <option value="">Select Program</option>
+                {programs.map((program) => (
+                  <option key={program.id} value={program.id}>
+                    {program.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="papa_id">Papa (Guest) *</Label>
-                <select
-                  id="papa_id"
-                  required
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={formData.papa_id}
-                  onChange={(e) => setFormData({ ...formData, papa_id: e.target.value })}
-                >
-                  <option value="">Select Papa</option>
-                  {papas.map((papa) => (
-                    <option key={papa.id} value={papa.id}>
-                      {papa.title} {papa.full_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="assigned_duty_officer_id">Designated Officer (DO)</Label>
+              <select
+                id="assigned_duty_officer_id"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                value={formData.assigned_duty_officer_id}
+                onChange={(e) => setFormData({ ...formData, assigned_duty_officer_id: e.target.value })}
+              >
+                <option value="">No DO assigned</option>
+                {officers.map((officer) => (
+                  <option key={officer.id} value={officer.id}>
+                    {officer.full_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="assigned_cheetah_id">Cheetah (Vehicle) *</Label>
-                <select
-                  id="assigned_cheetah_id"
-                  required
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={formData.assigned_cheetah_id}
-                  onChange={(e) => setFormData({ ...formData, assigned_cheetah_id: e.target.value })}
-                >
-                  <option value="">Select Cheetah</option>
-                  {cheetahs.map((cheetah) => (
-                    <option key={cheetah.id} value={cheetah.id}>
-                      {cheetah.call_sign} - {cheetah.registration_number}
-                    </option>
-                  ))}
-                </select>
-              </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="papa_id">Papa (Guest) *</Label>
+              <select
+                id="papa_id"
+                required
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                value={formData.papa_id}
+                onChange={(e) => setFormData({ ...formData, papa_id: e.target.value })}
+              >
+                <option value="">Select Papa</option>
+                {papas.map((papa) => (
+                  <option key={papa.id} value={papa.id}>
+                    {papa.title} {papa.full_name}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="origin">Origin *</Label>
-                <Input
-                  id="origin"
-                  required
-                  placeholder="e.g., Transcorp Hilton"
-                  value={formData.origin}
-                  onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="assigned_cheetah_id">Cheetah (Vehicle) *</Label>
+              <select
+                id="assigned_cheetah_id"
+                required
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                value={formData.assigned_cheetah_id}
+                onChange={(e) => setFormData({ ...formData, assigned_cheetah_id: e.target.value })}
+              >
+                <option value="">Select Cheetah</option>
+                {cheetahs.map((cheetah) => (
+                  <option key={cheetah.id} value={cheetah.id}>
+                    {cheetah.call_sign} - {cheetah.registration_number}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="destination">Destination *</Label>
-                <Input
-                  id="destination"
-                  required
-                  placeholder="e.g., Aso Rock Villa"
-                  value={formData.destination}
-                  onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
-                />
-              </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="origin">Origin *</Label>
+              <Input
+                id="origin"
+                required
+                placeholder="e.g., Transcorp Hilton"
+                value={formData.origin}
+                onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
+              />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="scheduled_departure">Scheduled Departure *</Label>
-                <DateTimePicker
-                  value={formData.scheduled_departure}
-                  onChange={(value) => setFormData({ ...formData, scheduled_departure: value })}
-                  placeholder="Select departure date & time"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="destination">Destination *</Label>
+              <Input
+                id="destination"
+                required
+                placeholder="e.g., Aso Rock Villa"
+                value={formData.destination}
+                onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+              />
+            </div>
+          </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="scheduled_arrival">Scheduled Arrival</Label>
-                <DateTimePicker
-                  value={formData.scheduled_arrival}
-                  onChange={(value) => setFormData({ ...formData, scheduled_arrival: value })}
-                  placeholder="Select arrival date & time"
-                />
-              </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="scheduled_departure">Scheduled Departure *</Label>
+              <DateTimePicker
+                value={formData.scheduled_departure}
+                onChange={(value) => setFormData({ ...formData, scheduled_departure: value })}
+                placeholder="Select departure date & time"
+              />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="etd">ETD (Estimated Time of Departure)</Label>
-                <DateTimePicker
-                  value={formData.etd}
-                  onChange={(value) => setFormData({ ...formData, etd: value })}
-                  placeholder="Select estimated departure"
-                />
-                <p className="text-xs text-muted-foreground">When DO should depart</p>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="scheduled_arrival">Scheduled Arrival</Label>
+              <DateTimePicker
+                value={formData.scheduled_arrival}
+                onChange={(value) => setFormData({ ...formData, scheduled_arrival: value })}
+                placeholder="Select arrival date & time"
+              />
+            </div>
+          </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="eta">ETA (Estimated Time of Arrival)</Label>
-                <DateTimePicker
-                  value={formData.eta}
-                  onChange={(value) => setFormData({ ...formData, eta: value })}
-                  placeholder="Select estimated arrival"
-                />
-                <p className="text-xs text-muted-foreground">When DO should arrive</p>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="etd">ETD (Estimated Time of Departure)</Label>
+              <DateTimePicker
+                value={formData.etd}
+                onChange={(value) => setFormData({ ...formData, etd: value })}
+                placeholder="Select estimated departure"
+              />
+              <p className="text-xs text-muted-foreground">When DO should depart</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="eta">ETA (Estimated Time of Arrival)</Label>
+              <DateTimePicker
+                value={formData.eta}
+                onChange={(value) => setFormData({ ...formData, eta: value })}
+                placeholder="Select estimated arrival"
+              />
+              <p className="text-xs text-muted-foreground">When DO should arrive</p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="notes">Notes</Label>
+            <Textarea
+              id="notes"
+              placeholder="Additional journey details..."
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            />
+          </div>
+
+          <div className="flex justify-end space-x-2">
+            <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit">Create Journey</Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+
+    {/* Call-Sign Dialog */}
+    <Dialog open={callSignDialogOpen} onOpenChange={setCallSignDialogOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Execute Call-Sign</DialogTitle>
+          <DialogDescription>
+            Update journey status for {selectedJourney?.papas?.title} {selectedJourney?.papas?.full_name}
+          </DialogDescription>
+        </DialogHeader>
+
+        {selectedJourney && canUpdateSelectedJourney && (
+          <div className="space-y-4 mt-4">
+            <div className="rounded-lg border p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Current Status:</span>
+                <Badge variant="secondary">{getStatusLabel(selectedJourney.status)}</Badge>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                <p>{selectedJourney.origin} → {selectedJourney.destination}</p>
+                <p>{selectedJourney.cheetahs?.call_sign}</p>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea
-                id="notes"
-                placeholder="Additional journey details..."
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              <Label>Available Call-Signs:</Label>
+              <div className="grid gap-2">
+                {getAvailableCallSigns(selectedJourney.status).map((callSign) => (
+                  <Button
+                    key={callSign}
+                    variant={callSign === 'broken_arrow' ? 'destructive' : 'outline'}
+                    className="justify-start"
+                    onClick={() => handleCallSign(selectedJourney, callSign)}
+                  >
+                    {callSign === 'first_course' && <Navigation className="mr-2 h-4 w-4" />}
+                    {callSign === 'chapman' && <Flag className="mr-2 h-4 w-4" />}
+                    {callSign === 'dessert' && <Clock className="mr-2 h-4 w-4" />}
+                    {callSign === 'completed' && <CheckCircle className="mr-2 h-4 w-4" />}
+                    {callSign === 'broken_arrow' && <AlertTriangle className="mr-2 h-4 w-4" />}
+                    {callSign === 'in_progress' && <Radio className="mr-2 h-4 w-4" />}
+                    {getStatusLabel(callSign)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+        {selectedJourney && !canUpdateSelectedJourney && (
+          <div className="mt-4 text-sm text-muted-foreground">
+            You do not have permission to execute call-signs for this journey.
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+    {/* Edit Journey Dialog - Reusing the form structure */}
+    <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Journey</DialogTitle>
+          <DialogDescription>
+            Update journey details, reassign Cheetahs or DOs.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleUpdateJourney} className="space-y-6 mt-4">
+          {/* Core Assignment */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="edit_papa_id">Principal (Papa) *</Label>
+              <select
+                id="edit_papa_id"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                value={formData.papa_id}
+                onChange={(e) => setFormData({ ...formData, papa_id: e.target.value })}
+                required
+              >
+                <option value="">Select Principal</option>
+                {papas.map((papa) => (
+                  <option key={papa.id} value={papa.id}>
+                    {papa.title} {papa.full_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit_program_id">Program (Optional)</Label>
+              <select
+                id="edit_program_id"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                value={formData.program_id}
+                onChange={(e) => setFormData({ ...formData, program_id: e.target.value })}
+              >
+                <option value="">Select Program</option>
+                {programs.map((prog) => (
+                  <option key={prog.id} value={prog.id}>
+                    {prog.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="edit_assigned_cheetah_id">Assigned Cheetah</Label>
+              <select
+                id="edit_assigned_cheetah_id"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                value={formData.assigned_cheetah_id}
+                onChange={(e) => setFormData({ ...formData, assigned_cheetah_id: e.target.value })}
+              >
+                <option value="">Select Vehicle</option>
+                {cheetahs.map((cheetah) => (
+                  <option key={cheetah.id} value={cheetah.id}>
+                    {cheetah.call_sign} - {cheetah.registration_number}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit_assigned_duty_officer_id">Designated Officer (DO)</Label>
+              <select
+                id="edit_assigned_duty_officer_id"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                value={formData.assigned_duty_officer_id}
+                onChange={(e) => setFormData({ ...formData, assigned_duty_officer_id: e.target.value })}
+              >
+                <option value="">Select Officer</option>
+                {officers.map((officer) => (
+                  <option key={officer.id} value={officer.id}>
+                    {officer.full_name} ({officer.role})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Route Details */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="edit_origin">Origin *</Label>
+              <Input
+                id="edit_origin"
+                placeholder="e.g. Airport"
+                value={formData.origin}
+                onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
+                required
               />
             </div>
 
-            <div className="flex justify-end space-x-2">
-              <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit">Create Journey</Button>
+            <div className="space-y-2">
+              <Label htmlFor="edit_destination">Destination *</Label>
+              <Input
+                id="edit_destination"
+                placeholder="e.g. Hotel"
+                value={formData.destination}
+                onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                required
+              />
             </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+          </div>
 
-      {/* Call-Sign Dialog */}
-      <Dialog open={callSignDialogOpen} onOpenChange={setCallSignDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Execute Call-Sign</DialogTitle>
-            <DialogDescription>
-              Update journey status for {selectedJourney?.papas?.title} {selectedJourney?.papas?.full_name}
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedJourney && canUpdateSelectedJourney && (
-            <div className="space-y-4 mt-4">
-              <div className="rounded-lg border p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Current Status:</span>
-                  <Badge variant="secondary">{getStatusLabel(selectedJourney.status)}</Badge>
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  <p>{selectedJourney.origin} → {selectedJourney.destination}</p>
-                  <p>{selectedJourney.cheetahs?.call_sign}</p>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Available Call-Signs:</Label>
-                <div className="grid gap-2">
-                  {getAvailableCallSigns(selectedJourney.status).map((callSign) => (
-                    <Button
-                      key={callSign}
-                      variant={callSign === 'broken_arrow' ? 'destructive' : 'outline'}
-                      className="justify-start"
-                      onClick={() => handleCallSign(selectedJourney, callSign)}
-                    >
-                      {callSign === 'first_course' && <Navigation className="mr-2 h-4 w-4" />}
-                      {callSign === 'chapman' && <Flag className="mr-2 h-4 w-4" />}
-                      {callSign === 'dessert' && <Clock className="mr-2 h-4 w-4" />}
-                      {callSign === 'completed' && <CheckCircle className="mr-2 h-4 w-4" />}
-                      {callSign === 'broken_arrow' && <AlertTriangle className="mr-2 h-4 w-4" />}
-                      {callSign === 'in_progress' && <Radio className="mr-2 h-4 w-4" />}
-                      {getStatusLabel(callSign)}
-                    </Button>
-                  ))}
-                </div>
-              </div>
+          {/* Schedule */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label>Scheduled Departure</Label>
+              <DateTimePicker
+                value={formData.scheduled_departure}
+                onChange={(date) => setFormData({ ...formData, scheduled_departure: date })}
+              />
             </div>
-          )}
-          {selectedJourney && !canUpdateSelectedJourney && (
-            <div className="mt-4 text-sm text-muted-foreground">
-              You do not have permission to execute call-signs for this journey.
+
+            <div className="space-y-2">
+              <Label>Scheduled Arrival</Label>
+              <DateTimePicker
+                value={formData.scheduled_arrival}
+                onChange={(date) => setFormData({ ...formData, scheduled_arrival: date })}
+              />
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
+          </div>
+
+          {/* Notes */}
+          <div className="space-y-2">
+            <Label htmlFor="edit_notes">Operational Notes</Label>
+            <Textarea
+              id="edit_notes"
+              placeholder="Any special requirements or instructions..."
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              rows={3}
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button type="button" variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit">
+              Save Changes
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  </div>
+)
 }
