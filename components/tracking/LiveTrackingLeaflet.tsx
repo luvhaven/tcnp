@@ -148,9 +148,6 @@ export default function LiveTrackingLeaflet({ center, locations, getUserStatus, 
     Object.keys(markers).forEach((userId) => {
       if (!locations.find((loc) => loc.user_id === userId)) {
         const marker = markers[userId]
-        if ((marker as any)._accuracyCircle) {
-          (marker as any)._accuracyCircle.remove()
-        }
         marker.remove()
         delete markers[userId]
       }
@@ -166,30 +163,10 @@ export default function LiveTrackingLeaflet({ center, locations, getUserStatus, 
         const marker = markers[location.user_id]
         marker.setLatLng(position)
         marker.setPopupContent(popupContent)
-
-        // Update circle
-        if ((marker as any)._accuracyCircle) {
-          (marker as any)._accuracyCircle.setLatLng(position);
-          (marker as any)._accuracyCircle.setRadius(location.accuracy || 0);
-        }
       } else {
         const marker = L.marker(position)
           .addTo(map)
           .bindPopup(popupContent)
-
-        // Create accuracy circle
-        // Only show if accuracy is available and reasonable (< 5000m)
-        if (location.accuracy && location.accuracy > 0) {
-          const circle = L.circle(position, {
-            radius: location.accuracy,
-            color: status.color,
-            fillColor: status.color,
-            fillOpacity: 0.15,
-            weight: 1,
-            opacity: 0.5
-          }).addTo(map);
-          (marker as any)._accuracyCircle = circle
-        }
 
         markers[location.user_id] = marker
       }
@@ -210,9 +187,6 @@ export default function LiveTrackingLeaflet({ center, locations, getUserStatus, 
   useEffect(() => {
     return () => {
       Object.values(markersRef.current).forEach((marker) => {
-        if ((marker as any)._accuracyCircle) {
-          (marker as any)._accuracyCircle.remove()
-        }
         marker.remove()
       })
       markersRef.current = {}

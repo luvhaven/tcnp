@@ -141,7 +141,8 @@ export default function LiveTrackingMap() {
     startTracking
   } = useLocationTracking({
     enableTracking: false, // Don't auto-start, modal will handle it
-    highAccuracy: true
+    updateInterval: 10000, // Update every 10 seconds
+    highAccuracy: true // Use GPS for precise location
   })
 
   useEffect(() => {
