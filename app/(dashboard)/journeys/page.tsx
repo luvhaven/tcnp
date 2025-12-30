@@ -301,6 +301,11 @@ export default function JourneysPage() {
         .from('journeys')
         .update({
           ...formData,
+          assigned_cheetah_id: formData.assigned_cheetah_id || null,
+          assigned_duty_officer_id: formData.assigned_duty_officer_id || null,
+          assigned_nest_id: formData.assigned_nest_id || null,
+          assigned_eagle_square_id: formData.assigned_eagle_square_id || null,
+          program_id: formData.program_id || null,
           updated_at: new Date().toISOString()
         })
         .eq('id', selectedJourney.id)
@@ -1040,73 +1045,111 @@ export default function JourneysPage() {
               </div>
             </div>
 
-            {/* Route Details */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="edit_origin">Origin *</Label>
-                <Input
-                  id="edit_origin"
-                  placeholder="e.g. Airport"
-                  value={formData.origin}
-                  onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
-                  required
-                />
-              </div>
+          </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="edit_destination">Destination *</Label>
-                <Input
-                  id="edit_destination"
-                  placeholder="e.g. Hotel"
-                  value={formData.destination}
-                  onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Schedule */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label>Scheduled Departure</Label>
-                <DateTimePicker
-                  value={formData.scheduled_departure}
-                  onChange={(date) => setFormData({ ...formData, scheduled_departure: date })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Scheduled Arrival</Label>
-                <DateTimePicker
-                  value={formData.scheduled_arrival}
-                  onChange={(date) => setFormData({ ...formData, scheduled_arrival: date })}
-                />
-              </div>
-            </div>
-
-            {/* Notes */}
+          {/* Base Location Assignment */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="edit_notes">Operational Notes</Label>
-              <Textarea
-                id="edit_notes"
-                placeholder="Any special requirements or instructions..."
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                rows={3}
+              <Label htmlFor="edit_assigned_nest_id">Base Location (Nest)</Label>
+              <select
+                id="edit_assigned_nest_id"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                value={formData.assigned_nest_id || ''}
+                onChange={(e) => setFormData({ ...formData, assigned_nest_id: e.target.value, assigned_eagle_square_id: '' })}
+              >
+                <option value="">Select Nest</option>
+                {nests.map((nest) => (
+                  <option key={nest.id} value={nest.id}>
+                    {nest.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit_assigned_eagle_square_id">Base Location (Eagle Square)</Label>
+              <select
+                id="edit_assigned_eagle_square_id"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                value={formData.assigned_eagle_square_id || ''}
+                onChange={(e) => setFormData({ ...formData, assigned_eagle_square_id: e.target.value, assigned_nest_id: '' })}
+              >
+                <option value="">Select Eagle Square</option>
+                {eagleSquares.map((es) => (
+                  <option key={es.id} value={es.id}>
+                    {es.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Route Details */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="edit_origin">Origin *</Label>
+              <Input
+                id="edit_origin"
+                placeholder="e.g. Airport"
+                value={formData.origin}
+                onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
+                required
               />
             </div>
 
-            <div className="flex justify-end gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => setEditDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit">
-                Save Changes
-              </Button>
+            <div className="space-y-2">
+              <Label htmlFor="edit_destination">Destination *</Label>
+              <Input
+                id="edit_destination"
+                placeholder="e.g. Hotel"
+                value={formData.destination}
+                onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                required
+              />
             </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </div>
+          </div>
+
+          {/* Schedule */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label>Scheduled Departure</Label>
+              <DateTimePicker
+                value={formData.scheduled_departure}
+                onChange={(date) => setFormData({ ...formData, scheduled_departure: date })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Scheduled Arrival</Label>
+              <DateTimePicker
+                value={formData.scheduled_arrival}
+                onChange={(date) => setFormData({ ...formData, scheduled_arrival: date })}
+              />
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div className="space-y-2">
+            <Label htmlFor="edit_notes">Operational Notes</Label>
+            <Textarea
+              id="edit_notes"
+              placeholder="Any special requirements or instructions..."
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              rows={3}
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button type="button" variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit">
+              Save Changes
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+    </div >
   )
 }
