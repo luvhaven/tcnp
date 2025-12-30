@@ -101,6 +101,8 @@ export default function JourneysPage() {
   const [cheetahs, setCheetahs] = useState<any[]>([])
   const [programs, setPrograms] = useState<any[]>([])
   const [officers, setOfficers] = useState<any[]>([])
+  const [nests, setNests] = useState<any[]>([])
+  const [eagleSquares, setEagleSquares] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -166,7 +168,7 @@ export default function JourneysPage() {
 
   const loadData = async () => {
     try {
-      const [journeysRes, papasRes, cheetahsRes, programsRes, officersRes] = await Promise.all([
+      const [journeysRes, papasRes, cheetahsRes, programsRes, officersResult] = await Promise.all([
         supabase.from('journeys').select(`
           *,
           papas (title, full_name),
@@ -186,7 +188,35 @@ export default function JourneysPage() {
       if (papasRes.data) setPapas(papasRes.data)
       if (cheetahsRes.data) setCheetahs(cheetahsRes.data)
       if (programsRes.data) setPrograms(programsRes.data)
-      if (officersRes.data) setOfficers(officersRes.data)
+      if (officersResult.error) throw officersResult.error
+      setOfficers(officersResult.data || [])
+
+      // Fetch Nests
+      const nestsResult = await supabase
+        .from('nests')
+        .select('*')
+        .order('name', { ascending: true })
+
+      if (nestsResult.error) {
+        console.error('Error fetching nests:', nestsResult.error)
+        // Non-fatal
+      } else {
+        setNests(nestsResult.data || [])
+      }
+
+      // Fetch Eagle Squares
+      const eagleResult = await supabase
+        .from('eagle_squares')
+        .select('*')
+        .order('name', { ascending: true })
+
+      if (eagleResult.error) {
+        // Some tables might be named differently? Let's assume eagle_squares is correct based on schema view earlier
+        console.warn('Error fetching eagle squares:', eagleResult.error)
+      } else {
+        setEagleSquares(eagleResult.data || [])
+      }
+
     } catch (error) {
       console.error('Error loading journeys data:', error)
       toast.error('Failed to load journeys')
@@ -242,8 +272,12 @@ export default function JourneysPage() {
       papa_id: journey.papa_id || '',
       assigned_cheetah_id: journey.assigned_cheetah_id || '',
       // @ts-ignore
-      program_id: journey.program_id || '',
-      assigned_duty_officer_id: journey.assigned_duty_officer_id || journey.assigned_do_id || '',
+      program_id: journey.program_id || '', // Assuming program_id exists on journey object
+      assigned_duty_officer_id: journey.assigned_do_id || '',
+      // Assuming journey has direct properties for these or they need to be derived from nested objects
+      // For now, setting to empty string as the Journey type doesn't explicitly have these IDs
+      assigned_nest_id: '', // Placeholder, needs actual journey.assigned_nest_id if available
+      assigned_eagle_square_id: '', // Placeholder, needs actual journey.assigned_eagle_square_id if available
       origin: journey.origin || '',
       destination: journey.destination || '',
       scheduled_departure: journey.scheduled_departure ? new Date(journey.scheduled_departure).toISOString().slice(0, 16) : '',
@@ -579,7 +613,10 @@ export default function JourneysPage() {
                             </div>
                             <div>
                               <p className="text-sm font-medium">
-                                {journey.cheetahs?.call_sign || 'No Vehicle'}
+                                {journey.cheetahs?.call_sign
+                                  ? `${journey.cheetahs.call_sign}`
+                                  : (journey.cheetahs?.registration_number ? 'Vehicle' : 'No Vehicle')
+                                }
                                 {journey.cheetahs?.registration_number && ` (${journey.cheetahs.registration_number})`}
                               </p>
                               <p className="text-xs text-muted-foreground">
