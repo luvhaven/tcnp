@@ -26,6 +26,13 @@ const DashboardCharts = dynamic(
   () => import("@/components/dashboard/DashboardCharts").then((m) => m.DashboardCharts),
   {
     ssr: false,
+    loading: () => (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="h-56 rounded-xl skeleton" />
+        <div className="h-56 rounded-xl skeleton" />
+        <div className="h-56 rounded-xl skeleton" />
+      </div>
+    )
   }
 )
 
