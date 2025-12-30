@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, Suspense } from "react"
+import { useState, Suspense, useEffect } from "react"
 import dynamic from "next/dynamic"
-import { useDelayedMount } from "@/hooks/useIsClient"
+import { useIsClient } from "@/hooks/useIsClient"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 
 // Core layout components - loaded normally but wrapped in error boundaries
@@ -14,6 +14,7 @@ const Sidebar = dynamic(
   { ssr: false, loading: () => <div className="w-72 h-full bg-background animate-pulse" /> }
 )
 
+// These components are COMPLETELY DISABLED on iOS - they cause crashes
 const LocationTracker = dynamic(
   () => import("@/components/tracking/LocationTracker").then((m) => m.LocationTracker),
   { ssr: false }
@@ -40,12 +41,15 @@ const SyncStatusBadge = dynamic(
 )
 
 /**
- * iOS-Safe Dashboard Layout
+ * iOS-Safe Dashboard Layout - NUCLEAR OPTION
  * 
- * This layout is specifically designed to prevent crashes on iOS Safari by:
- * 1. Using dynamic imports with SSR disabled for all browser-dependent components
- * 2. Delaying risky features (location, notifications) until after hydration
- * 3. Wrapping everything in error boundaries to catch any remaining issues
+ * On iOS, we completely disable:
+ * - Location tracking (crashes after mount)
+ * - Notification banner (crashes in private mode)
+ * - Sync status badge (uses IndexedDB which fails on iOS)
+ * - Dev logger (not critical)
+ * 
+ * These features work on desktop/Android but CRASH iOS Safari.
  */
 export default function DashboardLayout({
   children,
@@ -53,25 +57,42 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const isClient = useIsClient()
+  const [isIOS, setIsIOS] = useState(false)
+  const [canMountExtras, setCanMountExtras] = useState(false)
 
-  // Wait for client-side hydration before mounting risky features
-  const canMountRiskyFeatures = useDelayedMount(2000)
+  // Detect iOS on client side only
+  useEffect(() => {
+    if (isClient && typeof navigator !== 'undefined') {
+      const ua = navigator.userAgent
+      const isIOSDevice = /iPad|iPhone|iPod/.test(ua) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+      setIsIOS(isIOSDevice)
+
+      // On non-iOS, enable extras after a short delay
+      // On iOS, NEVER enable these features - they crash the app
+      if (!isIOSDevice) {
+        const timer = setTimeout(() => setCanMountExtras(true), 1000)
+        return () => clearTimeout(timer)
+      }
+    }
+  }, [isClient])
 
   return (
     <ErrorBoundary>
       <div className="flex h-screen overflow-hidden">
-        {/* Dev tools - only after hydration */}
-        {canMountRiskyFeatures && <DevLoggerInit />}
+        {/* Dev tools - DISABLED on iOS */}
+        {canMountExtras && !isIOS && <DevLoggerInit />}
 
-        {/* Location tracking - severely delayed on iOS */}
-        {canMountRiskyFeatures && (
+        {/* Location tracking - COMPLETELY DISABLED on iOS */}
+        {canMountExtras && !isIOS && (
           <ErrorBoundary>
             <LocationTracker />
           </ErrorBoundary>
         )}
 
-        {/* Online status - delayed */}
-        {canMountRiskyFeatures && (
+        {/* Online status - DISABLED on iOS */}
+        {canMountExtras && !isIOS && (
           <ErrorBoundary>
             <OnlineStatusBanner />
           </ErrorBoundary>
@@ -118,8 +139,8 @@ export default function DashboardLayout({
           </main>
         </div>
 
-        {/* Floating UI elements - delayed */}
-        {canMountRiskyFeatures && (
+        {/* Floating UI elements - DISABLED on iOS */}
+        {canMountExtras && !isIOS && (
           <>
             <ErrorBoundary>
               <NotificationPermissionBanner />

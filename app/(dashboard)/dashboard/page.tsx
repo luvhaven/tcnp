@@ -51,6 +51,17 @@ export default function DashboardPage() {
   const [installPromptEvent, setInstallPromptEvent] = useState<any | null>(null)
   const [isInstalled, setIsInstalled] = useState(false)
   const [installHelpPlatform, setInstallHelpPlatform] = useState<"ios" | "android" | "desktop" | null>(null)
+  const [isIOS, setIsIOS] = useState(false)
+
+  // Detect iOS on mount
+  useEffect(() => {
+    if (typeof navigator !== 'undefined') {
+      const ua = navigator.userAgent
+      const isIOSDevice = /iPad|iPhone|iPod/.test(ua) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+      setIsIOS(isIOSDevice)
+    }
+  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -454,8 +465,15 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Analytics Charts */}
-      <DashboardCharts />
+      {/* Analytics Charts - DISABLED on iOS due to Recharts hydration issues */}
+      {!isIOS && <DashboardCharts />}
+      {isIOS && (
+        <Card className="border-dashed border-muted-foreground/30">
+          <CardContent className="py-8 text-center text-muted-foreground">
+            <p className="text-sm">Charts available on desktop version</p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Recent Journeys */}
       <Card>
