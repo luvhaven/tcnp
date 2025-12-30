@@ -10,7 +10,6 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Car, Plus, Edit, Trash2 } from "lucide-react"
 import { toast } from "sonner"
@@ -510,8 +509,9 @@ export default function CheetahsPage() {
 
             <div className="space-y-2">
               <Label htmlFor="program_id">Program</Label>
-              <Select
+              <select
                 id="program_id"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 value={formData.program_id}
                 onChange={(e) => setFormData({ ...formData, program_id: e.target.value })}
               >
@@ -521,7 +521,7 @@ export default function CheetahsPage() {
                     {program.name}
                   </option>
                 ))}
-              </Select>
+              </select>
             </div>
 
             <div className="grid gap-4 md:grid-cols-3">
@@ -588,9 +588,10 @@ export default function CheetahsPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="fuel_status">Fuel Status *</Label>
-                <Select
+                <select
                   id="fuel_status"
                   required
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   value={formData.fuel_status}
                   onChange={(e) => setFormData({ ...formData, fuel_status: e.target.value })}
                 >
@@ -599,14 +600,15 @@ export default function CheetahsPage() {
                   <option value="half">Half</option>
                   <option value="quarter">1/4</option>
                   <option value="empty">Empty</option>
-                </Select>
+                </select>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="status">Status *</Label>
-                <Select
+                <select
                   id="status"
                   required
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 >
@@ -614,7 +616,7 @@ export default function CheetahsPage() {
                   <option value="in_use">In Use</option>
                   <option value="maintenance">Maintenance</option>
                   <option value="retired">Retired</option>
-                </Select>
+                </select>
               </div>
             </div>
 

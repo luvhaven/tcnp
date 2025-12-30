@@ -116,8 +116,7 @@ export default function JourneyStatusTable() {
                 .select(`
                     *,
                     papas (full_name, title),
-                    cheetahs (call_sign, registration_number),
-                    users:assigned_duty_officer_id (full_name, oscar)
+                    cheetahs:assigned_cheetah_id (call_sign, registration_number)
                 `)
                 .in('status', ['planned', 'in_progress'])
                 .order('status_updated_at', { ascending: false })
@@ -127,14 +126,25 @@ export default function JourneyStatusTable() {
                 throw error
             }
 
-            // Transform the data to match expected structure
-            const transformedData = data?.map(journey => ({
-                ...journey,
-                assigned_do: journey.users
-            })) || []
+            // Fetch assigned DOs separately to avoid foreign key issues
+            const journeysWithDO = await Promise.all((data || []).map(async (journey) => {
+                let assignedDO = null
+                if (journey.assigned_duty_officer_id) {
+                    const { data: doData } = await supabase
+                        .from('users')
+                        .select('full_name, oscar')
+                        .eq('id', journey.assigned_duty_officer_id)
+                        .single()
+                    assignedDO = doData
+                }
+                return {
+                    ...journey,
+                    assigned_do: assignedDO
+                }
+            }))
 
-            console.log('Successfully loaded journeys:', transformedData.length)
-            setJourneys(transformedData as any)
+            console.log('Successfully loaded journeys:', journeysWithDO.length)
+            setJourneys(journeysWithDO as any)
         } catch (error) {
             console.error('Error loading journeys:', JSON.stringify(error, null, 2))
             toast.error('Failed to load active journeys')
