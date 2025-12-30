@@ -28,6 +28,7 @@ import {
   Activity,
   Route,
   Landmark,
+  PlaneTakeoff,
 } from "lucide-react"
 
 const navigation = [
@@ -40,6 +41,7 @@ const navigation = [
   { name: "Cheetahs", href: "/cheetahs", icon: Car },
   { name: "Eagle Operations", href: "/eagles", icon: Plane },
   { name: "Live Tracking", href: "/tracking/live", icon: MapPin },
+  { name: "Flight Tracking", href: "/flight-tracking", icon: PlaneTakeoff },
   { name: "Team Chat", href: "/chat", icon: MessageCircle },
   { name: "Officers", href: "/officers", icon: UserCircle },
   { name: "NOscar", href: "/nests", icon: Hotel },
@@ -125,7 +127,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
     () =>
       isDeltaOscar
         ? navigation.filter((item) =>
-          item.href === '/dashboard' || item.href === '/my-operations' || item.href === '/chat'
+          item.href === '/dashboard' || item.href === '/my-operations' || item.href === '/chat' || item.href === '/flight-tracking'
         )
         : navigation,
     [isDeltaOscar]
