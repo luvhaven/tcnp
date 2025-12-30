@@ -272,12 +272,10 @@ export default function JourneysPage() {
       papa_id: journey.papa_id || '',
       assigned_cheetah_id: journey.assigned_cheetah_id || '',
       // @ts-ignore
-      program_id: journey.program_id || '', // Assuming program_id exists on journey object
-      assigned_duty_officer_id: journey.assigned_do_id || '',
-      // Assuming journey has direct properties for these or they need to be derived from nested objects
-      // For now, setting to empty string as the Journey type doesn't explicitly have these IDs
-      assigned_nest_id: '', // Placeholder, needs actual journey.assigned_nest_id if available
-      assigned_eagle_square_id: '', // Placeholder, needs actual journey.assigned_eagle_square_id if available
+      program_id: journey.program_id || '',
+      assigned_duty_officer_id: journey.assigned_duty_officer_id || journey.assigned_do_id || '',
+      assigned_nest_id: journey.assigned_nest_id || '',
+      assigned_eagle_square_id: journey.assigned_eagle_square_id || '',
       origin: journey.origin || '',
       destination: journey.destination || '',
       scheduled_departure: journey.scheduled_departure ? new Date(journey.scheduled_departure).toISOString().slice(0, 16) : '',
@@ -771,6 +769,47 @@ export default function JourneysPage() {
                   {cheetahs.map((cheetah) => (
                     <option key={cheetah.id} value={cheetah.id}>
                       {cheetah.call_sign} - {cheetah.registration_number}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="assigned_nest_id">Base Location (Nest - Optional)</Label>
+                <select
+                  id="assigned_nest_id"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={formData.assigned_nest_id || ''}
+                  onChange={(e) => {
+                    setFormData({ ...formData, assigned_nest_id: e.target.value, assigned_eagle_square_id: '' })
+                  }}
+                >
+                  <option value="">Select Nest</option>
+                  {nests.map((nest) => (
+                    <option key={nest.id} value={nest.id}>
+                      {nest.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-muted-foreground">Select where the DO/Team is based</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="assigned_eagle_square_id">Base Location (Eagle Square - Optional)</Label>
+                <select
+                  id="assigned_eagle_square_id"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={formData.assigned_eagle_square_id || ''}
+                  onChange={(e) => {
+                    setFormData({ ...formData, assigned_eagle_square_id: e.target.value, assigned_nest_id: '' })
+                  }}
+                >
+                  <option value="">Select Eagle Square</option>
+                  {eagleSquares.map((es) => (
+                    <option key={es.id} value={es.id}>
+                      {es.name}
                     </option>
                   ))}
                 </select>
