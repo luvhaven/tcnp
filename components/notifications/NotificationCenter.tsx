@@ -31,8 +31,15 @@ export default function NotificationCenter() {
     const [userId, setUserId] = useState<string | null>(null)
 
     useEffect(() => {
-        loadNotifications()
-        setupRealtimeSubscription()
+        const init = async () => {
+            try {
+                await loadNotifications()
+                setupRealtimeSubscription()
+            } catch (error) {
+                console.warn('NotificationCenter init failed (non-fatal):', error)
+            }
+        }
+        init()
     }, [])
 
     const loadNotifications = async () => {

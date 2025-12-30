@@ -1,15 +1,52 @@
 'use client'
 
-import { useState } from "react"
-import { Sidebar } from "@/components/layout/sidebar"
-import { Header } from "@/components/layout/header"
-import { LocationTracker } from "@/components/tracking/LocationTracker"
-import NotificationPermissionBanner from "@/components/notifications/NotificationPermissionBanner"
-import { DevLoggerInit } from "@/components/utils/DevLoggerInit"
-import { OnlineStatusBanner } from "@/components/ui/online-status-banner"
-import { SyncStatusBadge } from "@/components/ui/sync-status-badge"
+import { useState, Suspense } from "react"
+import dynamic from "next/dynamic"
+import { useDelayedMount } from "@/hooks/useIsClient"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 
+// Core layout components - loaded normally but wrapped in error boundaries
+import { Header } from "@/components/layout/header"
+
+// Dynamically import ALL potentially problematic components with SSR disabled
+const Sidebar = dynamic(
+  () => import("@/components/layout/sidebar").then((m) => m.Sidebar),
+  { ssr: false, loading: () => <div className="w-72 h-full bg-background animate-pulse" /> }
+)
+
+const LocationTracker = dynamic(
+  () => import("@/components/tracking/LocationTracker").then((m) => m.LocationTracker),
+  { ssr: false }
+)
+
+const NotificationPermissionBanner = dynamic(
+  () => import("@/components/notifications/NotificationPermissionBanner"),
+  { ssr: false }
+)
+
+const DevLoggerInit = dynamic(
+  () => import("@/components/utils/DevLoggerInit").then((m) => m.DevLoggerInit),
+  { ssr: false }
+)
+
+const OnlineStatusBanner = dynamic(
+  () => import("@/components/ui/online-status-banner").then((m) => m.OnlineStatusBanner),
+  { ssr: false }
+)
+
+const SyncStatusBadge = dynamic(
+  () => import("@/components/ui/sync-status-badge").then((m) => m.SyncStatusBadge),
+  { ssr: false }
+)
+
+/**
+ * iOS-Safe Dashboard Layout
+ * 
+ * This layout is specifically designed to prevent crashes on iOS Safari by:
+ * 1. Using dynamic imports with SSR disabled for all browser-dependent components
+ * 2. Delaying risky features (location, notifications) until after hydration
+ * 3. Wrapping everything in error boundaries to catch any remaining issues
+ */
 export default function DashboardLayout({
   children,
 }: {
@@ -17,17 +54,39 @@ export default function DashboardLayout({
 }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
+  // Wait for client-side hydration before mounting risky features
+  const canMountRiskyFeatures = useDelayedMount(2000)
+
   return (
     <ErrorBoundary>
       <div className="flex h-screen overflow-hidden">
-        <DevLoggerInit />
-        <LocationTracker />
-        <OnlineStatusBanner />
+        {/* Dev tools - only after hydration */}
+        {canMountRiskyFeatures && <DevLoggerInit />}
 
+        {/* Location tracking - severely delayed on iOS */}
+        {canMountRiskyFeatures && (
+          <ErrorBoundary>
+            <LocationTracker />
+          </ErrorBoundary>
+        )}
+
+        {/* Online status - delayed */}
+        {canMountRiskyFeatures && (
+          <ErrorBoundary>
+            <OnlineStatusBanner />
+          </ErrorBoundary>
+        )}
+
+        {/* Desktop Sidebar */}
         <div className="hidden h-full md:flex">
-          <Sidebar />
+          <ErrorBoundary>
+            <Suspense fallback={<div className="w-72 h-full bg-background animate-pulse" />}>
+              <Sidebar />
+            </Suspense>
+          </ErrorBoundary>
         </div>
 
+        {/* Mobile Sidebar Overlay */}
         {mobileSidebarOpen && (
           <div className="fixed inset-0 z-40 flex md:hidden">
             <div
@@ -35,13 +94,21 @@ export default function DashboardLayout({
               onClick={() => setMobileSidebarOpen(false)}
             />
             <div className="relative z-50 h-full w-72 max-w-[80%]">
-              <Sidebar isMobile onClose={() => setMobileSidebarOpen(false)} />
+              <ErrorBoundary>
+                <Suspense fallback={<div className="w-72 h-full bg-background animate-pulse" />}>
+                  <Sidebar isMobile onClose={() => setMobileSidebarOpen(false)} />
+                </Suspense>
+              </ErrorBoundary>
             </div>
           </div>
         )}
 
+        {/* Main Content Area */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          <Header onOpenSidebar={() => setMobileSidebarOpen(true)} />
+          <ErrorBoundary>
+            <Header onOpenSidebar={() => setMobileSidebarOpen(true)} />
+          </ErrorBoundary>
+
           <main className="flex-1 overflow-y-auto bg-gradient-to-br from-orange-50 via-background to-slate-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-900 px-3 py-4 sm:px-4 sm:py-6">
             <div className="mx-auto max-w-6xl space-y-6 animate-fade-in">
               <ErrorBoundary>
@@ -50,8 +117,18 @@ export default function DashboardLayout({
             </div>
           </main>
         </div>
-        <NotificationPermissionBanner />
-        <SyncStatusBadge />
+
+        {/* Floating UI elements - delayed */}
+        {canMountRiskyFeatures && (
+          <>
+            <ErrorBoundary>
+              <NotificationPermissionBanner />
+            </ErrorBoundary>
+            <ErrorBoundary>
+              <SyncStatusBadge />
+            </ErrorBoundary>
+          </>
+        )}
       </div>
     </ErrorBoundary>
   )

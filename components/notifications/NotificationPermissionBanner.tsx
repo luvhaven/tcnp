@@ -42,14 +42,22 @@ export default function NotificationPermissionBanner() {
     const handleDismiss = () => {
         setShow(false)
         // Remember dismissal in localStorage
-        localStorage.setItem('notification-banner-dismissed', 'true')
+        try {
+            localStorage.setItem('notification-banner-dismissed', 'true')
+        } catch (error) {
+            // localStorage can fail in iOS private mode - ignore
+        }
     }
 
     // Don't show if already dismissed
     useEffect(() => {
-        const dismissed = localStorage.getItem('notification-banner-dismissed')
-        if (dismissed === 'true') {
-            setShow(false)
+        try {
+            const dismissed = localStorage.getItem('notification-banner-dismissed')
+            if (dismissed === 'true') {
+                setShow(false)
+            }
+        } catch (error) {
+            // localStorage can fail in iOS private mode - ignore
         }
     }, [])
 

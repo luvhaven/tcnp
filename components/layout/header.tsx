@@ -17,21 +17,26 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        setUser(user)
 
-      if (user) {
-        const { data: profile, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', user.id)
-          .single()
+        if (user) {
+          const { data: profile, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', user.id)
+            .single()
 
-        if (error) {
-          console.error('Error loading user profile:', error)
+          if (error) {
+            console.warn('Error loading user profile (non-fatal):', error)
+          }
+
+          setProfile(profile)
         }
-
-        setProfile(profile)
+      } catch (error) {
+        // iOS Safari can throw during hydration - suppress to prevent crash
+        console.warn('User fetch failed (non-fatal):', error)
       }
     }
 

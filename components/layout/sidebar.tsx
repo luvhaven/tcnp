@@ -65,28 +65,33 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
 
   useEffect(() => {
     const loadUser = async () => {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser()
+      try {
+        const {
+          data: { user }
+        } = await supabase.auth.getUser()
 
-      if (!user) {
-        setCurrentUser(null)
-        setUserRole(null)
-        setUserOscar(null)
-        return
-      }
+        if (!user) {
+          setCurrentUser(null)
+          setUserRole(null)
+          setUserOscar(null)
+          return
+        }
 
-      setCurrentUser(user.id)
+        setCurrentUser(user.id)
 
-      const { data: profile, error } = await supabase
-        .from('users')
-        .select('role, oscar')
-        .eq('id', user.id)
-        .single<{ role: string | null; oscar: string | null }>()
+        const { data: profile, error } = await supabase
+          .from('users')
+          .select('role, oscar')
+          .eq('id', user.id)
+          .single<{ role: string | null; oscar: string | null }>()
 
-      if (!error && profile) {
-        setUserRole(profile.role ?? null)
-        setUserOscar(profile.oscar ?? null)
+        if (!error && profile) {
+          setUserRole(profile.role ?? null)
+          setUserOscar(profile.oscar ?? null)
+        }
+      } catch (error) {
+        // iOS Safari can throw during hydration - suppress to prevent crash
+        console.warn('Sidebar user load failed (non-fatal):', error)
       }
     }
 
@@ -96,16 +101,21 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   useEffect(() => {
     if (!currentUser) return
 
-    const channel = supabase.channel('chat-notifications')
+    try {
+      const channel = supabase.channel('chat-notifications')
 
-    channel
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
-        // Hook will handle updates via chat_messages subscription.
-      })
-      .subscribe()
+      channel
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
+          // Hook will handle updates via chat_messages subscription.
+        })
+        .subscribe()
 
-    return () => {
-      supabase.removeChannel(channel)
+      return () => {
+        supabase.removeChannel(channel)
+      }
+    } catch (error) {
+      // Realtime subscription can fail on iOS - non-fatal
+      console.warn('Sidebar realtime subscription failed (non-fatal):', error)
     }
   }, [supabase, currentUser])
 
