@@ -2,7 +2,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Plane, Clock, Calendar, MapPin, User, AlertCircle } from "lucide-react"
@@ -31,7 +31,7 @@ type FlightStatus = 'scheduled' | 'in_air' | 'landed' | 'delayed' | 'unknown'
 export default function FlightTrackingPage() {
     const [papas, setPapas] = useState<Papa[]>([])
     const [loading, setLoading] = useState(true)
-    const supabase = createClientComponentClient()
+    const supabase = createClient()
 
     useEffect(() => {
         fetchPapasWithFlights()
