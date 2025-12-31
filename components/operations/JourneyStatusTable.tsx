@@ -463,31 +463,60 @@ export default function JourneyStatusTable() {
 
             {/* Call Sign Update Dialog */}
             <Dialog open={callSignDialogOpen} onOpenChange={setCallSignDialogOpen}>
-                <DialogContent className="sm:max-w-[500px]">
+                <DialogContent className="sm:max-w-[600px]">
                     <DialogHeader>
                         <DialogTitle>Update Call Sign</DialogTitle>
                         <DialogDescription>
                             Select the new call sign for {selectedJourney?.papas?.full_name}'s journey
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="grid grid-cols-2 gap-3 py-4">
-                        {CALL_SIGNS.filter(cs => cs.category !== 'time').map((callSign) => (
-                            <button
-                                key={callSign.key}
-                                onClick={() => handleUpdateCallSign(callSign.key)}
-                                className={cn(
-                                    "p-4 rounded-lg border-2 transition-all hover:scale-105 flex flex-col items-start text-left",
-                                    getCallSignBadgeColor(callSign.key),
-                                    selectedJourney?.current_call_sign === callSign.key && "ring-2 ring-primary ring-offset-2"
-                                )}
-                            >
-                                <div className="flex items-center gap-2 mb-1">
-                                    <Radio className="h-4 w-4" />
-                                    <span className="font-semibold">{callSign.label}</span>
-                                </div>
-                                <span className="text-xs opacity-90">{callSign.description}</span>
-                            </button>
-                        ))}
+
+                    {/* Movement Call Signs */}
+                    <div className="space-y-4 py-4">
+                        <div>
+                            <h4 className="text-sm font-semibold mb-3 text-muted-foreground">Movement Updates</h4>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                {CALL_SIGNS.filter(cs => cs.category === 'movement').map((callSign) => (
+                                    <button
+                                        key={callSign.key}
+                                        onClick={() => handleUpdateCallSign(callSign.key)}
+                                        className={cn(
+                                            "p-3 rounded-lg border-2 transition-all hover:scale-105 flex flex-col items-center text-center",
+                                            callSign.color,
+                                            "text-white hover:opacity-90",
+                                            selectedJourney?.current_call_sign === callSign.key && "ring-2 ring-primary ring-offset-2"
+                                        )}
+                                    >
+                                        <div className="w-3 h-3 rounded-full bg-white/30 mb-2" />
+                                        <span className="font-semibold text-sm">{callSign.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Incident Call Signs */}
+                        <div>
+                            <h4 className="text-sm font-semibold mb-3 text-destructive">Emergency / Incident</h4>
+                            <div className="grid grid-cols-1 gap-2">
+                                {CALL_SIGNS.filter(cs => cs.category === 'incident').map((callSign) => (
+                                    <button
+                                        key={callSign.key}
+                                        onClick={() => handleUpdateCallSign(callSign.key)}
+                                        className={cn(
+                                            "p-3 rounded-lg border-2 border-destructive/50 transition-all hover:scale-[1.02] flex items-center gap-3",
+                                            "bg-destructive/10 hover:bg-destructive/20 text-destructive",
+                                            selectedJourney?.current_call_sign === callSign.key && "ring-2 ring-destructive ring-offset-2"
+                                        )}
+                                    >
+                                        <div className="w-3 h-3 rounded-full bg-destructive" />
+                                        <div className="text-left">
+                                            <span className="font-semibold text-sm block">{callSign.label}</span>
+                                            <span className="text-xs opacity-75">{callSign.description}</span>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 </DialogContent>
             </Dialog>

@@ -1,83 +1,117 @@
 -- ============================================================================
--- COMPLETE FIX: CALL SIGN NOTIFICATIONS AND REALTIME UPDATES
+-- UNIFIED FIX: CALL SIGN NOTIFICATIONS AND REALTIME UPDATES
 -- ============================================================================
--- This script provides a comprehensive fix for:
--- 1. Ensures current_call_sign column exists
--- 2. Updates existing notifications table with journey_id column
--- 3. Updates update_journey_call_sign function to notify dev_admin and admins
--- 4. Enables realtime for notifications table
+-- This script fixes:
+-- 1. update_journey_status function (used by My Operations page)
+-- 2. update_journey_call_sign function (used by Ops Monitor page)
+-- Both will now notify admins and dev_admin
 -- ============================================================================
 
 -- ============================================================================
--- STEP 1: ENSURE CURRENT_CALL_SIGN COLUMN EXISTS
+-- STEP 1: ENSURE REQUIRED COLUMNS EXIST
 -- ============================================================================
 
 DO $$
 BEGIN
+  -- Ensure current_status column exists
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'journeys' AND column_name = 'current_status'
+  ) THEN
+    ALTER TABLE journeys ADD COLUMN current_status TEXT DEFAULT 'planned';
+    RAISE NOTICE '✓ Added current_status column';
+  END IF;
+
+  -- Ensure current_call_sign column exists
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_name = 'journeys' AND column_name = 'current_call_sign'
   ) THEN
     ALTER TABLE journeys ADD COLUMN current_call_sign TEXT DEFAULT 'planned';
-    RAISE NOTICE '✓ Added current_call_sign column to journeys table';
-  ELSE
-    RAISE NOTICE '✓ current_call_sign column already exists';
+    RAISE NOTICE '✓ Added current_call_sign column';
   END IF;
-END $$;
 
--- ============================================================================
--- STEP 2: ENSURE NOTIFICATIONS TABLE HAS ALL REQUIRED COLUMNS
--- ============================================================================
-
--- Add journey_id column if it doesn't exist
-DO $$
-BEGIN
+  -- Ensure status_updated_at column exists
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'notifications' AND column_name = 'journey_id'
+    WHERE table_name = 'journeys' AND column_name = 'status_updated_at'
   ) THEN
-    ALTER TABLE notifications ADD COLUMN journey_id UUID REFERENCES journeys(id) ON DELETE CASCADE;
-    CREATE INDEX IF NOT EXISTS idx_notifications_journey_id ON notifications(journey_id);
-    RAISE NOTICE '✓ Added journey_id column to notifications table';
-  ELSE
-    RAISE NOTICE '✓ journey_id column already exists';
+    ALTER TABLE journeys ADD COLUMN status_updated_at TIMESTAMPTZ DEFAULT NOW();
+    RAISE NOTICE '✓ Added status_updated_at column';
   END IF;
 END $$;
 
--- Ensure other indexes exist
-CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
-
 -- ============================================================================
--- STEP 3: SET UP RLS POLICIES FOR NOTIFICATIONS
+-- STEP 2: UPDATE update_journey_status (USED BY MY OPERATIONS PAGE)
 -- ============================================================================
 
-ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+CREATE OR REPLACE FUNCTION update_journey_status(
+  p_journey_id UUID,
+  p_status VARCHAR,
+  p_notes TEXT DEFAULT NULL
+)
+RETURNS UUID AS $$
+DECLARE
+  v_update_id UUID;
+  v_papa_name TEXT;
+  v_do_name TEXT;
+  admin_user RECORD;
+BEGIN
+  -- Get Papa name for notification
+  SELECT p.full_name INTO v_papa_name
+  FROM journeys j
+  LEFT JOIN papas p ON j.papa_id = p.id
+  WHERE j.id = p_journey_id;
+  
+  v_papa_name := COALESCE(v_papa_name, 'Unknown Papa');
 
--- Drop existing policies if they exist
-DROP POLICY IF EXISTS "Users can view their own notifications" ON notifications;
-DROP POLICY IF EXISTS "Users can update their own notifications" ON notifications;
-DROP POLICY IF EXISTS "System can insert notifications" ON notifications;
+  -- Get DO name for notification
+  SELECT full_name INTO v_do_name
+  FROM users
+  WHERE id = auth.uid();
+  
+  v_do_name := COALESCE(v_do_name, 'Unknown Officer');
 
--- Users can view their own notifications
-CREATE POLICY "Users can view their own notifications"
-  ON notifications FOR SELECT
-  USING (user_id = auth.uid());
+  -- Insert into history
+  INSERT INTO journey_status_updates (journey_id, status, updated_by, notes)
+  VALUES (p_journey_id, p_status, auth.uid(), p_notes)
+  RETURNING id INTO v_update_id;
 
--- Users can update their own notifications (mark as read)
-CREATE POLICY "Users can update their own notifications"
-  ON notifications FOR UPDATE
-  USING (user_id = auth.uid())
-  WITH CHECK (user_id = auth.uid());
+  -- Update journey with both current_status AND current_call_sign for consistency
+  UPDATE journeys
+  SET 
+    current_status = p_status,
+    current_call_sign = p_status,
+    status_updated_at = NOW(),
+    updated_at = NOW()
+  WHERE id = p_journey_id;
 
--- System can insert notifications for any user
-CREATE POLICY "System can insert notifications"
-  ON notifications FOR INSERT
-  WITH CHECK (true);
+  -- Create notifications for all admins AND dev_admin
+  FOR admin_user IN
+    SELECT id FROM users
+    WHERE role IN ('dev_admin', 'super_admin', 'admin', 'captain', 'head_of_operations', 'head_of_command')
+    AND is_active = true
+    AND id != auth.uid()
+  LOOP
+    INSERT INTO notifications (
+      user_id, title, message, type, priority, journey_id, created_at
+    ) VALUES (
+      admin_user.id,
+      'Journey Status Updated',
+      format('%s updated status to "%s" for %s', v_do_name, p_status, v_papa_name),
+      'journey_update',
+      CASE WHEN p_status IN ('broken_arrow', 'distress') THEN 'high' ELSE 'medium' END,
+      p_journey_id,
+      NOW()
+    );
+  END LOOP;
+
+  RETURN v_update_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================================
--- STEP 4: UPDATE update_journey_call_sign FUNCTION
+-- STEP 3: UPDATE update_journey_call_sign (USED BY OPS MONITOR PAGE)
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION update_journey_call_sign(
@@ -86,7 +120,7 @@ CREATE OR REPLACE FUNCTION update_journey_call_sign(
 )
 RETURNS JSONB AS $$
 DECLARE
-  journey_record RECORD;
+  journey_rec RECORD;
   updates JSONB;
   papa_name TEXT;
   do_name TEXT;
@@ -94,8 +128,8 @@ DECLARE
   notification_count INTEGER := 0;
 BEGIN
   -- Get the journey with related data
-  SELECT j.*, p.full_name as papa_full_name
-  INTO journey_record
+  SELECT j.id, j.papa_id, j.assigned_do_id, j.assigned_duty_officer_id, p.full_name as papa_full_name
+  INTO journey_rec
   FROM journeys j
   LEFT JOIN papas p ON j.papa_id = p.id
   WHERE j.id = journey_uuid;
@@ -104,12 +138,12 @@ BEGIN
     RAISE EXCEPTION 'Journey not found';
   END IF;
 
-  papa_name := COALESCE(journey_record.papa_full_name, 'Unknown Papa');
+  papa_name := COALESCE(journey_rec.papa_full_name, 'Unknown Papa');
 
   -- Verify the user is assigned to this journey or is admin
   IF NOT (
-    journey_record.assigned_do_id = auth.uid()
-    OR journey_record.assigned_duty_officer_id = auth.uid()
+    journey_rec.assigned_do_id = auth.uid()
+    OR journey_rec.assigned_duty_officer_id = auth.uid()
     OR is_admin()
   ) THEN
     RAISE EXCEPTION 'You are not authorized to update this journey';
@@ -122,7 +156,7 @@ BEGIN
 
   do_name := COALESCE(do_name, 'Unknown Officer');
 
-  -- Validate status (accept both journey_status and call_sign values)
+  -- Validate status
   IF new_status NOT IN (
     'planned', 'scheduled', 'first_course', 'chapman', 'dessert', 
     'broken_arrow', 'in_progress', 'completed', 'cancelled',
@@ -135,57 +169,30 @@ BEGIN
   -- Build updates
   updates := jsonb_build_object('current_call_sign', new_status);
 
-  -- Set actual times based on call-sign
-  IF new_status IN ('first_course', 'in_progress', 'departing_nest', 'departing_theatre') THEN
-    IF journey_record.actual_departure IS NULL THEN
-      updates := updates || jsonb_build_object('actual_departure', NOW());
-    END IF;
-  ELSIF new_status = 'completed' THEN
-    IF journey_record.actual_arrival IS NULL THEN
-      updates := updates || jsonb_build_object('actual_arrival', NOW());
-    END IF;
-  END IF;
-
-  -- Update the journey with current_call_sign
+  -- Update the journey with both fields for consistency
   UPDATE journeys
   SET 
     current_call_sign = new_status,
-    status = CASE 
-      WHEN new_status IN ('broken_arrow', 'distress') THEN 'distress'
-      WHEN new_status = 'completed' THEN 'completed'
-      WHEN new_status = 'planned' THEN 'planned'
-      WHEN new_status IN ('scheduled', 'arriving', 'at_nest') THEN 'scheduled'
-      ELSE 'active'
-    END,
-    actual_departure = COALESCE((updates->>'actual_departure')::TIMESTAMPTZ, actual_departure),
-    actual_arrival = COALESCE((updates->>'actual_arrival')::TIMESTAMPTZ, actual_arrival),
+    current_status = new_status,
+    status_updated_at = NOW(),
     updated_at = NOW()
   WHERE id = journey_uuid;
 
   -- Create notifications for all admins AND dev_admin
   FOR admin_user IN
-    SELECT id, full_name FROM users
+    SELECT id FROM users
     WHERE role IN ('dev_admin', 'super_admin', 'admin', 'captain', 'head_of_operations', 'head_of_command')
     AND is_active = true
-    AND id != auth.uid()  -- Don't notify the user who made the update
+    AND id != auth.uid()
   LOOP
     INSERT INTO notifications (
-      user_id,
-      title,
-      message,
-      type,
-      priority,
-      journey_id,
-      created_at
+      user_id, title, message, type, priority, journey_id, created_at
     ) VALUES (
       admin_user.id,
       'Journey Call Sign Updated',
       format('%s updated call sign to "%s" for %s', do_name, new_status, papa_name),
       'journey_update',
-      CASE 
-        WHEN new_status IN ('broken_arrow', 'distress') THEN 'high'
-        ELSE 'medium'
-      END,
+      CASE WHEN new_status IN ('broken_arrow', 'distress') THEN 'high' ELSE 'medium' END,
       journey_uuid,
       NOW()
     );
@@ -198,16 +205,27 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Ensure permissions are granted
+-- ============================================================================
+-- STEP 4: GRANT PERMISSIONS
+-- ============================================================================
+
+GRANT EXECUTE ON FUNCTION update_journey_status TO authenticated;
 GRANT EXECUTE ON FUNCTION update_journey_call_sign TO authenticated;
 
 -- ============================================================================
--- STEP 5: ENABLE REALTIME FOR NOTIFICATIONS
+-- STEP 5: ENABLE REALTIME FOR JOURNEYS TABLE
 -- ============================================================================
 
--- Enable realtime publication for notifications table
 DO $$
 BEGIN
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE journeys;
+    RAISE NOTICE '✓ Added journeys to realtime publication';
+  EXCEPTION
+    WHEN duplicate_object THEN
+      RAISE NOTICE '✓ Journeys already in realtime publication';
+  END;
+  
   BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
     RAISE NOTICE '✓ Added notifications to realtime publication';
@@ -223,42 +241,24 @@ END $$;
 
 DO $$
 DECLARE
-  has_current_call_sign BOOLEAN;
-  has_journey_id BOOLEAN;
-  notification_policies_count INTEGER;
+  admin_count INTEGER;
 BEGIN
-  -- Check current_call_sign column
-  SELECT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'journeys' AND column_name = 'current_call_sign'
-  ) INTO has_current_call_sign;
-
-  -- Check journey_id column in notifications
-  SELECT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'notifications' AND column_name = 'journey_id'
-  ) INTO has_journey_id;
-
-  -- Count notification RLS policies
-  SELECT COUNT(*) INTO notification_policies_count
-  FROM pg_policies
-  WHERE tablename = 'notifications';
+  -- Count admins who will receive notifications
+  SELECT COUNT(*) INTO admin_count
+  FROM users
+  WHERE role IN ('dev_admin', 'super_admin', 'admin', 'captain', 'head_of_operations', 'head_of_command')
+  AND is_active = true;
 
   RAISE NOTICE '============================================================================';
-  RAISE NOTICE 'CALL SIGN NOTIFICATION SYSTEM - INSTALLATION COMPLETE!';
+  RAISE NOTICE 'UNIFIED CALL SIGN NOTIFICATION SYSTEM - COMPLETE!';
   RAISE NOTICE '============================================================================';
-  RAISE NOTICE 'Verification:';
-  RAISE NOTICE '  % current_call_sign column exists in journeys table', 
-    CASE WHEN has_current_call_sign THEN '✓' ELSE '✗' END;
-  RAISE NOTICE '  % journey_id column exists in notifications table', 
-    CASE WHEN has_journey_id THEN '✓' ELSE '✗' END;
-  RAISE NOTICE '  % RLS policies on notifications table', notification_policies_count;
-  RAISE NOTICE '============================================================================';
-  RAISE NOTICE 'Features enabled:';
-  RAISE NOTICE '  ✓ Admins and dev_admin receive notifications when DO updates call sign';
-  RAISE NOTICE '  ✓ Notifications include DO name, call sign, and Papa name';
-  RAISE NOTICE '  ✓ High priority for broken_arrow/distress, medium for others';
-  RAISE NOTICE '  ✓ Updates current_call_sign field for realtime sync';
-  RAISE NOTICE '  ✓ Realtime enabled for instant notification delivery';
+  RAISE NOTICE 'Fixed functions:';
+  RAISE NOTICE '  ✓ update_journey_status() - used by My Operations page';
+  RAISE NOTICE '  ✓ update_journey_call_sign() - used by Ops Monitor page';
+  RAISE NOTICE 'Both functions now:';
+  RAISE NOTICE '  ✓ Update both current_status AND current_call_sign fields';
+  RAISE NOTICE '  ✓ Create notifications for % admin users', admin_count;
+  RAISE NOTICE '  ✓ Include dev_admin in notification recipients';
+  RAISE NOTICE '  ✓ Realtime enabled for instant updates';
   RAISE NOTICE '============================================================================';
 END $$;
