@@ -62,20 +62,46 @@ export default function JourneyStatusTable() {
         loadPrograms()
         loadActiveJourneys()
 
+        // Debounce timer for rapid updates
+        let debounceTimer: NodeJS.Timeout | null = null
+        const debouncedReload = () => {
+            if (debounceTimer) clearTimeout(debounceTimer)
+            debounceTimer = setTimeout(() => {
+                console.log('🔄 Debounced reload triggered')
+                loadActiveJourneys()
+            }, 300)
+        }
+
         // Real-time subscription for journey updates with improved reliability
         const channel = supabase
             .channel('journey-monitor')
             .on(
                 'postgres_changes',
                 {
-                    event: '*',
+                    event: 'UPDATE',
                     schema: 'public',
                     table: 'journeys'
                 },
                 (payload) => {
-                    console.log('🔄 Realtime journey update received:', payload.eventType, payload.new)
-                    // Debounce rapid updates
-                    loadActiveJourneys()
+                    console.log('🔄 Journey UPDATE received:', {
+                        id: payload.new?.id,
+                        status: payload.new?.status,
+                        current_call_sign: payload.new?.current_call_sign,
+                        old_call_sign: payload.old?.current_call_sign
+                    })
+                    debouncedReload()
+                }
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'journeys'
+                },
+                (payload) => {
+                    console.log('➕ Journey INSERT received:', payload.new?.id)
+                    debouncedReload()
                 }
             )
             .subscribe((status, err) => {
@@ -85,10 +111,20 @@ export default function JourneyStatusTable() {
                     console.error('❌ Ops Monitor realtime error:', err)
                 } else if (status === 'TIMED_OUT') {
                     console.warn('⏱️ Ops Monitor realtime timed out, retrying...')
+                } else {
+                    console.log('📡 Ops Monitor subscription status:', status)
                 }
             })
 
+        // Also poll every 15 seconds as a fallback
+        const pollInterval = setInterval(() => {
+            console.log('⏰ Polling for journey updates...')
+            loadActiveJourneys()
+        }, 15000)
+
         return () => {
+            if (debounceTimer) clearTimeout(debounceTimer)
+            clearInterval(pollInterval)
             supabase.removeChannel(channel)
         }
     }, [])
@@ -134,7 +170,7 @@ export default function JourneyStatusTable() {
             }
 
             // Fetch related data separately
-            const journeysWithRelations = await Promise.all((data || []).map(async (journey) => {
+            const journeysWithRelations = await Promise.all((data || []).map(async (journey: any) => {
                 let papa = null
                 let cheetah = null
                 let assignedDO = null
