@@ -3,7 +3,7 @@
 -- ============================================================================
 -- This script provides a comprehensive fix for:
 -- 1. Ensures current_call_sign column exists
--- 2. Creates/updates notifications table with proper RLS
+-- 2. Updates existing notifications table with journey_id column
 -- 3. Updates update_journey_call_sign function to notify dev_admin and admins
 -- 4. Enables realtime for notifications table
 -- ============================================================================
@@ -26,27 +26,28 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- STEP 2: ENSURE NOTIFICATIONS TABLE EXISTS WITH PROPER SCHEMA
+-- STEP 2: ENSURE NOTIFICATIONS TABLE HAS ALL REQUIRED COLUMNS
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS notifications (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  message TEXT NOT NULL,
-  type TEXT NOT NULL DEFAULT 'info',
-  priority TEXT DEFAULT 'medium',
-  is_read BOOLEAN DEFAULT false,
-  journey_id UUID REFERENCES journeys(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  read_at TIMESTAMPTZ
-);
+-- Add journey_id column if it doesn't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'notifications' AND column_name = 'journey_id'
+  ) THEN
+    ALTER TABLE notifications ADD COLUMN journey_id UUID REFERENCES journeys(id) ON DELETE CASCADE;
+    CREATE INDEX IF NOT EXISTS idx_notifications_journey_id ON notifications(journey_id);
+    RAISE NOTICE '✓ Added journey_id column to notifications table';
+  ELSE
+    RAISE NOTICE '✓ journey_id column already exists';
+  END IF;
+END $$;
 
--- Indexes for performance
+-- Ensure other indexes exist
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
-CREATE INDEX IF NOT EXISTS idx_notifications_journey_id ON notifications(journey_id);
 
 -- ============================================================================
 -- STEP 3: SET UP RLS POLICIES FOR NOTIFICATIONS
@@ -223,7 +224,7 @@ END $$;
 DO $$
 DECLARE
   has_current_call_sign BOOLEAN;
-  has_notifications_table BOOLEAN;
+  has_journey_id BOOLEAN;
   notification_policies_count INTEGER;
 BEGIN
   -- Check current_call_sign column
@@ -232,11 +233,11 @@ BEGIN
     WHERE table_name = 'journeys' AND column_name = 'current_call_sign'
   ) INTO has_current_call_sign;
 
-  -- Check notifications table
+  -- Check journey_id column in notifications
   SELECT EXISTS (
-    SELECT 1 FROM information_schema.tables
-    WHERE table_name = 'notifications'
-  ) INTO has_notifications_table;
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'notifications' AND column_name = 'journey_id'
+  ) INTO has_journey_id;
 
   -- Count notification RLS policies
   SELECT COUNT(*) INTO notification_policies_count
@@ -249,8 +250,8 @@ BEGIN
   RAISE NOTICE 'Verification:';
   RAISE NOTICE '  % current_call_sign column exists in journeys table', 
     CASE WHEN has_current_call_sign THEN '✓' ELSE '✗' END;
-  RAISE NOTICE '  % notifications table exists', 
-    CASE WHEN has_notifications_table THEN '✓' ELSE '✗' END;
+  RAISE NOTICE '  % journey_id column exists in notifications table', 
+    CASE WHEN has_journey_id THEN '✓' ELSE '✗' END;
   RAISE NOTICE '  % RLS policies on notifications table', notification_policies_count;
   RAISE NOTICE '============================================================================';
   RAISE NOTICE 'Features enabled:';
