@@ -15,6 +15,7 @@ export type LiveTrackingLeafletLocation = {
   speed: number | null
   battery_level: number | null
   updated_at: string
+  papa_name?: string | null
 }
 
 export type LiveTrackingLeafletProps = {
@@ -50,34 +51,44 @@ const buildPopupContent = (
   const statusLabel = escapeHtml(status.label)
   const roleLabel = escapeHtml(roleDisplay.label)
 
+  // Build the title - DO Name with Papa if assigned
+  const papaName = location.papa_name ? escapeHtml(location.papa_name) : null
+  const titleDisplay = papaName ? `${name} - ${papaName}` : name
+
   const speedLine =
     location.speed !== null
-      ? `<p style="font-size: 11px; color: #666; margin: 4px 0 0;">Speed: ${Math.round(
+      ? `<p style="font-size: 11px; color: #666; margin: 4px 0 0;">🚗 Speed: ${Math.round(
         location.speed * 3.6
       )} km/h</p>`
       : ''
-  const batteryLine =
-    location.battery_level !== null
-      ? `<p style="font-size: 11px; color: #666; margin: 4px 0 0;">Battery: ${location.battery_level}%</p>`
-      : ''
+
+  // Enhanced battery display with color based on level
+  let batteryLine = ''
+  if (location.battery_level !== null) {
+    const level = location.battery_level
+    const batteryColor = level <= 20 ? '#EF4444' : level <= 50 ? '#F59E0B' : '#22C55E'
+    batteryLine = `<p style="font-size: 12px; font-weight: 600; color: ${batteryColor}; margin: 6px 0 0;">
+      🔋 Battery: ${level}%
+    </p>`
+  }
 
   return `
-    <div style="min-width: 200px;">
-      <p style="font-weight: 600; margin-bottom: 4px;">${name}</p>
+    <div style="min-width: 220px;">
+      <p style="font-weight: 700; font-size: 14px; margin-bottom: 4px;">${titleDisplay}</p>
       <p style="font-size: 12px; color: #444; margin: 0 0 8px;">${oscar}</p>
-      <span style="display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 600; color: #fff; background: ${roleDisplay.color}; margin-bottom: 6px;">
+      <span style="display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 600; color: #fff; background: ${roleDisplay.color}; margin-right: 4px; margin-bottom: 6px;">
         ${roleLabel}
       </span>
       <span style="display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 600; color: #fff; background: ${status.color};">
         ${statusLabel}
       </span>
-      ${speedLine}
       ${batteryLine}
+      ${speedLine}
       <p style="font-size: 11px; color: #888; margin: 8px 0 0;">
         Updated: ${new Date(location.updated_at).toLocaleTimeString()}
       </p>
-      <p style="font-size: 11px; color: #888; margin: 4px 0 0;">
-        Lat: ${location.latitude.toFixed(5)}, Lng: ${location.longitude.toFixed(5)}
+      <p style="font-size: 10px; color: #999; margin: 4px 0 0;">
+        📍 ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}
       </p>
     </div>
   `

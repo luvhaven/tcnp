@@ -28,6 +28,7 @@ type UserLocation = {
   heading: number | null
   battery_level: number | null
   updated_at: string
+  papa_name?: string | null
 }
 
 type LiveTrackingLeafletProps = {
@@ -237,8 +238,36 @@ export default function LiveTrackingMap() {
         return
       }
 
-      console.log('✅ Loaded user locations:', data)
-      setUserLocations(data || [])
+      // Fetch active journeys to get Papa names for DOs
+      const { data: activeJourneys } = await supabase
+        .from('journeys')
+        .select(`
+          assigned_duty_officer_id,
+          assigned_do_id,
+          papas:papa_id (full_name)
+        `)
+        .in('status', ['planned', 'scheduled', 'arriving', 'at_nest', 'departing_nest', 'enroute_to_theatre', 'at_theatre', 'departing_theatre', 'active', 'planning', 'distress'])
+
+      // Create a map of user_id -> papa_name
+      const userToPapaMap = new Map<string, string>()
+      if (activeJourneys) {
+        activeJourneys.forEach((journey: any) => {
+          const doId = journey.assigned_duty_officer_id || journey.assigned_do_id
+          const papaName = journey.papas?.full_name
+          if (doId && papaName) {
+            userToPapaMap.set(doId, papaName)
+          }
+        })
+      }
+
+      // Enrich locations with Papa names
+      const enrichedData = (data || []).map((loc: UserLocation) => ({
+        ...loc,
+        papa_name: userToPapaMap.get(loc.user_id) || null
+      }))
+
+      console.log('✅ Loaded user locations:', enrichedData.length, 'with', userToPapaMap.size, 'Papa assignments')
+      setUserLocations(enrichedData)
     } catch (error) {
       console.error('❌ Error loading user locations (unexpected):', error)
     }
@@ -507,11 +536,12 @@ export default function LiveTrackingMap() {
         {/* Sidebar column (narrow) */}
         <div
           className={cn(
-            'lg:flex-[0.24] w-full lg:w-auto min-w-[220px] space-y-4 overflow-y-auto pb-2 transition-all duration-300 ease-in-out',
+            'lg:flex-[0.24] w-full lg:w-auto space-y-4 overflow-hidden pb-2 transition-all duration-300 ease-in-out',
             sidebarOpen
-              ? 'opacity-100 translate-x-0'
-              : 'pointer-events-none opacity-0 translate-x-4 lg:max-w-0 lg:min-w-0'
+              ? 'min-w-[220px] opacity-100 max-w-none'
+              : 'pointer-events-none opacity-0 lg:max-w-0 lg:min-w-0 lg:overflow-hidden'
           )}
+          style={{ willChange: 'opacity, max-width, min-width' }}
         >
           {/* Filters */}
           <Card>
