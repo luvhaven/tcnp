@@ -55,21 +55,23 @@ const buildPopupContent = (
   const papaName = location.papa_name ? escapeHtml(location.papa_name) : null
   const titleDisplay = papaName ? `${name} - ${papaName}` : name
 
-  const speedLine =
-    location.speed !== null
-      ? `<p style="font-size: 11px; color: #666; margin: 4px 0 0;">🚗 Speed: ${Math.round(
-        location.speed * 3.6
-      )} km/h</p>`
-      : ''
+  // Speed display with fallback
+  const speedLine = location.speed !== null && location.speed !== undefined
+    ? `<p style="font-size: 11px; color: #666; margin: 4px 0 0;">🚗 Speed: ${Math.round(
+      location.speed * 3.6
+    )} km/h</p>`
+    : `<p style="font-size: 11px; color: #999; margin: 4px 0 0;">🚗 Speed: N/A</p>`
 
   // Enhanced battery display with color based on level
   let batteryLine = ''
-  if (location.battery_level !== null) {
+  if (location.battery_level !== null && location.battery_level !== undefined) {
     const level = location.battery_level
     const batteryColor = level <= 20 ? '#EF4444' : level <= 50 ? '#F59E0B' : '#22C55E'
     batteryLine = `<p style="font-size: 12px; font-weight: 600; color: ${batteryColor}; margin: 6px 0 0;">
       🔋 Battery: ${level}%
     </p>`
+  } else {
+    batteryLine = `<p style="font-size: 11px; color: #999; margin: 6px 0 0;">🔋 Battery: N/A</p>`
   }
 
   return `
