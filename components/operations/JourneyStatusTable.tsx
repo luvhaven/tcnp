@@ -62,7 +62,7 @@ export default function JourneyStatusTable() {
         loadPrograms()
         loadActiveJourneys()
 
-        // Real-time subscription for journey updates
+        // Real-time subscription for journey updates with improved reliability
         const channel = supabase
             .channel('journey-monitor')
             .on(
@@ -72,11 +72,21 @@ export default function JourneyStatusTable() {
                     schema: 'public',
                     table: 'journeys'
                 },
-                () => {
+                (payload) => {
+                    console.log('🔄 Realtime journey update received:', payload.eventType, payload.new)
+                    // Debounce rapid updates
                     loadActiveJourneys()
                 }
             )
-            .subscribe()
+            .subscribe((status, err) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log('✅ Ops Monitor realtime subscription active')
+                } else if (status === 'CHANNEL_ERROR') {
+                    console.error('❌ Ops Monitor realtime error:', err)
+                } else if (status === 'TIMED_OUT') {
+                    console.warn('⏱️ Ops Monitor realtime timed out, retrying...')
+                }
+            })
 
         return () => {
             supabase.removeChannel(channel)
@@ -309,13 +319,15 @@ export default function JourneyStatusTable() {
                             <TableHead className="font-semibold">Duty Officer (DO)</TableHead>
                             <TableHead className="font-semibold">Status</TableHead>
                             <TableHead className="font-semibold">Call Sign</TableHead>
+                            <TableHead className="font-semibold">ETA</TableHead>
+                            <TableHead className="font-semibold">ETD</TableHead>
                             <TableHead className="font-semibold">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {filteredJourneys.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                                <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                                     <Radio className="h-12 w-12 mx-auto mb-3 opacity-50" />
                                     <p>No active journeys at the moment</p>
                                 </TableCell>
@@ -363,6 +375,26 @@ export default function JourneyStatusTable() {
                                             </button>
                                         </TableCell>
                                         <TableCell>
+                                            {journey.eta ? (
+                                                <div className="flex items-center gap-1 text-sm">
+                                                    <Clock className="h-3 w-3 text-muted-foreground" />
+                                                    {new Date(journey.eta).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                                </div>
+                                            ) : (
+                                                <span className="text-muted-foreground text-xs">—</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            {journey.etd ? (
+                                                <div className="flex items-center gap-1 text-sm">
+                                                    <Clock className="h-3 w-3 text-muted-foreground" />
+                                                    {new Date(journey.etd).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                                </div>
+                                            ) : (
+                                                <span className="text-muted-foreground text-xs">—</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
                                             <div className="flex gap-2">
                                                 <Button
                                                     variant="ghost"
@@ -370,7 +402,7 @@ export default function JourneyStatusTable() {
                                                     className="h-8 text-xs"
                                                 >
                                                     <Clock className="h-3 w-3 mr-1" />
-                                                    {journey.eta ? 'ETA/ETD' : 'Set Times'}
+                                                    {journey.eta ? 'Edit Times' : 'Set Times'}
                                                 </Button>
                                             </div>
                                         </TableCell>

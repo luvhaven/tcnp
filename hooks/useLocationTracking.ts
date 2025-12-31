@@ -243,16 +243,31 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
       return
     }
 
-    console.log('🚀 Starting location tracking...')
+    // iOS detection for special handling
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+
+    console.log('🚀 Starting location tracking...', isIOS ? '(iOS device detected)' : '')
+
+    // iOS requires longer timeouts due to Safari's power-saving behavior
+    const watchTimeout = isIOS ? 60000 : 30000
+    const updateFrequency = isIOS ? 15000 : 10000 // Slightly longer interval for iOS battery
 
     // Use watchPosition for continuous tracking
     const watchId = navigator.geolocation.watchPosition(
       handlePosition,
-      handleError,
+      (error) => {
+        // On iOS, timeout errors often resolve on retry, so handle gracefully
+        if (isIOS && error.code === error.TIMEOUT) {
+          console.log('📍 iOS timeout - will retry automatically')
+          return
+        }
+        handleError(error)
+      },
       {
         enableHighAccuracy: highAccuracy,
-        timeout: 30000,
-        maximumAge: 0 // Force fresh location every time
+        timeout: watchTimeout,
+        maximumAge: isIOS ? 5000 : 0 // Allow slightly stale data on iOS to reduce battery drain
       }
     )
 
@@ -271,11 +286,11 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
         },
         {
           enableHighAccuracy: highAccuracy,
-          timeout: 30000,
-          maximumAge: 0
+          timeout: watchTimeout,
+          maximumAge: isIOS ? 5000 : 0
         }
       )
-    }, updateInterval)
+    }, updateFrequency)
   }, [isTracking, highAccuracy, updateInterval, requestPermission, handlePosition, handleError])
 
   // Stop tracking

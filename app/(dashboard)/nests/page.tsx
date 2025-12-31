@@ -121,7 +121,8 @@ export default function NestsPage() {
       phone: item.phone || '',
       email: item.email || '',
       rating: item.rating || 5,
-      amenities: item.amenities || ''
+      amenities: item.amenities || '',
+      type: item.type || 'nest'
     })
     setDialogOpen(true)
   }
@@ -156,7 +157,8 @@ export default function NestsPage() {
       phone: '',
       email: '',
       rating: 5,
-      amenities: ''
+      amenities: '',
+      type: 'nest'
     })
   }
 
@@ -211,7 +213,7 @@ export default function NestsPage() {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">NOscar Management</h2>
           <p className="text-muted-foreground">
-            Manage NOscar Dens and Nests
+            Manage NOscar Theatres and Nests
           </p>
         </div>
         {canManage && (
@@ -239,7 +241,7 @@ export default function NestsPage() {
         <TabsList>
           <TabsTrigger value="den">
             <Home className="mr-2 h-4 w-4" />
-            NOscar Den
+            NOscar Theatre
           </TabsTrigger>
           <TabsTrigger value="nest">
             <Building className="mr-2 h-4 w-4" />
@@ -253,17 +255,17 @@ export default function NestsPage() {
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   {type === 'den' ? <Home className="h-5 w-5" /> : <Building className="h-5 w-5" />}
-                  <span>{type === 'den' ? 'NOscar Dens' : 'NOscar Nests'}</span>
+                  <span>{type === 'den' ? 'NOscar Theatres' : 'NOscar Nests'}</span>
                 </CardTitle>
                 <CardDescription>
-                  {type === 'den' ? 'Private residences and secure locations' : 'Hotels and public accommodation'}
+                  {type === 'den' ? 'Private residences and secure theatre locations' : 'Hotels and public accommodation'}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {nests.filter(n => n.type === type || (!n.type && type === 'nest')).length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <Hotel className="h-12 w-12 text-muted-foreground/50" />
-                    <p className="mt-4 text-sm font-medium">No {type === 'den' ? 'Dens' : 'Nests'} found</p>
+                    <p className="mt-4 text-sm font-medium">No {type === 'den' ? 'Theatres' : 'Nests'} found</p>
                   </div>
                 ) : (
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -415,7 +417,7 @@ export default function NestsPage() {
                 onChange={(e) => setFormData({ ...formData, type: e.target.value })}
               >
                 <option value="nest">NOscar Nest (Hotel)</option>
-                <option value="den">NOscar Den (Private)</option>
+                <option value="den">NOscar Theatre (Private)</option>
               </select>
             </div>
             <div className="space-y-2">
