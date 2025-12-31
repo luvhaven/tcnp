@@ -77,11 +77,18 @@ BEGIN
   VALUES (p_journey_id, p_status, auth.uid(), p_notes)
   RETURNING id INTO v_update_id;
 
-  -- Update journey with both current_status AND current_call_sign for consistency
+  -- Update journey with current_status, current_call_sign AND legacy status for consistency
   UPDATE journeys
   SET 
     current_status = p_status,
     current_call_sign = p_status,
+    status = CASE 
+      WHEN p_status IN ('broken_arrow', 'distress') THEN 'distress'
+      WHEN p_status = 'completed' THEN 'completed'
+      WHEN p_status = 'planned' THEN 'planned'
+      WHEN p_status IN ('scheduled', 'arriving', 'at_nest') THEN 'scheduled'
+      ELSE 'active'
+    END,
     status_updated_at = NOW(),
     updated_at = NOW()
   WHERE id = p_journey_id;

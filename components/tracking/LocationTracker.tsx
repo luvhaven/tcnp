@@ -193,7 +193,7 @@ export function LocationTracker() {
 
   return (
     <div className="pointer-events-none fixed bottom-4 left-1/2 z-40 -translate-x-1/2 px-3 sm:px-4">
-      <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-2 text-xs text-white shadow-lg sm:text-sm">
+      <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-2 text-xs text-white shadow-lg sm:text-sm whitespace-nowrap">
         <span className="inline-flex h-2 w-2 rounded-full bg-emerald-300 animate-pulse" />
         <span>Live location sharing is active.</span>
         <button
