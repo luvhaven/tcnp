@@ -71,7 +71,7 @@ USING (
   EXISTS (
     SELECT 1 FROM users 
     WHERE id = auth.uid() 
-    AND role IN ('super_admin', 'admin', 'captain', 'head_of_command', 'november_oscar', 'head_november_oscar')
+    AND role IN ('super_admin', 'admin', 'captain', 'head_of_command', 'november_oscar', 'head_of_operations')
     AND is_active = true
   )
 );
