@@ -8,17 +8,52 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Hotel, Plus, Edit, Trash2, Home, Building } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Hotel, Plus, Edit, Trash2, Home, Building, Users, UserPlus, UserCheck, UserX } from "lucide-react"
 import { toast } from "sonner"
 import { canManageNests } from "@/lib/utils"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
+type Program = {
+  id: string
+  name: string
+  status: string
+}
+
+type Officer = {
+  id: string
+  full_name: string
+  email: string
+  role: string
+  oscar: string | null
+}
+
+type NoscarAssignment = {
+  id: string
+  user_id: string
+  nest_id: string | null
+  assignment_type: 'theatre' | 'nest'
+  program_id: string
+  is_active: boolean
+  assigned_date: string
+  user?: Officer
+}
+
 export default function NestsPage() {
   const supabase = createClient()
   const [nests, setNests] = useState<any[]>([])
+  const [programs, setPrograms] = useState<Program[]>([])
+  const [officers, setOfficers] = useState<Officer[]>([])
+  const [assignments, setAssignments] = useState<NoscarAssignment[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [officerDialogOpen, setOfficerDialogOpen] = useState(false)
   const [editing, setEditing] = useState<any>(null)
+  const [selectedNest, setSelectedNest] = useState<any>(null)
+  const [selectedProgram, setSelectedProgram] = useState<string>('all')
   const [formData, setFormData] = useState({
     name: '',
     address: '',
@@ -27,7 +62,12 @@ export default function NestsPage() {
     email: '',
     rating: 5,
     amenities: '',
-    type: 'nest' // Default type
+    type: 'nest',
+    program_id: ''
+  })
+  const [officerFormData, setOfficerFormData] = useState({
+    user_id: '',
+    assignment_type: 'nest' as 'theatre' | 'nest'
   })
   const [currentRole, setCurrentRole] = useState<string | null>(null)
 
@@ -62,16 +102,47 @@ export default function NestsPage() {
 
   const loadData = async () => {
     try {
-      const { data, error } = await supabase
+      // Load nests
+      const { data: nestsData, error: nestsError } = await supabase
         .from('nests')
         .select('*')
         .order('name')
 
-      if (error) throw error
-      setNests(data || [])
+      if (nestsError) throw nestsError
+      setNests(nestsData || [])
+
+      // Load programs
+      const { data: programsData } = await supabase
+        .from('programs')
+        .select('id, name, status')
+        .order('name')
+
+      setPrograms(programsData || [])
+
+      // Load NOscar officers (november_oscar roles)
+      const { data: officersData } = await supabase
+        .from('users')
+        .select('id, full_name, email, role, oscar')
+        .in('role', ['november_oscar', 'head_of_operations', 'admin', 'super_admin'])
+        .eq('is_active', true)
+        .order('full_name')
+
+      setOfficers(officersData || [])
+
+      // Load assignments
+      const { data: assignmentsData } = await supabase
+        .from('noscar_assignments')
+        .select(`
+          *,
+          user:users(id, full_name, email, role, oscar)
+        `)
+        .order('assigned_date', { ascending: false })
+
+      setAssignments(assignmentsData || [])
+
     } catch (error) {
       console.error('Error:', error)
-      toast.error('Failed to load hotels')
+      toast.error('Failed to load data')
     } finally {
       setLoading(false)
     }
@@ -86,21 +157,26 @@ export default function NestsPage() {
         return
       }
 
+      const submitData = {
+        ...formData,
+        program_id: formData.program_id || null
+      }
+
       if (editing) {
         const { error } = await (supabase as any)
           .from('nests')
-          .update(formData)
+          .update(submitData)
           .eq('id', editing.id)
 
         if (error) throw error
-        toast.success('Hotel updated!')
+        toast.success('NOscar location updated!')
       } else {
         const { error } = await (supabase as any)
           .from('nests')
-          .insert([formData])
+          .insert([submitData])
 
         if (error) throw error
-        toast.success('Hotel added!')
+        toast.success('NOscar location added!')
       }
 
       setDialogOpen(false)
@@ -122,17 +198,18 @@ export default function NestsPage() {
       email: item.email || '',
       rating: item.rating || 5,
       amenities: item.amenities || '',
-      type: item.type || 'nest'
+      type: item.type || 'nest',
+      program_id: item.program_id || ''
     })
     setDialogOpen(true)
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this hotel?')) return
+    if (!confirm('Delete this location?')) return
 
     try {
       if (!canManage) {
-        toast.error('You are not authorized to manage hotels')
+        toast.error('You are not authorized to manage locations')
         return
       }
 
@@ -142,7 +219,7 @@ export default function NestsPage() {
         .eq('id', id)
 
       if (error) throw error
-      toast.success('Hotel deleted!')
+      toast.success('Location deleted!')
       loadData()
     } catch (error: any) {
       toast.error(error.message || 'Failed to delete')
@@ -158,15 +235,85 @@ export default function NestsPage() {
       email: '',
       rating: 5,
       amenities: '',
-      type: 'nest'
+      type: 'nest',
+      program_id: ''
     })
   }
 
-  const openDialog = () => {
-    setEditing(null)
-    resetForm()
-    setDialogOpen(true)
+  const handleAssignOfficer = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!officerFormData.user_id || !selectedNest) {
+      toast.error('Please select an officer')
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from('noscar_assignments')
+        .insert([{
+          user_id: officerFormData.user_id,
+          nest_id: selectedNest.id,
+          assignment_type: officerFormData.assignment_type,
+          program_id: selectedNest.program_id,
+          is_active: true,
+          assigned_date: new Date().toISOString().split('T')[0]
+        }])
+
+      if (error) throw error
+      toast.success('Officer assigned!')
+      setOfficerDialogOpen(false)
+      setOfficerFormData({ user_id: '', assignment_type: 'nest' })
+      loadData()
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to assign officer')
+    }
   }
+
+  const toggleOfficerActive = async (assignment: NoscarAssignment) => {
+    try {
+      const { error } = await supabase
+        .from('noscar_assignments')
+        .update({ is_active: !assignment.is_active })
+        .eq('id', assignment.id)
+
+      if (error) throw error
+      toast.success(assignment.is_active ? 'Officer marked inactive' : 'Officer marked active')
+      loadData()
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update status')
+    }
+  }
+
+  const removeAssignment = async (assignmentId: string) => {
+    if (!confirm('Remove this officer from the location?')) return
+
+    try {
+      const { error } = await supabase
+        .from('noscar_assignments')
+        .delete()
+        .eq('id', assignmentId)
+
+      if (error) throw error
+      toast.success('Officer removed from location')
+      loadData()
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to remove')
+    }
+  }
+
+  const getOfficersForNest = (nestId: string) => {
+    return assignments.filter(a => a.nest_id === nestId)
+  }
+
+  const getInitials = (name: string) => {
+    if (!name) return '??'
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)
+  }
+
+  const filteredNests = selectedProgram === 'all'
+    ? nests
+    : nests.filter(n => n.program_id === selectedProgram)
 
   if (loading) {
     return (
@@ -178,27 +325,14 @@ export default function NestsPage() {
           </div>
           <div className="h-10 w-28 rounded-md skeleton" />
         </div>
-
-        {/* Content skeleton */}
         <Card>
           <CardHeader>
             <div className="h-5 w-40 rounded-md skeleton" />
-            <div className="mt-2 h-4 w-56 rounded-md skeleton" />
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="flex items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-2">
-                    <div className="h-5 w-48 rounded-md skeleton" />
-                    <div className="h-4 w-64 rounded-md skeleton" />
-                    <div className="h-3 w-32 rounded-md skeleton" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-md skeleton" />
-                    <div className="h-8 w-8 rounded-md skeleton" />
-                  </div>
-                </div>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="h-48 rounded-lg skeleton" />
               ))}
             </div>
           </CardContent>
@@ -213,28 +347,39 @@ export default function NestsPage() {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">NOscar Management</h2>
           <p className="text-muted-foreground">
-            Manage NOscar Theatres and Nests
+            Manage NOscar Theatres, Nests, and Officers
           </p>
         </div>
-        {canManage && (
-          <Button onClick={() => {
-            setEditing(null)
-            setFormData({
-              name: '',
-              address: '',
-              city: '',
-              phone: '',
-              email: '',
-              rating: 5,
-              amenities: '',
-              type: 'nest'
-            })
-            setDialogOpen(true)
-          }}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add NOscar
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {canManage && (
+            <Button onClick={() => {
+              setEditing(null)
+              resetForm()
+              setDialogOpen(true)
+            }}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Location
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Program Filter */}
+      <div className="flex items-center gap-4">
+        <Label>Filter by Program:</Label>
+        <Select value={selectedProgram} onValueChange={setSelectedProgram}>
+          <SelectTrigger className="w-[250px]">
+            <SelectValue placeholder="All Programs" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Programs</SelectItem>
+            {programs.map(program => (
+              <SelectItem key={program.id} value={program.id}>
+                {program.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <Tabs defaultValue="den" className="space-y-4">
@@ -262,63 +407,104 @@ export default function NestsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {nests.filter(n => n.type === type || (!n.type && type === 'nest')).length === 0 ? (
+                {filteredNests.filter(n => n.type === type || (!n.type && type === 'nest')).length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <Hotel className="h-12 w-12 text-muted-foreground/50" />
                     <p className="mt-4 text-sm font-medium">No {type === 'den' ? 'Theatres' : 'Nests'} found</p>
                   </div>
                 ) : (
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {nests
+                    {filteredNests
                       .filter(n => n.type === type || (!n.type && type === 'nest'))
-                      .map((nest) => (
-                        <Card key={nest.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                          <CardHeader className="pb-2">
-                            <div className="flex justify-between items-start">
-                              <CardTitle className="text-lg">{nest.name}</CardTitle>
-                              {canManage && (
-                                <div className="flex gap-1">
-                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
-                                    setEditing(nest)
-                                    setFormData({
-                                      name: nest.name,
-                                      address: nest.address || '',
-                                      city: nest.city || '',
-                                      phone: nest.phone || '',
-                                      email: nest.email || '',
-                                      rating: nest.rating || 5,
-                                      amenities: nest.amenities || '',
-                                      type: nest.type || 'nest'
-                                    })
-                                    setDialogOpen(true)
-                                  }}>
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(nest.id)}>
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
+                      .map((nest) => {
+                        const nestOfficers = getOfficersForNest(nest.id)
+                        const programName = programs.find(p => p.id === nest.program_id)?.name
+
+                        return (
+                          <Card key={nest.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                            <CardHeader className="pb-2">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <CardTitle className="text-lg">{nest.name}</CardTitle>
+                                  {programName && (
+                                    <Badge variant="outline" className="mt-1">{programName}</Badge>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                            <CardDescription>{nest.city}</CardDescription>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="space-y-2 text-sm">
-                              <p className="text-muted-foreground">{nest.address}</p>
-                              {nest.phone && <p>📞 {nest.phone}</p>}
-                              {nest.amenities && (
-                                <div className="flex flex-wrap gap-1 mt-2">
-                                  {nest.amenities.split(',').map((item: string, i: number) => (
-                                    <span key={i} className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80">
-                                      {item.trim()}
-                                    </span>
-                                  ))}
+                                {canManage && (
+                                  <div className="flex gap-1">
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                                      setSelectedNest(nest)
+                                      setOfficerFormData({ ...officerFormData, assignment_type: type as 'theatre' | 'nest' })
+                                      setOfficerDialogOpen(true)
+                                    }}>
+                                      <UserPlus className="h-4 w-4" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(nest)}>
+                                      <Edit className="h-4 w-4" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(nest.id)}>
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                              <CardDescription>{nest.city}</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-3 text-sm">
+                                <p className="text-muted-foreground">{nest.address}</p>
+                                {nest.phone && <p>📞 {nest.phone}</p>}
+
+                                {/* Officers Section */}
+                                <div className="border-t pt-3 mt-3">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Users className="h-4 w-4 text-muted-foreground" />
+                                    <span className="font-medium text-xs">Assigned Officers ({nestOfficers.length})</span>
+                                  </div>
+                                  {nestOfficers.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground">No officers assigned</p>
+                                  ) : (
+                                    <div className="space-y-2">
+                                      {nestOfficers.map(assignment => (
+                                        <div key={assignment.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
+                                          <div className="flex items-center gap-2">
+                                            <Avatar className="h-6 w-6">
+                                              <AvatarFallback className="text-xs">
+                                                {getInitials(assignment.user?.full_name || '')}
+                                              </AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                              <p className="text-xs font-medium">{assignment.user?.full_name}</p>
+                                              <p className="text-[10px] text-muted-foreground">{assignment.user?.oscar}</p>
+                                            </div>
+                                          </div>
+                                          {canManage && (
+                                            <div className="flex items-center gap-2">
+                                              <Switch
+                                                checked={assignment.is_active}
+                                                onCheckedChange={() => toggleOfficerActive(assignment)}
+                                                className="scale-75"
+                                              />
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6"
+                                                onClick={() => removeAssignment(assignment.id)}
+                                              >
+                                                <Trash2 className="h-3 w-3 text-destructive" />
+                                              </Button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )
+                      })}
                   </div>
                 )}
               </CardContent>
@@ -327,24 +513,54 @@ export default function NestsPage() {
         ))}
       </Tabs>
 
+      {/* Add/Edit Location Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editing ? 'Edit NOscar' : 'Add NOscar'}</DialogTitle>
+            <DialogTitle>{editing ? 'Edit NOscar Location' : 'Add NOscar Location'}</DialogTitle>
             <DialogDescription>
-              {editing ? 'Update NOscar information' : 'Add a new NOscar location'}
+              {editing ? 'Update location information' : 'Add a new NOscar location'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="name">Name *</Label>
+                <Input
+                  id="name"
+                  required
+                  placeholder="e.g., Transcorp Hilton"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="type">Type *</Label>
+                <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="nest">NOscar Nest (Hotel)</SelectItem>
+                    <SelectItem value="den">NOscar Theatre (Private)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <Label htmlFor="name">Name *</Label>
-              <Input
-                id="name"
-                required
-                placeholder="e.g., Transcorp Hilton"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
+              <Label htmlFor="program_id">Program</Label>
+              <Select value={formData.program_id} onValueChange={(value) => setFormData({ ...formData, program_id: value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a program (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No Program</SelectItem>
+                  {programs.map(program => (
+                    <SelectItem key={program.id} value={program.id}>{program.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -358,7 +574,6 @@ export default function NestsPage() {
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                 />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="city">City *</Label>
                 <Input
@@ -382,7 +597,6 @@ export default function NestsPage() {
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -393,13 +607,11 @@ export default function NestsPage() {
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 />
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="rating">Rating *</Label>
+                <Label htmlFor="rating">Rating</Label>
                 <Input
                   id="rating"
                   type="number"
-                  required
                   min="1"
                   max="5"
                   value={formData.rating}
@@ -409,22 +621,10 @@ export default function NestsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="type">Type</Label>
-              <select
-                id="type"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                value={formData.type}
-                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-              >
-                <option value="nest">NOscar Nest (Hotel)</option>
-                <option value="den">NOscar Theatre (Private)</option>
-              </select>
-            </div>
-            <div className="space-y-2">
               <Label htmlFor="amenities">Amenities (comma separated)</Label>
               <Textarea
                 id="amenities"
-                placeholder="e.g., Pool, Gym, Spa, Restaurant, Conference rooms..."
+                placeholder="e.g., Pool, Gym, Spa, Restaurant..."
                 value={formData.amenities}
                 onChange={(e) => setFormData({ ...formData, amenities: e.target.value })}
               />
@@ -435,7 +635,49 @@ export default function NestsPage() {
                 Cancel
               </Button>
               <Button type="submit">
-                {editing ? 'Update' : 'Add'} Hotel
+                {editing ? 'Update' : 'Add'} Location
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign Officer Dialog */}
+      <Dialog open={officerDialogOpen} onOpenChange={setOfficerDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign Officer to {selectedNest?.name}</DialogTitle>
+            <DialogDescription>
+              Select an officer to assign to this {selectedNest?.type === 'den' ? 'theatre' : 'nest'}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAssignOfficer} className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label>Select Officer</Label>
+              <Select value={officerFormData.user_id} onValueChange={(value) => setOfficerFormData({ ...officerFormData, user_id: value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose an officer" />
+                </SelectTrigger>
+                <SelectContent>
+                  {officers.map(officer => (
+                    <SelectItem key={officer.id} value={officer.id}>
+                      <div className="flex items-center gap-2">
+                        <span>{officer.full_name}</span>
+                        {officer.oscar && <span className="text-muted-foreground text-xs">({officer.oscar})</span>}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={() => setOfficerDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">
+                <UserCheck className="mr-2 h-4 w-4" />
+                Assign Officer
               </Button>
             </div>
           </form>
