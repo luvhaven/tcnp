@@ -115,7 +115,7 @@ export default function JourneyStatusTable() {
             const { data, error } = await supabase
                 .from('journeys')
                 .select('*')
-                .in('status', ['planned', 'in_progress'])
+                .in('status', ['planned', 'scheduled', 'arriving', 'at_nest', 'departing_nest', 'enroute_to_theatre', 'at_theatre', 'departing_theatre', 'active', 'planning', 'distress'])
                 .order('created_at', { ascending: false })
 
             if (error) {
@@ -149,12 +149,13 @@ export default function JourneyStatusTable() {
                     cheetah = cheetahData
                 }
 
-                // Fetch assigned DO
-                if (journey.assigned_duty_officer_id) {
+                // Fetch assigned DO (check both columns for backward compatibility)
+                const doId = journey.assigned_duty_officer_id || journey.assigned_do_id
+                if (doId) {
                     const { data: doData } = await supabase
                         .from('users')
                         .select('full_name, oscar')
-                        .eq('id', journey.assigned_duty_officer_id)
+                        .eq('id', doId)
                         .single()
                     assignedDO = doData
                 }
