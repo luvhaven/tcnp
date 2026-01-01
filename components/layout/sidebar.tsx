@@ -156,7 +156,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
       <div className="flex h-16 items-center border-b px-4 justify-between">
         <Link
           href="/dashboard"
-          className="flex items-center space-x-2 overflow-hidden"
+          className="flex items-center justify-start gap-2 overflow-hidden"
           onClick={isMobile ? onClose : undefined}
         >
           <div className="relative h-8 w-8 flex-shrink-0">
@@ -206,7 +206,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
               href={item.href}
               onClick={isMobile ? onClose : undefined}
               className={cn(
-                "flex items-center px-3 py-2 text-sm font-medium transition-all duration-200 border-l-4 space-x-3",
+                "flex items-center justify-start px-3 py-2 text-sm font-medium transition-all duration-200 border-l-4 gap-3",
                 isActive
                   ? "text-primary border-primary"
                   : "text-muted-foreground border-transparent hover:text-foreground hover:border-muted-foreground/30"
