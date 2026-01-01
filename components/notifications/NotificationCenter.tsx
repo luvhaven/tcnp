@@ -173,9 +173,9 @@ export default function NotificationCenter() {
 
     const markAsRead = async (notificationId: string) => {
         try {
-            const { error } = await supabase
-                .from('notifications')
-                .update({ is_read: true } as any)
+            const { error } = await (supabase
+                .from('notifications') as any)
+                .update({ is_read: true })
                 .eq('id', notificationId)
 
             if (error) throw error
@@ -193,9 +193,9 @@ export default function NotificationCenter() {
         if (!userId) return
 
         try {
-            const { error } = await supabase
-                .from('notifications')
-                .update({ is_read: true } as any)
+            const { error } = await (supabase
+                .from('notifications') as any)
+                .update({ is_read: true })
                 .eq('user_id', userId)
                 .eq('is_read', false)
 
