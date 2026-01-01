@@ -29,6 +29,7 @@ import {
   Route,
   Landmark,
   PlaneTakeoff,
+  Volume2,
 } from "lucide-react"
 
 const navigation = [
@@ -39,6 +40,7 @@ const navigation = [
   { name: "Journeys", href: "/journeys", icon: Route },
   { name: "Papas", href: "/papas", icon: Users },
   { name: "Cheetahs", href: "/cheetahs", icon: Car },
+  { name: "Echo", href: "/echo", icon: Volume2 },
   { name: "Eagle Operations", href: "/eagles", icon: Plane },
   { name: "Live Tracking", href: "/tracking/live", icon: MapPin },
   { name: "Flight Tracking", href: "/flight-tracking", icon: PlaneTakeoff },
@@ -122,15 +124,25 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   }, [supabase, currentUser])
 
   const isDeltaOscar = (userRole === 'delta_oscar') || (userOscar === 'delta_oscar')
+  const isEchoOscar = (userRole === 'echo_oscar') || (userRole === 'head_echo_oscar')
 
   const visibleNavigation = useMemo(
-    () =>
-      isDeltaOscar
-        ? navigation.filter((item) =>
+    () => {
+      if (isDeltaOscar) {
+        return navigation.filter((item) =>
           item.href === '/dashboard' || item.href === '/my-operations' || item.href === '/chat' || item.href === '/flight-tracking'
         )
-        : navigation,
-    [isDeltaOscar]
+      }
+
+      if (isEchoOscar) {
+        return navigation.filter((item) =>
+          item.href === '/dashboard' || item.href === '/echo' || item.href === '/chat' || item.href === '/programs'
+        )
+      }
+
+      return navigation
+    },
+    [isDeltaOscar, isEchoOscar]
   )
 
   return (
