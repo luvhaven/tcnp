@@ -87,19 +87,10 @@ export default function InstallButton() {
     }
   }
 
-  // If app is already installed/running in standalone
+  // If app is already installed/running in standalone, simply don't show the button.
+  // The user complained about it "re-opening" the app, which implies they don't want to see it when inside the app.
   if (isInstalled) {
-    return (
-      <Button
-        variant="ghost"
-        size="sm"
-        className="hidden md:flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border border-emerald-500/20"
-        onClick={() => window.location.reload()} // "Refresh" as a dummy action, or router push
-      >
-        <CheckCircle className="h-4 w-4" />
-        Open App
-      </Button>
-    )
+    return null
   }
 
   // If banner is explicitly hidden or not relevant (though we allow manual click via header button)

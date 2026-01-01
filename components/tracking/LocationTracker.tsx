@@ -21,6 +21,23 @@ export function LocationTracker() {
   const [permissionRequested, setPermissionRequested] = useState(false)
   const watchIdRef = useRef<number | null>(null)
   const mountedRef = useRef(true)
+  const lastPositionRef = useRef<{ latitude: number; longitude: number; timestamp: number } | null>(null)
+
+  // Helper to calculate distance in meters
+  const getDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3 // metres
+    const φ1 = lat1 * Math.PI / 180
+    const φ2 = lat2 * Math.PI / 180
+    const Δφ = (lat2 - lat1) * Math.PI / 180
+    const Δλ = (lon2 - lon1) * Math.PI / 180
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) *
+      Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+
+    return R * c
+  }
 
   // Detect iOS on mount
   useEffect(() => {
@@ -133,6 +150,31 @@ export function LocationTracker() {
               } catch (e) { }
             }
 
+            // Calculate speed if missing
+            let speed = position.coords.speed
+            const currentTimestamp = position.timestamp || Date.now()
+
+            if (speed === null && lastPositionRef.current) {
+              const dist = getDistanceMeters(
+                lastPositionRef.current.latitude,
+                lastPositionRef.current.longitude,
+                position.coords.latitude,
+                position.coords.longitude
+              )
+              const timeDiff = (currentTimestamp - lastPositionRef.current.timestamp) / 1000 // seconds
+
+              if (timeDiff > 0) {
+                speed = dist / timeDiff
+              }
+            }
+
+            // Update last position for next calculation
+            lastPositionRef.current = {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              timestamp: currentTimestamp
+            }
+
             const { error } = await (supabase as any).rpc('upsert_user_location', {
               p_user_id: user.id,
               p_latitude: position.coords.latitude,
@@ -140,7 +182,7 @@ export function LocationTracker() {
               p_accuracy: position.coords.accuracy,
               p_altitude: position.coords.altitude ?? null,
               p_heading: position.coords.heading ?? null,
-              p_speed: position.coords.speed ?? null,
+              p_speed: speed ?? 0, // Default to 0 instead of null to avoid N/A
               p_battery_level: currentBattery
             })
 

@@ -238,7 +238,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
         <div className="border-t p-4 animate-fade-in">
           <div className="text-xs text-muted-foreground">
             <p>Version 1.0.0</p>
-            <p className="mt-1">© 2025 TCNP</p>
+            <p className="mt-1">© {new Date().getFullYear()} TCNP</p>
           </div>
         </div>
       )}
