@@ -196,7 +196,7 @@ export default function InstallPage() {
                         <p className="font-semibold mb-2">Instructions:</p>
                         <ul className="list-disc pl-4 space-y-1 text-muted-foreground">
                             <li>Chrome/Edge: Click the <Download className="h-3 w-3 inline" /> icon in the address bar.</li>
-                            <li>Safari: Right-click tab > Pin Tab (for quick access).</li>
+                            <li>Safari: Right-click tab &gt; Pin Tab (for quick access).</li>
                             <li>Mobile: Use the browser menu to "Add to Home Screen".</li>
                         </ul>
                     </div>
