@@ -26,10 +26,37 @@ export function LocationTracker() {
   const mountedRef = useRef(true)
   const lastPositionRef = useRef<{ latitude: number; longitude: number; timestamp: number } | null>(null)
 
-  // Audio Alert System
+  // Audio Alert System & Admin Notification
   const audioContextRef = useRef<AudioContext | null>(null)
 
+  const sendAdminAlert = async (type: 'LOCATION_LOSS' | 'BATTERY_CRITICAL') => {
+    try {
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      // Generic notification insert - triggers realtime for admins subscribed to notifications
+      // Adjust title/message as per app standard
+      await supabase.from('notifications').insert({
+        user_id: user.id, // Who caused it
+        title: type === 'LOCATION_LOSS' ? 'SOS: Location Offline' : 'Battery Critical',
+        message: type === 'LOCATION_LOSS'
+          ? `User ${user.email} location stopped updating.`
+          : `User device battery is critical.`,
+        type: 'alert',
+        read: false
+      })
+    } catch (e) {
+      console.warn('Failed to send admin alert', e)
+    }
+  }
+
   const playAlert = (type: 'location_lost' | 'network_lost') => {
+    // If location is lost, also notifying admin (throttled logic implied or just direct)
+    if (type === 'location_lost') {
+      sendAdminAlert('LOCATION_LOSS')
+    }
     try {
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()

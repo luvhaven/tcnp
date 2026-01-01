@@ -206,7 +206,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
               href={item.href}
               onClick={isMobile ? onClose : undefined}
               className={cn(
-                "flex items-center justify-start px-3 py-2 text-sm font-medium transition-all duration-200 border-l-4 gap-3",
+                "flex items-center justify-start px-3 py-2 text-sm font-medium transition-all duration-200 border-l-[3px] gap-3",
                 isActive
                   ? "text-primary border-primary"
                   : "text-muted-foreground border-transparent hover:text-foreground hover:border-muted-foreground/30"

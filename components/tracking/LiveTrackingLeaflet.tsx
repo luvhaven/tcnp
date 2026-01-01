@@ -111,6 +111,17 @@ export default function LiveTrackingLeaflet({ center, locations, getUserStatus, 
       preferCanvas: true,
     })
 
+    // Inject styles for red pulse
+    const style = document.createElement('style')
+    style.innerHTML = `
+      @keyframes pulse-red {
+        0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+      }
+    `
+    document.head.appendChild(style)
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors',
       maxZoom: 19,
@@ -169,15 +180,44 @@ export default function LiveTrackingLeaflet({ center, locations, getUserStatus, 
     locations.forEach((location) => {
       const position: L.LatLngExpression = [location.latitude, location.longitude]
       const status = getUserStatus(location.updated_at)
+
+      // Check if stale logic matches the getUserStatus or is independent
+      // We'll define "Stale" as > 5 minutes for the red blinking effect independently of the text status
+      const minutesSinceUpdate = (new Date().getTime() - new Date(location.updated_at).getTime()) / 60000
+      const isStale = minutesSinceUpdate > 5
+
       const roleDisplay = getRoleDisplay(location.role)
       const popupContent = buildPopupContent(location, status, roleDisplay)
+
+      // Custom icon logic
+      let icon = new L.Icon.Default()
+      if (isStale) {
+        // Create a blinking red marker using DivIcon for CSS animation or a colored filter
+        // We will use a DivIcon with a custom HTML to ensure it looks good without external images
+        icon = L.divIcon({
+          className: 'custom-div-icon',
+          html: `<div style="
+            background-color: #ef4444;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.4);
+            animation: pulse-red 1.5s infinite;
+            "></div>`,
+          iconSize: [12, 12],
+          iconAnchor: [6, 6],
+          popupAnchor: [0, -6]
+        }) as any
+      }
 
       if (markers[location.user_id]) {
         const marker = markers[location.user_id]
         marker.setLatLng(position)
         marker.setPopupContent(popupContent)
+        marker.setIcon(icon) // Update icon if status changes
       } else {
-        const marker = L.marker(position)
+        const marker = L.marker(position, { icon })
           .addTo(map)
           .bindPopup(popupContent)
 
