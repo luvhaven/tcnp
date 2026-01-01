@@ -1238,8 +1238,8 @@ export default function ChatSystem({
                 key={message.id}
                 id={`msg-${message.id}`}
                 className={`flex items-end gap-3 animate-in slide-in-from-bottom-2 duration-300 group ${isOwn ? 'flex-row-reverse' : ''} ${highlightedMessageId === message.id
-                    ? 'ring-2 ring-offset-4 ring-primary bg-primary/5 rounded-lg p-2 transition-all duration-500'
-                    : ''
+                  ? 'ring-2 ring-offset-4 ring-primary bg-primary/5 rounded-lg p-2 transition-all duration-500'
+                  : ''
                   }`}
               >
                 <Avatar className="h-9 w-9 border-2 border-background shadow-sm">
@@ -1318,62 +1318,68 @@ export default function ChatSystem({
 
       {/* User List Overlay */}
       {showUserList && (
-        <div className="absolute bottom-24 right-6 w-80 bg-background border rounded-xl shadow-2xl overflow-hidden z-50 animate-in slide-in-from-bottom-4 duration-200">
-          <div className="bg-muted/50 px-4 py-3 border-b">
-            <h3 className="text-sm font-semibold">Active Users</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {users.filter(u => u.is_online).length} online • {users.length} total
-            </p>
-          </div>
-          <div className="max-h-80 overflow-y-auto">
-            {users
-              .sort((a, b) => (b.is_online ? 1 : 0) - (a.is_online ? 1 : 0))
-              .map((user) => (
-                <div
-                  key={user.id}
-                  className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors border-b last:border-b-0"
-                >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="relative">
-                      <Avatar className="h-10 w-10 border-2 border-background">
-                        <AvatarFallback className="text-xs font-semibold">
-                          {getInitials(user.full_name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${user.is_online ? 'bg-green-500' : 'bg-gray-400'
-                        }`} />
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setShowUserList(false)}
+          />
+          <div className="absolute bottom-24 right-6 w-80 bg-background border rounded-xl shadow-2xl overflow-hidden z-50 animate-in slide-in-from-bottom-4 duration-200">
+            <div className="bg-muted/50 px-4 py-3 border-b">
+              <h3 className="text-sm font-semibold">Active Users</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {users.filter(u => u.is_online).length} online • {users.length} total
+              </p>
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              {users
+                .sort((a, b) => (b.is_online ? 1 : 0) - (a.is_online ? 1 : 0))
+                .map((user) => (
+                  <div
+                    key={user.id}
+                    className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors border-b last:border-b-0"
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="relative">
+                        <Avatar className="h-10 w-10 border-2 border-background">
+                          <AvatarFallback className="text-xs font-semibold">
+                            {getInitials(user.full_name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${user.is_online ? 'bg-green-500' : 'bg-gray-400'
+                          }`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{user.full_name}</p>
+                        <span className="text-xs text-muted-foreground">
+                          {user.is_online ? 'Online' : 'Offline'}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{user.full_name}</p>
-                      <span className="text-xs text-muted-foreground">
-                        {user.is_online ? 'Online' : 'Offline'}
-                      </span>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={() => handleMention(user.id)}
+                        title="Mention publicly"
+                      >
+                        <AtSign className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={() => handleDoubleMention(user.id)}
+                        title="Send private message"
+                      >
+                        <Lock className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() => handleMention(user.id)}
-                      title="Mention publicly"
-                    >
-                      <AtSign className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() => handleDoubleMention(user.id)}
-                      title="Send private message"
-                    >
-                      <Lock className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                ))}
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Input */}
