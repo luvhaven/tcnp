@@ -550,12 +550,15 @@ export default function NestsPage() {
 
             <div className="space-y-2">
               <Label htmlFor="program_id">Program</Label>
-              <Select value={formData.program_id} onValueChange={(value) => setFormData({ ...formData, program_id: value })}>
+              <Select
+                value={formData.program_id || 'unassigned'}
+                onValueChange={(value) => setFormData({ ...formData, program_id: value === 'unassigned' ? '' : value })}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a program (optional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No Program</SelectItem>
+                  <SelectItem value="unassigned">No Program</SelectItem>
                   {programs.map(program => (
                     <SelectItem key={program.id} value={program.id}>{program.name}</SelectItem>
                   ))}

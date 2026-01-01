@@ -913,73 +913,77 @@ export default function OfficersPage() {
               <div className="space-y-2">
                 <Label htmlFor="title">Official Title *</Label>
                 <Select
-                  id="title"
                   required
-                  value={titleFormData.title_id}
-                  onChange={(e) => setTitleFormData({ ...titleFormData, title_id: e.target.value })}
+                  value={titleFormData.title_id || 'unassigned'}
+                  onValueChange={(value) => setTitleFormData({ ...titleFormData, title_id: value === 'unassigned' ? '' : value })}
                 >
-                  <option value="">Select a title...</option>
-                  <optgroup label="Fixed Leadership">
+                  <SelectTrigger id="title">
+                    <SelectValue placeholder="Select a title..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">Select a title...</SelectItem>
+
+                    {/* Fixed Leadership */}
                     {getTitleByUnit('leadership').filter(t => t.is_fixed).map((title) => (
-                      <option key={title.id} value={title.id}>
+                      <SelectItem key={title.id} value={title.id}>
                         {title.name} {title.is_team_lead && '(Team Lead)'}
-                      </option>
+                      </SelectItem>
                     ))}
-                  </optgroup>
-                  <optgroup label="Leadership">
+
+                    {/* Leadership */}
                     {getTitleByUnit('leadership').filter(t => !t.is_fixed).map((title) => (
-                      <option key={title.id} value={title.id}>
+                      <SelectItem key={title.id} value={title.id}>
                         {title.name} {title.max_positions > 1 && `(${title.max_positions} positions)`}
-                      </option>
+                      </SelectItem>
                     ))}
-                  </optgroup>
-                  <optgroup label="Command">
+
+                    {/* Command */}
                     {getTitleByUnit('command').map((title) => (
-                      <option key={title.id} value={title.id}>
+                      <SelectItem key={title.id} value={title.id}>
                         {title.name}
-                      </option>
+                      </SelectItem>
                     ))}
-                  </optgroup>
-                  <optgroup label="Oscar Units">
+
+                    {/* Oscar Units */}
                     {getTitleByUnit('oscar').map((title) => (
-                      <option key={title.id} value={title.id}>
+                      <SelectItem key={title.id} value={title.id}>
                         {title.name} {title.is_team_lead && '⭐'}
-                      </option>
+                      </SelectItem>
                     ))}
-                  </optgroup>
+                  </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="program">Program</Label>
                 <Select
-                  id="program"
-                  value={titleFormData.program_id}
-                  onChange={(e) => setTitleFormData({ ...titleFormData, program_id: e.target.value })}
+                  value={titleFormData.program_id || 'unassigned'}
+                  onValueChange={(value) => setTitleFormData({ ...titleFormData, program_id: value === 'unassigned' ? '' : value })}
                 >
-                  <option value="">No specific program</option>
-                  {programs.length > 0 && (
-                    <>
-                      <optgroup label="Active Programs">
+                  <SelectTrigger id="program">
+                    <SelectValue placeholder="No specific program" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">No specific program</SelectItem>
+                    {programs.length > 0 && (
+                      <>
                         {programs
                           .filter((program) => program.status === 'active')
                           .map((program) => (
-                            <option key={program.id} value={program.id}>
-                              {program.name}
-                            </option>
+                            <SelectItem key={program.id} value={program.id}>
+                              [Active] {program.name}
+                            </SelectItem>
                           ))}
-                      </optgroup>
-                      <optgroup label="Planning / Upcoming">
                         {programs
                           .filter((program) => program.status === 'planning')
                           .map((program) => (
-                            <option key={program.id} value={program.id}>
-                              {program.name}
-                            </option>
+                            <SelectItem key={program.id} value={program.id}>
+                              [Planning] {program.name}
+                            </SelectItem>
                           ))}
-                      </optgroup>
-                    </>
-                  )}
+                      </>
+                    )}
+                  </SelectContent>
                 </Select>
               </div>
 
@@ -1030,53 +1034,72 @@ export default function OfficersPage() {
                   onChange={(e) => setAssignSearch(e.target.value)}
                   className="text-sm"
                 />
+                <Input
+                  id="officer_search"
+                  placeholder="Filter by name, email, OSCAR or role"
+                  value={assignSearch}
+                  onChange={(e) => setAssignSearch(e.target.value)}
+                  className="text-sm mb-2"
+                />
                 <Select
-                  id="officer"
                   required
-                  value={assignForm.officer_id}
-                  onChange={(e) => setAssignForm({ ...assignForm, officer_id: e.target.value })}
+                  value={assignForm.officer_id || 'unassigned'}
+                  onValueChange={(value) => setAssignForm({ ...assignForm, officer_id: value === 'unassigned' ? '' : value })}
                 >
-                  <option value="">Select an officer...</option>
-                  {filteredOfficersForAssign.map((officer) => (
-                    <option key={officer.id} value={officer.id}>
-                      {officer.full_name || officer.email}
-                      {officer.oscar ? ` • ${officer.oscar}` : ""}
-                      {officer.is_active ? "" : " • (inactive)"}
-                    </option>
-                  ))}
+                  <SelectTrigger id="officer">
+                    <SelectValue placeholder="Select an officer..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">Select an officer...</SelectItem>
+                    {filteredOfficersForAssign.map((officer) => (
+                      <SelectItem key={officer.id} value={officer.id}>
+                        {officer.full_name || officer.email}
+                        {officer.oscar ? ` • ${officer.oscar}` : ""}
+                        {officer.is_active ? "" : " • (inactive)"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="assign_title">Official Title *</Label>
                 <Select
-                  id="assign_title"
                   required
-                  value={assignForm.title_id}
-                  onChange={(e) => setAssignForm({ ...assignForm, title_id: e.target.value })}
+                  value={assignForm.title_id || 'unassigned'}
+                  onValueChange={(value) => setAssignForm({ ...assignForm, title_id: value === 'unassigned' ? '' : value })}
                 >
-                  <option value="">Select a title...</option>
-                  {titles.map((title) => (
-                    <option key={title.id} value={title.id}>
-                      {title.name}
-                    </option>
-                  ))}
+                  <SelectTrigger id="assign_title">
+                    <SelectValue placeholder="Select a title..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">Select a title...</SelectItem>
+                    {titles.map((title) => (
+                      <SelectItem key={title.id} value={title.id}>
+                        {title.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="assign_program">Program</Label>
                 <Select
-                  id="assign_program"
-                  value={assignForm.program_id}
-                  onChange={(e) => setAssignForm({ ...assignForm, program_id: e.target.value })}
+                  value={assignForm.program_id || 'unassigned'}
+                  onValueChange={(value) => setAssignForm({ ...assignForm, program_id: value === 'unassigned' ? '' : value })}
                 >
-                  <option value="">No specific program</option>
-                  {programs.map((program) => (
-                    <option key={program.id} value={program.id}>
-                      {program.name}
-                    </option>
-                  ))}
+                  <SelectTrigger id="assign_program">
+                    <SelectValue placeholder="No specific program" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">No specific program</SelectItem>
+                    {programs.map((program) => (
+                      <SelectItem key={program.id} value={program.id}>
+                        {program.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
 

@@ -67,6 +67,31 @@ export function LocationTracker() {
     }
   }, [])
 
+  // Battery tracking state
+  const [batteryLevel, setBatteryLevel] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && 'getBattery' in navigator) {
+      try {
+        // @ts-ignore - BatteryManager is not standard
+        navigator.getBattery().then((battery: any) => {
+          const updateBattery = () => {
+            setBatteryLevel(Math.round(battery.level * 100))
+          }
+
+          updateBattery()
+          battery.addEventListener('levelchange', updateBattery)
+
+          return () => {
+            battery.removeEventListener('levelchange', updateBattery)
+          }
+        })
+      } catch (e) {
+        console.warn('Battery status not supported')
+      }
+    }
+  }, [])
+
   // Start tracking with permission request
   useEffect(() => {
     if (!isReady || permissionRequested) return
@@ -96,6 +121,18 @@ export function LocationTracker() {
           if (!mountedRef.current) return
 
           try {
+            // Get latest battery level directly if possible, or use state
+            let currentBattery = batteryLevel
+
+            if (currentBattery === null && 'getBattery' in navigator) {
+              try {
+                // @ts-ignore
+                const batt = await navigator.getBattery()
+                currentBattery = Math.round(batt.level * 100)
+                setBatteryLevel(currentBattery)
+              } catch (e) { }
+            }
+
             const { error } = await (supabase as any).rpc('upsert_user_location', {
               p_user_id: user.id,
               p_latitude: position.coords.latitude,
@@ -104,7 +141,7 @@ export function LocationTracker() {
               p_altitude: position.coords.altitude ?? null,
               p_heading: position.coords.heading ?? null,
               p_speed: position.coords.speed ?? null,
-              p_battery_level: null
+              p_battery_level: currentBattery
             })
 
             if (error) {
@@ -116,6 +153,9 @@ export function LocationTracker() {
             console.warn('📍 Location DB update failed (non-fatal):', e)
           }
         }
+
+        // ... (rest of tracking logic)
+
 
         // Request permission by getting current position first
         // This triggers the browser's permission dialog
