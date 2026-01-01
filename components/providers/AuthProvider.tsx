@@ -25,13 +25,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     // Session was refreshed successfully
                     console.log('Session refreshed successfully')
                 } else if (event === 'SIGNED_IN') {
-                    // User signed in - avoid router.refresh() which causes iOS errors
+                    // User signed in - only redirect if on an auth page
+                    // This prevents unwanted redirects when session is restored on page load
                     isAuthenticating.current = true
                     console.log('User signed in successfully')
 
-                    // Only refresh if not on dashboard already
-                    if (!pathname?.startsWith('/dashboard')) {
-                        // Use replace instead of refresh for better iOS compatibility
+                    // Only redirect if coming from login or signup page
+                    // Do NOT redirect if user is already on a dashboard sub-page
+                    const isOnAuthPage = pathname?.startsWith('/login') || pathname?.startsWith('/signup')
+                    if (isOnAuthPage) {
                         setTimeout(() => {
                             router.replace('/dashboard')
                             isAuthenticating.current = false
