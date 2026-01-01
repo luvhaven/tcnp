@@ -206,15 +206,14 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
               href={item.href}
               onClick={isMobile ? onClose : undefined}
               className={cn(
-                "flex items-center px-3 py-2 text-sm font-medium transition-all duration-200 border-l-4",
-                collapsed ? "justify-center" : "space-x-3",
+                "flex items-center px-3 py-2 text-sm font-medium transition-all duration-200 border-l-4 space-x-3",
                 isActive
                   ? "text-primary border-primary"
                   : "text-muted-foreground border-transparent hover:text-foreground hover:border-muted-foreground/30"
               )}
               title={collapsed ? item.name : undefined}
             >
-              <item.icon className={cn("h-5 w-5 flex-shrink-0", collapsed && "mx-auto")} />
+              <item.icon className="h-5 w-5 flex-shrink-0" />
               <span className={cn(
                 "flex items-center justify-between w-full transition-all duration-300 overflow-hidden whitespace-nowrap",
                 collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
