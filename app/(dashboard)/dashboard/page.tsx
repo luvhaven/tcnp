@@ -109,19 +109,6 @@ export default function DashboardPage() {
       setIsInstalled(true)
     }
 
-    // Only register the service worker in production builds to avoid
-    // interfering with local development and Next.js chunk loading.
-    // Wrapped in try-catch for iOS Safari compatibility
-    if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
-      try {
-        navigator.serviceWorker.register("/sw.js").catch((error) => {
-          console.warn("Service worker registration failed:", error)
-        })
-      } catch (error) {
-        console.warn("Service worker not supported:", error)
-      }
-    }
-
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstall)
       window.removeEventListener("appinstalled", handleAppInstalled)

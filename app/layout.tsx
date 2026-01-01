@@ -4,8 +4,6 @@ import "./globals.css";
 import "leaflet/dist/leaflet.css";
 import { SafeProviders } from "@/components/providers/SafeProviders";
 
-import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
-
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
@@ -36,7 +34,6 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <SafeProviders>
-          <ServiceWorkerRegister />
           {children}
         </SafeProviders>
       </body>

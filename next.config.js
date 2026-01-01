@@ -50,4 +50,17 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+const withPWA = require("@ducanh2912/next-pwa").default({
+  dest: "public",
+  disable: process.env.NODE_ENV === "development",
+  register: true,
+  scope: "/",
+  sw: "sw.js",
+  // iOS specific settings
+  extendDefaultHandler: false,
+  workboxOptions: {
+    disableDevLogs: true,
+  }
+});
+
+module.exports = withPWA(nextConfig);
