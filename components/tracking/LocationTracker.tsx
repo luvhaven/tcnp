@@ -243,38 +243,54 @@ export function LocationTracker() {
     }
   }, [])
 
+  // Permissions API Listener for robustness
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && 'permissions' in navigator) {
+      navigator.permissions.query({ name: 'geolocation' }).then((permissionStatus) => {
+
+        const handleChange = () => {
+          console.log('📍 Permission status changed to:', permissionStatus.state)
+          if (permissionStatus.state === 'granted') {
+            // Force a restart of tracking if it was lost
+            setPermissionRequested(false) // This will trigger the main effect again
+          } else if (permissionStatus.state === 'denied') {
+            setIsTracking(false)
+            playAlert('location_lost')
+          }
+        }
+
+        permissionStatus.addEventListener('change', handleChange)
+        return () => permissionStatus.removeEventListener('change', handleChange)
+      })
+    }
+  }, [])
+
   // Start tracking with permission request
   useEffect(() => {
-    if (!isReady || permissionRequested) return
+    if (!isReady) return
 
     const startTracking = async () => {
+      if (isTracking && permissionRequested) return
+
       setPermissionRequested(true)
 
       try {
-        // Check if geolocation is available
         if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
           console.log('📍 Geolocation not available on this device')
           return
         }
 
-        // Import Supabase only when needed
         const { createClient } = await import('@/lib/supabase/client')
         const supabase = createClient()
-
         const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
-          console.log('📍 No authenticated user, skipping location tracking')
-          return
-        }
+        if (!user) return
 
         // Function to update location in database
         const updateLocation = async (position: GeolocationPosition) => {
           if (!mountedRef.current) return
 
           try {
-            // Get latest battery level directly if possible, or use state
             let currentBattery = batteryLevel
-
             if (currentBattery === null && 'getBattery' in navigator) {
               try {
                 // @ts-ignore
@@ -284,7 +300,6 @@ export function LocationTracker() {
               } catch (e) { }
             }
 
-            // Calculate speed if missing
             let speed = position.coords.speed
             const currentTimestamp = position.timestamp || Date.now()
 
@@ -295,14 +310,13 @@ export function LocationTracker() {
                 position.coords.latitude,
                 position.coords.longitude
               )
-              const timeDiff = (currentTimestamp - lastPositionRef.current.timestamp) / 1000 // seconds
+              const timeDiff = (currentTimestamp - lastPositionRef.current.timestamp) / 1000
 
               if (timeDiff > 0) {
                 speed = dist / timeDiff
               }
             }
 
-            // Update last position for next calculation
             lastPositionRef.current = {
               latitude: position.coords.latitude,
               longitude: position.coords.longitude,
@@ -316,38 +330,32 @@ export function LocationTracker() {
               p_accuracy: position.coords.accuracy,
               p_altitude: position.coords.altitude ?? null,
               p_heading: position.coords.heading ?? null,
-              p_speed: speed ?? 0, // Default to 0 instead of null to avoid N/A
+              p_speed: speed ?? 0,
               p_battery_level: currentBattery
             })
 
-            if (error) {
-              console.warn('📍 Location update failed (non-fatal):', error.message)
-            } else {
-              console.log('📍 Location updated successfully')
-            }
+            if (error) console.warn('📍 Location update failed (non-fatal):', error.message)
           } catch (e) {
             console.warn('📍 Location DB update failed (non-fatal):', e)
           }
         }
 
-        // ... (rest of tracking logic)
-
-
-        // Request permission by getting current position first
-        // This triggers the browser's permission dialog
-        console.log('📍 Requesting location permission...')
+        console.log('📍 Requesting location permission (Native Trigger)...')
 
         try {
-          // Re-request logic: If we fail, we start an interval to retry
           const retryTracking = () => {
             console.log('📍 Retrying location request...')
-            playAlert('location_lost')
+            if (!isTracking) playAlert('location_lost')
+
             navigator.geolocation.getCurrentPosition(
               (pos) => {
                 setIsTracking(true)
                 updateLocation(pos)
               },
-              (err) => console.warn('Retry failed:', err),
+              (err) => {
+                console.warn('Retry failed:', err)
+                setTimeout(retryTracking, 10000)
+              },
               { enableHighAccuracy: true, timeout: 10000 }
             )
           }
@@ -356,11 +364,7 @@ export function LocationTracker() {
             navigator.geolocation.getCurrentPosition(
               resolve,
               reject,
-              {
-                enableHighAccuracy: true, // Always try high accuracy first
-                timeout: 15000,
-                maximumAge: 0
-              }
+              { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             )
           })
 
@@ -369,31 +373,30 @@ export function LocationTracker() {
           console.log('📍 Initial location obtained, starting continuous tracking')
           await updateLocation(position)
 
-          // Start continuous tracking
+          if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current)
+
           watchIdRef.current = navigator.geolocation.watchPosition(
             async (pos) => {
               if (mountedRef.current) {
-                setIsTracking(true)
+                if (!isTracking) {
+                  setIsTracking(true)
+                  console.log('📍 Tracking recovered via watch.')
+                }
                 await updateLocation(pos)
               }
             },
             (error) => {
               console.warn('📍 Watch position error:', error.message)
               setIsTracking(false)
-              playAlert('location_lost') // Alert!
+              sendAdminAlert('LOCATION_LOSS')
+              playAlert('location_lost')
 
-              // If permission denied or unavailable, try to prompt/recover
               if (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE) {
                 toast.error('Location Access Lost! Please check settings.')
-                // Retry every 10s if we lose it
-                setTimeout(retryTracking, 10000)
+                setTimeout(retryTracking, 5000)
               }
             },
-            {
-              enableHighAccuracy: true, // Force high accuracy for background resilience
-              timeout: 30000,
-              maximumAge: 0
-            }
+            { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
           )
 
           setIsTracking(true)
@@ -402,15 +405,28 @@ export function LocationTracker() {
           console.warn('📍 Initial Location Permission Failed:', error)
           playAlert('location_lost')
           toast.error('Location Permission Required')
+          setTimeout(() => {
+            const retryTrackingLoop = () => {
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  setIsTracking(true)
+                  updateLocation(pos)
+                  setPermissionRequested(false)
+                },
+                (err) => setTimeout(retryTrackingLoop, 5000),
+                { enableHighAccuracy: true }
+              )
+            }
+            retryTrackingLoop()
+          }, 2000)
         }
-
       } catch (error) {
         console.warn('📍 Location tracking setup failed:', error)
       }
     }
 
     startTracking()
-  }, [isReady, permissionRequested, isIOS])
+  }, [isReady, isIOS, permissionRequested])
 
   // Only show banner if tracking is active and not dismissed
   const showBanner = isTracking && !bannerDismissed
