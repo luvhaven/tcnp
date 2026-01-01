@@ -18,7 +18,8 @@ import {
   TrendingUp,
   Clock,
   CheckCircle,
-  XCircle
+  XCircle,
+  Trash2
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
@@ -213,6 +214,22 @@ export default function DashboardPage() {
       console.error('Error loading dashboard:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleDeleteJourney = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!confirm('Are you sure you want to delete this journey?')) return
+
+    try {
+      const { error } = await supabase.from('journeys').delete().eq('id', id)
+      if (error) throw error
+
+      toast.success('Journey deleted')
+      loadDashboardData()
+    } catch (error) {
+      console.error('Error deleting journey:', error)
+      toast.error('Failed to delete journey')
     }
   }
 
@@ -527,6 +544,14 @@ export default function DashboardPage() {
                           ? formatDistanceToNow(createdDate!, { addSuffix: true })
                           : 'Just now'}
                       </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={(e) => handleDeleteJourney(journey.id, e)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                 );
