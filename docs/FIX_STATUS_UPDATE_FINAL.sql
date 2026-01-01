@@ -118,4 +118,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION update_journey_status TO authenticated;
 GRANT EXECUTE ON FUNCTION update_journey_status TO service_role;
 
-RAISE NOTICE 'SUCCESS: Status update logic fixed and history table rebuilt.';
+DO $$
+BEGIN
+  RAISE NOTICE 'SUCCESS: Status update logic fixed and history table rebuilt.';
+END $$;

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Bell } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { motion, AnimatePresence } from "framer-motion"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -59,8 +60,8 @@ export default function NotificationCenter() {
 
             if (error) throw error
 
-            setNotifications(data || [])
-            setUnreadCount(data?.filter(n => !n.is_read).length || 0)
+            setNotifications((data as unknown as Notification[]) || [])
+            setUnreadCount((data as unknown as Notification[])?.filter(n => !n.is_read).length || 0)
         } catch (error) {
             console.error('Error loading notifications:', error)
         }
@@ -174,7 +175,7 @@ export default function NotificationCenter() {
         try {
             const { error } = await supabase
                 .from('notifications')
-                .update({ is_read: true })
+                .update({ is_read: true } as any)
                 .eq('id', notificationId)
 
             if (error) throw error
@@ -194,7 +195,7 @@ export default function NotificationCenter() {
         try {
             const { error } = await supabase
                 .from('notifications')
-                .update({ is_read: true })
+                .update({ is_read: true } as any)
                 .eq('user_id', userId)
                 .eq('is_read', false)
 
@@ -252,34 +253,56 @@ export default function NotificationCenter() {
                     </div>
                 ) : (
                     <div className="max-h-[400px] overflow-y-auto">
-                        {notifications.map((notification) => (
-                            <DropdownMenuItem
-                                key={notification.id}
-                                className="flex flex-col items-start p-3 cursor-pointer"
-                                onClick={() => !notification.is_read && markAsRead(notification.id)}
-                            >
-                                <div className="flex items-start justify-between w-full gap-2">
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <p className={`font-medium text-sm ${getTypeColor(notification.type)}`}>
-                                                {notification.title}
-                                            </p>
-                                            {!notification.is_read && (
-                                                <span className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />
-                                            )}
+                        <AnimatePresence initial={false}>
+                            {notifications.map((notification) => (
+                                <motion.div
+                                    key={notification.id}
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                >
+                                    <DropdownMenuItem
+                                        className="flex flex-col items-start p-3 cursor-pointer focus:bg-accent/50"
+                                        onClick={(e) => {
+                                            if (!notification.is_read) {
+                                                e.preventDefault() // Keep menu open to see animation
+                                                markAsRead(notification.id)
+                                            }
+                                        }}
+                                    >
+                                        <div className="flex items-start justify-between w-full gap-2">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <p className={`font-medium text-sm transition-colors duration-300 ${getTypeColor(notification.type)}`}>
+                                                        {notification.title}
+                                                    </p>
+                                                    <AnimatePresence>
+                                                        {!notification.is_read && (
+                                                            <motion.span
+                                                                initial={{ scale: 0 }}
+                                                                animate={{ scale: 1 }}
+                                                                exit={{ scale: 0 }}
+                                                                transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                                                                className="h-2 w-2 rounded-full bg-primary flex-shrink-0"
+                                                            />
+                                                        )}
+                                                    </AnimatePresence>
+                                                </div>
+                                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                                    {notification.message}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground mt-1">
+                                                    {notification.created_at && !isNaN(new Date(notification.created_at).getTime())
+                                                        ? formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })
+                                                        : 'Just now'}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                                            {notification.message}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground mt-1">
-                                            {notification.created_at && !isNaN(new Date(notification.created_at).getTime())
-                                                ? formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })
-                                                : 'Just now'}
-                                        </p>
-                                    </div>
-                                </div>
-                            </DropdownMenuItem>
-                        ))}
+                                    </DropdownMenuItem>
+                                </motion.div>
+                            ))}
+                        </AnimatePresence>
                     </div>
                 )}
             </DropdownMenuContent>
