@@ -38,6 +38,12 @@ export default function InstallButton() {
     const isIosDevice = /iphone|ipad|ipod/.test(userAgent)
     setIsIOS(isIosDevice)
 
+    // On iOS, we can't rely on beforeinstallprompt, so we auto-show if not standalone
+    // We wait a moment to avoid flashing if checking standalone takes time
+    if (isIosDevice && !(window.navigator as any).standalone) {
+      setTimeout(() => setShowInstallBanner(true), 1000)
+    }
+
     // 3. Handle standard install prompt (Android/Desktop)
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault()
@@ -84,10 +90,15 @@ export default function InstallButton() {
   // If app is already installed/running in standalone
   if (isInstalled) {
     return (
-      <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 text-sm font-medium">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="hidden md:flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border border-emerald-500/20"
+        onClick={() => window.location.reload()} // "Refresh" as a dummy action, or router push
+      >
         <CheckCircle className="h-4 w-4" />
         Open App
-      </div>
+      </Button>
     )
   }
 
