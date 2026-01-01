@@ -42,6 +42,38 @@ BEGIN
 END $$;
 
 -- ============================================================================
+-- STEP 1.5: ENSURE HISTORY TABLE EXISTS (REQUIRED FOR update_journey_status)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS journey_status_updates (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  journey_id UUID NOT NULL REFERENCES journeys(id) ON DELETE CASCADE,
+  status VARCHAR(50) NOT NULL,
+  updated_by UUID REFERENCES auth.users(id),
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_journey_status_updates_journey_id ON journey_status_updates(journey_id);
+CREATE INDEX IF NOT EXISTS idx_journey_status_updates_created_at ON journey_status_updates(created_at);
+
+-- RLS for history table
+ALTER TABLE journey_status_updates ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Authenticated users can view status updates" ON journey_status_updates;
+DROP POLICY IF EXISTS "Authenticated users can insert status updates" ON journey_status_updates;
+
+CREATE POLICY "Authenticated users can view status updates"
+  ON journey_status_updates FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Authenticated users can insert status updates"
+  ON journey_status_updates FOR INSERT TO authenticated WITH CHECK (true);
+
+GRANT ALL ON journey_status_updates TO authenticated;
+GRANT ALL ON journey_status_updates TO service_role;
+
+-- ============================================================================
 -- STEP 2: UPDATE update_journey_status (USED BY MY OPERATIONS PAGE)
 -- ============================================================================
 
