@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useIsClient } from '@/hooks/useIsClient'
+import { toast } from 'sonner'
 
 /**
  * iOS-Safe LocationTracker Component with Permission Requests
@@ -11,6 +12,8 @@ import { useIsClient } from '@/hooks/useIsClient'
  * 2. Actively requests permission (like other devices)
  * 3. Wraps ALL operations in try-catch to prevent crashes
  * 4. Uses low accuracy on iOS to improve reliability
+ * 5. Uses WakeLock API to keep screen alive
+ * 6. Uses AudioContext for alerts (Network/Location loss)
  */
 export function LocationTracker() {
   const isClient = useIsClient()
@@ -22,6 +25,110 @@ export function LocationTracker() {
   const watchIdRef = useRef<number | null>(null)
   const mountedRef = useRef(true)
   const lastPositionRef = useRef<{ latitude: number; longitude: number; timestamp: number } | null>(null)
+
+  // Audio Alert System
+  const audioContextRef = useRef<AudioContext | null>(null)
+
+  const playAlert = (type: 'location_lost' | 'network_lost') => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+      }
+
+      const ctx = audioContextRef.current
+      if (ctx.state === 'suspended') ctx.resume()
+
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+
+      if (type === 'location_lost') {
+        // High-pitch urgent alarm (beep-beep-beep)
+        osc.type = 'square'
+        osc.frequency.setValueAtTime(880, ctx.currentTime) // A5
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1)
+        osc.frequency.setValueAtTime(0, ctx.currentTime + 0.15) // Silence
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.25)
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.35)
+
+        gain.gain.setValueAtTime(0.5, ctx.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5)
+
+        osc.start()
+        osc.stop(ctx.currentTime + 0.6)
+
+        // Vibrate: SOS pattern
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 100])
+      } else {
+        // Network lost: Descending warning
+        osc.type = 'sawtooth'
+        osc.frequency.setValueAtTime(440, ctx.currentTime)
+        osc.frequency.linearRampToValueAtTime(220, ctx.currentTime + 0.5)
+
+        gain.gain.setValueAtTime(0.3, ctx.currentTime)
+        gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.5)
+
+        osc.start()
+        osc.stop(ctx.currentTime + 0.5)
+
+        // Vibrate: Long buzz
+        if (navigator.vibrate) navigator.vibrate([500])
+      }
+    } catch (e) {
+      console.warn('Audio/Vibration failed (user interaction required first)')
+    }
+  }
+
+  // Network Monitoring
+  useEffect(() => {
+    const handleOffline = () => {
+      console.warn('⚠️ Network connection lost')
+      toast.error('Network lost. Tracking paused.')
+      playAlert('network_lost')
+    }
+    const handleOnline = () => {
+      console.log('✅ Network restored')
+      toast.success('Network restored. Resuming tracking.')
+    }
+
+    window.addEventListener('offline', handleOffline)
+    window.addEventListener('online', handleOnline)
+    return () => {
+      window.removeEventListener('offline', handleOffline)
+      window.removeEventListener('online', handleOnline)
+    }
+  }, [])
+
+  // Wake Lock API (Keep screen on)
+  useEffect(() => {
+    let wakeLock: any = null;
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+          console.log('💡 Screen Wake Lock active');
+        }
+      } catch (err: any) {
+        console.warn(`${err.name}, ${err.message}`);
+      }
+    };
+
+    // Request on mount and re-request if visibility changes (e.g. tab switch)
+    requestWakeLock();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLock) wakeLock.release();
+    };
+  }, []);
 
   // Helper to calculate distance in meters
   const getDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -204,12 +311,26 @@ export function LocationTracker() {
         console.log('📍 Requesting location permission...')
 
         try {
+          // Re-request logic: If we fail, we start an interval to retry
+          const retryTracking = () => {
+            console.log('📍 Retrying location request...')
+            playAlert('location_lost')
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                setIsTracking(true)
+                updateLocation(pos)
+              },
+              (err) => console.warn('Retry failed:', err),
+              { enableHighAccuracy: true, timeout: 10000 }
+            )
+          }
+
           const position = await new Promise<GeolocationPosition>((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(
               resolve,
               reject,
               {
-                enableHighAccuracy: !isIOS, // Low accuracy on iOS
+                enableHighAccuracy: true, // Always try high accuracy first
                 timeout: 15000,
                 maximumAge: 0
               }
@@ -230,38 +351,34 @@ export function LocationTracker() {
               }
             },
             (error) => {
-              // Don't crash on watch errors
-              console.warn('📍 Watch position error (non-fatal):', error.message)
-              if (error.code === error.PERMISSION_DENIED) {
-                setIsTracking(false)
+              console.warn('📍 Watch position error:', error.message)
+              setIsTracking(false)
+              playAlert('location_lost') // Alert!
+
+              // If permission denied or unavailable, try to prompt/recover
+              if (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE) {
+                toast.error('Location Access Lost! Please check settings.')
+                // Retry every 10s if we lose it
+                setTimeout(retryTracking, 10000)
               }
             },
             {
-              enableHighAccuracy: !isIOS,
+              enableHighAccuracy: true, // Force high accuracy for background resilience
               timeout: 30000,
-              maximumAge: 10000
+              maximumAge: 0
             }
           )
 
           setIsTracking(true)
-          console.log('📍 Location tracking active')
 
         } catch (error: any) {
-          // Handle permission denial and other errors gracefully
-          if (error?.code === 1) {
-            console.log('📍 Location permission denied by user')
-          } else if (error?.code === 2) {
-            console.log('📍 Location unavailable (device may have location disabled)')
-          } else if (error?.code === 3) {
-            console.log('📍 Location request timed out')
-          } else {
-            console.warn('📍 Location permission request failed (non-fatal):', error?.message || error)
-          }
-          // Never crash - just don't track
+          console.warn('📍 Initial Location Permission Failed:', error)
+          playAlert('location_lost')
+          toast.error('Location Permission Required')
         }
 
       } catch (error) {
-        console.warn('📍 Location tracking setup failed (non-fatal):', error)
+        console.warn('📍 Location tracking setup failed:', error)
       }
     }
 
