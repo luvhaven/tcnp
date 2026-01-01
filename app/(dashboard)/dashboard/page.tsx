@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { JourneyAlerts } from "@/components/dashboard/JourneyAlerts"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
@@ -181,11 +182,11 @@ export default function DashboardPage() {
 
   const loadDashboardData = async () => {
     try {
-      // Get stats
+      // Get stats - Querying simplfied status column + legacy call signs for safety until migration is 100%
       const [papasRes, cheetahsRes, journeysRes, incidentsRes] = await Promise.all([
         supabase.from('papas').select('id', { count: 'exact', head: true }),
         supabase.from('cheetahs').select('id', { count: 'exact', head: true }),
-        supabase.from('journeys').select('id', { count: 'exact', head: true }).in('status', ['planned', 'in_progress', 'first_course', 'chapman', 'dessert']),
+        supabase.from('journeys').select('id', { count: 'exact', head: true }).or('status.eq.active,status.eq.planned,status.eq.in_progress'),
         supabase.from('incidents').select('id', { count: 'exact', head: true }).eq('status', 'open'),
       ])
 
@@ -389,6 +390,9 @@ export default function DashboardPage() {
           </button>
         </div>
       )}
+
+      {/* Active Alerts */}
+      <JourneyAlerts />
 
       {/* Stats Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">

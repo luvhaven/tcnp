@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -113,6 +114,10 @@ export default function ChatSystem({
   initialMessage?: string;
 }) {
   const supabase = useMemo(() => createClient(), [])
+  const searchParams = useSearchParams()
+  const highlightId = searchParams?.get('highlight')
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
+
   const [messages, setMessages] = useState<Message[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -515,9 +520,9 @@ export default function ChatSystem({
           const { data: fullMessage, error } = await supabase
             .from('chat_messages')
             .select(`
-              *,
-              users:sender_id(full_name, oscar, role)
-            `)
+                      *,
+                      users:sender_id(full_name, oscar, role)
+                      `)
             .eq('id', raw.id)
             .single()
 
@@ -732,9 +737,26 @@ export default function ChatSystem({
     }
   }, [supabase, currentUser?.id, loadParticipants])
 
+  // NEW: Highlight Effect replaced generic scrollToBottom
   useEffect(() => {
-    scrollToBottom()
-  }, [messages])
+    if (highlightId && messages.some(m => m.id === highlightId)) {
+      setTimeout(() => {
+        const el = document.getElementById(`msg-${highlightId}`)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          setHighlightedMessageId(highlightId)
+
+          const timer = setTimeout(() => {
+            setHighlightedMessageId(null)
+          }, 2000)
+          return () => clearTimeout(timer)
+        }
+      }, 500)
+    } else {
+      scrollToBottom()
+    }
+  }, [messages, highlightId])
+
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -770,9 +792,9 @@ export default function ChatSystem({
       let query = supabase
         .from('chat_messages')
         .select(`
-          *,
-          users:sender_id(full_name, oscar, role)
-        `)
+                      *,
+                      users:sender_id(full_name, oscar, role)
+                      `)
         .is('deleted_at', null)
         .order('created_at', { ascending: true })
         .limit(100)
@@ -920,9 +942,9 @@ export default function ChatSystem({
           .from('chat_messages')
           .insert([payload])
           .select(`
-            *,
-            users:sender_id(full_name, oscar, role)
-          `)
+                      *,
+                      users:sender_id(full_name, oscar, role)
+                      `)
 
         if (error) {
           console.error('Supabase error details:', error)
@@ -1214,7 +1236,11 @@ export default function ChatSystem({
             return (
               <div
                 key={message.id}
-                className={`flex items-end gap-3 animate-in slide-in-from-bottom-2 duration-300 group ${isOwn ? 'flex-row-reverse' : ''}`}
+                id={`msg-${message.id}`}
+                className={`flex items-end gap-3 animate-in slide-in-from-bottom-2 duration-300 group ${isOwn ? 'flex-row-reverse' : ''} ${highlightedMessageId === message.id
+                    ? 'ring-2 ring-offset-4 ring-primary bg-primary/5 rounded-lg p-2 transition-all duration-500'
+                    : ''
+                  }`}
               >
                 <Avatar className="h-9 w-9 border-2 border-background shadow-sm">
                   <AvatarFallback className={`text-xs font-semibold ${isOwn ? 'bg-primary text-primary-foreground' : 'bg-muted'

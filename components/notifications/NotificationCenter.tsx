@@ -266,8 +266,26 @@ export default function NotificationCenter() {
                                         className="flex flex-col items-start p-3 cursor-pointer focus:bg-accent/50"
                                         onClick={(e) => {
                                             if (!notification.is_read) {
-                                                e.preventDefault() // Keep menu open to see animation
                                                 markAsRead(notification.id)
+                                            }
+
+                                            // Handling Chat Deep Link
+                                            if (notification.type === 'info' && notification.title.includes('New Message')) {
+                                                // Assuming we store related entity ID in a field? 
+                                                // Or simple heuristics: if it's a chat notification, try to find the ID.
+                                                // Since we don't have a clear 'entity_id' in the type defined in this file (Notification),
+                                                // we might need to rely on the backend payload structure having `journey_id` which might be hijacked for message id, 
+                                                // OR assume the user just wants to go to chat. 
+                                                // Ideally, the notification "journey_id" field often stores the related entity ID for generic types.
+                                                // Let's assume generic linking to dashboard for now, or if possible, pass the ID.
+
+                                                // Since I cannot see the full backend logic for creating the notification in this file context,
+                                                // but the ChatSystem sends: `notificationService.notifyNewMessage`
+                                                // I will link to the dashboard. To fully implement highlighting, the notification object NEEDS the message ID.
+                                                // If 'journey_id' is used for message ID in chat context:
+                                                if ((notification as any).journey_id) {
+                                                    window.location.href = `/dashboard?highlight=${(notification as any).journey_id}`
+                                                }
                                             }
                                         }}
                                     >
