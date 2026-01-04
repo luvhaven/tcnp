@@ -15,12 +15,16 @@ export function useJourneyStatus(journeyId: string) {
     useEffect(() => {
         if (!journeyId) return
 
+        let mounted = true
+
         const loadStatus = async () => {
             const { data, error } = await supabase
                 .from('journeys')
-                .select('current_status, status_updated_at')
+                .select('current_status, status_updated_at, current_call_sign')
                 .eq('id', journeyId)
                 .single()
+
+            if (!mounted) return
 
             if (error) {
                 console.error('Error loading journey status:', error)
@@ -28,8 +32,10 @@ export function useJourneyStatus(journeyId: string) {
             }
 
             if (data) {
-                setStatus(data.current_status as CallSignKey)
-                setLastUpdated(data.status_updated_at)
+                const journeyData = data as { current_status: string, status_updated_at: string, current_call_sign: string | null }
+                // Prefer current_call_sign if available as it's more granular
+                setStatus((journeyData.current_call_sign || journeyData.current_status) as CallSignKey)
+                setLastUpdated(journeyData.status_updated_at)
             }
         }
 
@@ -47,8 +53,12 @@ export function useJourneyStatus(journeyId: string) {
                     filter: `id=eq.${journeyId}`
                 },
                 (payload) => {
-                    const newStatus = payload.new.current_status as CallSignKey
-                    const newTime = payload.new.status_updated_at
+                    if (!mounted) return
+                    const newRow = payload.new
+                    // Prefer current_call_sign
+                    const newStatus = (newRow.current_call_sign || newRow.current_status) as CallSignKey
+                    const newTime = newRow.status_updated_at
+
                     setStatus(newStatus)
                     setLastUpdated(newTime)
                 }
@@ -56,6 +66,7 @@ export function useJourneyStatus(journeyId: string) {
             .subscribe()
 
         return () => {
+            mounted = false
             supabase.removeChannel(channel)
         }
     }, [journeyId, supabase])
@@ -71,7 +82,7 @@ export function useJourneyStatus(journeyId: string) {
         setLastUpdated(new Date().toISOString())
 
         try {
-            const { error } = await supabase.rpc('update_journey_status', {
+            const { error } = await (supabase as any).rpc('update_journey_status', {
                 p_journey_id: journeyId,
                 p_status: newStatus,
                 p_notes: notes
@@ -98,7 +109,7 @@ export function useJourneyStatus(journeyId: string) {
 
         setLoading(true)
         try {
-            const { error } = await supabase.rpc('complete_journey', {
+            const { error } = await (supabase as any).rpc('complete_journey', {
                 p_journey_id: journeyId
             })
 

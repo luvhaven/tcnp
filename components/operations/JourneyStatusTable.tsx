@@ -58,21 +58,13 @@ export default function JourneyStatusTable() {
     const [canUpdateCallSigns, setCanUpdateCallSigns] = useState(false)
 
     useEffect(() => {
+        let mounted = true
+
         loadCurrentUser()
         loadPrograms()
         loadActiveJourneys()
 
-        // Debounce timer for rapid updates
-        let debounceTimer: NodeJS.Timeout | null = null
-        const debouncedReload = () => {
-            if (debounceTimer) clearTimeout(debounceTimer)
-            debounceTimer = setTimeout(() => {
-                console.log('🔄 Debounced reload triggered')
-                loadActiveJourneys()
-            }, 300)
-        }
-
-        // Real-time subscription for journey updates with improved reliability
+        // Realtime subscription for journey updates - with DIRECT state updates
         const channel = supabase
             .channel('journey-monitor')
             .on(
@@ -83,13 +75,37 @@ export default function JourneyStatusTable() {
                     table: 'journeys'
                 },
                 (payload) => {
+                    if (!mounted) return
                     console.log('🔄 Journey UPDATE received:', {
                         id: payload.new?.id,
                         status: payload.new?.status,
-                        current_call_sign: payload.new?.current_call_sign,
-                        old_call_sign: payload.old?.current_call_sign
+                        current_call_sign: payload.new?.current_call_sign
                     })
-                    debouncedReload()
+
+                    // DIRECT state update for instant UI change
+                    setJourneys(prev => {
+                        const updated = prev.map(journey => {
+                            if (journey.id === payload.new?.id) {
+                                return {
+                                    ...journey,
+                                    current_call_sign: payload.new.current_call_sign || journey.current_call_sign,
+                                    status: payload.new.status || journey.status,
+                                    status_updated_at: payload.new.status_updated_at || journey.status_updated_at
+                                }
+                            }
+                            return journey
+                        })
+                        return updated
+                    })
+
+                    // Flash effect for visual feedback
+                    const element = document.querySelector(`[data-journey-id="${payload.new?.id}"]`)
+                    if (element) {
+                        element.classList.add('animate-pulse', 'bg-primary/10')
+                        setTimeout(() => {
+                            element?.classList.remove('animate-pulse', 'bg-primary/10')
+                        }, 2000)
+                    }
                 }
             )
             .on(
@@ -100,8 +116,10 @@ export default function JourneyStatusTable() {
                     table: 'journeys'
                 },
                 (payload) => {
+                    if (!mounted) return
                     console.log('➕ Journey INSERT received:', payload.new?.id)
-                    debouncedReload()
+                    // For new journeys, we need to reload to get relations
+                    loadActiveJourneys()
                 }
             )
             .subscribe((status, err) => {
@@ -109,21 +127,19 @@ export default function JourneyStatusTable() {
                     console.log('✅ Ops Monitor realtime subscription active')
                 } else if (status === 'CHANNEL_ERROR') {
                     console.error('❌ Ops Monitor realtime error:', err)
-                } else if (status === 'TIMED_OUT') {
-                    console.warn('⏱️ Ops Monitor realtime timed out, retrying...')
-                } else {
-                    console.log('📡 Ops Monitor subscription status:', status)
                 }
             })
 
-        // Also poll every 15 seconds as a fallback
+        // Reduced polling to 60 seconds as fallback (realtime is primary)
         const pollInterval = setInterval(() => {
-            console.log('⏰ Polling for journey updates...')
-            loadActiveJourneys()
-        }, 15000)
+            if (mounted) {
+                console.log('⏰ Fallback polling for journey updates...')
+                loadActiveJourneys()
+            }
+        }, 60000)
 
         return () => {
-            if (debounceTimer) clearTimeout(debounceTimer)
+            mounted = false
             clearInterval(pollInterval)
             supabase.removeChannel(channel)
         }
@@ -143,7 +159,8 @@ export default function JourneyStatusTable() {
             setCurrentUser(userData)
 
             // Check if user can update call signs (DO or admin)
-            const canUpdate = userData?.role && ['dev_admin', 'admin', 'delta_oscar', 'captain', 'head_of_command'].includes(userData.role)
+            const userRole = (userData as any)?.role as string | undefined
+            const canUpdate = userRole && ['dev_admin', 'admin', 'delta_oscar', 'captain', 'head_of_command'].includes(userRole)
             setCanUpdateCallSigns(Boolean(canUpdate))
         } catch (error) {
             console.error('Error loading current user:', error)
@@ -247,7 +264,7 @@ export default function JourneyStatusTable() {
         if (!selectedJourney) return
 
         try {
-            const { error } = await supabase.rpc('update_journey_call_sign', {
+            const { error } = await (supabase as any).rpc('update_journey_call_sign', {
                 journey_uuid: selectedJourney.id,
                 new_status: newCallSign
             })
@@ -375,7 +392,7 @@ export default function JourneyStatusTable() {
                                 const callSignColor = getCallSignBadgeColor(callSign)
 
                                 return (
-                                    <TableRow key={journey.id} className="hover:bg-muted/30 transition-colors">
+                                    <TableRow key={journey.id} data-journey-id={journey.id} className="hover:bg-muted/30 transition-colors transition-all duration-300">
                                         <TableCell>
                                             <div className="flex flex-col">
                                                 <span className="font-medium">{journey.papas?.full_name || 'Unknown Papa'}</span>
