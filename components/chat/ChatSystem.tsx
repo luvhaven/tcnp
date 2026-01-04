@@ -181,15 +181,16 @@ export default function ChatSystem({
       }
 
       if (data) {
+        const userData = data as { id: string, full_name: string | null, oscar: string | null, role: string | null, last_seen: string | null }
         setUsers((prev: User[]) => {
           if (prev.some((user) => user.id === userId)) {
             return prev.map((user) =>
               user.id === userId
                 ? {
                   ...user,
-                  full_name: data.full_name || user.full_name || 'Unknown User',
-                  oscar: data.oscar || user.oscar,
-                  role: data.role || user.role
+                  full_name: userData.full_name || user.full_name || 'Unknown User',
+                  oscar: userData.oscar || user.oscar,
+                  role: userData.role || user.role
                 }
                 : user
             )
@@ -198,12 +199,12 @@ export default function ChatSystem({
           return [
             ...prev,
             {
-              id: data.id,
-              full_name: data.full_name || 'Unknown User',
-              oscar: data.oscar || '',
-              role: data.role || '',
+              id: userData.id,
+              full_name: userData.full_name || 'Unknown User',
+              oscar: userData.oscar || '',
+              role: userData.role || '',
               is_online: false,
-              last_seen: data.last_seen ?? null
+              last_seen: userData.last_seen
             }
           ]
         })
@@ -471,10 +472,14 @@ export default function ChatSystem({
   }, [currentUser])
 
   useEffect(() => {
+    let mounted = true
+
     // Load current user first, then set up subscriptions
     const initializeChat = async () => {
       await loadCurrentUser()
+      if (!mounted) return
       await loadMessages()
+      if (!mounted) return
       await loadParticipants()
     }
 
@@ -484,7 +489,7 @@ export default function ChatSystem({
       `chat-messages-${programId || 'global'}-${papaId || 'none'}`,
       {
         config: {
-          broadcast: { self: false }, // Don't receive own typing events
+          broadcast: { self: false },
           presence: { key: currentUser?.id || 'anonymous' }
         }
       }
@@ -493,23 +498,18 @@ export default function ChatSystem({
     const handlePayload = async (
       payload: RealtimePostgresChangesPayload<ChatMessageRow>
     ) => {
+      if (!mounted) return
       console.log('📨 Realtime payload received:', payload.eventType, payload)
 
       const newRow = payload.new as ChatMessageRow
 
-      // Ensure we only process messages for the active chat context
+      // Context filtering
       if (papaId) {
-        if (newRow.papa_id !== papaId) {
-          return
-        }
+        if (newRow.papa_id !== papaId) return
       } else if (programId) {
-        if (newRow.program_id !== programId || newRow.papa_id !== null) {
-          return
-        }
+        if (newRow.program_id !== programId || newRow.papa_id !== null) return
       } else {
-        if (newRow.program_id !== null || newRow.papa_id !== null) {
-          return
-        }
+        if (newRow.program_id !== null || newRow.papa_id !== null) return
       }
 
       const raw = payload.new as RawMessage
@@ -519,64 +519,56 @@ export default function ChatSystem({
         try {
           const { data: fullMessage, error } = await supabase
             .from('chat_messages')
-            .select(`
-                      *,
-                      users:sender_id(full_name, oscar, role)
-                      `)
+            .select(`*, users:sender_id(full_name, oscar, role)`)
             .eq('id', raw.id)
             .single()
 
+          if (!mounted) return
+
           if (!error && fullMessage) {
-            console.log('✅ Fetched full message with user data:', fullMessage)
             const message = transformMessage(fullMessage as RawMessage)
             setMessages((prev) => {
+              // Prevent duplicates
+              if (prev.some(m => m.id === message.id)) return prev
               const updated = upsertMessage(prev, message)
-              console.log('💬 Messages updated, count:', updated.length)
               return updated
             })
 
-            // Only mark as read if not sent by current user
             if (message.sender_id !== currentUser?.id) {
               void markMessageRead(message)
+
+              // Notification for mentions/private
+              const isMentioned = message.mentions.includes(currentUser?.id || '')
+              if (isMentioned || message.is_private) {
+                const senderName = message.users?.full_name || 'Someone'
+                void notificationService.notifyNewMessage(
+                  senderName,
+                  message.content,
+                  message.is_private
+                )
+              }
             }
 
-            // Remove sender from typing users immediately when message received
+            // Remove sender from typing
             setTypingUsers(prev => {
               const next = { ...prev }
               delete next[message.sender_id]
               return next
             })
-
             return
-          } else if (error) {
-            console.error('❌ Error fetching full message:', error)
           }
         } catch (err) {
           console.error('❌ Error fetching full message:', err)
         }
       }
 
-      // Fallback to raw payload transformation
-      console.log('⚠️ Using fallback transformation for message')
-      const message = transformMessage(raw)
-      setMessages((prev) => upsertMessage(prev, message))
-
-      if (payload.eventType === 'INSERT' && message.sender_id !== currentUser?.id) {
-        void markMessageRead(message)
-
-        // Show notification for new message
-        const senderName = message.users?.full_name || 'Someone'
-        const isMentioned = message.mentions.includes(currentUser?.id || '')
-        const isPrivate = message.is_private
-
-        // Only notify if user is mentioned or it's a private message to them
-        if (isMentioned || isPrivate) {
-          void notificationService.notifyNewMessage(
-            senderName,
-            message.content,
-            isPrivate
-          )
-        }
+      // Fallback transformation
+      if (mounted) {
+        const message = transformMessage(raw)
+        setMessages((prev) => {
+          if (prev.some(m => m.id === message.id)) return prev
+          return upsertMessage(prev, message)
+        })
       }
     }
 
@@ -595,7 +587,8 @@ export default function ChatSystem({
     channel
       .on('postgres_changes', subscriptionConfig, handlePayload)
       .on('broadcast', { event: 'typing' }, (payload) => {
-        const { userId, fullName } = payload.payload
+        if (!mounted) return
+        const { userId } = payload.payload
         if (userId === currentUser?.id) return
 
         setTypingUsers(prev => ({
@@ -607,31 +600,14 @@ export default function ChatSystem({
         if (status === 'SUBSCRIBED') {
           console.log('✅ Chat realtime subscription active')
         } else if (status === 'CHANNEL_ERROR') {
-          const state = channel.presenceState()
-          const presenceKeys = state ? Object.keys(state) : []
-          const hasDetails =
-            presenceKeys.length > 0 || Boolean(subscriptionConfig.filter) || Boolean(currentUser?.id)
-
-          if (hasDetails) {
-            console.warn('❌ Chat realtime subscription reported CHANNEL_ERROR', {
-              channel: channel.topic,
-              presenceKeys,
-              currentUserId: currentUser?.id,
-              filter: subscriptionConfig.filter
-            })
-          } else {
-            console.warn('❌ Chat realtime subscription reported CHANNEL_ERROR (no additional details)')
-          }
-        } else if (status === 'TIMED_OUT') {
-          console.warn('⏱️ Chat realtime subscription timed out')
-        } else if (status === 'CLOSED') {
-          console.warn('🔒 Chat realtime subscription closed')
+          console.warn('❌ Chat subscription error')
         }
       })
 
     channelRef.current = channel
 
     return () => {
+      mounted = false
       if (channelRef.current) {
         console.log('🧹 Cleaning up chat subscription')
         supabase.removeChannel(channelRef.current)
@@ -737,7 +713,10 @@ export default function ChatSystem({
     }
   }, [supabase, currentUser?.id, loadParticipants])
 
-  // NEW: Highlight Effect replaced generic scrollToBottom
+  // Auto-scroll behavior
+  const shouldAutoScroll = useRef(true)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (highlightId && messages.some(m => m.id === highlightId)) {
       setTimeout(() => {
@@ -745,17 +724,22 @@ export default function ChatSystem({
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' })
           setHighlightedMessageId(highlightId)
-
-          const timer = setTimeout(() => {
-            setHighlightedMessageId(null)
-          }, 2000)
-          return () => clearTimeout(timer)
+          setTimeout(() => setHighlightedMessageId(null), 2000)
         }
-      }, 500)
-    } else {
-      scrollToBottom()
+      }, 300)
+    } else if (shouldAutoScroll.current) {
+      // Only auto-scroll if user is near bottom
+      setTimeout(() => scrollToBottom(), 100)
     }
   }, [messages, highlightId])
+
+  // Detect if user scrolled up
+  const handleScroll = useCallback(() => {
+    if (!messagesContainerRef.current) return
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight
+    shouldAutoScroll.current = distanceFromBottom < 100
+  }, [])
 
 
   const scrollToBottom = () => {
@@ -1194,7 +1178,7 @@ export default function ChatSystem({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-muted/10">
+      <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-6 space-y-6 bg-muted/10 scroll-smooth">
         {loadingMessages ? (
           <div className="space-y-4">
             {[...Array(4)].map((_, index) => (
