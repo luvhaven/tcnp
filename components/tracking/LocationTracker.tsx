@@ -5,23 +5,21 @@ import { useIsClient } from '@/hooks/useIsClient'
 import { toast } from 'sonner'
 
 /**
- * iOS-Safe LocationTracker Component with Permission Requests
+ * LocationTracker Component - Clean Permission Flow
  * 
  * This version:
- * 1. Waits 10 seconds on iOS before starting (3 seconds on other devices)
- * 2. Actively requests permission (like other devices)
- * 3. Wraps ALL operations in try-catch to prevent crashes
- * 4. Uses low accuracy on iOS to improve reliability
+ * 1. Triggers native location permission immediately on sign-in
+ * 2. No alerts during initial permission request
+ * 3. Only alerts when tracking is LOST after being established
+ * 4. Works on iPhone, Android, and Desktop
  * 5. Uses WakeLock API to keep screen alive
- * 6. Uses AudioContext for alerts (Network/Location loss)
  */
 export function LocationTracker() {
   const isClient = useIsClient()
-  const [isIOS, setIsIOS] = useState(false)
-  const [isReady, setIsReady] = useState(false)
   const [isTracking, setIsTracking] = useState(false)
   const [bannerDismissed, setBannerDismissed] = useState(false)
   const [permissionRequested, setPermissionRequested] = useState(false)
+  const [hasEverTracked, setHasEverTracked] = useState(false) // NEW: Track if we've successfully tracked before
   const watchIdRef = useRef<number | null>(null)
   const mountedRef = useRef(true)
   const lastPositionRef = useRef<{ latitude: number; longitude: number; timestamp: number } | null>(null)
@@ -36,10 +34,8 @@ export function LocationTracker() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Generic notification insert - triggers realtime for admins subscribed to notifications
-      // Adjust title/message as per app standard
       await supabase.from('notifications').insert({
-        user_id: user.id, // Who caused it
+        user_id: user.id,
         title: type === 'LOCATION_LOSS' ? 'SOS: Location Offline' : 'Battery Critical',
         message: type === 'LOCATION_LOSS'
           ? `User ${user.email} location stopped updating.`
@@ -53,7 +49,6 @@ export function LocationTracker() {
   }
 
   const playAlert = (type: 'location_lost' | 'network_lost') => {
-    // If location is lost, also notifying admin (throttled logic implied or just direct)
     if (type === 'location_lost') {
       sendAdminAlert('LOCATION_LOSS')
     }
@@ -71,11 +66,10 @@ export function LocationTracker() {
       gain.connect(ctx.destination)
 
       if (type === 'location_lost') {
-        // High-pitch urgent alarm (beep-beep-beep)
         osc.type = 'square'
-        osc.frequency.setValueAtTime(880, ctx.currentTime) // A5
+        osc.frequency.setValueAtTime(880, ctx.currentTime)
         osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1)
-        osc.frequency.setValueAtTime(0, ctx.currentTime + 0.15) // Silence
+        osc.frequency.setValueAtTime(0, ctx.currentTime + 0.15)
         osc.frequency.setValueAtTime(880, ctx.currentTime + 0.25)
         osc.frequency.setValueAtTime(880, ctx.currentTime + 0.35)
 
@@ -85,10 +79,8 @@ export function LocationTracker() {
         osc.start()
         osc.stop(ctx.currentTime + 0.6)
 
-        // Vibrate: SOS pattern
         if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 100])
       } else {
-        // Network lost: Descending warning
         osc.type = 'sawtooth'
         osc.frequency.setValueAtTime(440, ctx.currentTime)
         osc.frequency.linearRampToValueAtTime(220, ctx.currentTime + 0.5)
@@ -99,7 +91,6 @@ export function LocationTracker() {
         osc.start()
         osc.stop(ctx.currentTime + 0.5)
 
-        // Vibrate: Long buzz
         if (navigator.vibrate) navigator.vibrate([500])
       }
     } catch (e) {
@@ -112,7 +103,7 @@ export function LocationTracker() {
     const handleOffline = () => {
       console.warn('⚠️ Network connection lost')
       toast.error('Network lost. Tracking paused.')
-      playAlert('network_lost')
+      if (hasEverTracked) playAlert('network_lost') // Only alert if we've been tracking
     }
     const handleOnline = () => {
       console.log('✅ Network restored')
@@ -125,7 +116,7 @@ export function LocationTracker() {
       window.removeEventListener('offline', handleOffline)
       window.removeEventListener('online', handleOnline)
     }
-  }, [])
+  }, [hasEverTracked])
 
   // Wake Lock API (Keep screen on)
   useEffect(() => {
@@ -141,7 +132,6 @@ export function LocationTracker() {
       }
     };
 
-    // Request on mount and re-request if visibility changes (e.g. tab switch)
     requestWakeLock();
 
     const handleVisibilityChange = () => {
@@ -159,7 +149,7 @@ export function LocationTracker() {
 
   // Helper to calculate distance in meters
   const getDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371e3 // metres
+    const R = 6371e3
     const φ1 = lat1 * Math.PI / 180
     const φ2 = lat2 * Math.PI / 180
     const Δφ = (lat2 - lat1) * Math.PI / 180
@@ -172,36 +162,6 @@ export function LocationTracker() {
 
     return R * c
   }
-
-  // Detect iOS on mount
-  useEffect(() => {
-    if (isClient && typeof navigator !== 'undefined') {
-      try {
-        const ua = navigator.userAgent
-        const isIOSDevice = /iPad|iPhone|iPod/.test(ua) ||
-          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-        setIsIOS(isIOSDevice)
-      } catch (e) {
-        console.warn('iOS detection failed (non-fatal)')
-      }
-    }
-  }, [isClient])
-
-  // Wait before starting - longer on iOS
-  useEffect(() => {
-    if (!isClient) return
-
-    // Wait 10 seconds on iOS, 3 seconds otherwise
-    const delay = isIOS ? 10000 : 3000
-
-    const timer = setTimeout(() => {
-      if (mountedRef.current) {
-        setIsReady(true)
-      }
-    }, delay)
-
-    return () => clearTimeout(timer)
-  }, [isClient, isIOS])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -224,7 +184,7 @@ export function LocationTracker() {
   useEffect(() => {
     if (typeof navigator !== 'undefined' && 'getBattery' in navigator) {
       try {
-        // @ts-ignore - BatteryManager is not standard
+        // @ts-ignore
         navigator.getBattery().then((battery: any) => {
           const updateBattery = () => {
             setBatteryLevel(Math.round(battery.level * 100))
@@ -243,19 +203,19 @@ export function LocationTracker() {
     }
   }, [])
 
-  // Permissions API Listener for robustness
+  // Permissions API Listener for robustness (silent - no alerts on permission changes)
   useEffect(() => {
     if (typeof navigator !== 'undefined' && 'permissions' in navigator) {
       navigator.permissions.query({ name: 'geolocation' }).then((permissionStatus) => {
 
         const handleChange = () => {
           console.log('📍 Permission status changed to:', permissionStatus.state)
-          if (permissionStatus.state === 'granted') {
-            // Force a restart of tracking if it was lost
-            setPermissionRequested(false) // This will trigger the main effect again
+          if (permissionStatus.state === 'granted' && hasEverTracked) {
+            // Only restart if we've been tracking before
+            setPermissionRequested(false)
           } else if (permissionStatus.state === 'denied') {
             setIsTracking(false)
-            playAlert('location_lost')
+            // NO ALERT - this might be initial denial, not a loss
           }
         }
 
@@ -263,15 +223,14 @@ export function LocationTracker() {
         return () => permissionStatus.removeEventListener('change', handleChange)
       })
     }
-  }, [])
+  }, [hasEverTracked])
 
-  // Start tracking with permission request
+  // Start tracking with permission request - IMMEDIATE, NO DELAY
   useEffect(() => {
-    if (!isReady) return
+    if (!isClient) return
+    if (permissionRequested) return
 
     const startTracking = async () => {
-      if (isTracking && permissionRequested) return
-
       setPermissionRequested(true)
 
       try {
@@ -343,23 +302,24 @@ export function LocationTracker() {
         console.log('📍 Requesting location permission (Native Trigger)...')
 
         try {
-          const retryTracking = () => {
-            console.log('📍 Retrying location request...')
-            if (!isTracking) playAlert('location_lost')
-
+          // Silent retry - only for background recovery
+          const silentRetry = () => {
+            console.log('📍 Silent background retry...')
             navigator.geolocation.getCurrentPosition(
               (pos) => {
                 setIsTracking(true)
+                setHasEverTracked(true)
                 updateLocation(pos)
               },
               (err) => {
-                console.warn('Retry failed:', err)
-                setTimeout(retryTracking, 10000)
+                console.warn('Silent retry failed:', err)
+                // Silent - no alert, will try again later via permission change
               },
               { enableHighAccuracy: true, timeout: 10000 }
             )
           }
 
+          // Initial permission request
           const position = await new Promise<GeolocationPosition>((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(
               resolve,
@@ -371,6 +331,7 @@ export function LocationTracker() {
           if (!mountedRef.current) return
 
           console.log('📍 Initial location obtained, starting continuous tracking')
+          setHasEverTracked(true)
           await updateLocation(position)
 
           if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current)
@@ -387,13 +348,19 @@ export function LocationTracker() {
             },
             (error) => {
               console.warn('📍 Watch position error:', error.message)
+              const wasTracking = isTracking
               setIsTracking(false)
-              sendAdminAlert('LOCATION_LOSS')
-              playAlert('location_lost')
 
-              if (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE) {
+              // ONLY alert if we were already tracking (not initial setup)
+              if (wasTracking && hasEverTracked) {
+                sendAdminAlert('LOCATION_LOSS')
+                playAlert('location_lost')
                 toast.error('Location Access Lost! Please check settings.')
-                setTimeout(retryTracking, 5000)
+              }
+
+              // Silent retry for recovery
+              if (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE) {
+                setTimeout(silentRetry, 5000)
               }
             },
             { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
@@ -403,22 +370,12 @@ export function LocationTracker() {
 
         } catch (error: any) {
           console.warn('📍 Initial Location Permission Failed:', error)
-          playAlert('location_lost')
-          toast.error('Location Permission Required')
-          setTimeout(() => {
-            const retryTrackingLoop = () => {
-              navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                  setIsTracking(true)
-                  updateLocation(pos)
-                  setPermissionRequested(false)
-                },
-                (err) => setTimeout(retryTrackingLoop, 5000),
-                { enableHighAccuracy: true }
-              )
-            }
-            retryTrackingLoop()
-          }, 2000)
+          // NO ALERT on initial failure - user hasn't granted permission yet
+          // Just show a silent toast
+          toast('Location permission needed for tracking', {
+            description: 'Please enable location access to use live tracking features.',
+            duration: 5000
+          })
         }
       } catch (error) {
         console.warn('📍 Location tracking setup failed:', error)
@@ -426,7 +383,7 @@ export function LocationTracker() {
     }
 
     startTracking()
-  }, [isReady, isIOS, permissionRequested])
+  }, [isClient, permissionRequested])
 
   // Only show banner if tracking is active and not dismissed
   const showBanner = isTracking && !bannerDismissed
