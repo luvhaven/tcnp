@@ -105,15 +105,15 @@ export default function IncidentsPage() {
     }
   }, [])
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true)
 
       const { data: { user } } = await supabase.auth.getUser()
-      const { data: userData } = await supabase
+      const { data: userData } = await (supabase as any)
         .from('users')
         .select('*')
-        .eq('id', user?.id)
+        .eq('id', user?.id ?? '')
         .single()
 
       setCurrentUser(userData)
@@ -135,7 +135,6 @@ export default function IncidentsPage() {
 
       if (error) throw error
 
-      console.log('✅ Loaded incidents:', incidentsData)
       setIncidents(incidentsData || [])
 
       const { data: journeysData } = await supabase
@@ -155,7 +154,7 @@ export default function IncidentsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [supabase])
 
   const subscribeToIncidents = () => {
     const channel = supabase
@@ -176,7 +175,7 @@ export default function IncidentsPage() {
   const createAuditLog = useCallback(
     async (action: string, targetType: string, targetId: string | null, changes: Record<string, unknown>) => {
       try {
-        await supabase
+        await (supabase as any)
           .from('audit_logs')
           .insert([{ user_id: currentUser?.id ?? null, action, target_type: targetType, target_id: targetId, changes }])
       } catch (error) {
@@ -230,7 +229,7 @@ export default function IncidentsPage() {
 
     try {
       if (editing) {
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('incidents')
           .update({
             journey_id: formData.journey_id || null,
@@ -245,7 +244,7 @@ export default function IncidentsPage() {
         if (error) throw error
         toast.success('Incident updated successfully!')
       } else {
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('incidents')
           .insert([{
             journey_id: formData.journey_id || null,
@@ -455,14 +454,14 @@ export default function IncidentsPage() {
               <div className="space-y-2">
                 <Label>Journey (Optional)</Label>
                 <Select
-                  value={formData.journey_id}
-                  onValueChange={(value) => setFormData({ ...formData, journey_id: value })}
+                  value={formData.journey_id || 'none'}
+                  onValueChange={(value) => setFormData({ ...formData, journey_id: value === 'none' ? '' : value })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select journey" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {journeys.map((journey) => (
                       <SelectItem key={journey.id} value={journey.id}>
                         {journey.papas?.full_name || 'Unknown'} - {journey.cheetahs?.call_sign || 'No call sign'}

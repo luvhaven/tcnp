@@ -52,6 +52,12 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
     return email.substring(0, 2).toUpperCase()
   }
 
+  const formatRole = (role: string) => {
+    return role
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+  }
+
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-background/80 backdrop-blur-md px-6 shadow-sm transition-all duration-200">
       <div className="flex items-center space-x-3">
@@ -68,7 +74,7 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
           </h1>
           {profile?.role && (
             <span className="mt-0.5 inline-flex max-w-full items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary md:mt-1 md:px-3 md:py-1 md:text-[11px]">
-              {profile.role}
+              {formatRole(profile.role)}
             </span>
           )}
         </div>
@@ -93,7 +99,7 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
             <p className="text-sm font-medium truncate">{user?.email}</p>
             {profile?.role && (
               <p className="text-[11px] text-muted-foreground uppercase tracking-wide">
-                {profile.role}
+                {formatRole(profile.role)}
               </p>
             )}
           </div>

@@ -26,6 +26,7 @@ type Officer = {
   is_active: boolean
   is_online?: boolean
   activation_status: string
+  photo_url?: string | null
   created_at: string
 }
 
@@ -1001,7 +1002,7 @@ export default function OfficersPage() {
                 <Button type="button" variant="outline" onClick={() => {
                   setTitleDialogOpen(false)
                   setAssigningTitleFor(null)
-                  setTitleFormData({ title_id: '', program_id: '' })
+                  setTitleFormData({ title_id: '', program_id: '', role: '' })
                 }} className="flex-1">
                   Cancel
                 </Button>

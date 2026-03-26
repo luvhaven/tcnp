@@ -77,6 +77,10 @@ type Journey = {
   assigned_cheetah_id: string
   status: string
   assigned_do_id?: string | null
+  assigned_duty_officer_id?: string | null
+  assigned_nest_id?: string | null
+  assigned_eagle_square_id?: string | null
+  program_id?: string | null
   origin: string
   destination: string
   scheduled_departure: string
@@ -85,10 +89,11 @@ type Journey = {
   actual_arrival: string | null
   notes: string | null
   created_at: string
+  updated_at?: string | null
   eta: string | null
   etd: string | null
   papas: { full_name: string; title: string } | null
-  cheetahs: { call_sign: string; registration_number: string; driver_name?: string; driver_phone?: string } | null
+  cheetahs: { call_sign: string | null; registration_number: string; driver_name?: string; driver_phone?: string } | null
   assigned_do?: { full_name: string; oscar: string } | null
   nests?: { name: string } | null
   eagle_squares?: { name: string; code: string } | null
@@ -115,6 +120,8 @@ export default function JourneysPage() {
     assigned_cheetah_id: '',
     program_id: '',
     assigned_duty_officer_id: '',
+    assigned_nest_id: '',
+    assigned_eagle_square_id: '',
     origin: '',
     destination: '',
     scheduled_departure: '',
@@ -172,7 +179,7 @@ export default function JourneysPage() {
         supabase.from('journeys').select(`
           *,
           papas (title, full_name),
-          cheetahs (registration_number, driver_name, driver_phone),
+          cheetahs (call_sign, registration_number, driver_name, driver_phone),
           assigned_do:users!journeys_assigned_duty_officer_id_fkey (full_name),
           nests (name),
           eagle_squares (name, code),
@@ -250,6 +257,8 @@ export default function JourneysPage() {
         assigned_cheetah_id: '',
         program_id: '',
         assigned_duty_officer_id: '',
+        assigned_nest_id: '',
+        assigned_eagle_square_id: '',
         origin: '',
         destination: '',
         scheduled_departure: '',
@@ -271,7 +280,6 @@ export default function JourneysPage() {
     setFormData({
       papa_id: journey.papa_id || '',
       assigned_cheetah_id: journey.assigned_cheetah_id || '',
-      // @ts-ignore
       program_id: journey.program_id || '',
       assigned_duty_officer_id: journey.assigned_duty_officer_id || journey.assigned_do_id || '',
       assigned_nest_id: journey.assigned_nest_id || '',
@@ -297,7 +305,7 @@ export default function JourneysPage() {
     }
 
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('journeys')
         .update({
           ...formData,
@@ -369,7 +377,7 @@ export default function JourneysPage() {
       in_progress: ['first_course', 'chapman', 'broken_arrow', 'cancelled'],
       first_course: ['chapman', 'broken_arrow', 'cancelled'],
       chapman: ['dessert', 'broken_arrow', 'cancelled'],
-      dessert: ['completed', 'broken_arrow'],
+      dessert: ['completed', 'broken_arrow', 'cancelled'],
     }
     return workflow[currentStatus] || []
   }
@@ -569,7 +577,7 @@ export default function JourneysPage() {
 
                           <div className="flex items-center gap-3">
                             <div className="text-xs text-muted-foreground">
-                              Updated {formatDistanceToNow(new Date(journey.created_at), { addSuffix: true })}
+                              Updated {formatDistanceToNow(new Date(journey.updated_at ?? journey.created_at), { addSuffix: true })}
                             </div>
                             {canCreateJourney && (
                               <Button

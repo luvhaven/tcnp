@@ -206,20 +206,26 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
               href={item.href}
               onClick={isMobile ? onClose : undefined}
               className={cn(
-                "flex items-center justify-start px-3 py-2 text-sm font-medium transition-all duration-200 border-l-[3px] gap-3 mr-2 rounded-r-md",
+                "relative flex items-center justify-start px-3 py-2 text-sm font-medium transition-all duration-200 border-l-[3px] gap-3 mr-2 rounded-r-md",
                 isActive
                   ? "text-primary border-primary"
                   : "text-muted-foreground border-transparent hover:text-foreground hover:border-muted-foreground/30"
               )}
               title={collapsed ? item.name : undefined}
             >
-              <item.icon className="h-5 w-5 flex-shrink-0" />
+              <div className="relative flex-shrink-0">
+                <item.icon className="h-5 w-5" />
+                {/* Collapsed badge dot - only show when sidebar is collapsed */}
+                {item.name === "Team Chat" && unreadCount > 0 && collapsed && (
+                  <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                )}
+              </div>
               <span className={cn(
                 "flex items-center justify-between w-full transition-all duration-300 overflow-hidden whitespace-nowrap",
                 collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
               )}>
                 <span>{item.name}</span>
-                {item.name === "Team Chat" && unreadCount > 0 && (
+                {item.name === "Team Chat" && unreadCount > 0 && !collapsed && (
                   <Badge
                     variant="destructive"
                     className="ml-auto bg-red-500 text-white font-semibold animate-pulse shadow-lg"

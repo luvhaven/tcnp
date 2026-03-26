@@ -18,8 +18,7 @@ import {
   TrendingUp,
   Clock,
   CheckCircle,
-  XCircle,
-  Trash2
+  XCircle
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
@@ -174,7 +173,7 @@ export default function DashboardPage() {
       const [papasRes, cheetahsRes, journeysRes, incidentsRes] = await Promise.all([
         supabase.from('papas').select('id', { count: 'exact', head: true }),
         supabase.from('cheetahs').select('id', { count: 'exact', head: true }),
-        supabase.from('journeys').select('id', { count: 'exact', head: true }).or('status.eq.active,status.eq.planned,status.eq.in_progress'),
+        supabase.from('journeys').select('id', { count: 'exact', head: true }).in('status', ['planned', 'in_progress', 'first_course', 'chapman', 'dessert', 'broken_arrow']),
         supabase.from('incidents').select('id', { count: 'exact', head: true }).eq('status', 'open'),
       ])
 
@@ -204,21 +203,6 @@ export default function DashboardPage() {
     }
   }
 
-  const handleDeleteJourney = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!confirm('Are you sure you want to delete this journey?')) return
-
-    try {
-      const { error } = await supabase.from('journeys').delete().eq('id', id)
-      if (error) throw error
-
-      toast.success('Journey deleted')
-      loadDashboardData()
-    } catch (error) {
-      console.error('Error deleting journey:', error)
-      toast.error('Failed to delete journey')
-    }
-  }
 
   const FALLBACK_STATUS_COLORS: Record<string, string> = {
     planned: 'bg-blue-500 text-white',
@@ -509,7 +493,7 @@ export default function DashboardPage() {
                     className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:border-primary/30 hover:shadow-sm"
                   >
                     <div className="flex items-center space-x-4">
-                      <div className={`h-2 w-2 rounded-full ${getStatusColor(journey.status)}`} />
+                      <div className={`h-2 w-2 rounded-full flex-shrink-0 ${getStatusIndicatorClass(journey.status)}`} />
                       <div>
                         <p className="font-medium">
                           {journey.papas?.title} {journey.papas?.full_name}
@@ -534,10 +518,11 @@ export default function DashboardPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={(e) => handleDeleteJourney(journey.id, e)}
+                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        onClick={() => router.push('/journeys')}
+                        title="View in Journeys"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <TrendingUp className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>

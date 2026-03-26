@@ -72,33 +72,34 @@ export default function SettingsPage() {
       }
 
       if (settingsData) {
+        const sd = settingsData as any
         // Map database columns to form fields
         reset({
-          theme: settingsData.theme || defaultSettings.theme,
-          organization_name: settingsData.organization_name || defaultSettings.organization_name,
-          organization_email: settingsData.organization_email || defaultSettings.organization_email,
-          organization_phone: settingsData.organization_phone || defaultSettings.organization_phone,
-          address: settingsData.address || defaultSettings.address,
-          email_notifications: settingsData.email_notifications ?? defaultSettings.email_notifications,
-          sms_notifications: settingsData.sms_notifications ?? defaultSettings.sms_notifications,
-          push_notifications: settingsData.push_notifications ?? defaultSettings.push_notifications,
-          notification_sound: settingsData.notification_sound ?? defaultSettings.notification_sound,
-          default_journey_duration: settingsData.default_journey_duration || defaultSettings.default_journey_duration,
-          auto_assign_vehicles: settingsData.auto_assign_vehicles ?? defaultSettings.auto_assign_vehicles,
-          require_journey_approval: settingsData.require_journey_approval ?? defaultSettings.require_journey_approval,
-          session_timeout: settingsData.session_timeout || defaultSettings.session_timeout,
-          require_2fa: settingsData.require_2fa ?? defaultSettings.require_2fa,
-          password_expiry_days: settingsData.password_expiry_days || defaultSettings.password_expiry_days,
-          language: settingsData.language || defaultSettings.language,
-          timezone: settingsData.timezone || defaultSettings.timezone,
-          date_format: settingsData.date_format || defaultSettings.date_format,
-          time_format: settingsData.time_format || defaultSettings.time_format,
-          default_map_center_lat: settingsData.default_map_center_lat || defaultSettings.default_map_center_lat,
-          default_map_center_lng: settingsData.default_map_center_lng || defaultSettings.default_map_center_lng,
-          default_map_zoom: settingsData.default_map_zoom || defaultSettings.default_map_zoom,
-          map_provider: settingsData.map_provider || defaultSettings.map_provider,
-          location_update_interval: settingsData.location_update_interval || defaultSettings.location_update_interval,
-          enable_offline_mode: settingsData.enable_offline_mode ?? defaultSettings.enable_offline_mode,
+          theme: sd.theme || defaultSettings.theme,
+          organization_name: sd.organization_name || defaultSettings.organization_name,
+          organization_email: sd.organization_email || defaultSettings.organization_email,
+          organization_phone: sd.organization_phone || defaultSettings.organization_phone,
+          address: sd.address || defaultSettings.address,
+          email_notifications: sd.email_notifications ?? defaultSettings.email_notifications,
+          sms_notifications: sd.sms_notifications ?? defaultSettings.sms_notifications,
+          push_notifications: sd.push_notifications ?? defaultSettings.push_notifications,
+          notification_sound: sd.notification_sound ?? defaultSettings.notification_sound,
+          default_journey_duration: sd.default_journey_duration || defaultSettings.default_journey_duration,
+          auto_assign_vehicles: sd.auto_assign_vehicles ?? defaultSettings.auto_assign_vehicles,
+          require_journey_approval: sd.require_journey_approval ?? defaultSettings.require_journey_approval,
+          session_timeout: sd.session_timeout || defaultSettings.session_timeout,
+          require_2fa: sd.require_2fa ?? defaultSettings.require_2fa,
+          password_expiry_days: sd.password_expiry_days || defaultSettings.password_expiry_days,
+          language: sd.language || defaultSettings.language,
+          timezone: sd.timezone || defaultSettings.timezone,
+          date_format: sd.date_format || defaultSettings.date_format,
+          time_format: sd.time_format || defaultSettings.time_format,
+          default_map_center_lat: sd.default_map_center_lat || defaultSettings.default_map_center_lat,
+          default_map_center_lng: sd.default_map_center_lng || defaultSettings.default_map_center_lng,
+          default_map_zoom: sd.default_map_zoom || defaultSettings.default_map_zoom,
+          map_provider: sd.map_provider || defaultSettings.map_provider,
+          location_update_interval: sd.location_update_interval || defaultSettings.location_update_interval,
+          enable_offline_mode: sd.enable_offline_mode ?? defaultSettings.enable_offline_mode,
         })
       } else {
         reset(defaultSettings)
@@ -170,7 +171,7 @@ export default function SettingsPage() {
     )
   }
 
-  if (!isAdmin) {
+  if (!isAdminUser) {
     return (
       <div className="space-y-6">
         <div>

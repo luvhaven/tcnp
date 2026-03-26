@@ -11,10 +11,10 @@ import { format } from 'date-fns'
 interface AssignedJourney {
     id: string
     program_id: string
-    program: { name: string }
-    papa: { full_name: string, title: string }
-    cheetah: { call_sign: string, vehicle_type: string }
-    current_status: string
+    status: string
+    program: { name: string } | null
+    papa: { full_name: string, title: string } | null
+    cheetah: { call_sign: string, registration_number: string } | null
 }
 
 export default function MyOperationsPage() {
@@ -35,26 +35,24 @@ export default function MyOperationsPage() {
             const { data, error } = await supabase
                 .from('journeys')
                 .select(`
-          id,
-          program_id,
-          current_status,
-          program:programs(name),
-          papa:papas(full_name, title),
-          cheetah:cheetahs(call_sign, vehicle_type)
-        `)
+                    id,
+                    program_id,
+                    status,
+                    program:programs(name),
+                    papa:papas(full_name, title),
+                    cheetah:cheetahs(call_sign, registration_number)
+                `)
                 .or(`assigned_do_id.eq.${user.id},assigned_duty_officer_id.eq.${user.id}`)
-                .is('completed_at', null)
-                .is('archived_at', null)
+                .not('status', 'in', '(completed,cancelled)')
                 .order('created_at', { ascending: false })
                 .limit(1)
-                .single()
 
-            if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+            if (error) {
                 console.error('Error loading journey:', error)
             }
 
-            if (data) {
-                setJourney(data as any)
+            if (data && data.length > 0) {
+                setJourney(data[0] as any)
             }
         } catch (error) {
             console.error('Unexpected error:', error)
@@ -128,7 +126,7 @@ export default function MyOperationsPage() {
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground">Vehicle (Cheetah)</p>
                                 <p className="font-semibold">{journey.cheetah?.call_sign}</p>
-                                <p className="text-sm text-muted-foreground">{journey.cheetah?.vehicle_type}</p>
+                                <p className="text-sm text-muted-foreground">{journey.cheetah?.registration_number || 'No reg. number'}</p>
                             </div>
                         </div>
 

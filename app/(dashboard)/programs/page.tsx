@@ -451,13 +451,14 @@ export default function ProgramsPage() {
               <div className="space-y-2">
                 <Label htmlFor="theatre_id">Theatre</Label>
                 <Select
-                  value={formData.theatre_id}
-                  onValueChange={(value) => setFormData({ ...formData, theatre_id: value })}
+                  value={formData.theatre_id || 'unassigned'}
+                  onValueChange={(value) => setFormData({ ...formData, theatre_id: value === 'unassigned' ? '' : value })}
                 >
                   <SelectTrigger id="theatre_id">
                     <SelectValue placeholder="Select theatre" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="unassigned">No Theatre</SelectItem>
                     {theatres.map((theatre) => (
                       <SelectItem key={theatre.id} value={theatre.id}>
                         {theatre.name}
