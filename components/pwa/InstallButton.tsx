@@ -134,7 +134,7 @@ export default function InstallButton() {
               </button>
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleInstallClick} size="sm" className="w-full">
+              <Button onClick={handleInstallClick} size="sm" className="w-full hidden">
                 Install
               </Button>
             </div>

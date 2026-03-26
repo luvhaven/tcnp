@@ -4,7 +4,7 @@
   "description": "Enterprise Journey Management System for The Covenant Nation Protocol",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#FFFFFF",
+  "background_color": "#0f172a",
   "theme_color": "#F26522",
   "orientation": "portrait-primary",
   "icons": [
