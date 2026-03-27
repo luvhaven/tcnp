@@ -122,7 +122,6 @@ export default function InstallButton() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-sm">Install App</h3>
-                  <p className="text-xs text-muted-foreground">Get the best experience</p>
                 </div>
               </div>
               <button
