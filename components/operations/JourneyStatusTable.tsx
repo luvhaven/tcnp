@@ -174,11 +174,10 @@ export default function JourneyStatusTable() {
 
     const loadActiveJourneys = async () => {
         try {
-            // First get basic journey data
             const { data, error } = await supabase
                 .from('journeys')
                 .select('*')
-                .in('status', ['planned', 'scheduled', 'arriving', 'at_nest', 'departing_nest', 'enroute_to_theatre', 'at_theatre', 'departing_theatre', 'active', 'planning', 'distress'])
+                .not('status', 'in', '(completed,cancelled)')
                 .order('created_at', { ascending: false })
 
             if (error) {

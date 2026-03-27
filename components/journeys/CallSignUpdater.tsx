@@ -3,31 +3,99 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import {
-  Radio,
-  Navigation,
-  CheckCircle,
-  XCircle,
-  Clock,
-  AlertCircle,
-  Plane,
-  Hotel,
-  Church,
-  MapPin,
-  ArrowRight,
-  AlertTriangle,
-} from 'lucide-react'
+import { Loader2, CheckCircle, AlertTriangle, Navigation, Clock, Car, Church, Hotel, Plane, Waves } from 'lucide-react'
 import { toast } from 'sonner'
-import { formatDistanceToNow } from 'date-fns'
+import { cn } from '@/lib/utils'
+import { getCallSignLabel } from '@/lib/constants/call-signs'
 
-export type JourneyType =
-  | 'airport_to_nest_to_theatre'   // Eagle Square → Nest → Theatre → return
-  | 'airport_to_theatre'           // Eagle Square → Theatre directly → return
-  | 'self_arrival'                  // Papa arrives own way, DO manages at Theatre
+// ─── Official TCNP call sign status keys (stored in journeys.status) ─────────
 
-type Journey = {
+type TcnpStatus =
+  | 'planned'
+  | 'cocktail'
+  | 'first_course'
+  | 'chapman'
+  | 'dessert'
+  | 'completed'
+  | 'broken_arrow'
+  | 'cancelled'
+
+// ─── Status config per sign ───────────────────────────────────────────────────
+
+type StatusConfig = {
+  label: string
+  description: string
+  icon: React.ElementType
+  color: string
+  bgColor: string
+}
+
+const STATUS_CONFIG: Record<string, StatusConfig> = {
+  planned:      { label: 'Planned',      description: 'Journey assigned — awaiting dispatch',            icon: Clock,       color: 'text-slate-600',  bgColor: 'bg-slate-100' },
+  // ---- Airport / transit ----
+  cocktail:     { label: 'Cocktail',     description: 'Principal in-transit',                            icon: Car,         color: 'text-emerald-600', bgColor: 'bg-emerald-50' },
+  first_course: { label: 'First Course', description: 'Departing Nest to Theatre',                       icon: Navigation,  color: 'text-blue-600',   bgColor: 'bg-blue-50' },
+  // ---- Theatre ----
+  chapman:      { label: 'Chapman',      description: 'Arrived at Theatre gate',                         icon: Church,      color: 'text-teal-600',   bgColor: 'bg-teal-50' },
+  dessert:      { label: 'Dessert',      description: 'Departing Theatre',                               icon: Hotel,       color: 'text-indigo-600', bgColor: 'bg-indigo-50' },
+  // ---- Terminal ----
+  completed:    { label: 'Completed',    description: 'Journey successfully completed',                  icon: CheckCircle, color: 'text-green-600',  bgColor: 'bg-green-50' },
+  broken_arrow: { label: 'Broken Arrow', description: 'Major incident — all Cheetahs immobilised',       icon: AlertTriangle, color: 'text-red-600', bgColor: 'bg-red-50' },
+  cancelled:    { label: 'Cancelled',    description: 'Journey cancelled',                               icon: AlertTriangle, color: 'text-gray-600', bgColor: 'bg-gray-50' },
+}
+
+// ─── Flow per journey type ────────────────────────────────────────────────────
+
+type FlowStep = { status: TcnpStatus; nextActions: TcnpStatus[] }
+
+const FLOWS: Record<string, FlowStep[]> = {
+  airport_to_nest_to_theatre: [
+    { status: 'planned',      nextActions: ['cocktail', 'broken_arrow', 'cancelled'] },
+    { status: 'cocktail',     nextActions: ['first_course', 'broken_arrow', 'cancelled'] },
+    { status: 'first_course', nextActions: ['chapman', 'broken_arrow', 'cancelled'] },
+    { status: 'chapman',      nextActions: ['dessert', 'broken_arrow', 'cancelled'] },
+    { status: 'dessert',      nextActions: ['completed', 'broken_arrow', 'cancelled'] },
+  ],
+  airport_to_theatre: [
+    { status: 'planned',  nextActions: ['cocktail', 'broken_arrow', 'cancelled'] },
+    { status: 'cocktail', nextActions: ['chapman', 'broken_arrow', 'cancelled'] },
+    { status: 'chapman',  nextActions: ['dessert', 'broken_arrow', 'cancelled'] },
+    { status: 'dessert',  nextActions: ['completed', 'broken_arrow', 'cancelled'] },
+  ],
+  self_arrival: [
+    { status: 'planned',  nextActions: ['chapman', 'broken_arrow', 'cancelled'] },
+    { status: 'chapman',  nextActions: ['dessert', 'broken_arrow', 'cancelled'] },
+    { status: 'dessert',  nextActions: ['completed', 'broken_arrow', 'cancelled'] },
+  ],
+}
+
+function getFlow(journeyType: string | null | undefined): FlowStep[] {
+  return FLOWS[journeyType ?? 'airport_to_nest_to_theatre'] ?? FLOWS.airport_to_nest_to_theatre
+}
+
+function getNextActions(currentStatus: string, journeyType: string | null | undefined): TcnpStatus[] {
+  const flow = getFlow(journeyType)
+  const step = flow.find(s => s.status === currentStatus)
+  return step?.nextActions ?? []
+}
+
+// ─── Action button styling ────────────────────────────────────────────────────
+
+const ACTION_STYLE: Record<string, string> = {
+  planned:      'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300',
+  cocktail:     'bg-emerald-600 hover:bg-emerald-700 text-white',
+  first_course: 'bg-blue-600 hover:bg-blue-700 text-white',
+  chapman:      'bg-teal-600 hover:bg-teal-700 text-white',
+  dessert:      'bg-indigo-600 hover:bg-indigo-700 text-white',
+  completed:    'bg-green-600 hover:bg-green-700 text-white',
+  broken_arrow: 'bg-red-600 hover:bg-red-700 text-white',
+  cancelled:    'bg-gray-200 hover:bg-gray-300 text-gray-800 border-gray-300',
+}
+
+// ─── Component props ──────────────────────────────────────────────────────────
+
+interface Journey {
   id: string
   papa_id: string
   status: string
@@ -38,263 +106,42 @@ type Journey = {
   scheduled_arrival: string | null
   actual_departure: string | null
   actual_arrival: string | null
-  papas?: { full_name: string; title?: string }
-  nests?: { name: string } | null
-  eagle_squares?: { name: string; code: string } | null
+  eta: string | null
+  etd: string | null
+  papas: { full_name: string; title: string } | null
+  cheetahs: { call_sign: string | null; registration_number: string } | null
 }
 
-type CallSignUpdaterProps = {
+interface CallSignUpdaterProps {
   journey: Journey
   onUpdate?: () => void
 }
 
-// ─── Status definitions ───────────────────────────────────────────────────────
-type StatusConfig = {
-  label: string
-  description: string
-  icon: React.ElementType
-  color: string
-  bgColor: string
-}
-
-const STATUS_CONFIGS: Record<string, StatusConfig> = {
-  planned: {
-    label: 'Planned',
-    description: 'Journey scheduled — awaiting dispatch',
-    icon: Clock,
-    color: 'text-gray-600',
-    bgColor: 'bg-gray-100',
-  },
-  // ---- Airport pickup leg ----
-  en_route_to_eagle: {
-    label: 'En Route to Eagle Square',
-    description: 'DO departing to Eagle Square to receive Papa',
-    icon: Navigation,
-    color: 'text-sky-600',
-    bgColor: 'bg-sky-100',
-  },
-  at_eagle: {
-    label: 'At Eagle Square',
-    description: "DO on ground at Eagle Square — awaiting Papa's arrival",
-    icon: Plane,
-    color: 'text-sky-700',
-    bgColor: 'bg-sky-200',
-  },
-  // ---- Transit legs ----
-  first_course: {
-    label: 'First Course',
-    description: 'Papa aboard — in transit',
-    icon: Radio,
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-100',
-  },
-  in_progress: {
-    label: 'In Progress',
-    description: 'En route — cocktail in progress',
-    icon: Navigation,
-    color: 'text-yellow-600',
-    bgColor: 'bg-yellow-100',
-  },
-  // ---- At Nest ----
-  at_nest: {
-    label: 'At Nest',
-    description: 'Papa checked in at Nest (hotel)',
-    icon: Hotel,
-    color: 'text-stone-600',
-    bgColor: 'bg-stone-100',
-  },
-  // ---- Theatre arrival ----
-  chapman: {
-    label: 'Chapman',
-    description: 'Arrived at Theatre gate',
-    icon: Church,
-    color: 'text-teal-600',
-    bgColor: 'bg-teal-100',
-  },
-  // ---- Return leg ----
-  dessert: {
-    label: 'Dessert',
-    description: 'Departing Theatre — returning Papa',
-    icon: ArrowRight,
-    color: 'text-indigo-600',
-    bgColor: 'bg-indigo-100',
-  },
-  completed: {
-    label: 'Completed',
-    description: 'Journey complete',
-    icon: CheckCircle,
-    color: 'text-green-600',
-    bgColor: 'bg-green-100',
-  },
-  cancelled: {
-    label: 'Cancelled',
-    description: 'Journey cancelled',
-    icon: XCircle,
-    color: 'text-red-600',
-    bgColor: 'bg-red-100',
-  },
-  broken_arrow: {
-    label: '⚠ BROKEN ARROW',
-    description: 'Emergency — major incident. All units alerted.',
-    icon: AlertTriangle,
-    color: 'text-red-700',
-    bgColor: 'bg-red-200',
-  },
-}
-
-// ─── Status flows per journey type ───────────────────────────────────────────
-
-/**
- * Returns the ordered sequence of statuses the DO will step through,
- * and the possible next steps from each status.
- */
-function getFlowForType(journeyType: JourneyType | null | undefined): {
-  steps: string[]                          // ordered progression for the timeline
-  transitions: Record<string, string[]>    // current → possible next
-} {
-  switch (journeyType) {
-    // ── Eagle Square → Nest → Theatre → return ─────────────────────────────
-    case 'airport_to_nest_to_theatre':
-    default:
-      return {
-        steps: [
-          'planned',
-          'en_route_to_eagle',
-          'at_eagle',
-          'first_course',     // picked up, heading to Nest
-          'at_nest',          // checked in at hotel
-          'in_progress',      // departing Nest → Theatre  (First Course call sign)
-          'chapman',          // arrived Theatre gate
-          'dessert',          // departing Theatre → Nest/Eagle Square
-          'completed',
-        ],
-        transitions: {
-          planned:            ['en_route_to_eagle', 'cancelled'],
-          en_route_to_eagle:  ['at_eagle', 'broken_arrow', 'cancelled'],
-          at_eagle:           ['first_course', 'broken_arrow', 'cancelled'],
-          first_course:       ['at_nest', 'broken_arrow', 'cancelled'],
-          at_nest:            ['in_progress', 'cancelled'],
-          in_progress:        ['chapman', 'broken_arrow', 'cancelled'],
-          chapman:            ['dessert', 'broken_arrow', 'cancelled'],
-          dessert:            ['completed', 'broken_arrow', 'cancelled'],
-          completed:          [],
-          cancelled:          [],
-          broken_arrow:       [],
-        },
-      }
-
-    // ── Eagle Square → Theatre directly → return ───────────────────────────
-    case 'airport_to_theatre':
-      return {
-        steps: [
-          'planned',
-          'en_route_to_eagle',
-          'at_eagle',
-          'first_course',   // picked up, heading direct to Theatre
-          'chapman',        // arrived Theatre gate
-          'dessert',        // returning
-          'completed',
-        ],
-        transitions: {
-          planned:            ['en_route_to_eagle', 'cancelled'],
-          en_route_to_eagle:  ['at_eagle', 'broken_arrow', 'cancelled'],
-          at_eagle:           ['first_course', 'broken_arrow', 'cancelled'],
-          first_course:       ['chapman', 'broken_arrow', 'cancelled'],
-          chapman:            ['dessert', 'broken_arrow', 'cancelled'],
-          dessert:            ['completed', 'broken_arrow', 'cancelled'],
-          completed:          [],
-          cancelled:          [],
-          broken_arrow:       [],
-        },
-      }
-
-    // ── Papa arrives own way — DO manages at Theatre ───────────────────────
-    case 'self_arrival':
-      return {
-        steps: [
-          'planned',
-          'chapman',     // Papa arrived at Theatre (own way) — DO on ground
-          'dessert',     // escorting Papa out / returning
-          'completed',
-        ],
-        transitions: {
-          planned:   ['chapman', 'cancelled'],
-          chapman:   ['dessert', 'broken_arrow', 'cancelled'],
-          dessert:   ['completed', 'broken_arrow', 'cancelled'],
-          completed: [],
-          cancelled: [],
-          broken_arrow: [],
-        },
-      }
-  }
-}
-
-// ─── Journey type label ───────────────────────────────────────────────────────
-const JOURNEY_TYPE_LABELS: Record<JourneyType, { label: string; route: string }> = {
-  airport_to_nest_to_theatre: {
-    label: 'Via Nest',
-    route: 'Eagle Square → Nest → Theatre → Return',
-  },
-  airport_to_theatre: {
-    label: 'Direct to Theatre',
-    route: 'Eagle Square → Theatre → Return',
-  },
-  self_arrival: {
-    label: 'Self-Arrival',
-    route: 'Papa arrives own way → Theatre',
-  },
-}
-
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function CallSignUpdater({ journey, onUpdate }: CallSignUpdaterProps) {
   const supabase = createClient()
-  const [updating, setUpdating] = useState(false)
+  const [loading, setLoading] = useState(false)
 
-  const journeyType: JourneyType = (journey.journey_type as JourneyType) || 'airport_to_nest_to_theatre'
-  const { steps, transitions } = getFlowForType(journeyType)
-  const currentStatus = journey.status || 'planned'
-  const currentConfig = STATUS_CONFIGS[currentStatus] || STATUS_CONFIGS.planned
+  const flow = getFlow(journey.journey_type)
+  const currentStep = flow.findIndex(s => s.status === journey.status)
+  const nextActions = getNextActions(journey.status, journey.journey_type)
+  const isTerminal = ['completed', 'broken_arrow', 'cancelled'].includes(journey.status)
+
+  const currentConfig = STATUS_CONFIG[journey.status] ?? STATUS_CONFIG.planned
   const CurrentIcon = currentConfig.icon
-  const nextStatuses = transitions[currentStatus] ?? []
 
-  // Contextual label overrides based on journey type
-  const getContextualLabel = (status: string): string => {
-    if (status === 'first_course') {
-      if (journeyType === 'airport_to_nest_to_theatre') return 'First Course — To Nest'
-      if (journeyType === 'airport_to_theatre') return 'First Course — To Theatre'
-    }
-    if (status === 'dessert') {
-      if (journeyType === 'airport_to_theatre') return 'Dessert — Return to Eagle Square'
-    }
-    if (status === 'chapman' && journeyType === 'self_arrival') {
-      return 'Chapman — Papa Arrived (Own)'
-    }
-    return STATUS_CONFIGS[status]?.label ?? status
-  }
-
-  const handleUpdateStatus = async (newStatus: string) => {
-    const label = getContextualLabel(newStatus)
-    if (!confirm(`Update journey status to "${label}"?`)) return
-
-    setUpdating(true)
+  const updateStatus = async (newStatus: TcnpStatus) => {
+    setLoading(true)
     try {
-      // Direct DB update (bypasses RPC status restrictions to support new statuses)
       const updates: Record<string, any> = {
         status: newStatus,
         updated_at: new Date().toISOString(),
       }
-
-      if (newStatus !== 'planned' && !journey.actual_departure) {
-        // Set actual_departure on first status advance
-        if (newStatus === 'en_route_to_eagle' || newStatus === 'first_course' || newStatus === 'chapman') {
-          if (!journey.actual_departure) {
-            updates.actual_departure = new Date().toISOString()
-          }
-        }
+      if (newStatus === 'cocktail' || newStatus === 'first_course') {
+        updates.actual_departure = new Date().toISOString()
       }
-
-      if (newStatus === 'completed') {
+      if (newStatus === 'chapman') {
         updates.actual_arrival = new Date().toISOString()
       }
 
@@ -305,184 +152,119 @@ export default function CallSignUpdater({ journey, onUpdate }: CallSignUpdaterPr
 
       if (error) throw error
 
-      // Log the journey event
+      // Log event
       await (supabase as any).from('journey_events').insert({
         journey_id: journey.id,
         event_type: newStatus,
-        description: `Call sign: ${label}`,
         triggered_at: new Date().toISOString(),
       })
 
-      toast.success(`${label} — call sign executed`)
+      toast.success(`${getCallSignLabel(newStatus)} — status updated`)
       onUpdate?.()
-    } catch (error: any) {
-      console.error('Error updating call sign:', error)
-      toast.error(error.message || 'Failed to update journey status')
+    } catch (err: any) {
+      console.error('Error updating status:', err)
+      toast.error(err.message || 'Failed to update status')
     } finally {
-      setUpdating(false)
+      setLoading(false)
     }
   }
 
-  const typeInfo = JOURNEY_TYPE_LABELS[journeyType]
-
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${currentConfig.bgColor}`}>
-              <CurrentIcon className={`h-5 w-5 ${currentConfig.color}`} />
-            </div>
-            <div>
-              <CardTitle className="text-lg">Journey Call Sign</CardTitle>
-              <CardDescription>
-                {journey.papas?.title} {journey.papas?.full_name}
-                {' · '}
-                {journey.origin} → {journey.destination}
-              </CardDescription>
-            </div>
-          </div>
-          <Badge className={`${currentConfig.bgColor} ${currentConfig.color} border-0`}>
-            {currentConfig.label}
-          </Badge>
+    <div className="space-y-4">
+      {/* Journey type label */}
+      {journey.journey_type && (
+        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+          {journey.journey_type === 'airport_to_nest_to_theatre' && <><Plane className="h-3 w-3" /> Eagle Square → Nest → Theatre</>}
+          {journey.journey_type === 'airport_to_theatre' && <><Plane className="h-3 w-3" /> Eagle Square → Theatre (Direct)</>}
+          {journey.journey_type === 'self_arrival' && <><Church className="h-3 w-3" /> Self-Arrival</>}
         </div>
+      )}
 
-        {/* Journey type route badge */}
-        <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-          <MapPin className="h-3 w-3" />
-          <span className="font-medium">{typeInfo.label}:</span>
-          <span>{typeInfo.route}</span>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-5">
-        {/* ── Progress timeline ─────────────────────────────────────────── */}
-        <div className="space-y-1">
-          {steps.filter(s => !['cancelled', 'broken_arrow'].includes(s)).map((step, i) => {
-            const stepConfig = STATUS_CONFIGS[step] || STATUS_CONFIGS.planned
-            const StepIcon = stepConfig.icon
-            const isDone = steps.indexOf(currentStatus) > i
-            const isCurrent = step === currentStatus
-            const isFuture = steps.indexOf(currentStatus) < i
-
-            return (
-              <div key={step} className="flex items-center gap-3">
-                <div className={`
-                  h-7 w-7 rounded-full flex items-center justify-center flex-shrink-0
-                  ${isDone ? 'bg-green-500 text-white' : isCurrent ? `${stepConfig.bgColor} ${stepConfig.color}` : 'bg-muted text-muted-foreground'}
-                `}>
-                  {isDone
-                    ? <CheckCircle className="h-4 w-4" />
-                    : <StepIcon className="h-3.5 w-3.5" />
-                  }
+      {/* Phase timeline */}
+      <div className="flex items-center gap-1 overflow-x-auto pb-1">
+        {flow.map((step, i) => {
+          const cfg = STATUS_CONFIG[step.status]
+          const StepIcon = cfg?.icon ?? Clock
+          const isDone = i < currentStep
+          const isCurrent = i === currentStep
+          return (
+            <div key={step.status} className="flex items-center">
+              <div className="flex flex-col items-center min-w-[64px]">
+                <div className={cn(
+                  'h-8 w-8 rounded-full flex items-center justify-center',
+                  isDone && 'bg-green-500 text-white',
+                  isCurrent && `${currentConfig.bgColor} ${currentConfig.color} ring-2 ring-offset-1 ring-current`,
+                  !isDone && !isCurrent && 'bg-muted text-muted-foreground opacity-40',
+                )}>
+                  {isDone ? <CheckCircle className="h-4 w-4" /> : <StepIcon className="h-4 w-4" />}
                 </div>
-                <span className={`text-sm ${isCurrent ? 'font-semibold' : isFuture ? 'text-muted-foreground' : 'line-through text-muted-foreground/60'}`}>
-                  {getContextualLabel(step)}
+                <span className={cn(
+                  'text-[9px] text-center font-medium mt-0.5 leading-tight',
+                  isCurrent && currentConfig.color,
+                  isDone && 'text-green-600 line-through',
+                  !isDone && !isCurrent && 'text-muted-foreground opacity-40',
+                )}>
+                  {cfg?.label ?? step.status}
                 </span>
-                {isCurrent && (
-                  <span className="ml-auto text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 rounded-full px-2 py-0.5">
-                    Current
-                  </span>
-                )}
               </div>
-            )
-          })}
+              {i < flow.length - 1 && (
+                <div className={cn('h-0.5 w-3 flex-shrink-0', i < currentStep ? 'bg-green-400' : 'bg-muted')} />
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Current status */}
+      <div className={cn('flex items-center gap-2 px-3 py-2 rounded-lg', currentConfig.bgColor)}>
+        <CurrentIcon className={cn('h-4 w-4', currentConfig.color)} />
+        <div>
+          <p className={cn('text-sm font-semibold', currentConfig.color)}>{currentConfig.label}</p>
+          <p className="text-xs text-muted-foreground">{currentConfig.description}</p>
         </div>
+      </div>
 
-        {/* ── Call sign action buttons ──────────────────────────────────── */}
-        {nextStatuses.filter(s => s !== 'cancelled' && s !== 'broken_arrow').length > 0 && (
-          <div className="space-y-2 pt-3 border-t">
-            <div className="flex items-center gap-2 text-sm font-medium mb-2">
-              <Radio className="h-4 w-4" />
-              <span>Execute Call Sign</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {nextStatuses
-                .filter(s => s !== 'cancelled' && s !== 'broken_arrow')
-                .map((status) => {
-                  const config = STATUS_CONFIGS[status] || STATUS_CONFIGS.planned
-                  const Icon = config.icon
-                  return (
-                    <Button
-                      key={status}
-                      variant="outline"
-                      onClick={() => handleUpdateStatus(status)}
-                      disabled={updating}
-                      className={`justify-start gap-2 border-2 hover:${config.bgColor} hover:${config.color}`}
-                    >
-                      <Icon className="h-4 w-4" />
-                      {getContextualLabel(status)}
-                    </Button>
-                  )
-                })}
-            </div>
+      {/* Next actions */}
+      {!isTerminal && nextActions.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Available Call Signs</p>
+          <div className="grid grid-cols-1 gap-2">
+            {nextActions.map(action => {
+              const cfg = STATUS_CONFIG[action]
+              const ActionIcon = cfg?.icon ?? CheckCircle
+              const isDanger = action === 'broken_arrow' || action === 'cancelled'
+              return (
+                <button
+                  key={action}
+                  onClick={() => updateStatus(action)}
+                  disabled={loading}
+                  className={cn(
+                    'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold border transition-all',
+                    ACTION_STYLE[action] ?? 'bg-muted hover:bg-muted/80',
+                    isDanger && 'border-dashed',
+                    loading && 'opacity-50 cursor-not-allowed',
+                  )}
+                >
+                  {loading
+                    ? <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
+                    : <ActionIcon className="h-4 w-4 flex-shrink-0" />
+                  }
+                  <div className="text-left">
+                    <span className="block">{cfg?.label ?? action}</span>
+                    <span className="text-[10px] opacity-75 font-normal">{cfg?.description}</span>
+                  </div>
+                </button>
+              )
+            })}
           </div>
-        )}
-
-        {/* ── Danger actions ────────────────────────────────────────────── */}
-        {nextStatuses.some(s => s === 'broken_arrow' || s === 'cancelled') && (
-          <div className="flex gap-2 pt-2 border-t border-destructive/20">
-            {nextStatuses.includes('broken_arrow') && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => handleUpdateStatus('broken_arrow')}
-                disabled={updating}
-                className="gap-2 flex-1"
-              >
-                <AlertTriangle className="h-4 w-4" />
-                Broken Arrow
-              </Button>
-            )}
-            {nextStatuses.includes('cancelled') && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleUpdateStatus('cancelled')}
-                disabled={updating}
-                className="gap-2 flex-1 text-destructive border-destructive/40 hover:bg-destructive/10"
-              >
-                <XCircle className="h-4 w-4" />
-                Cancel Journey
-              </Button>
-            )}
-          </div>
-        )}
-
-        {/* ── Timestamps ────────────────────────────────────────────────── */}
-        <div className="space-y-1 text-xs text-muted-foreground border-t pt-3">
-          <div className="flex justify-between">
-            <span>Scheduled departure</span>
-            <span>{new Date(journey.scheduled_departure).toLocaleString()}</span>
-          </div>
-          {journey.actual_departure && (
-            <div className="flex justify-between">
-              <span>Actual departure</span>
-              <span>
-                {new Date(journey.actual_departure).toLocaleString()}
-                {' · '}
-                {formatDistanceToNow(new Date(journey.actual_departure), { addSuffix: true })}
-              </span>
-            </div>
-          )}
-          {journey.actual_arrival && (
-            <div className="flex justify-between">
-              <span>Completed</span>
-              <span>{formatDistanceToNow(new Date(journey.actual_arrival), { addSuffix: true })}</span>
-            </div>
-          )}
         </div>
+      )}
 
-        {/* ── Terminal state info ───────────────────────────────────────── */}
-        {(currentStatus === 'completed' || currentStatus === 'cancelled' || currentStatus === 'broken_arrow') && (
-          <div className="flex items-start gap-2 p-3 bg-muted rounded-lg">
-            <AlertCircle className="h-4 w-4 mt-0.5 text-muted-foreground" />
-            <p className="text-xs text-muted-foreground">
-              This journey is <strong>{currentConfig.label}</strong>. No further updates available.
-            </p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      {isTerminal && (
+        <p className="text-sm text-muted-foreground italic px-1">
+          Journey is {currentConfig.label} — no further actions available.
+        </p>
+      )}
+    </div>
   )
 }

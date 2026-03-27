@@ -379,38 +379,26 @@ export default function JourneysPage() {
     const type = journeyType || 'airport_to_nest_to_theatre'
     const workflows: Record<string, Record<string, string[]>> = {
       airport_to_nest_to_theatre: {
-        planned:           ['en_route_to_eagle', 'cancelled'],
-        en_route_to_eagle: ['at_eagle', 'broken_arrow', 'cancelled'],
-        at_eagle:          ['first_course', 'broken_arrow', 'cancelled'],
-        first_course:      ['at_nest', 'broken_arrow', 'cancelled'],
-        at_nest:           ['in_progress', 'cancelled'],
-        in_progress:       ['chapman', 'broken_arrow', 'cancelled'],
-        chapman:           ['dessert', 'broken_arrow', 'cancelled'],
-        dessert:           ['completed', 'broken_arrow', 'cancelled'],
+        planned:      ['cocktail', 'broken_arrow', 'cancelled'],
+        cocktail:     ['first_course', 'broken_arrow', 'cancelled'],
+        first_course: ['chapman', 'broken_arrow', 'cancelled'],
+        chapman:      ['dessert', 'broken_arrow', 'cancelled'],
+        dessert:      ['completed', 'broken_arrow', 'cancelled'],
       },
       airport_to_theatre: {
-        planned:           ['en_route_to_eagle', 'cancelled'],
-        en_route_to_eagle: ['at_eagle', 'broken_arrow', 'cancelled'],
-        at_eagle:          ['first_course', 'broken_arrow', 'cancelled'],
-        first_course:      ['chapman', 'broken_arrow', 'cancelled'],
-        chapman:           ['dessert', 'broken_arrow', 'cancelled'],
-        dessert:           ['completed', 'broken_arrow', 'cancelled'],
-      },
-      self_arrival: {
-        planned:  ['chapman', 'cancelled'],
+        planned:  ['cocktail', 'broken_arrow', 'cancelled'],
+        cocktail: ['chapman', 'broken_arrow', 'cancelled'],
         chapman:  ['dessert', 'broken_arrow', 'cancelled'],
         dessert:  ['completed', 'broken_arrow', 'cancelled'],
       },
+      self_arrival: {
+        planned: ['chapman', 'broken_arrow', 'cancelled'],
+        chapman: ['dessert', 'broken_arrow', 'cancelled'],
+        dessert: ['completed', 'broken_arrow', 'cancelled'],
+      },
     }
-    const workflow = workflows[type] || workflows['airport_to_nest_to_theatre']
-    const legacy: Record<string, string[]> = {
-      planned: ['en_route_to_eagle', 'first_course', 'cancelled'],
-      in_progress: ['first_course', 'chapman', 'broken_arrow', 'cancelled'],
-      first_course: ['chapman', 'broken_arrow', 'cancelled'],
-      chapman: ['dessert', 'broken_arrow', 'cancelled'],
-      dessert: ['completed', 'broken_arrow', 'cancelled'],
-    }
-    return workflow[currentStatus] || []
+    const workflow = workflows[type] ?? workflows.airport_to_nest_to_theatre
+    return workflow[currentStatus] ?? []
   }
 
   const canUpdateSelectedJourney = selectedJourney && currentRole && currentUserId
