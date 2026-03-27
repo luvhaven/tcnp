@@ -68,8 +68,14 @@ export default function LiveTrackingPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <div className="space-y-4 animate-in fade-in duration-300">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <div className="h-8 w-40 rounded-md bg-muted animate-pulse" />
+            <div className="h-4 w-64 rounded-md bg-muted animate-pulse" />
+          </div>
+        </div>
+        <div className="h-[600px] rounded-xl border bg-muted animate-pulse" />
       </div>
     )
   }

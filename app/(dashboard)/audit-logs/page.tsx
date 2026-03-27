@@ -211,8 +211,30 @@ export default function AuditLogsPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      <div className="space-y-6 animate-in fade-in duration-300">
+        <div className="space-y-2">
+          <div className="h-8 w-36 rounded-md bg-muted animate-pulse" />
+          <div className="h-4 w-72 rounded-md bg-muted animate-pulse" />
+        </div>
+        <div className="border rounded-xl overflow-hidden">
+          <div className="bg-muted/50 px-5 py-4">
+            <div className="h-5 w-32 rounded-md bg-muted animate-pulse" />
+          </div>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="px-5 py-4 border-t flex items-start gap-4">
+              <div className="h-8 w-8 rounded-full bg-muted animate-pulse flex-shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="flex gap-2">
+                  <div className="h-5 w-14 rounded-full bg-muted animate-pulse" />
+                  <div className="h-5 w-20 rounded-md bg-muted animate-pulse" />
+                </div>
+                <div className="h-4 w-2/3 rounded-md bg-muted animate-pulse" />
+                <div className="h-3 w-1/2 rounded-md bg-muted animate-pulse" />
+              </div>
+              <div className="h-4 w-20 rounded-md bg-muted animate-pulse flex-shrink-0" />
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
