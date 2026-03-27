@@ -4,6 +4,7 @@ import { useState, Suspense, useEffect } from "react"
 import dynamic from "next/dynamic"
 import { useIsClient } from "@/hooks/useIsClient"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
+import { PresenceHeartbeat } from "@/components/utils/PresenceHeartbeat"
 
 // Core layout components - loaded normally but wrapped in error boundaries
 import { Header } from "@/components/layout/header"
@@ -81,6 +82,9 @@ export default function DashboardLayout({
   return (
     <ErrorBoundary>
       <div className="flex h-screen overflow-hidden">
+        {/* Presence heartbeat - updates last_seen every 60s so officers show as online */}
+        <PresenceHeartbeat />
+
         {/* Dev tools - DISABLED on iOS */}
         {canMountExtras && !isIOS && <DevLoggerInit />}
 
