@@ -10,10 +10,9 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { MapPin, Users, Car, Navigation, Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import { MapPin, Users, Car, Navigation, Search, ChevronLeft, ChevronRight, Wifi, WifiOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CallSignKey, getCallSignLabel, getCallSignColor, CALL_SIGNS } from '@/lib/constants/call-signs'
-import { LocationPermissionModal } from './LocationPermissionModal'
 import { useLocationTracking } from '@/hooks/useLocationTracking'
 
 type UserLocation = {
@@ -133,46 +132,31 @@ export default function LiveTrackingMap() {
   const [mapCenter, setMapCenter] = useState<[number, number]>([6.5244, 3.3792]) // Lagos, Nigeria
   const [isClient, setIsClient] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [showPermissionModal, setShowPermissionModal] = useState(false)
-
+  // Auto-start tracking immediately — no modal friction
   const {
     permissionStatus,
     requestPermission,
     isTracking,
     startTracking
   } = useLocationTracking({
-    enableTracking: false, // Don't auto-start, modal will handle it
-    updateInterval: 10000, // Update every 10 seconds
-    highAccuracy: true // Use GPS for precise location
+    enableTracking: true,   // Auto-start on mount
+    updateInterval: 10000,  // Push to DB every 10s
+    highAccuracy: true
   })
 
   useEffect(() => {
     setIsClient(true)
   }, [])
 
-  // Show modal if permission is denied or promptable, but only if we haven't dismissed it this session
-  useEffect(() => {
-    if (permissionStatus === 'denied' || (permissionStatus === 'prompt' && !isTracking)) {
-      setShowPermissionModal(true)
-    } else if (permissionStatus === 'granted') {
-      setShowPermissionModal(false)
-    }
-  }, [permissionStatus, isTracking])
-
-  const handleAllowLocation = async () => {
+  // If permission was denied, allow re-requesting on button click
+  const handleEnableLocation = async () => {
     const granted = await requestPermission()
     if (granted) {
-      setShowPermissionModal(false)
-      // Start tracking after permission is granted
       startTracking()
+      toast.success('Location sharing enabled — you are now visible on the map.')
+    } else {
+      toast.error('Location access denied. Please allow location in your browser settings and refresh.')
     }
-  }
-
-  const handleDenyLocation = () => {
-    setShowPermissionModal(false)
-    toast.info('Live tracking disabled', {
-      description: 'You can enable it later by refreshing the page.'
-    })
   }
 
   useEffect(() => {
@@ -246,7 +230,7 @@ export default function LiveTrackingMap() {
           assigned_do_id,
           papas:papa_id (full_name)
         `)
-        .in('status', ['planned', 'scheduled', 'arriving', 'at_nest', 'departing_nest', 'enroute_to_theatre', 'at_theatre', 'departing_theatre', 'active', 'planning', 'distress'])
+        .not('status', 'in', '(completed,cancelled,broken_arrow)')
 
       // Create a map of user_id -> papa_name
       const userToPapaMap = new Map<string, string>()
@@ -450,12 +434,6 @@ export default function LiveTrackingMap() {
 
   return (
     <div className="flex h-[calc(100vh-6rem)] flex-col gap-3 animate-fade-in relative">
-      <LocationPermissionModal
-        isOpen={showPermissionModal}
-        onAllow={handleAllowLocation}
-        onDeny={handleDenyLocation}
-        permissionStatus={permissionStatus}
-      />
       {/* Compact header with inline stats and sidebar toggle */}
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
@@ -465,6 +443,29 @@ export default function LiveTrackingMap() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Inline location sharing status */}
+          {isTracking ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+              <span className="pulse-dot bg-emerald-500 w-2 h-2" />
+              Sharing live location
+            </span>
+          ) : permissionStatus === 'denied' ? (
+            <button
+              onClick={handleEnableLocation}
+              className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 border border-destructive/30 px-3 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/20 transition-colors"
+            >
+              <WifiOff className="h-3 w-3" />
+              Location blocked — click to fix
+            </button>
+          ) : (
+            <button
+              onClick={handleEnableLocation}
+              className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/10 border border-orange-500/30 px-3 py-1 text-[11px] font-medium text-orange-700 dark:text-orange-400 hover:bg-orange-500/20 transition-colors"
+            >
+              <Wifi className="h-3 w-3" />
+              Enable location sharing
+            </button>
+          )}
           <div className="flex flex-wrap items-center gap-2 text-[11px] sm:text-xs">
             <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1">
               <Navigation className="h-3 w-3 text-yellow-500" />
