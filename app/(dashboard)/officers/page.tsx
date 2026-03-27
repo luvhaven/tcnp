@@ -515,7 +515,17 @@ export default function OfficersPage() {
     }
   }
 
-  const canManageOfficers = currentUser && ['dev_admin', 'admin'].includes(currentUser.role)
+  // Command Oscar = admin privileges (can fully manage officers/titles)
+  const ADMIN_ROLES = ['dev_admin', 'admin', 'command', 'head_of_command', 'captain', 'vice_captain']
+  const canManageOfficers = currentUser && ADMIN_ROLES.includes(currentUser.role)
+
+  // Oscar heads can manage their own unit (head_tango_oscar, head_delta_oscar, etc.)
+  // This is in addition to their DO assignment
+  const canManageOwnUnit = currentUser && (
+    ADMIN_ROLES.includes(currentUser.role) ||
+    (typeof currentUser.role === 'string' && currentUser.role.startsWith('head_'))
+  )
+
 
   if (loading) {
     return (

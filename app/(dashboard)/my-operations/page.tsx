@@ -3,19 +3,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import CallSignPanel from '@/components/operations/CallSignPanel'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, Radio, MapPin, Car, User, Calendar, Hotel, Plane } from 'lucide-react'
-import { format, formatDistanceToNow } from 'date-fns'
-import { getCallSignLabel } from '@/lib/constants/call-signs'
+import { Loader2, Radio, MapPin, Car, User, Calendar } from 'lucide-react'
+import { format } from 'date-fns'
 import { notificationService } from '@/lib/services/notificationService'
 import { toast } from 'sonner'
 
 interface Journey {
   id: string
   status: string
-  journey_type: string | null
   origin: string
   destination: string
   scheduled_departure: string | null
@@ -26,12 +24,6 @@ interface Journey {
   cheetahs: { call_sign: string | null; registration_number: string } | null
   nests: { name: string } | null
   eagle_squares: { name: string; code: string } | null
-}
-
-const JOURNEY_TYPE_LABELS: Record<string, string> = {
-  airport_to_nest_to_theatre: 'Eagle Square → Nest → Theatre',
-  airport_to_theatre: 'Eagle Square → Theatre (Direct)',
-  self_arrival: 'Self-Arrival',
 }
 
 export default function MyOperationsPage() {
@@ -50,7 +42,7 @@ export default function MyOperationsPage() {
       const { data, error } = await supabase
         .from('journeys')
         .select(`
-          id, status, journey_type, origin, destination,
+          id, status, origin, destination,
           scheduled_departure, etd, eta, notes,
           papas:papas!papa_id(full_name, title),
           cheetahs:cheetahs!assigned_cheetah_id(call_sign, registration_number),
@@ -81,7 +73,6 @@ export default function MyOperationsPage() {
       knownIds.current = new Set(incoming.map(j => j.id))
       setJourneys(incoming)
 
-      // Auto-select first journey if none selected
       if (isInitial && incoming.length > 0) {
         setSelectedJourneyId(incoming[0].id)
       }
@@ -180,12 +171,6 @@ export default function MyOperationsPage() {
 // ─── Sub-panel for one journey ─────────────────────────────────────────────
 
 function JourneyOperationsPanel({ journey }: { journey: Journey }) {
-  const JOURNEY_TYPE_LABELS: Record<string, string> = {
-    airport_to_nest_to_theatre: 'Eagle Square → Nest → Theatre',
-    airport_to_theatre: 'Eagle Square → Theatre (Direct)',
-    self_arrival: 'Self-Arrival',
-  }
-
   return (
     <div className="space-y-4">
       {/* Journey summary card */}
@@ -226,30 +211,18 @@ function JourneyOperationsPanel({ journey }: { journey: Journey }) {
             </div>
           </div>
 
-          {journey.journey_type && (
-            <div className="mt-3 pt-3 border-t border-primary/10">
-              <Badge variant="outline" className="text-xs">
-                {JOURNEY_TYPE_LABELS[journey.journey_type] ?? journey.journey_type}
-              </Badge>
-              {journey.nests && (
-                <span className="ml-2 text-xs text-muted-foreground">
-                  <Hotel className="h-3 w-3 inline mr-0.5" />{journey.nests.name}
-                </span>
-              )}
-              {journey.eagle_squares && (
-                <span className="ml-2 text-xs text-muted-foreground">
-                  <Plane className="h-3 w-3 inline mr-0.5" />{journey.eagle_squares.name}
-                </span>
-              )}
+          {(journey.nests || journey.eagle_squares) && (
+            <div className="mt-3 pt-3 border-t border-primary/10 flex gap-4 text-xs text-muted-foreground">
+              {journey.nests && <span>🏠 Nest: {journey.nests.name}</span>}
+              {journey.eagle_squares && <span>✈️ Eagle Square: {journey.eagle_squares.name}</span>}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Call sign panel */}
+      {/* Call sign panel — free-click, no rigid steps */}
       <CallSignPanel
         journeyId={journey.id}
-        journeyType={journey.journey_type}
         papaName={journey.papas ? `${journey.papas.title} ${journey.papas.full_name}` : undefined}
         cheetahName={journey.cheetahs?.call_sign ?? journey.cheetahs?.registration_number ?? undefined}
         origin={journey.origin}
