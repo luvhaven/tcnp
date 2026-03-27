@@ -21,6 +21,11 @@ const LocationTracker = dynamic(
   { ssr: false }
 )
 
+const LocationEnforcer = dynamic(
+  () => import("@/components/tracking/LocationEnforcer").then((m) => m.LocationEnforcer),
+  { ssr: false }
+)
+
 const NotificationPermissionBanner = dynamic(
   () => import("@/components/notifications/NotificationPermissionBanner"),
   { ssr: false }
@@ -88,10 +93,17 @@ export default function DashboardLayout({
         {/* Dev tools - DISABLED on iOS */}
         {canMountExtras && !isIOS && <DevLoggerInit />}
 
-        {/* Location tracking - NOW SAFE ON iOS */}
+        {/* Location tracking — auto-shares location */}
         {canMountExtras && (
           <ErrorBoundary>
             <LocationTracker />
+          </ErrorBoundary>
+        )}
+
+        {/* Location enforcer — prompts users who haven't granted permission */}
+        {canMountExtras && !isIOS && (
+          <ErrorBoundary>
+            <LocationEnforcer />
           </ErrorBoundary>
         )}
 

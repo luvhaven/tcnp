@@ -395,28 +395,41 @@ export default function ChatSystem({
     }
   }, [supabase, currentUser?.id])
 
+  const isRecentlySeen = (lastSeen: string | null): boolean => {
+    if (!lastSeen) return false
+    const ms = new Date().getTime() - new Date(lastSeen).getTime()
+    return ms < 3 * 60 * 1000 // 3 minutes
+  }
+
   const loadParticipants = useCallback(async () => {
     try {
-      const { data, error } = await (supabase as any).rpc('get_chat_participants')
+      // Query users directly — get full_name, oscar, role, last_seen, is_online
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, full_name, oscar, role, last_seen, is_online')
+        .eq('is_active', true)
+        .order('full_name')
 
       if (error) throw error
 
-      const participants = (data ?? []) as ChatParticipant[]
-      const onlineIds = onlineUserIdsRef.current
+      const participants = (data ?? []) as (ChatParticipant & { is_online: boolean | null })[]
+      const presenceIds = onlineUserIdsRef.current
 
       setUsers((prev: User[]) => {
         const merged = new Map<string, User>()
-        prev.forEach((user) => {
-          merged.set(user.id, user)
-        })
+        prev.forEach((user) => merged.set(user.id, user))
 
         participants.forEach((participant) => {
           const existing = merged.get(participant.id)
-          const isOnline = onlineIds.includes(participant.id)
+          // Online = DB flag OR Supabase Presence OR recent last_seen
+          const isOnline =
+            !!participant.is_online ||
+            presenceIds.includes(participant.id) ||
+            isRecentlySeen(participant.last_seen ?? null)
 
           merged.set(participant.id, {
             id: participant.id,
-            full_name: participant.full_name || existing?.full_name || 'Unknown User',
+            full_name: participant.full_name || existing?.full_name || 'Unknown',
             oscar: participant.oscar || existing?.oscar || '',
             role: participant.role || existing?.role || '',
             is_online: isOnline,
@@ -430,6 +443,7 @@ export default function ChatSystem({
       console.error('Error loading chat participants:', error)
     }
   }, [supabase])
+
 
   const [typingUsers, setTypingUsers] = useState<Record<string, number>>({})
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -704,12 +718,26 @@ export default function ChatSystem({
 
     presenceChannelRef.current = channel
 
+    // Also subscribe to users table changes for is_online / last_seen updates
+    const usersOnlineChannel = supabase
+      .channel('chat-users-online-rt')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'users',
+        filter: undefined
+      }, () => {
+        void loadParticipants()
+      })
+      .subscribe()
+
     return () => {
       if (presenceChannelRef.current) {
         presenceChannelRef.current.untrack()
         supabase.removeChannel(presenceChannelRef.current)
         presenceChannelRef.current = null
       }
+      supabase.removeChannel(usersOnlineChannel)
     }
   }, [supabase, currentUser?.id, loadParticipants])
 

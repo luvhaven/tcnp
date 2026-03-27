@@ -3,47 +3,56 @@
 /**
  * PresenceHeartbeat
  *
- * Updates the current user's `last_seen` timestamp in the database every
- * 60 seconds while the app is open. This allows the Officers page to accurately
- * show which officers are truly online (last_seen within 5 minutes).
- *
- * Also sets last_seen on mount (immediate) and clears it on unmount (tab close).
+ * - Sets is_online = true immediately on mount (with last_seen)
+ * - Pings last_seen + is_online every 30s while app is open
+ * - Sets is_online = false on page unload / hidden
  */
 
 import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-const HEARTBEAT_INTERVAL_MS = 60_000 // 1 minute
+const HEARTBEAT_INTERVAL_MS = 30_000 // 30 seconds
 
 export function PresenceHeartbeat() {
   useEffect(() => {
     const supabase = createClient()
     let intervalId: ReturnType<typeof setInterval> | null = null
 
-    const updatePresence = async () => {
+    const updatePresence = async (online: boolean) => {
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
+        const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
-
         await (supabase as any)
           .from('users')
-          .update({ last_seen: new Date().toISOString() })
+          .update({ last_seen: new Date().toISOString(), is_online: online })
           .eq('id', user.id)
       } catch {
-        // Non-fatal - presence update failure should not disrupt the app
+        // Non-fatal
       }
     }
 
-    // Ping immediately on mount
-    void updatePresence()
+    const handleVisibilityChange = () => {
+      void updatePresence(!document.hidden)
+    }
 
-    // Then ping every minute
-    intervalId = setInterval(() => void updatePresence(), HEARTBEAT_INTERVAL_MS)
+    const handleBeforeUnload = () => {
+      void updatePresence(false)
+    }
+
+    // Go online immediately
+    void updatePresence(true)
+
+    // Keep alive every 30s
+    intervalId = setInterval(() => void updatePresence(!document.hidden), HEARTBEAT_INTERVAL_MS)
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('beforeunload', handleBeforeUnload)
 
     return () => {
       if (intervalId) clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      void updatePresence(false)
     }
   }, [])
 

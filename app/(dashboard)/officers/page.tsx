@@ -126,46 +126,59 @@ export default function OfficersPage() {
 
   useEffect(() => {
     loadData()
+
+    // Realtime: refresh when users or titles change
+    const usersChannel = supabase
+      .channel('officers-users-rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => {
+        loadData()
+      })
+      .subscribe()
+
+    const titlesChannel = supabase
+      .channel('officers-titles-rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'official_titles' }, () => {
+        loadData()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(usersChannel)
+      supabase.removeChannel(titlesChannel)
+    }
   }, [])
 
   const loadData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
+      let profile: any = null
       if (user) {
-        const { data: profile } = await (supabase as any)
+        const { data } = await (supabase as any)
           .from("users")
           .select("*")
           .eq("id", user.id)
           .single()
-        setCurrentUser(profile || null)
+        profile = data || null
+        setCurrentUser(profile)
       } else {
         setCurrentUser(null)
       }
 
       const response = await fetch("/api/officers/list")
-
       if (!response.ok) {
         console.error("Failed to load officers via API:", await response.text())
         setLoading(false)
         return
       }
-
       const body = await response.json()
       setOfficers(body.officers || [])
 
-      // Load titles and programs for manage tab
-      if (currentUser && ['dev_admin', 'admin'].includes(currentUser.role)) {
+      // Load titles + programs — use local `profile` (not async `currentUser` state)
+      if (profile && ['dev_admin', 'admin', 'command', 'head_of_command', 'captain'].includes(profile.role)) {
         const [titlesRes, programsRes] = await Promise.all([
-          supabase
-            .from('official_titles')
-            .select('*')
-            .order('unit, name'),
-          supabase
-            .from('programs')
-            .select('id, name, status')
-            .order('created_at', { ascending: false })
+          supabase.from('official_titles').select('*').order('unit, name'),
+          supabase.from('programs').select('id, name, status').order('created_at', { ascending: false })
         ])
-
         if (titlesRes.data) setTitles(titlesRes.data as OfficialTitle[])
         if (programsRes.data) setPrograms(programsRes.data as Program[])
       }
@@ -175,6 +188,7 @@ export default function OfficersPage() {
       setLoading(false)
     }
   }
+
 
   const generateOscar = (fullName: string, role: string) => {
     if (!fullName) return ''
