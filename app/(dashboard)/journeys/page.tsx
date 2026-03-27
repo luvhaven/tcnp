@@ -76,6 +76,7 @@ type Journey = {
   papa_id: string
   assigned_cheetah_id: string
   status: string
+  journey_type?: string | null
   assigned_do_id?: string | null
   assigned_duty_officer_id?: string | null
   assigned_nest_id?: string | null
@@ -119,6 +120,7 @@ export default function JourneysPage() {
     papa_id: '',
     assigned_cheetah_id: '',
     program_id: '',
+    journey_type: 'airport_to_nest_to_theatre',
     assigned_duty_officer_id: '',
     assigned_nest_id: '',
     assigned_eagle_square_id: '',
@@ -256,6 +258,7 @@ export default function JourneysPage() {
         papa_id: '',
         assigned_cheetah_id: '',
         program_id: '',
+        journey_type: 'airport_to_nest_to_theatre',
         assigned_duty_officer_id: '',
         assigned_nest_id: '',
         assigned_eagle_square_id: '',
@@ -281,6 +284,7 @@ export default function JourneysPage() {
       papa_id: journey.papa_id || '',
       assigned_cheetah_id: journey.assigned_cheetah_id || '',
       program_id: journey.program_id || '',
+      journey_type: journey.journey_type || 'airport_to_nest_to_theatre',
       assigned_duty_officer_id: journey.assigned_duty_officer_id || journey.assigned_do_id || '',
       assigned_nest_id: journey.assigned_nest_id || '',
       assigned_eagle_square_id: journey.assigned_eagle_square_id || '',
@@ -371,9 +375,36 @@ export default function JourneysPage() {
 
 
 
-  const getAvailableCallSigns = (currentStatus: string) => {
-    const workflow: Record<string, string[]> = {
-      planned: ['first_course', 'in_progress', 'cancelled'],
+  const getAvailableCallSigns = (currentStatus: string, journeyType?: string | null) => {
+    const type = journeyType || 'airport_to_nest_to_theatre'
+    const workflows: Record<string, Record<string, string[]>> = {
+      airport_to_nest_to_theatre: {
+        planned:           ['en_route_to_eagle', 'cancelled'],
+        en_route_to_eagle: ['at_eagle', 'broken_arrow', 'cancelled'],
+        at_eagle:          ['first_course', 'broken_arrow', 'cancelled'],
+        first_course:      ['at_nest', 'broken_arrow', 'cancelled'],
+        at_nest:           ['in_progress', 'cancelled'],
+        in_progress:       ['chapman', 'broken_arrow', 'cancelled'],
+        chapman:           ['dessert', 'broken_arrow', 'cancelled'],
+        dessert:           ['completed', 'broken_arrow', 'cancelled'],
+      },
+      airport_to_theatre: {
+        planned:           ['en_route_to_eagle', 'cancelled'],
+        en_route_to_eagle: ['at_eagle', 'broken_arrow', 'cancelled'],
+        at_eagle:          ['first_course', 'broken_arrow', 'cancelled'],
+        first_course:      ['chapman', 'broken_arrow', 'cancelled'],
+        chapman:           ['dessert', 'broken_arrow', 'cancelled'],
+        dessert:           ['completed', 'broken_arrow', 'cancelled'],
+      },
+      self_arrival: {
+        planned:  ['chapman', 'cancelled'],
+        chapman:  ['dessert', 'broken_arrow', 'cancelled'],
+        dessert:  ['completed', 'broken_arrow', 'cancelled'],
+      },
+    }
+    const workflow = workflows[type] || workflows['airport_to_nest_to_theatre']
+    const legacy: Record<string, string[]> = {
+      planned: ['en_route_to_eagle', 'first_course', 'cancelled'],
       in_progress: ['first_course', 'chapman', 'broken_arrow', 'cancelled'],
       first_course: ['chapman', 'broken_arrow', 'cancelled'],
       chapman: ['dessert', 'broken_arrow', 'cancelled'],
@@ -750,6 +781,23 @@ export default function JourneysPage() {
               </div>
             </div>
 
+            {/* Journey Type - drives the DO's call sign steps */}
+            <div className="space-y-2">
+              <Label htmlFor="journey_type">Journey Type *</Label>
+              <select
+                id="journey_type"
+                required
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                value={formData.journey_type}
+                onChange={(e) => setFormData({ ...formData, journey_type: e.target.value })}
+              >
+                <option value="airport_to_nest_to_theatre">Eagle Square → Nest → Theatre → Return</option>
+                <option value="airport_to_theatre">Eagle Square → Theatre (Direct) → Return</option>
+                <option value="self_arrival">Self-Arrival — Papa arrives own way to Theatre</option>
+              </select>
+              <p className="text-[10px] text-muted-foreground">Determines the DO's call sign steps. Cannot be changed once the journey is in progress.</p>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="papa_id">Papa (Guest) *</Label>
@@ -1053,8 +1101,21 @@ export default function JourneysPage() {
               </div>
             </div>
 
+            {/* Journey Type */}
+            <div className="space-y-2">
+              <Label htmlFor="edit_journey_type">Journey Type</Label>
+              <select
+                id="edit_journey_type"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                value={formData.journey_type}
+                onChange={(e) => setFormData({ ...formData, journey_type: e.target.value })}
+              >
+                <option value="airport_to_nest_to_theatre">Eagle Square → Nest → Theatre → Return</option>
+                <option value="airport_to_theatre">Eagle Square → Theatre (Direct) → Return</option>
+                <option value="self_arrival">Self-Arrival — Papa arrives own way to Theatre</option>
+              </select>
+            </div>
 
-            {/* Base Location Assignment */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="edit_assigned_nest_id">Base Location (Nest)</Label>

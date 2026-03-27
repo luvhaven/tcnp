@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -23,11 +23,13 @@ import { toast } from 'sonner'
 import CallSignUpdater from '@/components/journeys/CallSignUpdater'
 import { formatDistanceToNow } from 'date-fns'
 import { getCallSignLabel } from '@/lib/constants/tncpCallSigns'
+import { notificationService } from '@/lib/services/notificationService'
 
 type Journey = {
   id: string
   papa_id: string
   status: string
+  journey_type?: string | null
   origin: string
   destination: string
   scheduled_departure: string
@@ -86,72 +88,31 @@ export default function MyAssignmentsPage() {
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [journeyEvents, setJourneyEvents] = useState<Record<string, JourneyEvent[]>>({})
+  // Track known journey IDs so we can detect newly assigned ones
+  const knownJourneyIds = useRef<Set<string>>(new Set())
 
-  useEffect(() => {
-    loadCurrentUser()
-    loadAssignments()
-  }, [])
-
-  const loadCurrentUser = async () => {
+  const loadAssignments = useCallback(async (isInitialLoad = false) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data } = await supabase
-          .from('users')
-          .select('id, full_name, oscar, role')
-          .eq('id', user.id)
-          .single()
-        setCurrentUser(data)
-      }
-    } catch (error) {
-      console.error('Error loading current user:', error)
-    }
-  }
-
-  const loadAssignments = async () => {
-    try {
-      setLoading(true)
+      if (isInitialLoad) setLoading(true)
 
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Load journeys assigned to current user
       const { data, error } = await supabase
         .from('journeys')
         .select(`
           *,
           papas:papas!papa_id (
-            id,
-            full_name,
-            title,
-            phone,
-            email,
-            nationality,
-            special_requirements,
-            notes
+            id, full_name, title, phone, email, nationality, special_requirements, notes
           ),
           cheetahs:cheetahs!assigned_cheetah_id (
-            id,
-            call_sign,
-            registration_number,
-            driver_name,
-            driver_phone
+            id, call_sign, registration_number, driver_name, driver_phone
           ),
           nests:nests!assigned_nest_id (
-            id,
-            name,
-            address,
-            city,
-            contact,
-            email
+            id, name, address, city, contact, email
           ),
           eagle_squares:eagle_squares!assigned_eagle_square_id (
-            id,
-            name,
-            code,
-            city,
-            country,
-            contact
+            id, name, code, city, country, contact
           )
         `)
         .eq('assigned_duty_officer_id', user.id)
@@ -159,21 +120,38 @@ export default function MyAssignmentsPage() {
 
       if (error) throw error
 
-      console.log('✅ Loaded assignments:', data)
-      setJourneys(data || [])
+      const incoming = (data || []) as Journey[]
 
-      if (data && data.length > 0) {
-        const journeyIds = (data as any[]).map((j) => j.id)
+      // Detect newly assigned journeys (not on initial load)
+      if (!isInitialLoad && knownJourneyIds.current.size > 0) {
+        for (const j of incoming) {
+          if (!knownJourneyIds.current.has(j.id)) {
+            const papaName = j.papas?.full_name || 'Unknown Papa'
+            toast.info(`📋 New assignment: ${papaName}`, {
+              description: `${j.origin} → ${j.destination}`,
+              duration: 8000,
+            })
+            void notificationService.notifyAssignment(
+              `Assignment: ${papaName}`,
+              `New journey assigned to you. ${j.origin} → ${j.destination}. Check My Assignments.`
+            )
+          }
+        }
+      }
 
-        const { data: events, error: eventsError } = await supabase
+      // Update known IDs
+      knownJourneyIds.current = new Set(incoming.map(j => j.id))
+      setJourneys(incoming)
+
+      if (incoming.length > 0) {
+        const journeyIds = incoming.map(j => j.id)
+        const { data: events } = await supabase
           .from('journey_events')
           .select('id, journey_id, event_type, description, triggered_at')
           .in('journey_id', journeyIds)
           .order('triggered_at', { ascending: false })
 
-        if (eventsError) {
-          console.error('Error loading journey events:', eventsError)
-        } else if (events) {
+        if (events) {
           const grouped: Record<string, JourneyEvent[]> = {}
           for (const event of events as any[]) {
             if (!grouped[event.journey_id]) grouped[event.journey_id] = []
@@ -186,14 +164,51 @@ export default function MyAssignmentsPage() {
       }
     } catch (error) {
       console.error('Error loading assignments:', error)
-      toast.error('Failed to load assignments')
+      if (isInitialLoad) toast.error('Failed to load assignments')
     } finally {
-      setLoading(false)
+      if (isInitialLoad) setLoading(false)
     }
-  }
+  }, [supabase])
+
+  useEffect(() => {
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data } = await supabase
+          .from('users')
+          .select('id, full_name, oscar, role')
+          .eq('id', user.id)
+          .single()
+        setCurrentUser(data)
+      }
+      // Initial load
+      await loadAssignments(true)
+
+      // Realtime: watch for journey changes assigned to this user
+      const channel = supabase
+        .channel('do_assignments')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'journeys' },
+          () => {
+            // Reload and detect newly assigned journeys
+            void loadAssignments(false)
+          }
+        )
+        .subscribe()
+
+      return () => {
+        supabase.removeChannel(channel)
+      }
+    }
+
+    void init()
+  }, [loadAssignments, supabase])
+
+
 
   const activeJourneys = journeys.filter(j =>
-    ['planned', 'first_course', 'in_progress'].includes(j.status)
+    !['completed', 'cancelled', 'broken_arrow'].includes(j.status)
   )
 
   const completedJourneys = journeys.filter(j =>
