@@ -72,6 +72,7 @@ export default function DashboardLayout({
   const isClient = useIsClient()
   const [isIOS, setIsIOS] = useState(false)
   const [canMountExtras, setCanMountExtras] = useState(false)
+  const [canMountTracker, setCanMountTracker] = useState(false) // Separate from canMountExtras — safe on iOS
 
   // Detect iOS on client side only
   useEffect(() => {
@@ -81,12 +82,19 @@ export default function DashboardLayout({
         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
       setIsIOS(isIOSDevice)
 
-      // On non-iOS, enable extras after a short delay
-      // On iOS, NEVER enable these features - they crash the app
+      // LocationTracker uses native geolocation + has try/catch for every iOS-risky API
+      // (wakelock, battery, AudioContext). Safe to enable on all devices after 2s.
+      const trackerTimer = setTimeout(() => setCanMountTracker(true), 2000)
+
       if (!isIOSDevice) {
-        const timer = setTimeout(() => setCanMountExtras(true), 1000)
-        return () => clearTimeout(timer)
+        // Extras (IndexedDB sync, push notifications) only safe on non-iOS
+        const extrasTimer = setTimeout(() => setCanMountExtras(true), 1000)
+        return () => {
+          clearTimeout(extrasTimer)
+          clearTimeout(trackerTimer)
+        }
       }
+      return () => clearTimeout(trackerTimer)
     }
   }, [isClient])
 
@@ -102,8 +110,8 @@ export default function DashboardLayout({
         {/* Dev tools - DISABLED on iOS */}
         {canMountExtras && !isIOS && <DevLoggerInit />}
 
-        {/* Location tracking — auto-shares location */}
-        {canMountExtras && (
+        {/* Location tracking — enabled on ALL devices including iOS */}
+        {canMountTracker && (
           <ErrorBoundary>
             <LocationTracker />
           </ErrorBoundary>

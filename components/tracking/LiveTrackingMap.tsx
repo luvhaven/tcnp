@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { formatDistanceToNow } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
@@ -33,6 +33,7 @@ type UserLocation = {
 type LiveTrackingLeafletProps = {
   center: [number, number]
   locations: UserLocation[]
+  trails?: Record<string, [number, number][]>
   getUserStatus: (updatedAt: string) => { label: string; color: string }
   getRoleDisplay: (role?: string | null) => { label: string; color: string }
 }
@@ -132,6 +133,9 @@ export default function LiveTrackingMap() {
   const [mapCenter, setMapCenter] = useState<[number, number]>([6.5244, 3.3792]) // Lagos, Nigeria
   const [isClient, setIsClient] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  /** Keeps the last 10 GPS positions per user for trail polylines */
+  const locationTrailsRef = useRef<Record<string, [number, number][]>>({})
+  const [locationTrails, setLocationTrails] = useState<Record<string, [number, number][]>>({})
   // Auto-start tracking immediately — no modal friction
   const {
     permissionStatus,
@@ -249,6 +253,19 @@ export default function LiveTrackingMap() {
         ...loc,
         papa_name: userToPapaMap.get(loc.user_id) || null
       }))
+
+      // Update trails: append new positions (keep last 10 per user)
+      const trails = locationTrailsRef.current
+      enrichedData.forEach((loc: UserLocation) => {
+        const point: [number, number] = [loc.latitude, loc.longitude]
+        const existing = trails[loc.user_id] ?? []
+        const last = existing[existing.length - 1]
+        // Only append if the position has actually moved >5m
+        if (!last || Math.abs(last[0] - point[0]) > 0.00005 || Math.abs(last[1] - point[1]) > 0.00005) {
+          trails[loc.user_id] = [...existing, point].slice(-10)
+        }
+      })
+      setLocationTrails({ ...trails })
 
       console.log('✅ Loaded user locations:', enrichedData.length, 'with', userToPapaMap.size, 'Papa assignments')
       setUserLocations(enrichedData)
@@ -520,6 +537,7 @@ export default function LiveTrackingMap() {
                   <LiveTrackingLeaflet
                     center={mapCenter}
                     locations={filteredLocations}
+                    trails={locationTrails}
                     getUserStatus={getUserStatus}
                     getRoleDisplay={getRoleDisplayMeta}
                   />

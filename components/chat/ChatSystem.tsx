@@ -137,6 +137,10 @@ export default function ChatSystem({
   const markedMessagesRef = useRef<Set<string>>(new Set())
   const missingUsersRef = useRef<Set<string>>(new Set())
   const onlineUserIdsRef = useRef<string[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [hasMoreMessages, setHasMoreMessages] = useState(false)
+  const [loadingEarlier, setLoadingEarlier] = useState(false)
+  const oldestTimestampRef = useRef<string | null>(null)
   const [canChatInProgram, setCanChatInProgram] = useState(true)
   const [programAccessChecked, setProgramAccessChecked] = useState(false)
 
@@ -808,8 +812,8 @@ export default function ChatSystem({
                       users:sender_id(full_name, oscar, role)
                       `)
         .is('deleted_at', null)
-        .order('created_at', { ascending: true })
-        .limit(100)
+        .order('created_at', { ascending: false })
+        .limit(50)
 
       if (papaId) {
         query = query.eq('papa_id', papaId)
@@ -826,8 +830,11 @@ export default function ChatSystem({
 
       if (error) throw error
 
-      // Safely transform messages with null checks
-      const transformedMessages = (data || [])
+      const rows = (data || []).reverse() // oldest first
+      oldestTimestampRef.current = rows[0]?.created_at ?? null
+      setHasMoreMessages(rows.length === 50)
+
+      const transformedMessages = rows
         .map((msg) => {
           try {
             return transformMessage(msg as RawMessage)
@@ -860,6 +867,48 @@ export default function ChatSystem({
       toast.error(friendlyMessage)
     } finally {
       setLoadingMessages(false)
+    }
+  }
+
+  const loadEarlierMessages = async () => {
+    if (!oldestTimestampRef.current || loadingEarlier) return
+    setLoadingEarlier(true)
+    try {
+      let query = supabase
+        .from('chat_messages')
+        .select(`*, users:sender_id(full_name, oscar, role)`)
+        .is('deleted_at', null)
+        .lt('created_at', oldestTimestampRef.current)
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+      if (papaId) {
+        query = query.eq('papa_id', papaId)
+        if (programId) query = query.eq('program_id', programId)
+      } else if (programId) {
+        query = query.eq('program_id', programId).is('papa_id', null)
+      } else {
+        query = query.is('program_id', null).is('papa_id', null)
+      }
+
+      const { data, error } = await query
+      if (error) throw error
+
+      const rows = (data || []).reverse()
+      if (rows.length > 0) {
+        oldestTimestampRef.current = rows[0].created_at
+        setHasMoreMessages(rows.length === 50)
+        const earlier = rows
+          .map((msg) => { try { return transformMessage(msg as RawMessage) } catch { return null } })
+          .filter((msg): msg is Message => msg !== null)
+        setMessages(prev => [...earlier, ...prev])
+      } else {
+        setHasMoreMessages(false)
+      }
+    } catch (err: any) {
+      toast.error('Failed to load earlier messages')
+    } finally {
+      setLoadingEarlier(false)
     }
   }
 
@@ -1196,17 +1245,44 @@ export default function ChatSystem({
             </span>
           </Button>
         </div>
-        <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground">
-          <AtSign className="h-3 w-3" />
-          <span>@ to mention</span>
-          <span>•</span>
-          <Lock className="h-3 w-3" />
-          <span>@@ for private</span>
+        <div className="flex items-center gap-2 mt-3">
+          <div className="relative flex-1">
+            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            <input
+              type="search"
+              placeholder="Search messages..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 h-7 text-xs rounded-md border bg-background focus:outline-none focus:ring-1 focus:ring-primary/60"
+              aria-label="Search messages"
+            />
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
+            <AtSign className="h-3 w-3" />
+            <span>@ mention</span>
+            <span>•</span>
+            <Lock className="h-3 w-3" />
+            <span>@@ private</span>
+          </div>
         </div>
       </div>
 
       {/* Messages */}
       <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-6 space-y-6 bg-muted/10 scroll-smooth">
+        {/* Load earlier messages */}
+        {hasMoreMessages && !loadingMessages && (
+          <div className="flex justify-center pb-2">
+            <button
+              type="button"
+              onClick={loadEarlierMessages}
+              disabled={loadingEarlier}
+              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground border rounded-full px-4 py-1.5 bg-background hover:bg-muted transition-colors"
+            >
+              {loadingEarlier ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+              {loadingEarlier ? 'Loading...' : 'Load earlier messages'}
+            </button>
+          </div>
+        )}
         {loadingMessages ? (
           <div className="space-y-4">
             {[...Array(4)].map((_, index) => (
@@ -1233,7 +1309,10 @@ export default function ChatSystem({
             </div>
           </div>
         ) : (
-          messages.filter(canViewMessage).map((message) => {
+          messages
+            .filter(canViewMessage)
+            .filter((m) => !searchQuery || m.content.toLowerCase().includes(searchQuery.toLowerCase()))
+            .map((message) => {
             const isOwn = message.sender_id === currentUser?.id
             const displayName = getDisplayName(message.users)
 

@@ -30,6 +30,7 @@ import {
   Landmark,
   PlaneTakeoff,
   Volume2,
+  BookOpen,
 } from "lucide-react"
 
 const navigation = [
@@ -50,6 +51,7 @@ const navigation = [
   { name: "Theatres", href: "/theatres", icon: Landmark },
   { name: "Incidents", href: "/incidents", icon: AlertTriangle },
   { name: "Audit Log", href: "/audit-logs", icon: FileText },
+  { name: "Guide", href: "/guide", icon: BookOpen },
   { name: "Settings", href: "/settings", icon: Settings },
 ]
 
