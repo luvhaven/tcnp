@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plane, Plus, Edit, Trash2, Search, RefreshCw, MapPin, Gauge, TrendingUp, Globe } from "lucide-react"
+import { Plane, Plus, Edit, Trash2, Search, RefreshCw, MapPin, Gauge, TrendingUp, Globe, ArrowRight } from "lucide-react"
 import { toast } from "sonner"
 import dynamic from 'next/dynamic'
 import {
@@ -398,25 +398,14 @@ function ManageSquares() {
 
 function TrackEagles() {
     const supabase = createClient()
-    const [searchTerm, setSearchTerm] = useState('')
-    const [flights, setFlights] = useState<FlightState[]>([])
-    const [selectedFlight, setSelectedFlight] = useState<FlightState | null>(null)
-    const [loading, setLoading] = useState(false)
-    const [autoRefresh, setAutoRefresh] = useState(false)
+    const [papas, setPapas] = useState<any[]>([])
+    const [activeFlights, setActiveFlights] = useState<Record<string, FlightState>>({})
+    const [loading, setLoading] = useState(true)
+    const [autoRefresh, setAutoRefresh] = useState(true)
     const [currentRole, setCurrentRole] = useState<string | null>(null)
     const [roleChecked, setRoleChecked] = useState(false)
 
     const canManage = currentRole ? canManageEagles(currentRole) : false
-
-    useEffect(() => {
-        if (!autoRefresh || !selectedFlight) return
-
-        const interval = setInterval(() => {
-            refreshSelectedFlight()
-        }, 10000) // 10 seconds
-
-        return () => clearInterval(interval)
-    }, [autoRefresh, selectedFlight])
 
     useEffect(() => {
         const loadRole = async () => {
@@ -443,81 +432,111 @@ function TrackEagles() {
         loadRole()
     }, [])
 
-    const handleSearch = async () => {
-        if (!canManage) {
-            toast.error('You are not authorized to track flights')
-            return
-        }
-
-        if (!searchTerm.trim()) {
-            toast.error('Please enter a flight callsign or ICAO24')
-            return
-        }
-
-        setLoading(true)
+    const fetchPapasWithFlights = async () => {
         try {
-            // Try ICAO24 first (6 character hex)
-            if (searchTerm.length === 6) {
-                const flight = await getFlightByIcao24(searchTerm.toLowerCase())
-                if (flight) {
-                    setFlights([flight])
-                    setSelectedFlight(flight)
-                    await storeFlightData(supabase, flight)
-                    toast.success('Flight found!')
-                    return
+            const { data, error } = await supabase
+                .from('papas')
+                .select('id, full_name, title, profile_photo_url, flight_number, airline, flight_departure_time, flight_arrival_time, arrival_city, country')
+                .not('flight_number', 'is', null)
+                .order('flight_departure_time', { ascending: true })
+
+            if (error) throw error
+            setPapas(data || [])
+            return data || []
+        } catch (error) {
+            console.error('Error fetching papas:', error)
+            return []
+        }
+    }
+
+    const refreshFlightData = async (papasData: any[]) => {
+        if (!papasData || papasData.length === 0) return
+
+        try {
+            // Get all unique callsigns we care about
+            const callsigns = papasData
+                .map(p => p.flight_number?.trim().toLowerCase())
+                .filter(Boolean)
+
+            if (callsigns.length === 0) return
+
+            // Fetch all states from OpenSky to avoid rate limits
+            const { getAllFlights, parseFlightState, storeFlightData } = await import('@/lib/opensky-api')
+            const response = await getAllFlights()
+            
+            if (!response.states) return
+
+            const newActiveFlights: Record<string, FlightState> = {}
+
+            // Find matching flights
+            response.states.forEach((rawState: any) => {
+                const callsign = rawState[1]?.trim().toLowerCase()
+                if (callsign && callsigns.some(c => callsign.includes(c) || c.includes(callsign))) {
+                    const flightData = parseFlightState(rawState)
+                    // We map it by the original papa flight_number that matched
+                    const matchingPapa = papasData.find(p => {
+                        const pCall = p.flight_number.trim().toLowerCase()
+                        return callsign.includes(pCall) || pCall.includes(callsign)
+                    })
+                    if (matchingPapa) {
+                        newActiveFlights[matchingPapa.id] = flightData
+                        // Store to DB (do this asynchronously)
+                        storeFlightData(supabase, flightData).catch(console.error)
+                    }
                 }
-            }
+            })
 
-            // Search by callsign
-            const results = await searchFlightsByCallsign(searchTerm)
+            setActiveFlights(newActiveFlights)
+        } catch (error) {
+            console.error('Error refreshing flights:', error)
+        }
+    }
 
-            if (results.length === 0) {
-                toast.error('No flights found')
-                setFlights([])
-                setSelectedFlight(null)
-                return
-            }
+    useEffect(() => {
+        if (!canManage) return
 
-            setFlights(results)
-            setSelectedFlight(results[0])
-
-            for (const flight of results) {
-                await storeFlightData(supabase, flight)
-            }
-
-            toast.success(`Found ${results.length} flight(s)`)
-        } catch (error: any) {
-            console.error('Error searching flights:', error)
-            toast.error('Failed to search flights')
-        } finally {
+        const init = async () => {
+            setLoading(true)
+            const p = await fetchPapasWithFlights()
+            await refreshFlightData(p)
             setLoading(false)
         }
-    }
+        init()
+    }, [canManage])
 
-    const refreshSelectedFlight = async () => {
-        if (!selectedFlight || !canManage) return
+    useEffect(() => {
+        if (!autoRefresh || !canManage || papas.length === 0) return
 
-        try {
-            const flight = await getFlightByIcao24(selectedFlight.icao24)
-            if (flight) {
-                setSelectedFlight(flight)
-                setFlights(prev => prev.map(f => f.icao24 === flight.icao24 ? flight : f))
-                await storeFlightData(supabase, flight)
-            }
-        } catch (error) {
-            console.error('Error refreshing flight:', error)
+        const interval = setInterval(() => {
+            refreshFlightData(papas)
+        }, 30000) // 30 seconds
+
+        return () => clearInterval(interval)
+    }, [autoRefresh, canManage, papas])
+
+    const getFlightStatus = (papa: any, activeFlight?: FlightState) => {
+        if (activeFlight) {
+            return activeFlight.on_ground ? 'Landed' : 'In Air'
         }
+
+        const now = new Date()
+        const depTime = papa.flight_departure_time ? new Date(papa.flight_departure_time) : null
+        const arrTime = papa.flight_arrival_time ? new Date(papa.flight_arrival_time) : null
+
+        if (arrTime && now > arrTime) return 'Landed'
+        if (depTime && now < depTime) return 'Pre-Flight'
+        
+        // If between dep and arr but no active flight found on OpenSky, it's either out of coverage or delayed
+        if (depTime && arrTime && now >= depTime && now <= arrTime) return 'In Air (No Telemetry)'
+
+        return 'Scheduled'
     }
 
-    const mapCenter: [number, number] = selectedFlight?.latitude && selectedFlight?.longitude
-        ? [selectedFlight.latitude, selectedFlight.longitude]
-        : [9.0765, 7.3986] // Default to Abuja
-
-    if (!roleChecked) {
+    if (!roleChecked || loading) {
         return (
             <div className="space-y-4">
                 {[...Array(3)].map((_, i) => (
-                    <div key={i} className="h-32 rounded-lg bg-muted animate-pulse" />
+                    <div key={i} className="h-48 rounded-lg bg-muted animate-pulse" />
                 ))}
             </div>
         )
@@ -539,212 +558,145 @@ function TrackEagles() {
 
     return (
         <div className="space-y-6">
-            {/* Search */}
-            <Card>
-                <CardContent className="pt-6">
-                    <div className="flex flex-col gap-4 md:flex-row">
-                        <div className="flex-1 relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Enter flight callsign or ICAO24 (e.g., AAL123 or a1b2c3)"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                                className="pl-10"
-                            />
-                        </div>
-                        <Button onClick={handleSearch} disabled={loading}>
-                            {loading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-                            Search Flight
-                        </Button>
-                    </div>
-                </CardContent>
-            </Card>
+            <div className="flex justify-between items-center bg-card p-4 rounded-lg border">
+                <div>
+                    <h2 className="text-lg font-bold">Papa Flights</h2>
+                    <p className="text-sm text-muted-foreground">Real-time tracking of active travel itineraries</p>
+                </div>
+                <Button
+                    variant="outline"
+                    onClick={() => {
+                        setAutoRefresh(!autoRefresh)
+                        if (!autoRefresh) {
+                            toast.success('Auto-refresh enabled (30s)')
+                            refreshFlightData(papas)
+                        } else {
+                            toast.success('Auto-refresh disabled')
+                        }
+                    }}
+                    className={autoRefresh ? 'border-primary/50 bg-primary/10' : ''}
+                >
+                    <RefreshCw className={`mr-2 h-4 w-4 ${autoRefresh ? 'animate-spin text-primary' : ''}`} />
+                    {autoRefresh ? 'Tracking Active' : 'Auto-Refresh Paused'}
+                </Button>
+            </div>
 
-            {selectedFlight && (
-                <>
-                    {/* Flight Stats */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <Card className="group hover:-translate-y-1 hover:shadow-lg hover:border-primary/40 transition-all">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Callsign</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="flex items-center gap-2">
-                                    <Plane className="h-5 w-5 text-primary" />
-                                    <span className="text-2xl font-bold">
-                                        {selectedFlight.callsign?.trim() || 'N/A'}
-                                    </span>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="group hover:-translate-y-1 hover:shadow-lg hover:border-primary/40 transition-all">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Altitude</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="flex items-center gap-2">
-                                    <TrendingUp className="h-5 w-5 text-blue-500" />
-                                    <span className="text-2xl font-bold">
-                                        {metersToFeet(selectedFlight.baro_altitude)?.toLocaleString() || 'N/A'} ft
-                                    </span>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="group hover:-translate-y-1 hover:shadow-lg hover:border-primary/40 transition-all">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Speed</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="flex items-center gap-2">
-                                    <Gauge className="h-5 w-5 text-emerald-500" />
-                                    <span className="text-2xl font-bold">
-                                        {metersPerSecondToKnots(selectedFlight.velocity)?.toFixed(0) || 'N/A'} kts
-                                    </span>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="group hover:-translate-y-1 hover:shadow-lg hover:border-primary/40 transition-all">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Origin</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="flex items-center gap-2">
-                                    <Globe className="h-5 w-5 text-amber-500" />
-                                    <span className="text-lg font-bold truncate">
-                                        {selectedFlight.origin_country || 'N/A'}
-                                    </span>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    {/* Flight Details */}
-                    <Card>
-                        <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <CardTitle>Flight Details</CardTitle>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setAutoRefresh(!autoRefresh)}
-                                >
-                                    <RefreshCw className={`mr-2 h-4 w-4 ${autoRefresh ? 'animate-spin' : ''}`} />
-                                    {autoRefresh ? 'Auto-Refresh ON' : 'Auto-Refresh OFF'}
-                                </Button>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                <div>
-                                    <p className="text-sm text-muted-foreground">ICAO24</p>
-                                    <p className="font-mono font-semibold">{selectedFlight.icao24}</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Heading</p>
-                                    <p className="font-semibold">{selectedFlight.true_track?.toFixed(0) || 'N/A'}°</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Vertical Rate</p>
-                                    <p className="font-semibold">
-                                        {selectedFlight.vertical_rate ? `${(selectedFlight.vertical_rate * 196.85).toFixed(0)} ft/min` : 'N/A'}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Latitude</p>
-                                    <p className="font-mono text-sm">{selectedFlight.latitude?.toFixed(4) || 'N/A'}</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Longitude</p>
-                                    <p className="font-mono text-sm">{selectedFlight.longitude?.toFixed(4) || 'N/A'}</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Last Contact</p>
-                                    <p className="font-semibold">{formatLastContact(selectedFlight.last_contact)}</p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Map */}
-                    {selectedFlight.latitude && selectedFlight.longitude && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Flight Position</CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-0">
-                                <div style={{ height: '500px', width: '100%' }}>
-                                    {typeof window !== 'undefined' && (
-                                        <MapContainer
-                                            center={mapCenter}
-                                            zoom={8}
-                                            style={{ height: '100%', width: '100%' }}
-                                        >
-                                            <TileLayer
-                                                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                                            />
-                                            <Marker position={mapCenter}>
-                                                <Popup>
-                                                    <div className="space-y-1">
-                                                        <p className="font-semibold">{selectedFlight.callsign?.trim() || 'Unknown'}</p>
-                                                        <p className="text-xs">{selectedFlight.origin_country}</p>
-                                                        <p className="text-xs">Alt: {metersToFeet(selectedFlight.baro_altitude)} ft</p>
-                                                        <p className="text-xs">Speed: {metersPerSecondToKnots(selectedFlight.velocity)} kts</p>
-                                                    </div>
-                                                </Popup>
-                                            </Marker>
-                                        </MapContainer>
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
-
-                    {/* Other Flights */}
-                    {flights.length > 1 && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Other Matching Flights ({flights.length - 1})</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-2">
-                                    {flights.filter(f => f.icao24 !== selectedFlight.icao24).map((flight) => (
-                                        <div
-                                            key={flight.icao24}
-                                            className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
-                                            onClick={() => setSelectedFlight(flight)}
-                                        >
-                                            <div>
-                                                <p className="font-semibold">{flight.callsign?.trim() || 'Unknown'}</p>
-                                                <p className="text-sm text-muted-foreground">{flight.icao24} • {flight.origin_country}</p>
-                                            </div>
-                                            <Badge variant={flight.on_ground ? 'secondary' : 'default'}>
-                                                {flight.on_ground ? 'On Ground' : 'In Flight'}
-                                            </Badge>
-                                        </div>
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
-                </>
-            )}
-
-            {/* Empty State */}
-            {!selectedFlight && !loading && (
+            {papas.length === 0 ? (
                 <Card>
-                    <CardContent className="flex flex-col items-center justify-center py-12">
+                    <CardContent className="flex flex-col items-center justify-center py-16">
                         <Plane className="h-16 w-16 text-muted-foreground mb-4" />
-                        <p className="text-lg font-semibold mb-2">No Flight Selected</p>
+                        <p className="text-xl font-bold mb-2">No Flights Scheduled</p>
                         <p className="text-sm text-muted-foreground text-center max-w-md">
-                            Enter a flight callsign (e.g., AAL123) or ICAO24 address (e.g., a1b2c3) to track a flight in real-time.
+                            Assign flight numbers and departure times to Papas in their profiles to track them automatically.
                         </p>
                     </CardContent>
                 </Card>
+            ) : (
+                <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                    {papas.map(papa => {
+                        const flight = activeFlights[papa.id]
+                        const status = getFlightStatus(papa, flight)
+                        
+                        let statusColor = "bg-gray-500/10 text-gray-400 border-gray-500/20"
+                        if (status === 'In Air') statusColor = "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
+                        if (status === 'Landed') statusColor = "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                        if (status === 'Pre-Flight' || status === 'Scheduled') statusColor = "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                        if (status === 'In Air (No Telemetry)') statusColor = "bg-orange-500/10 text-orange-400 border-orange-500/20"
+
+                        return (
+                            <Card key={papa.id} className="group hover:border-primary/40 transition-all duration-300 overflow-hidden relative bg-card/60 backdrop-blur-sm">
+                                <div className="absolute top-0 left-0 w-full h-1" style={{
+                                    background: status === 'In Air' ? 'linear-gradient(90deg, #10b981 0%, transparent 100%)' : 'transparent'
+                                }} />
+                                
+                                <CardContent className="p-6">
+                                    <div className="flex items-start justify-between mb-6">
+                                        <div className="flex items-center gap-3">
+                                            {papa.profile_photo_url ? (
+                                                <img src={papa.profile_photo_url} alt={papa.full_name} className="w-12 h-12 rounded-full object-cover border border-border/50 shadow-sm" />
+                                            ) : (
+                                                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center border border-border/50 shadow-sm">
+                                                    <span className="font-semibold text-muted-foreground">{papa.full_name.charAt(0)}</span>
+                                                </div>
+                                            )}
+                                            <div>
+                                                <h3 className="font-bold text-lg leading-tight mb-1">{papa.full_name}</h3>
+                                                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">{papa.title || 'Papa'}</p>
+                                            </div>
+                                        </div>
+                                        <Badge className={`${statusColor} transition-all duration-500 px-3 py-1 text-xs font-semibold tracking-wide`} variant="outline">
+                                            {status}
+                                            {status === 'In Air' && <span className="ml-2 w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />}
+                                        </Badge>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between p-4 bg-background/50 rounded-lg border border-border/50 shadow-inner">
+                                            <div>
+                                                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Flight</p>
+                                                <p className="font-mono font-bold flex items-center gap-2">
+                                                    <Plane className="h-4 w-4 text-primary" />
+                                                    {papa.airline ? `${papa.airline} ` : ''}{papa.flight_number}
+                                                </p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Destination</p>
+                                                <p className="font-semibold flex items-center justify-end gap-1.5 text-sm">
+                                                    <MapPin className="h-3.5 w-3.5 text-primary" />
+                                                    {papa.arrival_city || papa.country || 'N/A'}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {flight ? (
+                                            <div className="grid grid-cols-3 gap-3 text-center pt-2">
+                                                <div className="p-3 bg-background/30 border border-border/50 rounded-lg">
+                                                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Altitude</p>
+                                                    <p className="font-mono font-bold text-lg leading-none">
+                                                        {metersToFeet(flight.baro_altitude)?.toLocaleString() || '--'} 
+                                                        <span className="text-[10px] text-muted-foreground font-sans ml-1">ft</span>
+                                                    </p>
+                                                </div>
+                                                <div className="p-3 bg-background/30 border border-border/50 rounded-lg">
+                                                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Speed</p>
+                                                    <p className="font-mono font-bold text-lg leading-none">
+                                                        {metersPerSecondToKnots(flight.velocity)?.toFixed(0) || '--'} 
+                                                        <span className="text-[10px] text-muted-foreground font-sans ml-1">kts</span>
+                                                    </p>
+                                                </div>
+                                                <div className="p-3 bg-background/30 border border-border/50 rounded-lg">
+                                                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Heading</p>
+                                                    <p className="font-mono font-bold text-lg leading-none">
+                                                        {flight.true_track?.toFixed(0) || '--'}°
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center justify-between px-2 pt-2 relative">
+                                                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full px-12">
+                                                    <div className="h-px w-full border-t border-dashed border-border/60"></div>
+                                                </div>
+                                                <div className="bg-card z-10 pr-4">
+                                                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Departure</p>
+                                                    <p className="font-mono font-medium text-sm">
+                                                        {papa.flight_departure_time ? new Date(papa.flight_departure_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}
+                                                    </p>
+                                                </div>
+                                                <ArrowRight className="h-4 w-4 text-muted-foreground/40 z-10 bg-card" />
+                                                <div className="text-right bg-card z-10 pl-4">
+                                                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Arrival</p>
+                                                    <p className="font-mono font-medium text-sm">
+                                                        {papa.flight_arrival_time ? new Date(papa.flight_arrival_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )
+                    })}
+                </div>
             )}
         </div>
     )

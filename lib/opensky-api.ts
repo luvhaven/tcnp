@@ -202,18 +202,17 @@ export async function storeFlightData(supabase: any, flight: FlightState) {
     const { error } = await supabase
       .from('flight_tracking')
       .upsert({
-        flight_id: flight.callsign || flight.icao24,
+        flight_id: (flight.callsign || flight.icao24).trim(),
         icao24: flight.icao24,
-        callsign: flight.callsign,
+        callsign: flight.callsign?.trim() || null,
         origin_country: flight.origin_country,
-        latitude: flight.latitude,
-        longitude: flight.longitude,
+        current_latitude: flight.latitude,
+        current_longitude: flight.longitude,
         altitude: flight.baro_altitude,
         velocity: flight.velocity,
         heading: flight.true_track,
-        vertical_rate: flight.vertical_rate,
-        on_ground: flight.on_ground,
-        last_contact: new Date(flight.last_contact * 1000).toISOString(),
+        status: flight.on_ground ? 'Landed' : 'In Air',
+        last_updated: new Date(flight.last_contact * 1000).toISOString(),
         updated_at: new Date().toISOString()
       }, {
         onConflict: 'flight_id'
