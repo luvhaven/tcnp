@@ -136,5 +136,16 @@ export function useUnreadChatCount() {
     }
   }, [supabase, userId, fetchUnread])
 
-  return { count }
+  // Update document title when unread count changes
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const base = 'TCNP'
+    document.title = count > 0 ? `(${count > 99 ? '99+' : count}) ${base}` : base
+  }, [count])
+
+  const markRead = useCallback(() => {
+    setCount(0)
+  }, [])
+
+  return { count, markRead }
 }

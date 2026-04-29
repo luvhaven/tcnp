@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, Suspense, useEffect } from "react"
+import { useState, Suspense, useEffect, useMemo } from "react"
 import dynamic from "next/dynamic"
 import { useIsClient } from "@/hooks/useIsClient"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { PresenceHeartbeat } from "@/components/utils/PresenceHeartbeat"
 import { BrokenArrowAlert } from "@/components/operations/BrokenArrowAlert"
+import { createClient } from "@/lib/supabase/client"
+import { useChatNotifications } from "@/hooks/useChatNotifications"
 
 // Core layout components - loaded normally but wrapped in error boundaries
 import { Header } from "@/components/layout/header"
@@ -72,7 +74,12 @@ export default function DashboardLayout({
   const isClient = useIsClient()
   const [isIOS, setIsIOS] = useState(false)
   const [canMountExtras, setCanMountExtras] = useState(false)
-  const [canMountTracker, setCanMountTracker] = useState(false) // Separate from canMountExtras — safe on iOS
+  const [canMountTracker, setCanMountTracker] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const supabase = useMemo(() => createClient(), [])
+
+  // Mount global chat notification listener
+  useChatNotifications(currentUserId)
 
   // Detect iOS on client side only
   useEffect(() => {
@@ -83,11 +90,9 @@ export default function DashboardLayout({
       setIsIOS(isIOSDevice)
 
       // LocationTracker uses native geolocation + has try/catch for every iOS-risky API
-      // (wakelock, battery, AudioContext). Safe to enable on all devices after 2s.
       const trackerTimer = setTimeout(() => setCanMountTracker(true), 2000)
 
       if (!isIOSDevice) {
-        // Extras (IndexedDB sync, push notifications) only safe on non-iOS
         const extrasTimer = setTimeout(() => setCanMountExtras(true), 1000)
         return () => {
           clearTimeout(extrasTimer)
@@ -97,6 +102,13 @@ export default function DashboardLayout({
       return () => clearTimeout(trackerTimer)
     }
   }, [isClient])
+
+  // Load current user id for chat notifications
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setCurrentUserId(user?.id ?? null)
+    })
+  }, [supabase])
 
   return (
     <ErrorBoundary>

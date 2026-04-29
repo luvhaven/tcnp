@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
@@ -8,9 +8,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { MessageCircle, Send, Users, AtSign, Lock, Loader2 } from 'lucide-react'
+import { MessageCircle, Send, Users, AtSign, Lock, Loader2, ChevronDown, Trash2, CornerUpLeft, Pencil, X, Smile, Search } from 'lucide-react'
 import { toast } from 'sonner'
-import { formatDistanceToNow } from 'date-fns'
+import { format, formatDistanceToNow, isToday, isYesterday, isSameDay } from 'date-fns'
 import type {
   RealtimeChannel,
   RealtimePostgresChangesPayload,
@@ -22,6 +22,60 @@ import { notificationService } from '@/lib/services/notificationService'
 type ChatMessageRow = Database['public']['Tables']['chat_messages']['Row']
 type ChatMessageInsert = Database['public']['Tables']['chat_messages']['Insert']
 type NotificationInsert = Database['public']['Tables']['notifications']['Insert']
+
+type Reaction = { emoji: string; count: number; userIds: string[] }
+type ReactionMap = Record<string, Reaction[]>
+type TimelineItem =
+  | { kind: 'date'; id: string; label: string }
+  | { kind: 'unread'; id: string }
+  | { kind: 'msg'; id: string; msg: Message; isFirst: boolean; isLast: boolean }
+
+const QUICK_REACTIONS = ['ðŸ‘', 'â¤ï¸', 'ðŸ˜‚', 'ðŸ˜®', 'ðŸ˜¢', 'ðŸ”¥'] as const
+
+function formatDateLabel(d: Date): string {
+  if (isToday(d)) return 'Today'
+  if (isYesterday(d)) return 'Yesterday'
+  return format(d, 'EEEE, MMMM d')
+}
+
+function renderContent(content: string, searchQuery: string): React.ReactNode {
+  const parts = content.split(/(@@?[\w]+(?:\s[\w]+)?)/g)
+  return parts.map((part, i) => {
+    if (part.startsWith('@@')) return <span key={i} className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 text-[0.78em] font-semibold mx-0.5"><Lock className="inline h-2.5 w-2.5" />{part}</span>
+    if (part.startsWith('@') && part.length > 1) return <span key={i} className="inline-flex items-center rounded-full bg-primary/20 text-primary px-1.5 py-0.5 text-[0.78em] font-semibold mx-0.5">{part}</span>
+    if (searchQuery && part) {
+      const segs = part.split(new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'))
+      return segs.map((seg, j) => seg.toLowerCase() === searchQuery.toLowerCase()
+        ? <mark key={`${i}-${j}`} className="bg-yellow-300/80 dark:bg-yellow-500/50 text-foreground rounded px-0.5">{seg}</mark>
+        : seg)
+    }
+    return part
+  })
+}
+
+function buildTimeline(msgs: Message[], firstUnreadId: string | null): TimelineItem[] {
+  const items: TimelineItem[] = []
+  let lastDate: Date | null = null
+  let lastSenderId: string | null = null
+  let lastTime: number | null = null
+  const GAP = 5 * 60 * 1000
+  msgs.forEach((msg, i) => {
+    const d = new Date(msg.created_at)
+    if (!lastDate || !isSameDay(d, lastDate)) {
+      items.push({ kind: 'date', id: `date-${msg.id}`, label: formatDateLabel(d) })
+      lastDate = d; lastSenderId = null; lastTime = null
+    }
+    if (msg.id === firstUnreadId) items.push({ kind: 'unread', id: 'unread-divider' })
+    const gap = lastTime ? d.getTime() - lastTime : Infinity
+    const isFirst = lastSenderId !== msg.sender_id || gap > GAP
+    const next = msgs[i + 1]
+    const nextGap = next ? new Date(next.created_at).getTime() - d.getTime() : Infinity
+    const isLast = !next || next.sender_id !== msg.sender_id || nextGap > GAP
+    items.push({ kind: 'msg', id: msg.id, msg, isFirst, isLast })
+    lastSenderId = msg.sender_id; lastTime = d.getTime()
+  })
+  return items
+}
 
 type RawMessage = ChatMessageRow & {
   users?: {
@@ -143,6 +197,12 @@ export default function ChatSystem({
   const oldestTimestampRef = useRef<string | null>(null)
   const [canChatInProgram, setCanChatInProgram] = useState(true)
   const [programAccessChecked, setProgramAccessChecked] = useState(false)
+  const [reactions, setReactions] = useState<ReactionMap>({})
+  const [isAtBottom, setIsAtBottom] = useState(true)
+  const [newMsgCount, setNewMsgCount] = useState(0)
+  const [firstUnreadId, setFirstUnreadId] = useState<string | null>(null)
+  const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const userDirectory = useMemo<Record<string, MessageUserMeta>>(() => {
     const directory: Record<string, MessageUserMeta> = {}
@@ -180,7 +240,7 @@ export default function ChatSystem({
         .maybeSingle()
 
       if (error) {
-        console.error('❌ Failed to fetch user profile for message sender:', { userId, error })
+        console.error('âŒ Failed to fetch user profile for message sender:', { userId, error })
         return
       }
 
@@ -214,7 +274,7 @@ export default function ChatSystem({
         })
       }
     } catch (error) {
-      console.error('❌ Unexpected error fetching user profile:', { userId, error })
+      console.error('âŒ Unexpected error fetching user profile:', { userId, error })
     } finally {
       missingUsersRef.current.delete(userId)
     }
@@ -249,13 +309,13 @@ export default function ChatSystem({
         .eq('program_id', programId)
 
       if (error) {
-        console.error('❌ Error checking program chat access:', error)
+        console.error('âŒ Error checking program chat access:', error)
         setCanChatInProgram(false)
       } else {
         setCanChatInProgram(Array.isArray(data) && data.length > 0)
       }
     } catch (error) {
-      console.error('❌ Unexpected error checking program chat access:', error)
+      console.error('âŒ Unexpected error checking program chat access:', error)
       setCanChatInProgram(false)
     } finally {
       setProgramAccessChecked(true)
@@ -286,7 +346,7 @@ export default function ChatSystem({
         navigator.vibrate(120)
       }
     } catch (error) {
-      console.error('❌ Notification playback failed:', error)
+      console.error('âŒ Notification playback failed:', error)
     }
   }, [])
 
@@ -407,7 +467,7 @@ export default function ChatSystem({
 
   const loadParticipants = useCallback(async () => {
     try {
-      // Query users directly — get full_name, oscar, role, last_seen, is_online
+      // Query users directly â€” get full_name, oscar, role, last_seen, is_online
       const { data, error } = await supabase
         .from('users')
         .select('id, full_name, oscar, role, last_seen, is_online')
@@ -517,7 +577,7 @@ export default function ChatSystem({
       payload: RealtimePostgresChangesPayload<ChatMessageRow>
     ) => {
       if (!mounted) return
-      console.log('📨 Realtime payload received:', payload.eventType, payload)
+      console.log('ðŸ“¨ Realtime payload received:', payload.eventType, payload)
 
       const newRow = payload.new as ChatMessageRow
 
@@ -576,7 +636,7 @@ export default function ChatSystem({
             return
           }
         } catch (err) {
-          console.error('❌ Error fetching full message:', err)
+          console.error('âŒ Error fetching full message:', err)
         }
       }
 
@@ -616,9 +676,9 @@ export default function ChatSystem({
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          console.log('✅ Chat realtime subscription active')
+          console.log('âœ… Chat realtime subscription active')
         } else if (status === 'CHANNEL_ERROR') {
-          console.warn('❌ Chat subscription error')
+          console.warn('âŒ Chat subscription error')
         }
       })
 
@@ -627,7 +687,7 @@ export default function ChatSystem({
     return () => {
       mounted = false
       if (channelRef.current) {
-        console.log('🧹 Cleaning up chat subscription')
+        console.log('ðŸ§¹ Cleaning up chat subscription')
         supabase.removeChannel(channelRef.current)
         channelRef.current = null
       }
@@ -770,7 +830,15 @@ export default function ChatSystem({
     if (!messagesContainerRef.current) return
     const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight
-    shouldAutoScroll.current = distanceFromBottom < 100
+    const atBottom = distanceFromBottom < 100
+    shouldAutoScroll.current = atBottom
+    setIsAtBottom(atBottom)
+    if (atBottom) { setNewMsgCount(0); setFirstUnreadId(null) }
+  }, [])
+
+  const jumpToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    setIsAtBottom(true); setNewMsgCount(0); setFirstUnreadId(null)
   }, [])
 
 
@@ -789,15 +857,15 @@ export default function ChatSystem({
           .single()
 
         if (error) {
-          console.error('❌ Error loading current user:', error)
+          console.error('âŒ Error loading current user:', error)
           return
         }
 
-        console.log('✅ Current user loaded:', data)
+        console.log('âœ… Current user loaded:', data)
         setCurrentUser(data)
       }
     } catch (error) {
-      console.error('❌ Error in loadCurrentUser:', error)
+      console.error('âŒ Error in loadCurrentUser:', error)
     }
   }
 
@@ -848,7 +916,7 @@ export default function ChatSystem({
       setMessages(transformedMessages)
     } catch (error: any) {
       const supabaseError = error || {}
-      console.error('❌ Error loading messages:', {
+      console.error('âŒ Error loading messages:', {
         error: supabaseError,
         message: supabaseError.message,
         details: supabaseError.details,
@@ -914,6 +982,44 @@ export default function ChatSystem({
 
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [editingMessage, setEditingMessage] = useState<Message | null>(null)
+
+  const loadReactions = useCallback(async (ids: string[]) => {
+    if (!ids.length) return
+    const { data } = await (supabase as any).from('message_reactions').select('message_id,user_id,emoji').in('message_id', ids)
+    if (!data) return
+    const map: ReactionMap = {}
+    ;(data as { message_id: string; user_id: string; emoji: string }[]).forEach(r => {
+      if (!map[r.message_id]) map[r.message_id] = []
+      const ex = map[r.message_id].find(x => x.emoji === r.emoji)
+      if (ex) { ex.count++; ex.userIds.push(r.user_id) }
+      else map[r.message_id].push({ emoji: r.emoji, count: 1, userIds: [r.user_id] })
+    })
+    setReactions(map)
+  }, [supabase])
+
+  useEffect(() => {
+    const ids = messages.map(m => m.id)
+    if (ids.length) void loadReactions(ids)
+  }, [messages, loadReactions])
+
+  const toggleReaction = useCallback(async (messageId: string, emoji: string) => {
+    if (!currentUser?.id) return
+    const existing = reactions[messageId]?.find(r => r.emoji === emoji)
+    const hasReacted = existing?.userIds.includes(currentUser.id) ?? false
+    if (hasReacted) {
+      await (supabase as any).from('message_reactions').delete().eq('message_id', messageId).eq('user_id', currentUser.id).eq('emoji', emoji)
+    } else {
+      await (supabase as any).from('message_reactions').insert({ message_id: messageId, user_id: currentUser.id, emoji })
+    }
+    void loadReactions(messages.map(m => m.id))
+  }, [supabase, currentUser, reactions, messages, loadReactions])
+
+  const handleDeleteMessage = useCallback(async (messageId: string) => {
+    if (!currentUser?.id) return
+    const { error } = await (supabase as any).from('chat_messages').update({ deleted_at: new Date().toISOString() }).eq('id', messageId).eq('sender_id', currentUser.id)
+    if (error) { toast.error('Could not delete message'); return }
+    setMessages(prev => prev.filter(m => m.id !== messageId))
+  }, [supabase, currentUser])
 
   const handleReply = (message: Message) => {
     setReplyTo(message)
@@ -1059,7 +1165,9 @@ export default function ChatSystem({
     }
   }
 
-  const handleMessageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    // Auto-resize textarea
+    const el = e.target; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 128)}px`
     const value = e.target.value
     const cursorPos = e.target.selectionStart || 0
     setNewMessage(value)
@@ -1209,405 +1317,302 @@ export default function ChatSystem({
     return user ? user.full_name.split(' ')[0] : 'Someone'
   })
 
+  const visibleMessages = useMemo(() =>
+    messages.filter(canViewMessage).filter(m => !searchQuery || m.content.toLowerCase().includes(searchQuery.toLowerCase())),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [messages, searchQuery, currentUser]
+  )
+
+  const timeline = useMemo(() => buildTimeline(visibleMessages, firstUnreadId), [visibleMessages, firstUnreadId])
+
   return (
-    <div className="relative flex flex-col h-[calc(100vh-12rem)] min-h-[500px] max-h-[800px] bg-card/95 rounded-lg border shadow-sm backdrop-blur-sm">
+    <div className="relative flex flex-col h-[calc(100dvh-9rem)] min-h-[520px] bg-card rounded-2xl border shadow-2xl overflow-hidden">
+
       {/* Header */}
-      <div className="border-b bg-muted/30 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <MessageCircle className="h-5 w-5 text-primary" />
+      <div className="flex-none border-b bg-card/95 backdrop-blur-sm px-4 py-3 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <MessageCircle className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold">Team Chat</h2>
-              <p className="text-xs text-muted-foreground">
-                {messages.filter(canViewMessage).length} messages
-              </p>
-              {isReadOnlyProgramChat && (
-                <p className="text-[11px] text-amber-700 mt-0.5">
-                  You are not assigned to this program. Chat is read-only.
-                </p>
-              )}
+              <h2 className="text-sm font-semibold leading-tight">Team Chat</h2>
+              <p className="text-[11px] text-muted-foreground">{users.filter(u => u.is_online).length} online Â· {visibleMessages.length} messages</p>
+              {isReadOnlyProgramChat && <p className="text-[10px] text-amber-600 font-medium">Read-only: not assigned to this program</p>}
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowUserList(!showUserList)}
-            className="gap-2"
-          >
-            <div className="flex items-center gap-1">
-              <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
-              <Users className="h-4 w-4" />
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <input type="search" placeholder="Searchâ€¦" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                className="h-8 w-36 pl-8 pr-3 text-xs rounded-lg border bg-background/80 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-all focus:w-48" />
             </div>
-            <span className="font-medium">
-              {users.filter((user) => user.is_online).length}
-            </span>
-          </Button>
-        </div>
-        <div className="flex items-center gap-2 mt-3">
-          <div className="relative flex-1">
-            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            <input
-              type="search"
-              placeholder="Search messages..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 h-7 text-xs rounded-md border bg-background focus:outline-none focus:ring-1 focus:ring-primary/60"
-              aria-label="Search messages"
-            />
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
-            <AtSign className="h-3 w-3" />
-            <span>@ mention</span>
-            <span>•</span>
-            <Lock className="h-3 w-3" />
-            <span>@@ private</span>
+            <Button variant="outline" size="sm" onClick={() => setShowUserList(!showUserList)} className="gap-1.5 h-8 text-xs">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+              <Users className="h-3.5 w-3.5" />
+              {users.filter(u => u.is_online).length}
+            </Button>
           </div>
         </div>
       </div>
 
       {/* Messages */}
-      <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-6 space-y-6 bg-muted/10 scroll-smooth">
-        {/* Load earlier messages */}
-        {hasMoreMessages && !loadingMessages && (
-          <div className="flex justify-center pb-2">
-            <button
-              type="button"
-              onClick={loadEarlierMessages}
-              disabled={loadingEarlier}
-              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground border rounded-full px-4 py-1.5 bg-background hover:bg-muted transition-colors"
-            >
-              {loadingEarlier ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-              {loadingEarlier ? 'Loading...' : 'Load earlier messages'}
-            </button>
-          </div>
-        )}
-        {loadingMessages ? (
-          <div className="space-y-4">
-            {[...Array(4)].map((_, index) => (
-              <div
-                key={index}
-                className="flex items-end gap-3"
-              >
-                <div className="h-9 w-9 rounded-full skeleton" />
-                <div className="flex flex-col gap-2 max-w-[70%]">
-                  <div className="h-3 w-24 rounded-md skeleton" />
-                  <div className="h-9 w-40 rounded-2xl skeleton" />
+      <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto scroll-smooth">
+        <div className="px-4 py-3">
+          {hasMoreMessages && !loadingMessages && (
+            <div className="flex justify-center py-3">
+              <button onClick={loadEarlierMessages} disabled={loadingEarlier}
+                className="flex items-center gap-2 text-xs text-muted-foreground border rounded-full px-4 py-1.5 bg-background hover:bg-muted transition-colors disabled:opacity-50">
+                {loadingEarlier && <Loader2 className="h-3 w-3 animate-spin" />}
+                {loadingEarlier ? 'Loadingâ€¦' : 'Load earlier messages'}
+              </button>
+            </div>
+          )}
+
+          {loadingMessages && (
+            <div className="space-y-4 py-4">
+              {[1,2,3,4].map(i => (
+                <div key={i} className={`flex items-end gap-3 ${i % 3 === 0 ? 'flex-row-reverse' : ''}`}>
+                  <div className="h-8 w-8 rounded-full bg-muted animate-pulse flex-shrink-0" />
+                  <div className="space-y-1.5"><div className="h-2.5 w-16 rounded bg-muted animate-pulse" /><div className="h-10 w-52 rounded-2xl bg-muted animate-pulse" /></div>
                 </div>
+              ))}
+            </div>
+          )}
+
+          {!loadingMessages && visibleMessages.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+              <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center"><MessageCircle className="h-8 w-8 text-primary/50" /></div>
+              <div><p className="font-semibold text-muted-foreground">No messages yet</p><p className="text-sm text-muted-foreground/60 mt-1">Be the first to start the conversation</p></div>
+            </div>
+          )}
+
+          {!loadingMessages && timeline.map(item => {
+            if (item.kind === 'date') return (
+              <div key={item.id} className="flex items-center gap-3 py-4">
+                <div className="flex-1 h-px bg-border/60" />
+                <span className="text-[11px] text-muted-foreground font-medium px-3 py-1 rounded-full border bg-background/90 whitespace-nowrap">{item.label}</span>
+                <div className="flex-1 h-px bg-border/60" />
               </div>
-            ))}
-          </div>
-        ) : messages.filter(canViewMessage).length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-3">
-            <div className="p-4 bg-muted/50 rounded-full">
-              <MessageCircle className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">No messages yet</p>
-              <p className="text-xs text-muted-foreground mt-1">Start the conversation!</p>
-            </div>
-          </div>
-        ) : (
-          messages
-            .filter(canViewMessage)
-            .filter((m) => !searchQuery || m.content.toLowerCase().includes(searchQuery.toLowerCase()))
-            .map((message) => {
-            const isOwn = message.sender_id === currentUser?.id
-            const displayName = getDisplayName(message.users)
+            )
+            if (item.kind === 'unread') return (
+              <div key={item.id} className="flex items-center gap-3 py-2">
+                <div className="flex-1 h-px bg-primary/40" />
+                <span className="text-[11px] text-primary font-semibold px-3 py-1 rounded-full bg-primary/10 whitespace-nowrap">â†“ New messages</span>
+                <div className="flex-1 h-px bg-primary/40" />
+              </div>
+            )
 
-            // Check if message is editable (within 3 minutes)
-            const isEditable = isOwn && (new Date().getTime() - new Date(message.created_at).getTime()) < 3 * 60 * 1000
-
-            // Find replied message if any
-            const repliedMessage = (message as any).reply_to_id
-              ? messages.find(m => m.id === (message as any).reply_to_id)
-              : null
+            const { msg, isFirst, isLast } = item
+            const isOwn = msg.sender_id === currentUser?.id
+            const displayName = getDisplayName(msg.users)
+            const isEditable = isOwn && (Date.now() - new Date(msg.created_at).getTime()) < 3 * 60 * 1000
+            const repliedMsg = (msg as any).reply_to_id ? messages.find(m => m.id === (msg as any).reply_to_id) : null
+            const msgReactions = reactions[msg.id] ?? []
 
             return (
-              <div
-                key={message.id}
-                id={`msg-${message.id}`}
-                className={`flex items-end gap-3 animate-in slide-in-from-bottom-2 duration-300 group ${isOwn ? 'flex-row-reverse' : ''} ${highlightedMessageId === message.id
-                  ? 'ring-2 ring-offset-4 ring-primary bg-primary/5 rounded-lg p-2 transition-all duration-500'
-                  : ''
-                  }`}
+              <div key={item.id} id={`msg-${msg.id}`}
+                className={`flex items-end gap-2 group ${isOwn ? 'flex-row-reverse' : ''} ${isFirst ? 'mt-3' : 'mt-0.5'} ${highlightedMessageId === msg.id ? 'ring-2 ring-primary/40 rounded-xl bg-primary/5 px-1' : ''}`}
               >
-                <Avatar className="h-9 w-9 border-2 border-background shadow-sm">
-                  <AvatarFallback className={`text-xs font-semibold ${isOwn ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                    }`}>
-                    {getInitials(displayName)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className={`flex flex-col gap-1 max-w-[70%] ${isOwn ? 'items-end' : 'items-start'}`}>
-                  <div className={`flex items-center gap-2 px-1 ${isOwn ? 'flex-row-reverse' : ''}`}>
-                    <span className="text-xs font-semibold">{displayName}</span>
-                    {message.is_private && (
-                      <div className="flex items-center gap-1 text-amber-600">
-                        <Lock className="h-3 w-3" />
-                        <span className="text-[10px] font-medium">Private</span>
-                      </div>
-                    )}
-                  </div>
+                <div className="w-8 flex-shrink-0 self-end">
+                  {isLast ? (
+                    <Avatar className="h-8 w-8 border border-background shadow-sm">
+                      <AvatarFallback className={`text-[11px] font-bold ${isOwn ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>{getInitials(displayName)}</AvatarFallback>
+                    </Avatar>
+                  ) : null}
+                </div>
 
-                  {/* Reply Context */}
-                  {repliedMessage && (
-                    <div className={`text-xs text-muted-foreground mb-1 px-2 py-1 border-l-2 border-primary/30 bg-muted/30 rounded-r-md ${isOwn ? 'mr-1' : 'ml-1'}`}>
-                      <span className="font-semibold">{getDisplayName(repliedMessage.users)}: </span>
-                      <span className="line-clamp-1">{repliedMessage.content}</span>
+                <div className={`flex flex-col max-w-[72%] ${isOwn ? 'items-end' : 'items-start'}`}>
+                  {isFirst && (
+                    <div className={`flex items-center gap-2 mb-1 px-0.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
+                      <span className="text-[11px] font-semibold">{displayName}</span>
+                      <span className="text-[10px] text-muted-foreground">{format(new Date(msg.created_at), 'HH:mm')}</span>
+                      {msg.is_private && <span className="flex items-center gap-0.5 text-[10px] text-amber-600 font-medium"><Lock className="h-2.5 w-2.5" />Private</span>}
                     </div>
                   )}
 
-                  <div className="relative group/message">
-                    <div
-                      className={`rounded-2xl px-4 py-2.5 shadow-sm ${isOwn
-                        ? 'bg-primary text-primary-foreground rounded-br-sm'
-                        : 'bg-background border rounded-bl-sm'
-                        }`}
-                    >
-                      <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.content}</p>
+                  {repliedMsg && (
+                    <div className={`text-[11px] text-muted-foreground mb-1 px-2.5 py-1.5 border-l-2 border-primary/50 bg-muted/40 rounded-r-lg max-w-full ${isOwn ? 'mr-0.5' : 'ml-0.5'}`}>
+                      <strong className="text-foreground/70">{getDisplayName(repliedMsg.users)}: </strong>
+                      <span className="line-clamp-1">{repliedMsg.content}</span>
+                    </div>
+                  )}
+
+                  <div className="relative group/msg">
+                    <div className={`rounded-2xl px-3.5 py-2.5 shadow-sm text-sm leading-relaxed whitespace-pre-wrap break-words
+                      ${isOwn ? 'bg-gradient-to-br from-primary to-primary/80 text-primary-foreground rounded-br-sm' : 'bg-muted/60 border border-border/50 rounded-bl-sm'}
+                      ${msg.is_private && !isOwn ? 'border-l-2 border-l-amber-400' : ''}`}>
+                      {renderContent(msg.content, searchQuery)}
+                      {(msg as any).edited_at && <span className={`text-[10px] italic ml-1 ${isOwn ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>(edited)</span>}
                     </div>
 
-                    {/* Message Actions (Reply/Edit) */}
-                    <div className={`absolute top-0 ${isOwn ? '-left-16' : '-right-16'} opacity-0 group-hover/message:opacity-100 transition-opacity flex gap-1 bg-background/80 backdrop-blur-sm rounded-md p-1 shadow-sm`}>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => handleReply(message)}
-                        title="Reply"
-                      >
-                        <MessageCircle className="h-3 w-3" />
-                      </Button>
-                      {isEditable && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => handleEdit(message)}
-                          title="Edit"
-                        >
-                          <span className="text-[10px] font-bold">✎</span>
-                        </Button>
-                      )}
+                    <div className={`absolute top-0 ${isOwn ? '-left-[6.5rem]' : '-right-[6.5rem]'} opacity-0 group-hover/msg:opacity-100 transition-opacity flex gap-0.5 bg-background/90 backdrop-blur-sm rounded-xl p-1 shadow-lg border z-10`}>
+                      <button onClick={() => setShowReactionPicker(showReactionPicker === msg.id ? null : msg.id)} title="React" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><Smile className="h-3.5 w-3.5" /></button>
+                      <button onClick={() => handleReply(msg)} title="Reply" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><CornerUpLeft className="h-3.5 w-3.5" /></button>
+                      {isEditable && <button onClick={() => handleEdit(msg)} title="Edit" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><Pencil className="h-3.5 w-3.5" /></button>}
+                      {isOwn && <button onClick={() => void handleDeleteMessage(msg.id)} title="Delete" className="h-6 w-6 rounded-lg hover:bg-destructive/10 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>}
                     </div>
-                  </div>
 
-                  <div className={`flex items-center gap-2 px-1 text-[10px] text-muted-foreground ${isOwn ? 'flex-row-reverse' : ''}`}>
-                    <span>{formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}</span>
-                    {(message as any).edited_at && (
-                      <span className="italic">(edited)</span>
+                    {showReactionPicker === msg.id && (
+                      <div className={`absolute bottom-full ${isOwn ? 'right-0' : 'left-0'} mb-1.5 flex gap-1 bg-background border rounded-2xl p-1.5 shadow-2xl z-20 animate-in slide-in-from-bottom-2 duration-150`}>
+                        {QUICK_REACTIONS.map(emoji => (
+                          <button key={emoji} onClick={() => { void toggleReaction(msg.id, emoji); setShowReactionPicker(null) }}
+                            className="h-8 w-8 rounded-xl hover:bg-muted flex items-center justify-center text-lg transition-all hover:scale-125 active:scale-95">
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
+
+                  {msgReactions.length > 0 && (
+                    <div className={`flex flex-wrap gap-1 mt-1.5 px-0.5 ${isOwn ? 'justify-end' : ''}`}>
+                      {msgReactions.map(r => (
+                        <button key={r.emoji} onClick={() => void toggleReaction(msg.id, r.emoji)}
+                          className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs border transition-all hover:scale-105 active:scale-95 ${r.userIds.includes(currentUser?.id ?? '') ? 'bg-primary/15 border-primary/40 text-primary font-semibold' : 'bg-background border-border text-muted-foreground hover:border-primary/30'}`}>
+                          {r.emoji}<span>{r.count}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {!isFirst && isLast && (
+                    <span className="text-[10px] text-muted-foreground/60 px-0.5 mt-0.5">{format(new Date(msg.created_at), 'HH:mm')}</span>
+                  )}
                 </div>
               </div>
             )
-          })
-        )}
-        <div ref={messagesEndRef} />
+          })}
+
+          {typingUserNames.length > 0 && (
+            <div className="flex items-end gap-2 mt-3">
+              <div className="w-8 flex-shrink-0">
+                <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+                  <span className="text-[10px] font-bold text-muted-foreground">{typingUserNames[0]?.[0]?.toUpperCase()}</span>
+                </div>
+              </div>
+              <div className="bg-muted/60 border border-border/50 rounded-2xl rounded-bl-sm px-4 py-3">
+                <div className="flex gap-1 items-center h-3">
+                  {[0, 150, 300].map(delay => (
+                    <span key={delay} className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: `${delay}ms` }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} className="h-2" />
+        </div>
       </div>
 
-      {/* User List Overlay */}
+      {/* Jump to bottom */}
+      {!isAtBottom && (
+        <button onClick={jumpToBottom}
+          className="absolute bottom-[5.5rem] right-4 flex items-center gap-1.5 rounded-full bg-primary text-primary-foreground shadow-lg px-3 py-1.5 text-xs font-semibold hover:bg-primary/90 active:scale-95 transition-all z-20 animate-in slide-in-from-bottom-2 duration-200">
+          {newMsgCount > 0 && <span className="bg-white/25 rounded-full px-1.5 py-0.5 leading-tight">{newMsgCount}</span>}
+          <ChevronDown className="h-4 w-4" />
+        </button>
+      )}
+
+      {/* User list overlay */}
       {showUserList && (
         <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setShowUserList(false)}
-          />
-          <div className="absolute bottom-24 right-6 w-80 bg-background border rounded-xl shadow-2xl overflow-hidden z-50 animate-in slide-in-from-bottom-4 duration-200">
-            <div className="bg-muted/50 px-4 py-3 border-b">
-              <h3 className="text-sm font-semibold">Active Users</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {users.filter(u => u.is_online).length} online • {users.length} total
-              </p>
+          <div className="fixed inset-0 z-40" onClick={() => setShowUserList(false)} />
+          <div className="absolute bottom-[5.5rem] right-4 w-72 bg-background border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in slide-in-from-bottom-4 duration-200">
+            <div className="bg-muted/50 px-4 py-3 border-b flex items-center justify-between">
+              <div><h3 className="text-sm font-semibold">Team Members</h3><p className="text-xs text-muted-foreground">{users.filter(u => u.is_online).length} online Â· {users.length} total</p></div>
+              <button onClick={() => setShowUserList(false)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
             </div>
-            <div className="max-h-80 overflow-y-auto">
-              {users
-                .sort((a, b) => (b.is_online ? 1 : 0) - (a.is_online ? 1 : 0))
-                .map((user) => (
-                  <div
-                    key={user.id}
-                    className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors border-b last:border-b-0"
-                  >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="relative">
-                        <Avatar className="h-10 w-10 border-2 border-background">
-                          <AvatarFallback className="text-xs font-semibold">
-                            {getInitials(user.full_name)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${user.is_online ? 'bg-green-500' : 'bg-gray-400'
-                          }`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{user.full_name}</p>
-                        <span className="text-xs text-muted-foreground">
-                          {user.is_online ? 'Online' : 'Offline'}
-                        </span>
-                      </div>
+            <div className="max-h-72 overflow-y-auto">
+              {users.sort((a, b) => (b.is_online ? 1 : 0) - (a.is_online ? 1 : 0)).map(user => (
+                <div key={user.id} className="flex items-center justify-between px-3 py-2.5 hover:bg-muted/40 transition-colors border-b last:border-0">
+                  <div className="flex items-center gap-2.5">
+                    <div className="relative">
+                      <Avatar className="h-8 w-8"><AvatarFallback className="text-[11px] font-bold">{getInitials(user.full_name)}</AvatarFallback></Avatar>
+                      <div className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background ${user.is_online ? 'bg-green-500' : 'bg-gray-400'}`} />
                     </div>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                        onClick={() => handleMention(user.id)}
-                        title="Mention publicly"
-                      >
-                        <AtSign className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                        onClick={() => handleDoubleMention(user.id)}
-                        title="Send private message"
-                      >
-                        <Lock className="h-3.5 w-3.5" />
-                      </Button>
+                    <div>
+                      <p className="text-xs font-semibold">{user.full_name}</p>
+                      <p className="text-[11px] text-muted-foreground">{user.is_online ? 'Online' : user.last_seen ? `Last seen ${formatDistanceToNow(new Date(user.last_seen), { addSuffix: true })}` : 'Offline'}</p>
                     </div>
                   </div>
-                ))}
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { handleMention(user.id); setShowUserList(false) }} title="Mention"><AtSign className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { handleDoubleMention(user.id); setShowUserList(false) }} title="Private"><Lock className="h-3.5 w-3.5" /></Button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </>
       )}
 
-      {/* Input */}
-      <div className="border-t bg-background p-4">
-        {/* Typing Indicator */}
-        {typingUserNames.length > 0 && (
-          <div className="absolute bottom-[4.5rem] left-6 text-xs text-muted-foreground animate-pulse flex items-center gap-1">
-            <span className="flex gap-0.5">
-              <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-              <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-              <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce"></span>
-            </span>
-            <span>
-              {typingUserNames.length === 1
-                ? `${typingUserNames[0]} is typing...`
-                : typingUserNames.length === 2
-                  ? `${typingUserNames[0]} and ${typingUserNames[1]} are typing...`
-                  : `${typingUserNames.length} people are typing...`
-              }
-            </span>
-          </div>
-        )}
-
-        {/* Reply/Edit Indicator */}
+      {/* Input area */}
+      <div className="flex-none border-t bg-card/95 px-4 pt-3 pb-4">
         {replyTo && (
-          <div className="flex items-center justify-between bg-muted/50 px-3 py-2 rounded-t-lg border-b mb-2 text-xs">
-            <div className="flex items-center gap-2">
-              <MessageCircle className="h-3 w-3 text-primary" />
-              <span>Replying to <strong>{getDisplayName(replyTo.users)}</strong></span>
+          <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-xl px-3 py-2 mb-2 text-xs">
+            <div className="flex items-center gap-2 text-primary min-w-0">
+              <CornerUpLeft className="h-3.5 w-3.5 flex-shrink-0" />
+              <span className="truncate">Replying to <strong>{getDisplayName(replyTo.users)}</strong></span>
             </div>
-            <button onClick={cancelReply} className="text-muted-foreground hover:text-foreground">×</button>
+            <button onClick={cancelReply} className="ml-2 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="h-3.5 w-3.5" /></button>
           </div>
         )}
         {editingMessage && (
-          <div className="flex items-center justify-between bg-amber-500/10 px-3 py-2 rounded-t-lg border-b mb-2 text-xs text-amber-700">
-            <div className="flex items-center gap-2">
-              <span className="font-bold">✎ Editing message</span>
-            </div>
-            <button onClick={cancelEdit} className="text-amber-700 hover:text-amber-900">×</button>
+          <div className="flex items-center justify-between bg-amber-500/5 border border-amber-500/20 rounded-xl px-3 py-2 mb-2 text-xs text-amber-700 dark:text-amber-400">
+            <div className="flex items-center gap-2"><Pencil className="h-3.5 w-3.5" /><span className="font-semibold">Editing message</span></div>
+            <button onClick={cancelEdit}><X className="h-3.5 w-3.5" /></button>
           </div>
         )}
-
         {selectedMentions.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3 p-3 bg-muted/50 rounded-lg">
-            <span className="text-xs font-medium text-muted-foreground">Mentioning:</span>
-            {selectedMentions.map((userId) => {
-              const user = users.find(u => u.id === userId)
-              return user ? (
-                <Badge key={userId} variant="secondary" className="gap-1.5">
-                  <AtSign className="h-3 w-3" />
-                  {user.full_name}
-                  <button
-                    onClick={() => setSelectedMentions(selectedMentions.filter(id => id !== userId))}
-                    className="ml-0.5 hover:text-destructive transition-colors"
-                  >
-                    ×
-                  </button>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {selectedMentions.map(uid => {
+              const u = users.find(x => x.id === uid)
+              return u ? (
+                <Badge key={uid} variant="secondary" className="gap-1 text-xs pr-1">
+                  <AtSign className="h-3 w-3" />{u.full_name}
+                  <button onClick={() => setSelectedMentions(selectedMentions.filter(id => id !== uid))} className="ml-0.5 hover:text-destructive">Ã—</button>
                 </Badge>
               ) : null
             })}
           </div>
         )}
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-end">
           <div className="relative flex-1">
-            <Input
-              ref={inputRef}
-              placeholder={
-                isReadOnlyProgramChat
-                  ? 'You are not assigned to this program; chat is read-only.'
-                  : editingMessage ? 'Edit your message...' : 'Type your message...'
-              }
+            <textarea
+              ref={textareaRef}
+              placeholder={isReadOnlyProgramChat ? 'Read-only: not assigned to this program' : editingMessage ? 'Edit messageâ€¦' : 'Message the teamâ€¦'}
               value={newMessage}
               onChange={handleMessageChange}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  if (!showMentionSuggestions) {
-                    handleSendMessage()
-                  }
-                }
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!showMentionSuggestions) void handleSendMessage() }
               }}
-              className="pr-12 h-11"
               disabled={isReadOnlyProgramChat}
+              rows={1}
+              className="w-full resize-none rounded-xl border bg-background/80 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all placeholder:text-muted-foreground/60 max-h-32 disabled:opacity-50 leading-relaxed"
+              style={{ minHeight: '42px' }}
             />
-
-            {/* Mention Suggestions Dropdown */}
             {showMentionSuggestions && filteredUsers.length > 0 && (
-              <div className="absolute bottom-full left-0 right-0 mb-2 bg-background border rounded-xl shadow-2xl overflow-hidden z-50 animate-in slide-in-from-bottom-2 duration-200">
-                <div className="bg-muted/50 px-4 py-2.5 border-b">
-                  <div className="flex items-center gap-2">
-                    {mentionType === '@@' ? (
-                      <>
-                        <Lock className="h-3.5 w-3.5 text-amber-600" />
-                        <span className="text-xs font-semibold text-amber-600">Private mention</span>
-                      </>
-                    ) : (
-                      <>
-                        <AtSign className="h-3.5 w-3.5 text-primary" />
-                        <span className="text-xs font-semibold text-primary">Public mention</span>
-                      </>
-                    )}
-                    <span className="text-xs text-muted-foreground">• Type first name</span>
+              <div className="absolute bottom-full left-0 right-0 mb-2 bg-background border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in slide-in-from-bottom-2 duration-150">
+                <div className={`px-3 py-2 border-b flex items-center gap-2 text-xs font-semibold ${mentionType === '@@' ? 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' : 'text-primary bg-primary/5'}`}>
+                  {mentionType === '@@' ? <Lock className="h-3.5 w-3.5" /> : <AtSign className="h-3.5 w-3.5" />}
+                  {mentionType === '@@' ? 'Private mention' : 'Mention'} Â· type first name
+                </div>
+                {filteredUsers.slice(0, 5).map(user => (
+                  <div key={user.id} onClick={() => selectMention(user)} className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 cursor-pointer border-b last:border-0 transition-colors">
+                    <Avatar className="h-7 w-7 flex-shrink-0"><AvatarFallback className="text-[10px] font-bold">{getInitials(user.full_name)}</AvatarFallback></Avatar>
+                    <div className="min-w-0"><p className="text-sm font-medium">{user.full_name}</p><p className="text-[11px] text-muted-foreground truncate">{user.oscar || user.role}</p></div>
+                    {mentionType === '@@' && <Lock className="h-3.5 w-3.5 text-amber-500 flex-shrink-0 ml-auto" />}
                   </div>
-                </div>
-                <div className="max-h-60 overflow-y-auto">
-                  {filteredUsers.slice(0, 5).map((user) => (
-                    <div
-                      key={user.id}
-                      onClick={() => selectMention(user)}
-                      className="flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer transition-colors border-b last:border-b-0"
-                    >
-                      <Avatar className="h-8 w-8 border-2 border-background">
-                        <AvatarFallback className="text-xs font-semibold">
-                          {getInitials(user.full_name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{user.full_name}</p>
-                      </div>
-                      {mentionType === '@@' && (
-                        <Lock className="h-3.5 w-3.5 text-amber-600" />
-                      )}
-                    </div>
-                  ))}
-                </div>
+                ))}
               </div>
             )}
           </div>
-          <Button
-            onClick={handleSendMessage}
-            disabled={isReadOnlyProgramChat || !newMessage.trim()}
-            size="lg"
-            className="h-11 px-6"
-          >
+          <Button onClick={() => void handleSendMessage()} disabled={isReadOnlyProgramChat || !newMessage.trim()} size="icon" className="h-[42px] w-[42px] rounded-xl flex-shrink-0 shadow-sm">
             <Send className="h-4 w-4" />
           </Button>
         </div>
+        <p className="text-[10px] text-muted-foreground/40 mt-1.5 text-right select-none">Enter to send Â· Shift+Enter for new line</p>
       </div>
     </div>
   )
