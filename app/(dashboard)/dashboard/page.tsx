@@ -18,10 +18,13 @@ import {
   TrendingUp,
   Clock,
   CheckCircle,
-  XCircle
+  XCircle,
+  Download,
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
+import { usePWAInstall } from "@/hooks/usePWAInstall"
+import { PWAInstallModal } from "@/components/pwa/PWAInstallModal"
 
 const DashboardCharts = dynamic(
   () => import("@/components/dashboard/DashboardCharts").then((m) => m.DashboardCharts),
@@ -48,21 +51,8 @@ export default function DashboardPage() {
   })
   const [recentJourneys, setRecentJourneys] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [canInstall, setCanInstall] = useState(false)
-  const [installPromptEvent, setInstallPromptEvent] = useState<any | null>(null)
-  const [isInstalled, setIsInstalled] = useState(false)
-  const [installHelpPlatform, setInstallHelpPlatform] = useState<"ios" | "android" | "desktop" | null>(null)
-  const [isIOS, setIsIOS] = useState(false)
-
-  // Detect iOS on mount
-  useEffect(() => {
-    if (typeof navigator !== 'undefined') {
-      const ua = navigator.userAgent
-      const isIOSDevice = /iPad|iPhone|iPod/.test(ua) ||
-        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-      setIsIOS(isIOSDevice)
-    }
-  }, [])
+  const { isInstalled, install, platform: pwaplatform } = usePWAInstall()
+  const [showInstallModal, setShowInstallModal] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -84,86 +74,12 @@ export default function DashboardPage() {
     }
   }, [])
 
-  useEffect(() => {
-    if (typeof window === "undefined") return
-
-    const handleBeforeInstall = (event: any) => {
-      event.preventDefault()
-      setInstallPromptEvent(event)
-      setCanInstall(true)
-      setInstallHelpPlatform(null)
-    }
-
-    const handleAppInstalled = () => {
-      setIsInstalled(true)
-      setCanInstall(false)
-      setInstallPromptEvent(null)
-      setInstallHelpPlatform(null)
-    }
-
-    window.addEventListener("beforeinstallprompt", handleBeforeInstall)
-    window.addEventListener("appinstalled", handleAppInstalled)
-
-    if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) {
-      setIsInstalled(true)
-    }
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstall)
-      window.removeEventListener("appinstalled", handleAppInstalled)
-    }
-  }, [])
-
   const handleInstallClick = async () => {
-    if (!installPromptEvent) {
-      if (typeof window !== "undefined") {
-        const isStandalone =
-          (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
-          // @ts-ignore - iOS Safari specific
-          (window.navigator as any).standalone === true
-
-        if (isStandalone) {
-          toast.success("TCNP Journey is already installed on this device.")
-          return
-        }
-
-        const ua = window.navigator.userAgent || ""
-        let platform: "ios" | "android" | "desktop" = "desktop"
-        if (/iphone|ipad|ipod/i.test(ua)) {
-          platform = "ios"
-        } else if (/android/i.test(ua)) {
-          platform = "android"
-        }
-
-        setInstallHelpPlatform(platform)
-
-        if (platform === "ios") {
-          toast.info("Follow the quick steps above to add TCNP Journey to your home screen.")
-        } else if (platform === "android") {
-          toast.info("Follow the quick steps above to install TCNP Journey from the Chrome menu.")
-        } else {
-          toast.info("Follow the quick steps above to install TCNP Journey from your browser.")
-        }
-      }
-      return
-    }
-
-    try {
-      installPromptEvent.prompt()
-      const choice = await installPromptEvent.userChoice
-
-      if (choice && choice.outcome === "accepted") {
-        toast.success("Installing TCNP Journey… Check your home screen or app launcher.")
-        setIsInstalled(true)
-        setCanInstall(false)
-      } else {
-        toast.info("You can install TCNP Journey later from your browser's menu.")
-      }
-    } catch (error) {
-      console.error("PWA install prompt failed:", error)
-      toast.error("We couldn't open the install prompt. Try using your browser's install option.")
-    } finally {
-      setInstallPromptEvent(null)
+    const result = await install()
+    if (result === 'show-instructions') {
+      setShowInstallModal(true)
+    } else if (result === 'accepted') {
+      toast.success('TCNP is now installed. Check your home screen or app launcher.')
     }
   }
 
@@ -326,57 +242,28 @@ export default function DashboardPage() {
             Overview of TCNP Journey Management System
           </p>
         </div>
-        {!isInstalled && canInstall && (
+        {/* Install App button — always visible, works on every device */}
+        {!isInstalled ? (
           <Button
             onClick={handleInstallClick}
-            className="pwa-banner shadow-lg rounded-full px-5 py-2 text-sm font-medium"
+            variant="outline"
+            size="sm"
+            className="gap-2 rounded-full shadow-sm"
           >
-            Download this app
+            <Download className="h-4 w-4" aria-hidden="true" />
+            Install App
           </Button>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+            App Installed
+          </span>
         )}
       </div>
 
-      {installHelpPlatform && (
-        <div className="mt-2 flex items-start justify-between gap-3 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-4 py-3 text-xs text-muted-foreground">
-          <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
-              Install on{" "}
-              {installHelpPlatform === "ios"
-                ? "iPhone / iPad (Safari)"
-                : installHelpPlatform === "android"
-                  ? "Android (Chrome)"
-                  : "Desktop browser"}
-            </p>
-            {installHelpPlatform === "ios" && (
-              <ol className="list-decimal space-y-0.5 pl-4">
-                <li>Open this page in Safari.</li>
-                <li>Tap the Share icon in the toolbar.</li>
-                <li>Select "Add to Home Screen", then tap "Add".</li>
-              </ol>
-            )}
-            {installHelpPlatform === "android" && (
-              <ol className="list-decimal space-y-0.5 pl-4">
-                <li>Open this page in Chrome.</li>
-                <li>Tap the three-dot menu and choose "Install app" or "Add to Home screen".</li>
-                <li>Confirm the install prompt.</li>
-              </ol>
-            )}
-            {installHelpPlatform === "desktop" && (
-              <ol className="list-decimal space-y-0.5 pl-4">
-                <li>Open this page in Chrome, Edge, or another modern browser.</li>
-                <li>Click the install icon in the address bar or browser menu.</li>
-                <li>Choose "Install TCNP Journey" and confirm.</li>
-              </ol>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => setInstallHelpPlatform(null)}
-            className="ml-3 text-xs text-muted-foreground hover:text-foreground"
-          >
-            Close
-          </button>
-        </div>
+      {/* PWA install instructions modal */}
+      {showInstallModal && (
+        <PWAInstallModal platform={pwaplatform} onClose={() => setShowInstallModal(false)} />
       )}
 
       {/* Active Alerts */}
@@ -458,8 +345,8 @@ export default function DashboardPage() {
       </div>
 
       {/* Analytics Charts - DISABLED on iOS due to Recharts hydration issues */}
-      {!isIOS && <DashboardCharts />}
-      {isIOS && (
+      {pwaplatform !== 'ios' && <DashboardCharts />}
+      {pwaplatform === 'ios' && (
         <Card className="border-dashed border-muted-foreground/30">
           <CardContent className="py-8 text-center text-muted-foreground">
             <p className="text-sm">Charts available on desktop version</p>
