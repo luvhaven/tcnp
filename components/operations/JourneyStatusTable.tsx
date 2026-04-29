@@ -236,6 +236,22 @@ export default function JourneyStatusTable() {
         }
     }
 
+    const playCallSignChime = () => {
+        try {
+            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+            const osc = ctx.createOscillator()
+            const gain = ctx.createGain()
+            osc.type = 'sine'
+            osc.frequency.value = 660
+            gain.gain.setValueAtTime(0.25, ctx.currentTime)
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4)
+            osc.connect(gain)
+            gain.connect(ctx.destination)
+            osc.start()
+            osc.stop(ctx.currentTime + 0.4)
+        } catch (e) {}
+    }
+
     const handleCallSignClick = (journey: Journey) => {
         if (!canUpdateCallSigns) {
             toast.error('You do not have permission to update call signs')
@@ -266,6 +282,7 @@ export default function JourneyStatusTable() {
 
             if (error) throw error
 
+            playCallSignChime()
             toast.success(`Call sign updated to ${getCallSignLabel(newCallSign)}`)
             setCallSignDialogOpen(false)
             setSelectedJourney(null)

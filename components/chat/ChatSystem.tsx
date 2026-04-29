@@ -1133,7 +1133,7 @@ export default function ChatSystem({
     if (!currentUser) return false
 
     // Admins can see all messages
-    if (['dev_admin', 'admin'].includes(currentUser.role)) return true
+    if (['super_admin', 'dev_admin', 'admin'].includes(currentUser.role)) return true
 
     // Sender can see their own messages
     if (message.sender_id === currentUser.id) return true

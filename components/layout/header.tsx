@@ -63,10 +63,11 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
       <div className="flex items-center space-x-3">
         <button
           type="button"
+          aria-label="Open navigation sidebar"
           onClick={onOpenSidebar}
           className="inline-flex h-9 w-9 items-center justify-center rounded-full border bg-background text-foreground shadow-sm md:hidden"
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-5 w-5" aria-hidden="true" />
         </button>
         <div className="flex flex-col">
           <h1 className="text-base font-semibold tracking-tight md:text-xl">
@@ -106,8 +107,8 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
         </div>
 
         {/* Logout */}
-        <Button variant="ghost" size="icon" onClick={handleLogout}>
-          <LogOut className="h-5 w-5" />
+        <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Sign out">
+          <LogOut className="h-5 w-5" aria-hidden="true" />
         </Button>
       </div>
     </header>

@@ -244,8 +244,9 @@ export default function NotificationCenter() {
                     size="icon"
                     className="h-7 w-7"
                     onClick={() => setOpen(false)}
+                    aria-label="Close notifications"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </div>
               </div>
@@ -255,7 +256,9 @@ export default function NotificationCenter() {
                 {(["all", "unread", "broken_arrow"] as FilterTab[]).map((tab) => (
                   <button
                     key={tab}
+                    type="button"
                     onClick={() => setFilter(tab)}
+                    aria-pressed={filter === tab}
                     className={cn(
                       "relative px-3 py-2 text-xs font-medium capitalize transition-colors",
                       filter === tab
@@ -336,11 +339,12 @@ export default function NotificationCenter() {
               {notifications.length > 0 && (
                 <div className="border-t bg-card/80 px-4 py-2.5">
                   <button
+                    type="button"
                     onClick={() => { setOpen(false); router.push('/audit-logs') }}
                     className="flex w-full items-center justify-between text-xs text-muted-foreground hover:text-primary transition-colors"
                   >
                     <span>View full activity log</span>
-                    <ChevronRight className="h-3.5 w-3.5" />
+                    <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
                 </div>
               )}
