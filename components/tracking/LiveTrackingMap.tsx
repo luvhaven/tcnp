@@ -248,10 +248,12 @@ export default function LiveTrackingMap() {
         })
       }
 
-      // Enrich locations with Papa names
+      // Enrich locations with Papa names — only for Delta Oscar (DO) users
       const enrichedData = (data || []).map((loc: UserLocation) => ({
         ...loc,
-        papa_name: userToPapaMap.get(loc.user_id) || null
+        papa_name: (loc.role === 'delta_oscar' || loc.oscar?.toLowerCase().includes('do'))
+          ? (userToPapaMap.get(loc.user_id) || null)
+          : null
       }))
 
       // Update trails: append new positions (keep last 10 per user)

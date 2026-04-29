@@ -53,7 +53,11 @@ const buildPopupContent = (
   const statusLabel = escapeHtml(status.label)
   const roleLabel = escapeHtml(roleDisplay.label)
   const papaName = location.papa_name ? escapeHtml(location.papa_name) : null
-  const titleDisplay = papaName ? `${name} — ${papaName}` : name
+  const isDO = location.oscar?.toLowerCase().includes('do') || location.role === 'delta_oscar'
+  const titleDisplay = (isDO && papaName) ? `${name} - ${papaName}` : name
+  const papaLine = (isDO && papaName)
+    ? `<p style="font-size:11px;color:#2563EB;font-weight:600;margin:2px 0 6px">📋 Papa: ${papaName}</p>`
+    : ''
 
   const speedLine =
     location.speed !== null && location.speed !== undefined
@@ -71,8 +75,9 @@ const buildPopupContent = (
 
   return `
     <div style="min-width:220px">
-      <p style="font-weight:700;font-size:14px;margin-bottom:4px">${titleDisplay}</p>
-      <p style="font-size:12px;color:#444;margin:0 0 8px">${oscar}</p>
+      <p style="font-weight:700;font-size:14px;margin-bottom:2px">${titleDisplay}</p>
+      <p style="font-size:12px;color:#444;margin:0 0 4px">${oscar}</p>
+      ${papaLine}
       <span style="display:inline-block;padding:2px 8px;border-radius:9999px;font-size:10px;font-weight:600;color:#fff;background:${roleDisplay.color};margin-right:4px;margin-bottom:6px">${roleLabel}</span>
       <span style="display:inline-block;padding:2px 8px;border-radius:9999px;font-size:10px;font-weight:600;color:#fff;background:${status.color}">${statusLabel}</span>
       ${batteryLine}
