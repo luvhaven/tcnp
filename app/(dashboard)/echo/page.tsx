@@ -76,7 +76,7 @@ type Program = {
 }
 
 const ALLOWED_ROLES = [
-    'dev_admin', 'admin', 'captain', 'head_of_operations', 'head_of_command',
+    'super_admin', 'dev_admin', 'admin', 'captain', 'head_of_operations', 'head_of_command',
     'echo_oscar', 'head_echo_oscar'
 ]
 
@@ -144,7 +144,7 @@ export default function EchoPage() {
     const loadData = async () => {
         try {
             // Load equipment
-            const { data: equipmentData, error: equipmentError } = await supabase
+            const { data: equipmentData, error: equipmentError } = await (supabase as any)
                 .from('equipment')
                 .select(`
           *,
@@ -191,7 +191,7 @@ export default function EchoPage() {
             }
 
             if (editing) {
-                const { error } = await supabase
+                const { error } = await (supabase as any)
                     .from('equipment')
                     .update(payload)
                     .eq('id', editing.id)
@@ -199,7 +199,7 @@ export default function EchoPage() {
                 if (error) throw error
                 toast.success('Equipment updated successfully')
             } else {
-                const { error } = await supabase
+                const { error } = await (supabase as any)
                     .from('equipment')
                     .insert([{ ...payload, created_by: user?.id }])
 
@@ -236,7 +236,7 @@ export default function EchoPage() {
         if (!confirm('Are you sure you want to delete this equipment?')) return
 
         try {
-            const { error } = await supabase
+            const { error } = await (supabase as any)
                 .from('equipment')
                 .delete()
                 .eq('id', id)
@@ -253,7 +253,7 @@ export default function EchoPage() {
         try {
             const { data: { user } } = await supabase.auth.getUser()
 
-            const { error } = await supabase
+            const { error } = await (supabase as any)
                 .from('equipment')
                 .update({
                     status: newStatus,
@@ -266,7 +266,7 @@ export default function EchoPage() {
             if (error) throw error
 
             // Log the action
-            await supabase.from('equipment_logs').insert([{
+            await (supabase as any).from('equipment_logs').insert([{
                 equipment_id: id,
                 action: 'status_change',
                 new_status: newStatus,

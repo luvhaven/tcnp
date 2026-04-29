@@ -13,11 +13,8 @@ import { useRouter } from 'next/navigation'
 type AlertJourney = {
     id: string
     status: string
-    current_status: string
     etd: string | null
     eta: string | null
-    scheduled_departure: string | null
-    scheduled_arrival: string | null
     papas: {
         full_name: string
         title: string
@@ -38,8 +35,8 @@ export function JourneyAlerts() {
             const { data, error } = await supabase
                 .from('journeys')
                 .select(`
-                    id, status, current_status, 
-                    etd, eta, scheduled_departure, scheduled_arrival,
+                    id, status, 
+                    etd, eta,
                     papas(full_name, title),
                     cheetahs(call_sign)
                 `)
@@ -56,7 +53,7 @@ export function JourneyAlerts() {
 
                 // Check Departure (for Planned journeys)
                 if (journey.status === 'planned') {
-                    const departure = journey.etd || journey.scheduled_departure
+                    const departure = journey.etd
                     if (departure) {
                         const time = new Date(departure).getTime()
                         if (time > now && time - now < ALERT_THRESHOLD_MS) {
@@ -68,7 +65,7 @@ export function JourneyAlerts() {
 
                 // Check Arrival (for Active journeys)
                 if (journey.status === 'active') {
-                    const arrival = journey.eta || journey.scheduled_arrival
+                    const arrival = journey.eta
                     if (arrival) {
                         const time = new Date(arrival).getTime()
                         if (time > now && time - now < ALERT_THRESHOLD_MS) {
@@ -162,8 +159,8 @@ export function JourneyAlerts() {
                                             <Clock className="w-3.5 h-3.5" />
                                             Expected at {format(new Date(
                                                 alert.type === 'departure'
-                                                    ? (alert.journey.etd || alert.journey.scheduled_departure || '')
-                                                    : (alert.journey.eta || alert.journey.scheduled_arrival || '')
+                                                    ? (alert.journey.etd || '')
+                                                    : (alert.journey.eta || '')
                                             ), 'HH:mm')}
                                         </p>
                                     </div>

@@ -130,7 +130,7 @@ export default function NestsPage() {
       setOfficers(officersData || [])
 
       // Load assignments
-      const { data: assignmentsData } = await supabase
+      const { data: assignmentsData } = await (supabase as any)
         .from('noscar_assignments')
         .select(`
           *,
@@ -249,7 +249,7 @@ export default function NestsPage() {
     }
 
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('noscar_assignments')
         .insert([{
           user_id: officerFormData.user_id,
@@ -272,7 +272,7 @@ export default function NestsPage() {
 
   const toggleOfficerActive = async (assignment: NoscarAssignment) => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('noscar_assignments')
         .update({ is_active: !assignment.is_active })
         .eq('id', assignment.id)
@@ -289,7 +289,7 @@ export default function NestsPage() {
     if (!confirm('Remove this officer from the location?')) return
 
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('noscar_assignments')
         .delete()
         .eq('id', assignmentId)

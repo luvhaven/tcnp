@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Select } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { MapPin, Users, Car, Navigation, Search, ChevronLeft, ChevronRight, Wifi, WifiOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -558,14 +558,19 @@ export default function LiveTrackingMap() {
                   />
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
-                    <option value="all">All Roles</option>
-                    {roleOptions.map((role) => (
-                      <option key={role} value={role}>
-                        {formatRole(role)}
-                        {roleCounts[role] ? ` (${roleCounts[role]})` : ''}
-                      </option>
-                    ))}
+                  <Select value={roleFilter} onValueChange={(value) => setRoleFilter(value)}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="All Roles" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Roles</SelectItem>
+                      {roleOptions.map((role) => (
+                        <SelectItem key={role} value={role}>
+                          {formatRole(role)}
+                          {roleCounts[role] ? ` (${roleCounts[role]})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                   <div className="flex flex-wrap gap-2">
                     {statusOptions.map((option) => (

@@ -173,7 +173,7 @@ export default function DashboardPage() {
       const [papasRes, cheetahsRes, journeysRes, incidentsRes] = await Promise.all([
         supabase.from('papas').select('id', { count: 'exact', head: true }),
         supabase.from('cheetahs').select('id', { count: 'exact', head: true }),
-        supabase.from('journeys').select('id', { count: 'exact', head: true }).in('status', ['planned', 'in_progress', 'first_course', 'chapman', 'dessert', 'broken_arrow']),
+        (supabase as any).from('journeys').select('id', { count: 'exact', head: true }).in('status', ['planned', 'in_progress', 'first_course', 'chapman', 'dessert', 'broken_arrow']),
         supabase.from('incidents').select('id', { count: 'exact', head: true }).eq('status', 'open'),
       ])
 

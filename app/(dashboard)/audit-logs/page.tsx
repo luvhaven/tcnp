@@ -35,7 +35,7 @@ export default function AuditLogsPage() {
         .eq('id', user.id)
         .single()
 
-      if (!userData || !['dev_admin', 'admin'].includes((userData as any).role)) {
+      if (!userData || !['super_admin', 'dev_admin', 'admin'].includes((userData as any).role)) {
         setAuthorized(false)
         toast.error('Access denied. Admin privileges required to view audit logs.')
         return

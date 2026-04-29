@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { toast } from 'sonner'
 import LiveTrackingMap from '@/components/tracking/LiveTrackingMap'
 
 type CurrentUser = {
@@ -11,16 +9,20 @@ type CurrentUser = {
   role: string | null
 }
 
+// Roles that can view live tracking
 const ALLOWED_ROLES = [
+  'super_admin',
   'dev_admin',
   'admin',
+  'command',
   'captain',
+  'vice_captain',
   'head_of_command',
   'head_of_operations',
   'tango_oscar',
   'head_tango_oscar',
   'alpha_oscar',
-  'november_oscar'
+  'november_oscar',
 ]
 
 export default function LiveTrackingPage() {
@@ -32,32 +34,19 @@ export default function LiveTrackingPage() {
     const loadUser = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
 
-        if (!user) {
-          toast.error('Please login to access live tracking.')
-          return
-        }
-
-        const { data: userData, error } = await supabase
+        const { data: userData } = await supabase
           .from('users')
           .select('id, role')
           .eq('id', user.id)
           .single()
 
-        if (error) {
-          console.error('Failed to load current user for live tracking:', error)
-          toast.error('Failed to verify your access to live tracking.')
-          return
-        }
-
-        setCurrentUser(userData as CurrentUser)
-
-        if (!userData || !ALLOWED_ROLES.includes((userData as any).role)) {
-          toast.error('Access denied. Live tracking is restricted to admin roles.')
+        if (userData) {
+          setCurrentUser(userData as CurrentUser)
         }
       } catch (err) {
         console.error('Unexpected error loading user for live tracking:', err)
-        toast.error('Failed to verify your access to live tracking.')
       } finally {
         setLoading(false)
       }
@@ -66,6 +55,7 @@ export default function LiveTrackingPage() {
     loadUser()
   }, [supabase])
 
+  // Loading skeleton
   if (loading) {
     return (
       <div className="space-y-4 animate-in fade-in duration-300">
@@ -80,19 +70,9 @@ export default function LiveTrackingPage() {
     )
   }
 
+  // No access — show nothing (no error card, just blank)
   if (!currentUser || !ALLOWED_ROLES.includes(currentUser.role ?? '')) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Access Denied</CardTitle>
-            <CardDescription>
-              Live tracking is available only to Super Admin and Admin roles.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
+    return null
   }
 
   return <LiveTrackingMap />

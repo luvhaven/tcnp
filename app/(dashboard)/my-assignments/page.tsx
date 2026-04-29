@@ -120,7 +120,7 @@ export default function MyAssignmentsPage() {
 
       if (error) throw error
 
-      const incoming = (data || []) as Journey[]
+      const incoming = (data || []) as unknown as Journey[]
 
       // Detect newly assigned journeys (not on initial load)
       if (!isInitialLoad && knownJourneyIds.current.size > 0) {
@@ -351,7 +351,7 @@ export default function MyAssignmentsPage() {
             activeJourneys.map((journey) => (
               <div key={journey.id} className="grid grid-cols-1 lg:grid-cols-3 gap-4 animate-slide-up">
                 {/* Journey Status Card */}
-                <CallSignUpdater journey={journey} onUpdate={loadAssignments} />
+                <CallSignUpdater journey={journey as any} onUpdate={loadAssignments} />
 
                 {/* Papa & Cheetah Details Card */}
                 <Card>

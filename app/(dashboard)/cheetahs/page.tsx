@@ -173,7 +173,7 @@ export default function CheetahsPage() {
         // Update
         const { error } = await supabase
           .from('cheetahs')
-          .update(basePayload)
+          .update(basePayload as any)
           .eq('id', editingCheetah.id)
 
         if (error) throw error
@@ -188,14 +188,14 @@ export default function CheetahsPage() {
         const nextNumber = (count || 0) + 1
         const callSign = `CHEETAH-${nextNumber.toString().padStart(3, '0')}`
 
-        const insertPayload: CheetahInsertPayload = {
+        const insertPayload = {
           ...basePayload,
           call_sign: callSign
         }
 
         const { error } = await supabase
           .from('cheetahs')
-          .insert([insertPayload])
+          .insert([insertPayload as any])
 
         if (error) throw error
         toast.success('Cheetah added successfully!')

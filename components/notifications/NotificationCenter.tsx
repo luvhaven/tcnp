@@ -1,329 +1,353 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { createClient } from "@/lib/supabase/client"
-import { Bell } from "lucide-react"
+import { useRef, useState } from "react"
+import { useNotifications, AppNotification, NotificationType } from "@/hooks/useNotifications"
 import { Button } from "@/components/ui/button"
 import { motion, AnimatePresence } from "framer-motion"
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { toast } from "sonner"
+  Bell,
+  BellOff,
+  CheckCheck,
+  Trash2,
+  X,
+  Info,
+  CheckCircle2,
+  AlertTriangle,
+  AlertOctagon,
+  Radio,
+  MessageCircle,
+  ChevronRight,
+} from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
+import { cn } from "@/lib/utils"
+import { useRouter } from "next/navigation"
 
-type Notification = {
-    id: string
-    title: string
-    message: string
-    type: 'info' | 'success' | 'warning' | 'error'
-    is_read: boolean
-    created_at: string
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const TYPE_META: Record<
+  NotificationType,
+  { icon: React.ElementType; color: string; bg: string; border: string; label: string }
+> = {
+  info:         { icon: Info,          color: "text-blue-500",  bg: "bg-blue-50 dark:bg-blue-950/40",  border: "border-l-blue-500",  label: "Info"        },
+  success:      { icon: CheckCircle2,  color: "text-green-500", bg: "bg-green-50 dark:bg-green-950/40",border: "border-l-green-500", label: "Success"     },
+  warning:      { icon: AlertTriangle, color: "text-amber-500", bg: "bg-amber-50 dark:bg-amber-950/40",border: "border-l-amber-500", label: "Warning"     },
+  error:        { icon: AlertOctagon,  color: "text-red-500",   bg: "bg-red-50 dark:bg-red-950/40",    border: "border-l-red-500",   label: "Error"       },
+  broken_arrow: { icon: AlertOctagon,  color: "text-red-600",   bg: "bg-red-100 dark:bg-red-950/60",   border: "border-l-red-600",   label: "BROKEN ARROW"},
+  call_sign:    { icon: Radio,         color: "text-primary",   bg: "bg-primary/5",                    border: "border-l-primary",   label: "Call-Sign"   },
+  chat:         { icon: MessageCircle, color: "text-violet-500",bg: "bg-violet-50 dark:bg-violet-950/40",border: "border-l-violet-500",label: "Chat"      },
 }
 
+function getTypeMeta(type: string) {
+  return TYPE_META[type as NotificationType] ?? TYPE_META.info
+}
+
+// ─── Individual Notification Item ─────────────────────────────────────────────
+
+function NotificationItem({
+  notification,
+  onMarkRead,
+  onDelete,
+  onNavigate,
+}: {
+  notification: AppNotification
+  onMarkRead: (id: string) => void
+  onDelete: (id: string) => void
+  onNavigate: (url: string | null | undefined) => void
+}) {
+  const meta = getTypeMeta(notification.type)
+  const Icon = meta.icon
+  const isBrokenArrow = notification.type === 'broken_arrow'
+
+  const timeAgo = notification.created_at && !isNaN(new Date(notification.created_at).getTime())
+    ? formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })
+    : "just now"
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: -8, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, x: 40, scale: 0.95 }}
+      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+      className={cn(
+        "group relative flex gap-3 border-l-[3px] px-4 py-3 transition-colors",
+        meta.bg,
+        meta.border,
+        !notification.is_read && "font-medium",
+        isBrokenArrow && "animate-pulse-once"
+      )}
+    >
+      {/* Type Icon */}
+      <div className={cn("mt-0.5 flex-shrink-0", meta.color)}>
+        <Icon className={cn("h-4 w-4", isBrokenArrow && "animate-ping-slow")} />
+      </div>
+
+      {/* Content */}
+      <div
+        className="min-w-0 flex-1 cursor-pointer"
+        onClick={() => {
+          if (!notification.is_read) onMarkRead(notification.id)
+          onNavigate(notification.related_url || (notification.journey_id ? `/journeys` : null))
+        }}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <p className={cn("text-sm leading-snug", meta.color, isBrokenArrow && "font-bold uppercase tracking-wide")}>
+            {notification.title}
+          </p>
+          {!notification.is_read && (
+            <motion.span
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-primary"
+            />
+          )}
+        </div>
+        <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+          {notification.message}
+        </p>
+        <p className="mt-1 text-[10px] text-muted-foreground/70">{timeAgo}</p>
+      </div>
+
+      {/* Actions — appear on hover */}
+      <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        {!notification.is_read && (
+          <button
+            title="Mark as read"
+            onClick={(e) => { e.stopPropagation(); onMarkRead(notification.id) }}
+            className="rounded p-1 text-muted-foreground hover:bg-background hover:text-primary"
+          >
+            <CheckCheck className="h-3.5 w-3.5" />
+          </button>
+        )}
+        <button
+          title="Dismiss"
+          onClick={(e) => { e.stopPropagation(); onDelete(notification.id) }}
+          className="rounded p-1 text-muted-foreground hover:bg-background hover:text-destructive"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </motion.div>
+  )
+}
+
+// ─── Filter Tab ──────────────────────────────────────────────────────────────
+
+type FilterTab = "all" | "unread" | "broken_arrow"
+
+// ─── Main NotificationCenter ─────────────────────────────────────────────────
+
 export default function NotificationCenter() {
-    const supabase = createClient()
-    const [notifications, setNotifications] = useState<Notification[]>([])
-    const [unreadCount, setUnreadCount] = useState(0)
-    const [userId, setUserId] = useState<string | null>(null)
+  const router = useRouter()
+  const { notifications, unreadCount, loading, markAsRead, markAllAsRead, deleteNotification } = useNotifications()
+  const [open, setOpen] = useState(false)
+  const [filter, setFilter] = useState<FilterTab>("all")
+  const panelRef = useRef<HTMLDivElement>(null)
 
-    useEffect(() => {
-        const init = async () => {
-            try {
-                await loadNotifications()
-                setupRealtimeSubscription()
-            } catch (error) {
-                console.warn('NotificationCenter init failed (non-fatal):', error)
-            }
-        }
-        init()
-    }, [])
+  const filtered = notifications.filter((n) => {
+    if (filter === "unread") return !n.is_read
+    if (filter === "broken_arrow") return n.type === "broken_arrow"
+    return true
+  })
 
-    const loadNotifications = async () => {
-        try {
-            const { data: { user } } = await supabase.auth.getUser()
-            if (!user) return
+  const emergencyCount = notifications.filter((n) => n.type === "broken_arrow" && !n.is_read).length
 
-            setUserId(user.id)
+  const handleNavigate = (url: string | null | undefined) => {
+    setOpen(false)
+    if (url) router.push(url)
+  }
 
-            // Get last 10 notifications
-            const { data, error } = await supabase
-                .from('notifications')
-                .select('*')
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false })
-                .limit(10)
+  return (
+    <div className="relative" ref={panelRef}>
+      {/* ─── Bell Button ─── */}
+      <Button
+        id="notification-bell"
+        variant="ghost"
+        size="icon"
+        onClick={() => setOpen((o) => !o)}
+        className="relative"
+        aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
+      >
+        <motion.div
+          animate={unreadCount > 0 ? { rotate: [0, -15, 15, -10, 10, 0] } : {}}
+          transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 4 }}
+        >
+          <Bell className="h-5 w-5" />
+        </motion.div>
 
-            if (error) throw error
+        <AnimatePresence>
+          {unreadCount > 0 && (
+            <motion.span
+              key="badge"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0 }}
+              transition={{ type: "spring", stiffness: 500, damping: 25 }}
+              className={cn(
+                "notification-badge badge-pop",
+                emergencyCount > 0 && "bg-red-600 animate-pulse"
+              )}
+            >
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </Button>
 
-            setNotifications((data as unknown as Notification[]) || [])
-            setUnreadCount((data as unknown as Notification[])?.filter(n => !n.is_read).length || 0)
-        } catch (error) {
-            console.error('Error loading notifications:', error)
-        }
-    }
+      {/* ─── Notification Panel ─── */}
+      <AnimatePresence>
+        {open && (
+          <>
+            {/* Backdrop for closing */}
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setOpen(false)}
+            />
 
-    const setupRealtimeSubscription = async () => {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
+            <motion.div
+              key="panel"
+              initial={{ opacity: 0, y: -8, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.96 }}
+              transition={{ type: "spring", stiffness: 400, damping: 28 }}
+              className={cn(
+                "absolute right-0 top-[calc(100%+8px)] z-50 w-[380px] overflow-hidden",
+                "rounded-xl border bg-popover shadow-2xl shadow-black/15 ring-1 ring-border/50",
+                "flex flex-col max-h-[520px]"
+              )}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b bg-card/80 px-4 py-3 backdrop-blur-sm">
+                <div className="flex items-center gap-2">
+                  <Bell className="h-4 w-4 text-primary" />
+                  <h3 className="text-sm font-semibold">Notifications</h3>
+                  {unreadCount > 0 && (
+                    <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
+                      {unreadCount}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  {unreadCount > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={markAllAsRead}
+                      className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-primary"
+                    >
+                      <CheckCheck className="h-3.5 w-3.5" />
+                      Mark all read
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setOpen(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
 
-        // Subscribe to new notifications
-        const channel = supabase
-            .channel('notifications')
-            .on(
-                'postgres_changes',
-                {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'notifications',
-                    filter: `user_id=eq.${user.id}`
-                },
-                (payload) => {
-                    const newNotification = payload.new as Notification
-
-                    // Add to list
-                    setNotifications(prev => [newNotification, ...prev.slice(0, 9)])
-                    setUnreadCount(prev => prev + 1)
-
-                    // Show toast notification
-                    showToastNotification(newNotification)
-
-                    // Play sound and vibrate
-                    playNotificationSound()
-                    vibrateDevice()
-                }
-            )
-            .subscribe()
-
-        return () => {
-            supabase.removeChannel(channel)
-        }
-    }
-
-    const showToastNotification = (notification: Notification) => {
-        const toastFn = {
-            info: toast.info,
-            success: toast.success,
-            warning: toast.warning,
-            error: toast.error,
-        }[notification.type] || toast.info
-
-        toastFn(notification.title, {
-            description: notification.message,
-            duration: 5000,
-        })
-    }
-
-    const playNotificationSound = () => {
-        try {
-            if (typeof window === 'undefined') return
-
-            // Create a notification sound similar to Microsoft Teams
-            // iOS requires AudioContext to be created or resumed from a user gesture event initially
-            // However, we wrap this in try/catch to prevent app crash if it fails
-            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
-            if (!AudioContextClass) return
-
-            const audioContext = new AudioContextClass()
-
-            // Create a more pleasant notification sound (two-tone chime)
-            const playTone = (frequency: number, startTime: number, duration: number) => {
-                const oscillator = audioContext.createOscillator()
-                const gainNode = audioContext.createGain()
-
-                oscillator.connect(gainNode)
-                gainNode.connect(audioContext.destination)
-
-                oscillator.frequency.value = frequency
-                oscillator.type = 'sine'
-
-                // Envelope for smooth sound
-                gainNode.gain.setValueAtTime(0, startTime)
-                gainNode.gain.linearRampToValueAtTime(0.3, startTime + 0.01)
-                gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration)
-
-                oscillator.start(startTime)
-                oscillator.stop(startTime + duration)
-            }
-
-            const now = audioContext.currentTime
-            playTone(800, now, 0.15)  // First tone
-            playTone(1000, now + 0.15, 0.2)  // Second tone (higher pitch)
-
-        } catch (error) {
-            // Silent fail for audio issues to prevent app crash
-            console.warn('Audio playback failed (non-fatal):', error)
-        }
-    }
-
-    const vibrateDevice = () => {
-        try {
-            // Vibration pattern: vibrate for 200ms, pause 100ms, vibrate for 200ms
-            if ('vibrate' in navigator) {
-                navigator.vibrate([200, 100, 200])
-            }
-        } catch (error) {
-            console.error('Error vibrating device:', error)
-        }
-    }
-
-    const markAsRead = async (notificationId: string) => {
-        try {
-            const { error } = await (supabase
-                .from('notifications') as any)
-                .update({ is_read: true })
-                .eq('id', notificationId)
-
-            if (error) throw error
-
-            setNotifications(prev =>
-                prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
-            )
-            setUnreadCount(prev => Math.max(0, prev - 1))
-        } catch (error) {
-            console.error('Error marking notification as read:', error)
-        }
-    }
-
-    const markAllAsRead = async () => {
-        if (!userId) return
-
-        try {
-            const { error } = await (supabase
-                .from('notifications') as any)
-                .update({ is_read: true })
-                .eq('user_id', userId)
-                .eq('is_read', false)
-
-            if (error) throw error
-
-            setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
-            setUnreadCount(0)
-            toast.success('All notifications marked as read')
-        } catch (error) {
-            console.error('Error marking all as read:', error)
-            toast.error('Failed to mark notifications as read')
-        }
-    }
-
-    const getTypeColor = (type: string) => {
-        switch (type) {
-            case 'success': return 'text-green-600 dark:text-green-400'
-            case 'warning': return 'text-yellow-600 dark:text-yellow-400'
-            case 'error': return 'text-red-600 dark:text-red-400'
-            default: return 'text-blue-600 dark:text-blue-400'
-        }
-    }
-
-    return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative">
-                    <Bell className="h-5 w-5" />
-                    {unreadCount > 0 && (
-                        <span className="notification-badge">
-                            {unreadCount > 9 ? '9+' : unreadCount}
-                        </span>
+              {/* Filter Tabs */}
+              <div className="flex border-b bg-muted/30 px-2 pt-1">
+                {(["all", "unread", "broken_arrow"] as FilterTab[]).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setFilter(tab)}
+                    className={cn(
+                      "relative px-3 py-2 text-xs font-medium capitalize transition-colors",
+                      filter === tab
+                        ? "text-primary"
+                        : "text-muted-foreground hover:text-foreground"
                     )}
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
-                <DropdownMenuLabel className="flex justify-between items-center">
-                    <span>Notifications</span>
-                    {unreadCount > 0 && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={markAllAsRead}
-                            className="h-auto p-1 text-xs"
-                        >
-                            Mark all as read
-                        </Button>
+                  >
+                    {tab === "broken_arrow" ? "🚨 Emergency" : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    {filter === tab && (
+                      <motion.div
+                        layoutId="tab-indicator"
+                        className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-primary"
+                      />
                     )}
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
+                    {tab === "unread" && unreadCount > 0 && (
+                      <span className="ml-1 rounded-full bg-primary/20 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                        {unreadCount}
+                      </span>
+                    )}
+                    {tab === "broken_arrow" && emergencyCount > 0 && (
+                      <span className="ml-1 rounded-full bg-red-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-red-500">
+                        {emergencyCount}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
 
-                {notifications.length === 0 ? (
-                    <div className="p-4 text-center text-sm text-muted-foreground">
-                        No notifications
+              {/* Notification List */}
+              <div className="flex-1 overflow-y-auto overscroll-contain">
+                {loading ? (
+                  <div className="space-y-0.5 p-2">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="flex gap-3 rounded-lg p-3">
+                        <div className="h-4 w-4 rounded-full skeleton flex-shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-3.5 w-3/4 rounded skeleton" />
+                          <div className="h-3 w-full rounded skeleton" />
+                          <div className="h-2.5 w-1/3 rounded skeleton" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : filtered.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                    <div className="rounded-full bg-muted p-4">
+                      <BellOff className="h-6 w-6 text-muted-foreground" />
                     </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        {filter === "unread" ? "You're all caught up!" : "No notifications"}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground/70">
+                        {filter === "unread"
+                          ? "No unread notifications."
+                          : "New notifications will appear here."}
+                      </p>
+                    </div>
+                  </div>
                 ) : (
-                    <div className="max-h-[400px] overflow-y-auto">
-                        <AnimatePresence initial={false}>
-                            {notifications.map((notification) => (
-                                <motion.div
-                                    key={notification.id}
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: 'auto' }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                    transition={{ duration: 0.2 }}
-                                >
-                                    <DropdownMenuItem
-                                        className="flex flex-col items-start p-3 cursor-pointer focus:bg-accent/50"
-                                        onClick={(e) => {
-                                            if (!notification.is_read) {
-                                                markAsRead(notification.id)
-                                            }
-
-                                            // Handling Chat Deep Link
-                                            if (notification.type === 'info' && notification.title.includes('New Message')) {
-                                                // Assuming we store related entity ID in a field? 
-                                                // Or simple heuristics: if it's a chat notification, try to find the ID.
-                                                // Since we don't have a clear 'entity_id' in the type defined in this file (Notification),
-                                                // we might need to rely on the backend payload structure having `journey_id` which might be hijacked for message id, 
-                                                // OR assume the user just wants to go to chat. 
-                                                // Ideally, the notification "journey_id" field often stores the related entity ID for generic types.
-                                                // Let's assume generic linking to dashboard for now, or if possible, pass the ID.
-
-                                                // Since I cannot see the full backend logic for creating the notification in this file context,
-                                                // but the ChatSystem sends: `notificationService.notifyNewMessage`
-                                                // I will link to the dashboard. To fully implement highlighting, the notification object NEEDS the message ID.
-                                                // If 'journey_id' is used for message ID in chat context:
-                                                if ((notification as any).journey_id) {
-                                                    window.location.href = `/dashboard?highlight=${(notification as any).journey_id}`
-                                                }
-                                            }
-                                        }}
-                                    >
-                                        <div className="flex items-start justify-between w-full gap-2">
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2">
-                                                    <p className={`font-medium text-sm transition-colors duration-300 ${getTypeColor(notification.type)}`}>
-                                                        {notification.title}
-                                                    </p>
-                                                    <AnimatePresence>
-                                                        {!notification.is_read && (
-                                                            <motion.span
-                                                                initial={{ scale: 0 }}
-                                                                animate={{ scale: 1 }}
-                                                                exit={{ scale: 0 }}
-                                                                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                                                                className="h-2 w-2 rounded-full bg-primary flex-shrink-0"
-                                                            />
-                                                        )}
-                                                    </AnimatePresence>
-                                                </div>
-                                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                                                    {notification.message}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground mt-1">
-                                                    {notification.created_at && !isNaN(new Date(notification.created_at).getTime())
-                                                        ? formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })
-                                                        : 'Just now'}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </DropdownMenuItem>
-                                </motion.div>
-                            ))}
-                        </AnimatePresence>
+                  <AnimatePresence mode="popLayout">
+                    <div className="divide-y divide-border/50">
+                      {filtered.map((n) => (
+                        <NotificationItem
+                          key={n.id}
+                          notification={n}
+                          onMarkRead={markAsRead}
+                          onDelete={deleteNotification}
+                          onNavigate={handleNavigate}
+                        />
+                      ))}
                     </div>
+                  </AnimatePresence>
                 )}
-            </DropdownMenuContent>
-        </DropdownMenu>
-    )
+              </div>
+
+              {/* Footer */}
+              {notifications.length > 0 && (
+                <div className="border-t bg-card/80 px-4 py-2.5">
+                  <button
+                    onClick={() => { setOpen(false); router.push('/audit-logs') }}
+                    className="flex w-full items-center justify-between text-xs text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    <span>View full activity log</span>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  )
 }

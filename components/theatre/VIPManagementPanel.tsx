@@ -79,7 +79,7 @@ export default function VIPManagementPanel() {
         if (!selectedProgramId) return
 
         setLoading(true)
-        const { data, error } = await supabase
+        const { data, error } = await (supabase as any)
             .from('theatre_vips')
             .select('*')
             .eq('program_id', selectedProgramId)
@@ -148,7 +148,7 @@ export default function VIPManagementPanel() {
         setLoading(true)
         try {
             if (editingVIP) {
-                const { error } = await supabase
+                const { error } = await (supabase as any)
                     .from('theatre_vips')
                     .update(formData)
                     .eq('id', editingVIP.id)
@@ -156,7 +156,7 @@ export default function VIPManagementPanel() {
                 if (error) throw error
                 toast.success("VIP updated successfully")
             } else {
-                const { error } = await supabase
+                const { error } = await (supabase as any)
                     .from('theatre_vips')
                     .insert([{ ...formData, program_id: selectedProgramId }])
 
@@ -199,7 +199,7 @@ export default function VIPManagementPanel() {
         if (!confirm('Are you sure you want to remove this VIP?')) return
 
         try {
-            const { error } = await supabase
+            const { error } = await (supabase as any)
                 .from('theatre_vips')
                 .delete()
                 .eq('id', id)

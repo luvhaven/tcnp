@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Users, Plus, Edit, Trash2, Plane } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Users, Plus, Edit, Trash2, Plane, Search } from "lucide-react"
 import { toast } from "sonner"
 import PapaFormTabs from "@/components/papas/PapaFormTabs"
 import { canManagePapas } from "@/lib/utils"
@@ -51,8 +52,18 @@ export default function PapasPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingPapa, setEditingPapa] = useState<Papa | null>(null)
   const [currentRole, setCurrentRole] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   const canManage = currentRole ? canManagePapas(currentRole) : false
+
+  const filteredPapas = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return papas
+    return papas.filter((p) =>
+      [p.full_name, p.title, p.nationality, p.phone, p.email, p.flight_number]
+        .filter(Boolean).join(' ').toLowerCase().includes(q)
+    )
+  }, [papas, search])
 
   useEffect(() => {
     const init = async () => {
@@ -89,9 +100,10 @@ export default function PapasPage() {
         .from('papas')
         .select('*')
         .order('full_name')
+        .limit(200)
 
       if (error) throw error
-      setPapas(data || [])
+      setPapas((data || []) as unknown as Papa[])
     } catch (error) {
       console.error('Error loading papas:', error)
       toast.error('Failed to load Papas')
@@ -328,12 +340,30 @@ export default function PapasPage() {
           <CardDescription>All guest ministers and VIPs</CardDescription>
         </CardHeader>
         <CardContent>
-          {papas.length === 0 ? (
+          {/* Search bar */}
+          <div className="mb-4 flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search by name, nationality, flight number…"
+                className="pl-9"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            {search && (
+              <Button variant="ghost" size="sm" onClick={() => setSearch('')} className="text-xs">Clear</Button>
+            )}
+          </div>
+
+          {filteredPapas.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Users className="h-12 w-12 text-muted-foreground/50" />
-              <p className="mt-4 text-sm font-medium">No Papas yet</p>
-              <p className="text-xs text-muted-foreground">Add your first Papa to get started</p>
-              {canManage && (
+              <p className="mt-4 text-sm font-medium">{search ? 'No results found' : 'No Papas yet'}</p>
+              <p className="text-xs text-muted-foreground">
+                {search ? `No Papas match "${search}"` : 'Add your first Papa to get started'}
+              </p>
+              {canManage && !search && (
                 <Button className="mt-4" onClick={openCreateDialog}>
                   <Plus className="mr-2 h-4 w-4" />
                   Add Papa
@@ -342,7 +372,7 @@ export default function PapasPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {papas.map((papa) => (
+              {filteredPapas.map((papa) => (
                 <div
                   key={papa.id}
                   className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:-translate-y-0.5 hover:shadow-md hover:border-primary/30 animate-slide-up"
@@ -379,6 +409,11 @@ export default function PapasPage() {
                   )}
                 </div>
               ))}
+              {search && filteredPapas.length > 0 && (
+                <p className="pt-1 text-center text-xs text-muted-foreground">
+                  Showing {filteredPapas.length} of {papas.length} Papas
+                </p>
+              )}
             </div>
           )}
         </CardContent>

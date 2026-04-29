@@ -32,8 +32,9 @@ QUICK START (5 MINUTES)
    npm run dev
 
 5. LOGIN
-   Email: doriazowan@gmail.com
-   Password: &DannyDev1&
+   - Login with the Super Admin account you created in Supabase Auth
+   - Go to: Supabase Dashboard → Authentication → Users → Add User
+   - Use any secure email and password you control
 
 ================================================================================
 DETAILED SETUP INSTRUCTIONS

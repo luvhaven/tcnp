@@ -23,7 +23,7 @@ export function DevLoggerInit() {
                         .single()
 
                     // Enable dev logging only for dev_admin
-                    setDevAdminStatus(userData?.role === 'dev_admin')
+                    setDevAdminStatus((userData?.role as string) === 'dev_admin')
                 }
             } catch (error) {
                 // Silent  fail - non-critical

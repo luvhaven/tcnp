@@ -174,7 +174,7 @@ export default function OfficersPage() {
       setOfficers(body.officers || [])
 
       // Load titles + programs — use local `profile` (not async `currentUser` state)
-      if (profile && ['dev_admin', 'admin', 'command', 'head_of_command', 'captain'].includes(profile.role)) {
+      if (profile && ['super_admin', 'dev_admin', 'admin', 'command', 'head_of_command', 'captain'].includes(profile.role)) {
         const [titlesRes, programsRes] = await Promise.all([
           supabase.from('official_titles').select('*').order('unit, name'),
           supabase.from('programs').select('id, name, status').order('created_at', { ascending: false })
@@ -516,7 +516,7 @@ export default function OfficersPage() {
   }
 
   // Command Oscar = admin privileges (can fully manage officers/titles)
-  const ADMIN_ROLES = ['dev_admin', 'admin', 'command', 'head_of_command', 'captain', 'vice_captain']
+  const ADMIN_ROLES = ['super_admin', 'dev_admin', 'admin', 'command', 'head_of_command', 'captain', 'vice_captain']
   const canManageOfficers = currentUser && ADMIN_ROLES.includes(currentUser.role)
 
   // Oscar heads can manage their own unit (head_tango_oscar, head_delta_oscar, etc.)

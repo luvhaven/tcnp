@@ -31,6 +31,7 @@ import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/lib/constants/tncpCallSigns"
 import { DateTimePicker } from "@/components/ui/date-time-picker"
+import { usePagination } from "@/hooks/usePagination"
 
 const FALLBACK_STATUS_LABELS: Record<string, string> = {
   planned: "Planned",
@@ -110,6 +111,8 @@ export default function JourneysPage() {
   const [nests, setNests] = useState<any[]>([])
   const [eagleSquares, setEagleSquares] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const { page, from, to, hasMore, setHasMore, nextPage, resetPage } = usePagination({ pageSize: 50 })
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [callSignDialogOpen, setCallSignDialogOpen] = useState(false)
@@ -156,7 +159,8 @@ export default function JourneysPage() {
       } catch (error) {
         console.error('Error loading current user for JourneysPage:', error)
       } finally {
-        await loadData()
+        await loadLookups()
+        await loadJourneys(false)
       }
     }
 
@@ -166,7 +170,8 @@ export default function JourneysPage() {
     const channel = supabase
       .channel('journeys_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'journeys' }, () => {
-        loadData()
+        resetPage()
+        loadJourneys(false)
       })
       .subscribe()
 
@@ -175,25 +180,60 @@ export default function JourneysPage() {
     }
   }, [])
 
-  const loadData = async () => {
+  useEffect(() => {
+    if (page > 0) loadJourneys(true)
+  }, [page])
+
+  const loadJourneys = async (isLoadMore = false) => {
+    if (isLoadMore) setLoadingMore(true)
     try {
-      const [journeysRes, papasRes, cheetahsRes, programsRes, officersResult] = await Promise.all([
-        supabase.from('journeys').select(`
-          *,
-          papas (title, full_name),
-          cheetahs (call_sign, registration_number, driver_name, driver_phone),
-          assigned_do:users!journeys_assigned_duty_officer_id_fkey (full_name),
-          nests (name),
-          eagle_squares (name, code),
-          programs (name, status)
-        `).order('created_at', { ascending: false }),
+      const rangeFrom = isLoadMore ? from : 0
+      const rangeTo = isLoadMore ? to : 49
+
+      const { data, error } = await supabase.from('journeys').select(`
+        *,
+        papas (title, full_name),
+        cheetahs (call_sign, registration_number, driver_name, driver_phone),
+        assigned_do:users!journeys_assigned_duty_officer_id_fkey (full_name),
+        nests (name),
+        eagle_squares (name, code),
+        programs (name, status)
+      `)
+      .order('created_at', { ascending: false })
+      .range(rangeFrom, rangeTo)
+
+      if (error) throw error
+
+      if (data) {
+        if (isLoadMore) {
+          setJourneys(prev => {
+            const existingIds = new Set(prev.map(j => j.id))
+            const newItems = data.filter(j => !existingIds.has(j.id))
+            return [...prev, ...newItems] as any
+          })
+        } else {
+          setJourneys(data as any)
+        }
+        setHasMore(data.length === 50)
+      }
+    } catch (error) {
+      console.error('Error loading journeys data:', error)
+      toast.error('Failed to load journeys')
+    } finally {
+      if (isLoadMore) setLoadingMore(false)
+      else setLoading(false)
+    }
+  }
+
+  const loadLookups = async () => {
+    try {
+      const [papasRes, cheetahsRes, programsRes, officersResult] = await Promise.all([
         supabase.from('papas').select('*').order('full_name'),
         supabase.from('cheetahs').select('*').order('registration_number'),
         supabase.from('programs').select('*').order('name'),
         supabase.from('users').select('id, full_name, role').eq('role', 'delta_oscar').order('full_name')
       ])
 
-      if (journeysRes.data) setJourneys(journeysRes.data as any)
       if (papasRes.data) setPapas(papasRes.data)
       if (cheetahsRes.data) setCheetahs(cheetahsRes.data)
       if (programsRes.data) setPrograms(programsRes.data)
@@ -206,10 +246,7 @@ export default function JourneysPage() {
         .select('*')
         .order('name', { ascending: true })
 
-      if (nestsResult.error) {
-        console.error('Error fetching nests:', nestsResult.error)
-        // Non-fatal
-      } else {
+      if (!nestsResult.error) {
         setNests(nestsResult.data || [])
       }
 
@@ -219,18 +256,12 @@ export default function JourneysPage() {
         .select('*')
         .order('name', { ascending: true })
 
-      if (eagleResult.error) {
-        // Some tables might be named differently? Let's assume eagle_squares is correct based on schema view earlier
-        console.warn('Error fetching eagle squares:', eagleResult.error)
-      } else {
+      if (!eagleResult.error) {
         setEagleSquares(eagleResult.data || [])
       }
 
     } catch (error) {
-      console.error('Error loading journeys data:', error)
-      toast.error('Failed to load journeys')
-    } finally {
-      setLoading(false)
+      console.error('Error loading lookups:', error)
     }
   }
 
@@ -270,7 +301,8 @@ export default function JourneysPage() {
         eta: '',
         notes: ''
       })
-      loadData()
+      resetPage()
+      loadJourneys(false)
     } catch (error: any) {
       console.error('Error creating journey:', error)
       toast.error(error.message || 'Failed to create journey')
@@ -325,9 +357,9 @@ export default function JourneysPage() {
       if (error) throw error
 
       toast.success('Journey updated successfully!')
-      setEditDialogOpen(false)
       setSelectedJourney(null)
-      loadData()
+      resetPage()
+      loadJourneys(false)
     } catch (error: any) {
       console.error('Error updating journey:', error)
       toast.error(error.message || 'Failed to update journey')
@@ -364,9 +396,9 @@ export default function JourneysPage() {
       ])
 
       toast.success(`Call-sign ${newStatus.toUpperCase()} executed!`)
-      setCallSignDialogOpen(false)
       setSelectedJourney(null)
-      loadData()
+      resetPage()
+      loadJourneys(false)
     } catch (error: any) {
       console.error('Error updating journey:', error)
       toast.error(error.message || 'Failed to update journey')
@@ -673,6 +705,13 @@ export default function JourneysPage() {
                     ))}
                 </div>
               )}
+              {hasMore && (
+                <div className="flex justify-center pt-4">
+                  <Button variant="outline" onClick={nextPage} disabled={loadingMore}>
+                    {loadingMore ? 'Loading...' : 'Load More'}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -716,6 +755,13 @@ export default function JourneysPage() {
                 {journeys.filter(j => ['completed', 'cancelled'].includes(j.status)).length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     No completed journeys found
+                  </div>
+                )}
+                {hasMore && (
+                  <div className="flex justify-center pt-4">
+                    <Button variant="outline" onClick={nextPage} disabled={loadingMore}>
+                      {loadingMore ? 'Loading...' : 'Load More'}
+                    </Button>
                   </div>
                 )}
               </div>

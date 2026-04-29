@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
 export async function DELETE(request: Request) {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
 
     // 1. Create authenticated client to check permissions
     const supabaseAuth = createServerClient(

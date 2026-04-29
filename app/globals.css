@@ -466,3 +466,34 @@ nav a {
   background-size: 200% 100%;
   animation: skeleton-loading 1.8s ease-in-out infinite;
 }
+
+/* ─── Notification Panel ─────────────────────────────────────────────────── */
+
+/* Bell shake when new notification arrives — handled via framer-motion */
+
+/* Slow ping for broken-arrow icon */
+@keyframes ping-slow {
+  0%, 100% { transform: scale(1);   opacity: 1;   }
+  50%       { transform: scale(1.4); opacity: 0.5; }
+}
+.animate-ping-slow {
+  animation: ping-slow 1s ease-in-out infinite;
+}
+
+/* One-shot pulse for new broken-arrow row */
+@keyframes pulse-once {
+  0%   { background-color: hsl(0 72% 92%); }
+  50%  { background-color: hsl(0 72% 88%); }
+  100% { background-color: transparent; }
+}
+.animate-pulse-once {
+  animation: pulse-once 1.5s ease-out;
+}
+
+/* Notification panel scroll snap */
+.notification-scroll {
+  scroll-snap-type: y proximity;
+}
+.notification-scroll > * {
+  scroll-snap-align: start;
+}

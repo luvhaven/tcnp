@@ -34,14 +34,14 @@ export function LocationTracker() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      await supabase.from('notifications').insert({
+      await (supabase as any).from('notifications').insert({
         user_id: user.id,
         title: type === 'LOCATION_LOSS' ? 'SOS: Location Offline' : 'Battery Critical',
         message: type === 'LOCATION_LOSS'
           ? `User ${user.email} location stopped updating.`
           : `User device battery is critical.`,
         type: 'alert',
-        read: false
+        is_read: false
       })
     } catch (e) {
       console.warn('Failed to send admin alert', e)

@@ -179,9 +179,9 @@
    - Add your Supabase credentials
 
 4. **Create Super Admin**
-   - In Supabase Auth, create user:
-     - Email: doriazowan@gmail.com
-     - Password: &DannyDev1&
+   - In Supabase Auth (Dashboard → Authentication → Users → Add User)
+   - Use your own secure admin email and password
+   - The user profile will be auto-created via database triggers
 
 5. **Run Development Server**
    ```bash

@@ -54,7 +54,7 @@ export default function MyOperationsPage() {
         .order('etd', { ascending: true, nullsFirst: false })
 
       if (error) throw error
-      const incoming = (data || []) as Journey[]
+      const incoming = (data || []) as unknown as Journey[]
 
       // Detect newly assigned journeys
       if (!isInitial && knownIds.current.size > 0) {
