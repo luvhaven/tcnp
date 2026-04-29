@@ -497,3 +497,35 @@ nav a {
 .notification-scroll > * {
   scroll-snap-align: start;
 }
+
+/* ─── iOS Safe Area (notch/home-bar support) ─────────────────────────────── */
+
+body {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Fixed bottom elements must respect home bar */
+.fixed-bottom-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+/* ─── BrokenArrow Alert Extras ───────────────────────────────────────────── */
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; box-shadow: 0 0 40px rgba(239, 68, 68, 0.6); }
+  50%       { opacity: 0.9; box-shadow: 0 0 80px rgba(239, 68, 68, 0.9); }
+}
+.animate-pulse-slow {
+  animation: pulse-slow 2s ease-in-out infinite;
+}
+
+/* ─── Mobile table scroll ────────────────────────────────────────────────── */
+
+/* All table wrappers scroll horizontally on mobile */
+.table-scroll-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius);
+}

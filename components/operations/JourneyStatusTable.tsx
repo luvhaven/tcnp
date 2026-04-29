@@ -56,6 +56,10 @@ export default function JourneyStatusTable() {
     const [callSignDialogOpen, setCallSignDialogOpen] = useState(false)
     const [currentUser, setCurrentUser] = useState<any>(null)
     const [canUpdateCallSigns, setCanUpdateCallSigns] = useState(false)
+    const [setTimesDialogOpen, setSetTimesDialogOpen] = useState(false)
+    const [selectedJourneyForTimes, setSelectedJourneyForTimes] = useState<Journey | null>(null)
+    const [timesForm, setTimesForm] = useState({ eta: '', etd: '' })
+    const [savingTimes, setSavingTimes] = useState(false)
 
     useEffect(() => {
         let mounted = true
@@ -160,7 +164,7 @@ export default function JourneyStatusTable() {
 
             // Check if user can update call signs (DO or admin)
             const userRole = (userData as any)?.role as string | undefined
-            const canUpdate = userRole && ['dev_admin', 'admin', 'delta_oscar', 'captain', 'head_of_command'].includes(userRole)
+            const canUpdate = userRole && ['super_admin', 'dev_admin', 'admin', 'delta_oscar', 'captain', 'head_of_command'].includes(userRole)
             setCanUpdateCallSigns(Boolean(canUpdate))
         } catch (error) {
             console.error('Error loading current user:', error)
@@ -174,9 +178,15 @@ export default function JourneyStatusTable() {
 
     const loadActiveJourneys = async () => {
         try {
-            const { data, error } = await supabase
+            // Single joined query — eliminates N+1 problem
+            const { data, error } = await (supabase as any)
                 .from('journeys')
-                .select('*')
+                .select(`
+                    *,
+                    papas:papa_id(full_name, title),
+                    cheetahs:assigned_cheetah_id(call_sign, registration_number),
+                    assigned_do:assigned_duty_officer_id(full_name, oscar)
+                `)
                 .not('status', 'in', '(completed,cancelled)')
                 .order('created_at', { ascending: false })
 
@@ -185,58 +195,44 @@ export default function JourneyStatusTable() {
                 throw error
             }
 
-            // Fetch related data separately
-            const journeysWithRelations = await Promise.all((data || []).map(async (journey: any) => {
-                let papa = null
-                let cheetah = null
-                let assignedDO = null
-
-                // Fetch papa
-                if (journey.papa_id) {
-                    const { data: papaData } = await supabase
-                        .from('papas')
-                        .select('full_name, title')
-                        .eq('id', journey.papa_id)
-                        .single()
-                    papa = papaData
-                }
-
-                // Fetch cheetah
-                if (journey.assigned_cheetah_id) {
-                    const { data: cheetahData } = await supabase
-                        .from('cheetahs')
-                        .select('call_sign, registration_number')
-                        .eq('id', journey.assigned_cheetah_id)
-                        .single()
-                    cheetah = cheetahData
-                }
-
-                // Fetch assigned DO (check both columns for backward compatibility)
-                const doId = journey.assigned_duty_officer_id || journey.assigned_do_id
-                if (doId) {
-                    const { data: doData } = await supabase
-                        .from('users')
-                        .select('full_name, oscar')
-                        .eq('id', doId)
-                        .single()
-                    assignedDO = doData
-                }
-
-                return {
-                    ...journey,
-                    papas: papa,
-                    cheetahs: cheetah,
-                    assigned_do: assignedDO
-                }
-            }))
-
-            console.log('Successfully loaded journeys:', journeysWithRelations.length)
-            setJourneys(journeysWithRelations as any)
+            setJourneys((data || []) as any)
         } catch (error) {
             console.error('Error loading journeys:', JSON.stringify(error, null, 2))
             toast.error('Failed to load active journeys')
         } finally {
             setLoading(false)
+        }
+    }
+
+    const handleSetTimes = (journey: Journey) => {
+        setSelectedJourneyForTimes(journey)
+        setTimesForm({
+            eta: journey.eta ? new Date(journey.eta).toISOString().slice(0, 16) : '',
+            etd: journey.etd ? new Date(journey.etd).toISOString().slice(0, 16) : '',
+        })
+        setSetTimesDialogOpen(true)
+    }
+
+    const handleSaveTimes = async () => {
+        if (!selectedJourneyForTimes) return
+        setSavingTimes(true)
+        try {
+            const { error } = await (supabase as any)
+                .from('journeys')
+                .update({
+                    eta: timesForm.eta ? new Date(timesForm.eta).toISOString() : null,
+                    etd: timesForm.etd ? new Date(timesForm.etd).toISOString() : null,
+                })
+                .eq('id', selectedJourneyForTimes.id)
+            if (error) throw error
+            toast.success('Journey times updated')
+            setSetTimesDialogOpen(false)
+            setSelectedJourneyForTimes(null)
+            loadActiveJourneys()
+        } catch (error: any) {
+            toast.error(error.message || 'Failed to update times')
+        } finally {
+            setSavingTimes(false)
         }
     }
 
@@ -248,7 +244,7 @@ export default function JourneyStatusTable() {
 
         // Check if user is assigned DO or admin
         const isAssignedDO = currentUser?.id === journey.assigned_duty_officer_id
-        const isAdmin = currentUser?.role && ['dev_admin', 'admin', 'captain', 'head_of_command'].includes(currentUser.role)
+        const isAdmin = currentUser?.role && ['super_admin', 'dev_admin', 'admin', 'captain', 'head_of_command'].includes(currentUser.role)
 
         if (!isAssignedDO && !isAdmin) {
             toast.error('Only the assigned DO or admins can update this journey')
@@ -363,7 +359,7 @@ export default function JourneyStatusTable() {
             </div>
 
             {/* Journey Table */}
-            <div className="border rounded-lg overflow-hidden">
+            <div className="table-scroll-wrapper border rounded-lg">
                 <Table>
                     <TableHeader>
                         <TableRow className="bg-muted/50">
@@ -452,6 +448,7 @@ export default function JourneyStatusTable() {
                                                     variant="ghost"
                                                     size="sm"
                                                     className="h-8 text-xs"
+                                                    onClick={() => handleSetTimes(journey)}
                                                 >
                                                     <Clock className="h-3 w-3 mr-1" />
                                                     {journey.eta ? 'Edit Times' : 'Set Times'}
@@ -533,6 +530,45 @@ export default function JourneyStatusTable() {
                                 ))}
                             </div>
                         </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Set Times Dialog */}
+            <Dialog open={setTimesDialogOpen} onOpenChange={setSetTimesDialogOpen}>
+                <DialogContent className="sm:max-w-[420px]">
+                    <DialogHeader>
+                        <DialogTitle>Set Journey Times</DialogTitle>
+                        <DialogDescription>
+                            Update ETA and ETD for {selectedJourneyForTimes?.papas?.full_name ?? 'this journey'}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">ETA — Estimated Time of Arrival</label>
+                            <input
+                                type="datetime-local"
+                                value={timesForm.eta}
+                                onChange={(e) => setTimesForm(prev => ({ ...prev, eta: e.target.value }))}
+                                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">ETD — Estimated Time of Departure</label>
+                            <input
+                                type="datetime-local"
+                                value={timesForm.etd}
+                                onChange={(e) => setTimesForm(prev => ({ ...prev, etd: e.target.value }))}
+                                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+                            />
+                        </div>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                        <Button type="button" variant="outline" onClick={() => setSetTimesDialogOpen(false)}>Cancel</Button>
+                        <Button type="button" onClick={handleSaveTimes} disabled={savingTimes}>
+                            {savingTimes && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                            Save Times
+                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>

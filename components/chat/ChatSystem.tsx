@@ -230,7 +230,7 @@ export default function ChatSystem({
       return
     }
 
-    if (['dev_admin', 'admin'].includes(currentUser.role)) {
+    if (['super_admin', 'dev_admin', 'admin'].includes(currentUser.role)) {
       setCanChatInProgram(true)
       setProgramAccessChecked(true)
       return

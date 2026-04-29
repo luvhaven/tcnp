@@ -47,6 +47,30 @@
           "sizes": "192x192"
         }
       ]
+    },
+    {
+      "name": "Ops Monitor",
+      "short_name": "Ops",
+      "description": "Live operations monitoring",
+      "url": "/operations-monitor",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Chat",
+      "short_name": "Chat",
+      "description": "Team communications",
+      "url": "/chat",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

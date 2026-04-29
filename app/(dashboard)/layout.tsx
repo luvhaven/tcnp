@@ -5,6 +5,7 @@ import dynamic from "next/dynamic"
 import { useIsClient } from "@/hooks/useIsClient"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { PresenceHeartbeat } from "@/components/utils/PresenceHeartbeat"
+import { BrokenArrowAlert } from "@/components/operations/BrokenArrowAlert"
 
 // Core layout components - loaded normally but wrapped in error boundaries
 import { Header } from "@/components/layout/header"
@@ -43,6 +44,11 @@ const OnlineStatusBanner = dynamic(
 
 const SyncStatusBadge = dynamic(
   () => import("@/components/ui/sync-status-badge").then((m) => m.SyncStatusBadge),
+  { ssr: false }
+)
+
+const PWAInstallPrompt = dynamic(
+  () => import("@/components/pwa/PWAInstallPrompt").then((m) => m.PWAInstallPrompt),
   { ssr: false }
 )
 
@@ -90,6 +96,9 @@ export default function DashboardLayout({
         {/* Presence heartbeat - updates last_seen every 60s so officers show as online */}
         <PresenceHeartbeat />
 
+        {/* Broken Arrow Global Alert */}
+        <BrokenArrowAlert />
+
         {/* Dev tools - DISABLED on iOS */}
         {canMountExtras && !isIOS && <DevLoggerInit />}
 
@@ -124,21 +133,27 @@ export default function DashboardLayout({
         </div>
 
         {/* Mobile Sidebar Overlay */}
-        {mobileSidebarOpen && (
-          <div className="fixed inset-0 z-40 flex md:hidden">
-            <div
-              className="absolute inset-0 bg-black/40"
-              onClick={() => setMobileSidebarOpen(false)}
-            />
-            <div className="relative z-50 h-full w-72 max-w-[80%]">
-              <ErrorBoundary>
-                <Suspense fallback={<div className="w-72 h-full bg-background animate-pulse" />}>
-                  <Sidebar isMobile onClose={() => setMobileSidebarOpen(false)} />
-                </Suspense>
-              </ErrorBoundary>
-            </div>
+        <div
+          className={`fixed inset-0 z-40 flex md:hidden transition-all duration-300 ${
+            mobileSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+          }`}
+        >
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+          <div
+            className={`relative z-50 h-full w-72 max-w-[80%] transition-transform duration-300 ${
+              mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+            }`}
+          >
+            <ErrorBoundary>
+              <Suspense fallback={<div className="w-72 h-full bg-background animate-pulse" />}>
+                <Sidebar isMobile onClose={() => setMobileSidebarOpen(false)} />
+              </Suspense>
+            </ErrorBoundary>
           </div>
-        )}
+        </div>
 
         {/* Main Content Area */}
         <div className="flex flex-1 flex-col overflow-hidden">
@@ -163,6 +178,9 @@ export default function DashboardLayout({
             </ErrorBoundary>
             <ErrorBoundary>
               <SyncStatusBadge />
+            </ErrorBoundary>
+            <ErrorBoundary>
+              <PWAInstallPrompt />
             </ErrorBoundary>
           </>
         )}
