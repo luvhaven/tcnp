@@ -16,13 +16,9 @@ export default function ProgramExport({ programId, programName, status }: Progra
   const supabase = createClient()
   const [exporting, setExporting] = useState(false)
 
-  const canExport = ['completed', 'archived'].includes(status.toLowerCase())
+  const canExport = true // Allow exporting in any status
 
   const handleExport = async () => {
-    if (!canExport) {
-      toast.error('Only completed or archived programs can be exported')
-      return
-    }
 
     setExporting(true)
     
@@ -76,36 +72,28 @@ export default function ProgramExport({ programId, programName, status }: Progra
 
   const exportToCSV = async (data: any, programName: string) => {
     try {
-      // Create a comprehensive CSV with multiple sheets (as separate files)
-      
-      // Export Papas
-      if (data.papas && data.papas.length > 0) {
-        const papasCsv = convertToCSV(data.papas)
-        downloadCSV(papasCsv, `${programName}_Papas.csv`)
-      }
+      const exportList = [
+        { key: 'papas', suffix: '_Papas.csv' },
+        { key: 'journeys', suffix: '_Journeys.csv' },
+        { key: 'incidents', suffix: '_Incidents.csv' },
+        { key: 'chat_messages', suffix: '_Chat.csv' },
+        { key: 'cheetahs', suffix: '_Cheetahs.csv' },
+        { key: 'theatres', suffix: '_Theatres.csv' },
+        { key: 'nests', suffix: '_Nests.csv' },
+        { key: 'eagle_squares', suffix: '_Eagle_Squares.csv' },
+        { key: 'flight_tracking', suffix: '_Flight_Tracking.csv' },
+        { key: 'equipment', suffix: '_Equipment.csv' },
+        { key: 'equipment_logs', suffix: '_Equipment_Logs.csv' },
+        { key: 'staff_assignments', suffix: '_Staff_Assignments.csv' }
+      ]
 
-      // Export Journeys
-      if (data.journeys && data.journeys.length > 0) {
-        const journeysCsv = convertToCSV(data.journeys)
-        downloadCSV(journeysCsv, `${programName}_Journeys.csv`)
-      }
-
-      // Export Incidents
-      if (data.incidents && data.incidents.length > 0) {
-        const incidentsCsv = convertToCSV(data.incidents)
-        downloadCSV(incidentsCsv, `${programName}_Incidents.csv`)
-      }
-
-      // Export Chat Messages
-      if (data.chat_messages && data.chat_messages.length > 0) {
-        const chatCsv = convertToCSV(data.chat_messages)
-        downloadCSV(chatCsv, `${programName}_Chat.csv`)
-      }
-
-      // Export Cheetahs
-      if (data.cheetahs && data.cheetahs.length > 0) {
-        const cheetahsCsv = convertToCSV(data.cheetahs)
-        downloadCSV(cheetahsCsv, `${programName}_Cheetahs.csv`)
+      for (const item of exportList) {
+        if (data[item.key] && data[item.key].length > 0) {
+          const csv = convertToCSV(data[item.key])
+          downloadCSV(csv, `${programName}${item.suffix}`)
+          // Optional delay to prevent browser from blocking multiple downloads
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
       }
     } catch (error) {
       console.error('Error creating CSV:', error)

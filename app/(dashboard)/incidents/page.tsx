@@ -196,6 +196,13 @@ export default function IncidentsPage() {
         return
       }
 
+      // Optimistic removal — item disappears immediately
+      setIncidents(prev => prev.filter(i => i.id !== incident.id))
+      if (editing?.id === incident.id) {
+        setDialogOpen(false)
+        setEditing(null)
+      }
+
       try {
         const { error } = await supabase
           .from('incidents')
@@ -211,18 +218,16 @@ export default function IncidentsPage() {
         })
 
         toast.success('Incident deleted successfully')
-        if (editing?.id === incident.id) {
-          setDialogOpen(false)
-          setEditing(null)
-        }
-        await loadData()
       } catch (error: any) {
-        console.error('❌ Error deleting incident:', error)
+        console.error('Error deleting incident:', error)
         toast.error(error.message || 'Failed to delete incident')
+        // Rollback — reload to restore if delete failed
+        await loadData()
       }
     },
     [canManage, supabase, createAuditLog, editing?.id, loadData]
   )
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

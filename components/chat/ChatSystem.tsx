@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
@@ -30,7 +30,7 @@ type TimelineItem =
   | { kind: 'unread'; id: string }
   | { kind: 'msg'; id: string; msg: Message; isFirst: boolean; isLast: boolean }
 
-const QUICK_REACTIONS = ['ðŸ‘', 'â¤ï¸', 'ðŸ˜‚', 'ðŸ˜®', 'ðŸ˜¢', 'ðŸ”¥'] as const
+const QUICK_REACTIONS = ['\uD83D\uDC4D', '\u2764\uFE0F', '\uD83D\uDE02', '\uD83D\uDE2E', '\uD83D\uDE22', '\uD83D\uDD25'] as const
 
 function formatDateLabel(d: Date): string {
   if (isToday(d)) return 'Today'
@@ -137,8 +137,10 @@ type Message = {
   read_by: string[]
   is_private: boolean
   created_at: string
+  reply_to_id?: string | null
   users: MessageUserMeta
 }
+
 
 type User = {
   id: string
@@ -379,9 +381,11 @@ export default function ChatSystem({
       read_by: readBy,
       is_private: Boolean(message.is_private),
       created_at: message.created_at ?? new Date().toISOString(),
+      reply_to_id: (message as any).reply_to_id ?? null,
       users: userMeta
     }
   }, [userDirectory, ensureUserProfile])
+
 
   useEffect(() => {
     setMessages((prev) =>
@@ -419,21 +423,7 @@ export default function ChatSystem({
     )
   }, [])
 
-  const updatePresenceFlags = useCallback(async (online: boolean) => {
-    if (!currentUser?.id) return
-
-    try {
-      const { error } = await (supabase as any).rpc('set_user_presence', {
-        is_user_online: online
-      })
-
-      if (error) {
-        console.error('Error updating presence flag:', error)
-      }
-    } catch (error) {
-      console.error('Unexpected error updating presence flag:', error)
-    }
-  }, [supabase, currentUser?.id])
+  // updatePresenceFlags was removed because PresenceHeartbeat handles it globally
 
   const markMessageRead = useCallback(async (message: Message) => {
     if (!currentUser?.id) return
@@ -485,10 +475,9 @@ export default function ChatSystem({
 
         participants.forEach((participant) => {
           const existing = merged.get(participant.id)
-          // Online = DB flag OR Supabase Presence OR recent last_seen
+          // Online = DB flag OR recent last_seen
           const isOnline =
             !!participant.is_online ||
-            presenceIds.includes(participant.id) ||
             isRecentlySeen(participant.last_seen ?? null)
 
           merged.set(participant.id, {
@@ -640,7 +629,24 @@ export default function ChatSystem({
         }
       }
 
-      // Fallback transformation
+      // UPDATE: if soft-deleted, remove from state immediately
+      if (payload.eventType === 'UPDATE' && (newRow as any).deleted_at) {
+        if (mounted) setMessages(prev => prev.filter(m => m.id !== newRow.id))
+        return
+      }
+
+      // UPDATE: message was edited — refresh it in state
+      if (payload.eventType === 'UPDATE' && mounted) {
+        const message = transformMessage(raw)
+        setMessages(prev => {
+          const idx = prev.findIndex(m => m.id === message.id)
+          if (idx !== -1) { const next = [...prev]; next[idx] = message; return next }
+          return prev
+        })
+        return
+      }
+
+      // INSERT fallback
       if (mounted) {
         const message = transformMessage(raw)
         setMessages((prev) => {
@@ -649,6 +655,7 @@ export default function ChatSystem({
         })
       }
     }
+
 
     const subscriptionConfig: any = {
       event: '*',
@@ -707,82 +714,7 @@ export default function ChatSystem({
   useEffect(() => {
     if (!currentUser?.id) return
 
-    void updatePresenceFlags(true)
-
-    const handleVisibilityChange = () => {
-      void updatePresenceFlags(!document.hidden)
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    if (presenceIntervalRef.current) {
-      clearInterval(presenceIntervalRef.current)
-    }
-
-    presenceIntervalRef.current = setInterval(() => {
-      void updatePresenceFlags(!document.hidden)
-    }, 30000)
-
-    const handleBeforeUnload = () => {
-      void updatePresenceFlags(false)
-    }
-
-    window.addEventListener('beforeunload', handleBeforeUnload)
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-      if (presenceIntervalRef.current) {
-        clearInterval(presenceIntervalRef.current)
-        presenceIntervalRef.current = null
-      }
-      void updatePresenceFlags(false)
-    }
-  }, [currentUser?.id, updatePresenceFlags])
-
-  useEffect(() => {
-    if (!currentUser?.id) return
-
-    const channel = supabase.channel(`chat-presence`, {
-      config: {
-        presence: {
-          key: currentUser.id
-        }
-      }
-    })
-
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState() as RealtimePresenceState<{
-          online_at: string
-        }>
-
-        const onlineIds = Object.keys(state || {})
-        onlineUserIdsRef.current = onlineIds
-
-        setUsers((prev) =>
-          prev.map((user) => ({
-            ...user,
-            is_online: onlineIds.includes(user.id)
-          }))
-        )
-      })
-      .on('presence', { event: 'join' }, () => {
-        void loadParticipants()
-      })
-      .on('presence', { event: 'leave' }, () => {
-        void loadParticipants()
-      })
-
-    channel.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        await channel.track({ online_at: new Date().toISOString() })
-      }
-    })
-
-    presenceChannelRef.current = channel
-
-    // Also subscribe to users table changes for is_online / last_seen updates
+    // Subscribe to users table changes for is_online / last_seen updates
     const usersOnlineChannel = supabase
       .channel('chat-users-online-rt')
       .on('postgres_changes', {
@@ -796,11 +728,6 @@ export default function ChatSystem({
       .subscribe()
 
     return () => {
-      if (presenceChannelRef.current) {
-        presenceChannelRef.current.untrack()
-        supabase.removeChannel(presenceChannelRef.current)
-        presenceChannelRef.current = null
-      }
       supabase.removeChannel(usersOnlineChannel)
     }
   }, [supabase, currentUser?.id, loadParticipants])
@@ -983,6 +910,13 @@ export default function ChatSystem({
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [editingMessage, setEditingMessage] = useState<Message | null>(null)
 
+  // Cancel reply/edit when switching program or papa — start fresh in new context
+  useEffect(() => {
+    setReplyTo(null)
+    setEditingMessage(null)
+    setNewMessage('')
+  }, [programId, papaId])
+
   const loadReactions = useCallback(async (ids: string[]) => {
     if (!ids.length) return
     const { data } = await (supabase as any).from('message_reactions').select('message_id,user_id,emoji').in('message_id', ids)
@@ -1022,18 +956,16 @@ export default function ChatSystem({
   }, [supabase, currentUser])
 
   const handleReply = (message: Message) => {
+    setEditingMessage(null)
     setReplyTo(message)
-    if (inputRef.current) {
-      inputRef.current.focus()
-    }
+    setTimeout(() => textareaRef.current?.focus(), 50)
   }
 
   const handleEdit = (message: Message) => {
+    setReplyTo(null)
     setEditingMessage(message)
     setNewMessage(message.content)
-    if (inputRef.current) {
-      inputRef.current.focus()
-    }
+    setTimeout(() => textareaRef.current?.focus(), 50)
   }
 
   const cancelReply = () => {
@@ -1337,7 +1269,7 @@ export default function ChatSystem({
             </div>
             <div>
               <h2 className="text-sm font-semibold leading-tight">Team Chat</h2>
-              <p className="text-[11px] text-muted-foreground">{users.filter(u => u.is_online).length} online Â· {visibleMessages.length} messages</p>
+              <p className="text-[11px] text-muted-foreground">{users.filter(u => u.is_online).length} online · {visibleMessages.length} messages</p>
               {isReadOnlyProgramChat && <p className="text-[10px] text-amber-600 font-medium">Read-only: not assigned to this program</p>}
             </div>
           </div>
@@ -1364,7 +1296,7 @@ export default function ChatSystem({
               <button onClick={loadEarlierMessages} disabled={loadingEarlier}
                 className="flex items-center gap-2 text-xs text-muted-foreground border rounded-full px-4 py-1.5 bg-background hover:bg-muted transition-colors disabled:opacity-50">
                 {loadingEarlier && <Loader2 className="h-3 w-3 animate-spin" />}
-                {loadingEarlier ? 'Loadingâ€¦' : 'Load earlier messages'}
+                {loadingEarlier ? 'Loading...' : 'Load earlier messages'}
               </button>
             </div>
           )}
@@ -1520,7 +1452,7 @@ export default function ChatSystem({
           <div className="fixed inset-0 z-40" onClick={() => setShowUserList(false)} />
           <div className="absolute bottom-[5.5rem] right-4 w-72 bg-background border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in slide-in-from-bottom-4 duration-200">
             <div className="bg-muted/50 px-4 py-3 border-b flex items-center justify-between">
-              <div><h3 className="text-sm font-semibold">Team Members</h3><p className="text-xs text-muted-foreground">{users.filter(u => u.is_online).length} online Â· {users.length} total</p></div>
+              <div><h3 className="text-sm font-semibold">Team Members</h3><p className="text-xs text-muted-foreground">{users.filter(u => u.is_online).length} online · {users.length} total</p></div>
               <button onClick={() => setShowUserList(false)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
             </div>
             <div className="max-h-72 overflow-y-auto">
@@ -1581,7 +1513,7 @@ export default function ChatSystem({
           <div className="relative flex-1">
             <textarea
               ref={textareaRef}
-              placeholder={isReadOnlyProgramChat ? 'Read-only: not assigned to this program' : editingMessage ? 'Edit messageâ€¦' : 'Message the teamâ€¦'}
+              placeholder={isReadOnlyProgramChat ? 'Read-only: not assigned to this program' : editingMessage ? 'Edit message...' : 'Message the team...'}
               value={newMessage}
               onChange={handleMessageChange}
               onKeyDown={e => {
@@ -1596,7 +1528,7 @@ export default function ChatSystem({
               <div className="absolute bottom-full left-0 right-0 mb-2 bg-background border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in slide-in-from-bottom-2 duration-150">
                 <div className={`px-3 py-2 border-b flex items-center gap-2 text-xs font-semibold ${mentionType === '@@' ? 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' : 'text-primary bg-primary/5'}`}>
                   {mentionType === '@@' ? <Lock className="h-3.5 w-3.5" /> : <AtSign className="h-3.5 w-3.5" />}
-                  {mentionType === '@@' ? 'Private mention' : 'Mention'} Â· type first name
+                  {mentionType === '@@' ? 'Private mention' : 'Mention'} · type first name
                 </div>
                 {filteredUsers.slice(0, 5).map(user => (
                   <div key={user.id} onClick={() => selectMention(user)} className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 cursor-pointer border-b last:border-0 transition-colors">
@@ -1612,8 +1544,9 @@ export default function ChatSystem({
             <Send className="h-4 w-4" />
           </Button>
         </div>
-        <p className="text-[10px] text-muted-foreground/40 mt-1.5 text-right select-none">Enter to send Â· Shift+Enter for new line</p>
+        <p className="text-[10px] text-muted-foreground/40 mt-1.5 text-right select-none">Enter to send · Shift+Enter for new line</p>
       </div>
     </div>
   )
 }
+

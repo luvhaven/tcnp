@@ -355,14 +355,11 @@ export default function ProgramsPage() {
                       {getStatusLabel(program.status)}
                     </Badge>
 
-                    {/* Export Button for Completed/Archived Programs */}
-                    {(program.status === 'completed' || program.status === 'archived') && (
-                      <ProgramExport
-                        programId={program.id}
-                        programName={program.name}
-                        status={program.status}
-                      />
-                    )}
+                    <ProgramExport
+                      programId={program.id}
+                      programName={program.name}
+                      status={program.status}
+                    />
 
                     {program.status === 'planning' && (
                       <Button

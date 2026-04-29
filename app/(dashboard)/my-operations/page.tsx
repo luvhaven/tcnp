@@ -20,6 +20,7 @@ interface Journey {
   etd: string | null
   eta: string | null
   notes: string | null
+  assigned_duty_officer_id: string | null
   papas: { full_name: string; title: string } | null
   cheetahs: { call_sign: string | null; registration_number: string } | null
   nests: { name: string } | null
@@ -33,27 +34,65 @@ export default function MyOperationsPage() {
   const [selectedJourneyId, setSelectedJourneyId] = useState<string | null>(null)
   const knownIds = useRef<Set<string>>(new Set())
 
+  const [userId, setUserId] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
+
   const loadJourneys = useCallback(async (isInitial = false) => {
     try {
       if (isInitial) setLoading(true)
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const { data, error } = await supabase
+      // Get user role
+      const { data: userData } = await supabase
+        .from('users')
+        .select('id, role')
+        .eq('id', user.id)
+        .single()
+
+      setUserId(user.id)
+      setUserRole((userData as any)?.role ?? null)
+
+      const isAdmin = ['super_admin', 'dev_admin', 'admin'].includes((userData as any)?.role)
+
+      // Get program IDs where this user is assigned
+      const { data: assignments } = await (supabase as any)
+        .from('current_title_assignments')
+        .select('program_id')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+
+      const programIds: string[] = (assignments || [])
+        .map((a: any) => a.program_id)
+        .filter(Boolean)
+
+      // Build journey query — include journeys the user is DO for OR in their assigned programs
+      let query = (supabase as any)
         .from('journeys')
         .select(`
           id, status, origin, destination,
           scheduled_departure, etd, eta, notes,
+          assigned_duty_officer_id,
           papas:papas!papa_id(full_name, title),
           cheetahs:cheetahs!assigned_cheetah_id(call_sign, registration_number),
           nests:nests!assigned_nest_id(name),
           eagle_squares:eagle_squares!assigned_eagle_square_id(name, code)
         `)
-        .eq('assigned_duty_officer_id', user.id)
         .not('status', 'in', '(completed,cancelled)')
         .order('etd', { ascending: true, nullsFirst: false })
 
+      if (!isAdmin) {
+        // Build OR filter: direct DO assignment OR in assigned programs
+        const filters: string[] = [`assigned_duty_officer_id.eq.${user.id}`]
+        if (programIds.length > 0) {
+          filters.push(`program_id.in.(${programIds.join(',')})`)
+        }
+        query = query.or(filters.join(','))
+      }
+
+      const { data, error } = await query
       if (error) throw error
+
       const incoming = (data || []) as unknown as Journey[]
 
       // Detect newly assigned journeys
@@ -83,6 +122,8 @@ export default function MyOperationsPage() {
       if (isInitial) setLoading(false)
     }
   }, [supabase])
+
+
 
   useEffect(() => {
     const init = async () => {
@@ -157,12 +198,12 @@ export default function MyOperationsPage() {
 
           {journeys.map(j => (
             <TabsContent key={j.id} value={j.id}>
-              <JourneyOperationsPanel journey={j} />
+              <JourneyOperationsPanel journey={j} currentUserId={userId} />
             </TabsContent>
           ))}
         </Tabs>
       ) : (
-        <JourneyOperationsPanel journey={selectedJourney} />
+        <JourneyOperationsPanel journey={selectedJourney} currentUserId={userId} />
       )}
     </div>
   )
@@ -170,7 +211,9 @@ export default function MyOperationsPage() {
 
 // ─── Sub-panel for one journey ─────────────────────────────────────────────
 
-function JourneyOperationsPanel({ journey }: { journey: Journey }) {
+function JourneyOperationsPanel({ journey, currentUserId }: { journey: Journey; currentUserId: string | null }) {
+  const isDO = journey.assigned_duty_officer_id === currentUserId
+
   return (
     <div className="space-y-4">
       {/* Journey summary card */}
@@ -197,7 +240,7 @@ function JourneyOperationsPanel({ journey }: { journey: Journey }) {
               <MapPin className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
               <div>
                 <p className="text-xs text-muted-foreground">Route</p>
-                <p className="font-semibold text-xs">{journey.origin} → {journey.destination}</p>
+                <p className="font-semibold text-xs">{journey.origin} &rarr; {journey.destination}</p>
               </div>
             </div>
             <div className="flex items-start gap-2">
@@ -213,21 +256,31 @@ function JourneyOperationsPanel({ journey }: { journey: Journey }) {
 
           {(journey.nests || journey.eagle_squares) && (
             <div className="mt-3 pt-3 border-t border-primary/10 flex gap-4 text-xs text-muted-foreground">
-              {journey.nests && <span>🏠 Nest: {journey.nests.name}</span>}
-              {journey.eagle_squares && <span>✈️ Eagle Square: {journey.eagle_squares.name}</span>}
+              {journey.nests && <span>Nest: {journey.nests.name}</span>}
+              {journey.eagle_squares && <span>Eagle Square: {journey.eagle_squares.name}</span>}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Call sign panel — free-click, no rigid steps */}
-      <CallSignPanel
-        journeyId={journey.id}
-        papaName={journey.papas ? `${journey.papas.title} ${journey.papas.full_name}` : undefined}
-        cheetahName={journey.cheetahs?.call_sign ?? journey.cheetahs?.registration_number ?? undefined}
-        origin={journey.origin}
-        destination={journey.destination}
-      />
+      {/* CallSignPanel only for the assigned Delta Oscar */}
+      {isDO ? (
+        <CallSignPanel
+          journeyId={journey.id}
+          papaName={journey.papas ? `${journey.papas.title} ${journey.papas.full_name}` : undefined}
+          cheetahName={journey.cheetahs?.call_sign ?? journey.cheetahs?.registration_number ?? undefined}
+          origin={journey.origin}
+          destination={journey.destination}
+        />
+      ) : (
+        <Card>
+          <CardContent className="py-6 text-center text-sm text-muted-foreground">
+            <Radio className="h-8 w-8 mx-auto mb-3 text-muted-foreground/40" />
+            <p className="font-medium">Journey Update Panel</p>
+            <p className="text-xs mt-1">Only the assigned Delta Oscar can update this journey&apos;s call sign status.</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
