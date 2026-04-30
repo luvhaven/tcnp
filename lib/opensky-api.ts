@@ -136,7 +136,7 @@ export async function getFlightsInBounds(
 /**
  * Parse raw flight state array into typed object
  */
-function parseFlightState(state: any): FlightState {
+export function parseFlightState(state: any): FlightState {
   return {
     icao24: state[0],
     callsign: state[1],

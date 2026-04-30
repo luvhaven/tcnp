@@ -118,7 +118,6 @@ export async function handleFormDelete({
   onSuccess,
   onError,
   successMessage,
-  errorMessage,
   errorMessage
 }: {
   supabase: SupabaseClient
@@ -127,7 +126,6 @@ export async function handleFormDelete({
   onSuccess?: () => void
   onError?: (error: any) => void
   successMessage?: string
-  errorMessage?: string
   errorMessage?: string
 }): Promise<{ success: boolean; error?: any }> {
   // Confirmation should be handled by the caller using useConfirm hook

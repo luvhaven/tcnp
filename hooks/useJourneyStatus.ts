@@ -1,14 +1,12 @@
 "use client"
 
-import { useState, useEffect, useCallback } from 'react'
+import { useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/providers/ConfirmProvider'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { CallSignKey } from '@/lib/constants/call-signs'
 
-/**
- * Status-advancing call signs (update the journey's main status)
- */
 export const STATUS_CALL_SIGNS: CallSignKey[] = [
   'first_course',
   'cocktail',
@@ -16,9 +14,6 @@ export const STATUS_CALL_SIGNS: CallSignKey[] = [
   'dessert',
 ]
 
-/**
- * Event-only call signs (broadcast without changing main journey status)
- */
 export const EVENT_CALL_SIGNS: CallSignKey[] = [
   'blue_cocktail',
   'red_cocktail',
@@ -27,32 +22,27 @@ export const EVENT_CALL_SIGNS: CallSignKey[] = [
 
 export function useJourneyStatus(journeyId: string) {
   const supabase = createClient()
-  const [status, setStatus] = useState<string | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
   const confirm = useConfirm()
+  const queryClient = useQueryClient()
 
-  // Load initial status + realtime subscription
-  useEffect(() => {
-    if (!journeyId) return
-    let mounted = true
-
-    const loadStatus = async () => {
+  // 1. Fetch Status with React Query
+  const { data, isLoading } = useQuery({
+    queryKey: ['journeyStatus', journeyId],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('journeys')
         .select('status, updated_at')
         .eq('id', journeyId)
         .single()
+      if (error) throw error
+      return data as { status: string; updated_at: string | null }
+    },
+    enabled: !!journeyId
+  })
 
-      if (!mounted || error) return
-
-      const row = data as { status: string; updated_at: string | null }
-      setStatus(row.status)
-      setLastUpdated(row.updated_at)
-    }
-
-    void loadStatus()
-
+  // 2. Realtime Subscriptions targeting the Query Cache
+  useEffect(() => {
+    if (!journeyId) return
     const channel = supabase
       .channel(`journey-status-${journeyId}`)
       .on(
@@ -64,40 +54,28 @@ export function useJourneyStatus(journeyId: string) {
           filter: `id=eq.${journeyId}`,
         },
         (payload) => {
-          if (!mounted) return
-          setStatus(payload.new.status)
-          setLastUpdated(payload.new.updated_at)
+          // Immediately update React Query Cache upon realtime event
+          queryClient.setQueryData(['journeyStatus', journeyId], {
+            status: payload.new.status,
+            updated_at: payload.new.updated_at
+          })
+          // Also invalidate list views so other components stay fresh
+          queryClient.invalidateQueries({ queryKey: ['journeys'] })
         }
       )
       .subscribe()
 
     return () => {
-      mounted = false
       supabase.removeChannel(channel)
     }
-  }, [journeyId, supabase])
+  }, [journeyId, supabase, queryClient])
 
-  /**
-   * updateStatus — advances the journey status (status-advancing call signs)
-   * or records an event-only call sign without changing status
-   */
-  const updateStatus = useCallback(async (callSign: CallSignKey, notes?: string) => {
-    if (!journeyId) return
-    setLoading(true)
+  // 3. React Query Mutations for status updates
+  const updateMutation = useMutation({
+    mutationFn: async ({ callSign, notes }: { callSign: CallSignKey, notes?: string }) => {
+      const isEventOnly = EVENT_CALL_SIGNS.includes(callSign)
 
-    const isEventOnly = EVENT_CALL_SIGNS.includes(callSign)
-    const previousStatus = status
-    const previousTime = lastUpdated
-
-    if (!isEventOnly) {
-      // Optimistic status update
-      setStatus(callSign)
-      setLastUpdated(new Date().toISOString())
-    }
-
-    try {
       if (!isEventOnly) {
-        // Update journey status and timestamp
         const updates: Record<string, any> = {
           status: callSign,
           updated_at: new Date().toISOString(),
@@ -117,7 +95,6 @@ export function useJourneyStatus(journeyId: string) {
         if (error) throw error
       }
 
-      // Always log the event (status advance OR event-only broadcast)
       await (supabase as any).from('journey_events').insert({
         journey_id: journeyId,
         event_type: callSign,
@@ -125,27 +102,37 @@ export function useJourneyStatus(journeyId: string) {
         triggered_at: new Date().toISOString(),
       })
 
-      const label = callSign.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-      toast.success(`${label} — call sign executed`)
-    } catch (error: any) {
-      console.error('Error updating status:', error)
-      toast.error(error.message || 'Failed to update call sign')
-      // Revert optimistic update
-      if (!isEventOnly) {
-        setStatus(previousStatus)
-        setLastUpdated(previousTime)
+      return { callSign, isEventOnly }
+    },
+    onMutate: async ({ callSign }) => {
+      const isEventOnly = EVENT_CALL_SIGNS.includes(callSign)
+      if (isEventOnly) return
+
+      // Optimistic Update
+      await queryClient.cancelQueries({ queryKey: ['journeyStatus', journeyId] })
+      const previousState = queryClient.getQueryData(['journeyStatus', journeyId])
+      
+      queryClient.setQueryData(['journeyStatus', journeyId], {
+        status: callSign,
+        updated_at: new Date().toISOString()
+      })
+      
+      return { previousState }
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousState) {
+        queryClient.setQueryData(['journeyStatus', journeyId], context.previousState)
       }
-    } finally {
-      setLoading(false)
+      toast.error('Failed to update call sign')
+    },
+    onSuccess: (result) => {
+      const label = result.callSign.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+      toast.success(`${label} – call sign executed`)
     }
-  }, [journeyId, status, lastUpdated, supabase])
+  })
 
-  const completeJourney = useCallback(async () => {
-    if (!journeyId) return
-    if (!await confirm({ message: 'Mark this journey as complete?', confirmText: 'Complete', variant: 'default' })) return
-
-    setLoading(true)
-    try {
+  const completeMutation = useMutation({
+    mutationFn: async () => {
       const { error } = await (supabase as any)
         .from('journeys')
         .update({
@@ -163,16 +150,39 @@ export function useJourneyStatus(journeyId: string) {
         description: 'Journey completed',
         triggered_at: new Date().toISOString(),
       })
-
-      setStatus('completed')
-      toast.success('Journey marked as complete')
-    } catch (error: any) {
-      console.error('Error completing journey:', error)
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['journeyStatus', journeyId] })
+      const previousState = queryClient.getQueryData(['journeyStatus', journeyId])
+      queryClient.setQueryData(['journeyStatus', journeyId], {
+        status: 'completed',
+        updated_at: new Date().toISOString()
+      })
+      return { previousState }
+    },
+    onError: (err, variables, context) => {
+      queryClient.setQueryData(['journeyStatus', journeyId], context?.previousState)
       toast.error('Failed to complete journey')
-    } finally {
-      setLoading(false)
+    },
+    onSuccess: () => {
+      toast.success('Journey marked as complete')
     }
-  }, [journeyId, supabase])
+  })
 
-  return { status, lastUpdated, loading, updateStatus, completeJourney }
+  const updateStatus = useCallback(async (callSign: CallSignKey, notes?: string) => {
+    updateMutation.mutate({ callSign, notes })
+  }, [updateMutation])
+
+  const completeJourney = useCallback(async () => {
+    if (!await confirm({ message: 'Mark this journey as complete?', confirmText: 'Complete', variant: 'default' })) return
+    completeMutation.mutate()
+  }, [completeMutation, confirm])
+
+  return { 
+    status: data?.status || null, 
+    lastUpdated: data?.updated_at || null, 
+    loading: isLoading || updateMutation.isPending || completeMutation.isPending, 
+    updateStatus, 
+    completeJourney 
+  }
 }
