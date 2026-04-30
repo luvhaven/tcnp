@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
+import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -41,6 +42,7 @@ type SessionSpeaker = {
 
 export default function ProgramSchedule({ programId }: { programId: string }) {
     const supabase = createClient()
+    const confirm = useConfirm()
     const [days, setDays] = useState<ProgramDay[]>([])
     const [sessions, setSessions] = useState<ProgramSession[]>([])
     const [speakers, setSpeakers] = useState<SessionSpeaker[]>([])
@@ -145,7 +147,7 @@ export default function ProgramSchedule({ programId }: { programId: string }) {
     }
 
     const handleDelete = async (table: string, id: string) => {
-        if (!confirm('Are you sure?')) return
+        if (!await confirm({ message: 'Are you sure you want to delete this?', variant: 'destructive' })) return
         try {
             const { error } = await (supabase as any).from(table).delete().eq('id', id)
             if (error) throw error

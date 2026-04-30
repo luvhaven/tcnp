@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -17,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 export default function TheatresPage() {
   const supabase = createClient()
+  const confirm = useConfirm()
   const [theatres, setTheatres] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -102,7 +104,7 @@ export default function TheatresPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this venue?')) return
+    if (!await confirm({ message: 'Delete this venue?', variant: 'destructive' })) return
 
     try {
       const { error } = await supabase

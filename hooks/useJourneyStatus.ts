@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { useConfirm } from '@/components/providers/ConfirmProvider'
 import type { CallSignKey } from '@/lib/constants/call-signs'
 
 /**
@@ -29,6 +30,7 @@ export function useJourneyStatus(journeyId: string) {
   const [status, setStatus] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const confirm = useConfirm()
 
   // Load initial status + realtime subscription
   useEffect(() => {
@@ -140,7 +142,7 @@ export function useJourneyStatus(journeyId: string) {
 
   const completeJourney = useCallback(async () => {
     if (!journeyId) return
-    if (!confirm('Mark this journey as complete?')) return
+    if (!await confirm({ message: 'Mark this journey as complete?', confirmText: 'Complete', variant: 'default' })) return
 
     setLoading(true)
     try {

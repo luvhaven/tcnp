@@ -119,7 +119,7 @@ export async function handleFormDelete({
   onError,
   successMessage,
   errorMessage,
-  confirmMessage
+  errorMessage
 }: {
   supabase: SupabaseClient
   table: string
@@ -128,10 +128,9 @@ export async function handleFormDelete({
   onError?: (error: any) => void
   successMessage?: string
   errorMessage?: string
-  confirmMessage?: string
+  errorMessage?: string
 }): Promise<{ success: boolean; error?: any }> {
-  const confirmed = confirm(confirmMessage || `Are you sure you want to delete this ${table}?`)
-  if (!confirmed) return { success: false }
+  // Confirmation should be handled by the caller using useConfirm hook
 
   try {
     console.log(`🗑️ Deleting ${table} with id:`, id)

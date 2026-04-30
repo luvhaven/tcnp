@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -30,6 +31,7 @@ type Program = {
 
 export default function ProgramsPage() {
   const supabase = createClient()
+  const confirm = useConfirm()
   const [programs, setPrograms] = useState<Program[]>([])
   const [theatres, setTheatres] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -122,7 +124,7 @@ export default function ProgramsPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this program? This will affect all related data.')) return
+    if (!await confirm({ message: 'Delete this program? This will affect all related data.', variant: 'destructive' })) return
 
     try {
       const { error } = await supabase

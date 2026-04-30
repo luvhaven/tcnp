@@ -6,6 +6,7 @@ import type { Database } from "@/types/supabase"
 import { canManageFleet } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -60,6 +61,7 @@ type ProgramRow = Database['public']['Tables']['programs']['Row']
 
 export default function CheetahsPage() {
   const supabase = createClient() as any
+  const confirm = useConfirm()
   const [cheetahs, setCheetahs] = useState<Cheetah[]>([])
   const [programs, setPrograms] = useState<ProgramRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -233,7 +235,7 @@ export default function CheetahsPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this vehicle?')) return
+    if (!await confirm({ message: 'Are you sure you want to delete this vehicle?', variant: 'destructive' })) return
 
     try {
       const { error } = await supabase

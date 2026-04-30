@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -46,6 +47,7 @@ type Papa = {
 
 export default function PapasPage() {
   const supabase = createClient()
+  const confirm = useConfirm()
   const [papas, setPapas] = useState<Papa[]>([])
   const [programs, setPrograms] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -198,7 +200,7 @@ export default function PapasPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this Papa?')) return
+    if (!await confirm({ message: 'Are you sure you want to delete this Papa?', variant: 'destructive' })) return
 
     try {
       if (!canManage) {

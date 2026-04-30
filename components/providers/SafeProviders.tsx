@@ -3,6 +3,7 @@
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { AuthProvider } from "@/components/providers/AuthProvider"
 import { ThemeProvider } from "@/components/theme/ThemeProvider"
+import { ConfirmProvider } from "@/components/providers/ConfirmProvider"
 import { Toaster } from "sonner"
 import { useEffect, useState } from "react"
 
@@ -19,7 +20,9 @@ export function SafeProviders({ children }: { children: React.ReactNode }) {
                 {/* AuthProvider is critical, but we wrap it to prevent white-screen of death */}
                 <ErrorBoundary>
                     <AuthProvider>
-                        {children}
+                        <ConfirmProvider>
+                            {children}
+                        </ConfirmProvider>
                     </AuthProvider>
                 </ErrorBoundary>
 

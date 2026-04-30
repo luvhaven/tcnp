@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -82,6 +83,7 @@ const ALLOWED_ROLES = [
 
 export default function EchoPage() {
     const supabase = createClient()
+    const confirm = useConfirm()
     const [equipment, setEquipment] = useState<Equipment[]>([])
     const [programs, setPrograms] = useState<Program[]>([])
     const [loading, setLoading] = useState(true)
@@ -233,7 +235,7 @@ export default function EchoPage() {
     }
 
     const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this equipment?')) return
+        if (!await confirm({ message: 'Are you sure you want to delete this equipment?', variant: 'destructive' })) return
 
         try {
             const { error } = await (supabase as any)

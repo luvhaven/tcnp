@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -70,6 +71,7 @@ export default function EaglesPage() {
 
 function ManageSquares() {
     const supabase = createClient()
+    const confirm = useConfirm()
     const [airports, setAirports] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [dialogOpen, setDialogOpen] = useState(false)
@@ -144,7 +146,7 @@ function ManageSquares() {
     }
 
     const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this airport?')) return
+        if (!await confirm({ message: 'Are you sure you want to delete this airport?', variant: 'destructive' })) return
 
         try {
             const { error } = await supabase

@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -48,6 +49,7 @@ type Program = {
 
 export default function OfficersPage() {
   const supabase = createClient()
+  const confirm = useConfirm()
   const [officers, setOfficers] = useState<Officer[]>([])
   const [titles, setTitles] = useState<OfficialTitle[]>([])
   const [programs, setPrograms] = useState<Program[]>([])
@@ -492,7 +494,7 @@ export default function OfficersPage() {
       return
     }
 
-    if (!confirm(`Are you sure you want to delete ${officer.full_name}?`)) {
+    if (!await confirm({ message: `Are you sure you want to delete ${officer.full_name}?`, variant: 'destructive' })) {
       return
     }
 

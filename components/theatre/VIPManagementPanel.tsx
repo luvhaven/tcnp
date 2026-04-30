@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
+import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,6 +17,7 @@ import Image from "next/image"
 
 export default function VIPManagementPanel() {
     const supabase = createClient()
+    const confirm = useConfirm()
     const [selectedProgramId, setSelectedProgramId] = useState<string>("")
     const [programs, setPrograms] = useState<any[]>([])
     const [vips, setVips] = useState<any[]>([])
@@ -196,7 +198,7 @@ export default function VIPManagementPanel() {
     }
 
     const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to remove this VIP?')) return
+        if (!await confirm({ message: 'Are you sure you want to remove this VIP?', variant: 'destructive' })) return
 
         try {
             const { error } = await (supabase as any)

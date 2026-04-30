@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -44,6 +45,7 @@ type NoscarAssignment = {
 
 export default function NestsPage() {
   const supabase = createClient()
+  const confirm = useConfirm()
   const [nests, setNests] = useState<any[]>([])
   const [programs, setPrograms] = useState<Program[]>([])
   const [officers, setOfficers] = useState<Officer[]>([])
@@ -205,7 +207,7 @@ export default function NestsPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this location?')) return
+    if (!await confirm({ message: 'Delete this location?', variant: 'destructive' })) return
 
     try {
       if (!canManage) {
@@ -286,7 +288,7 @@ export default function NestsPage() {
   }
 
   const removeAssignment = async (assignmentId: string) => {
-    if (!confirm('Remove this officer from the location?')) return
+    if (!await confirm({ message: 'Remove this officer from the location?', variant: 'destructive' })) return
 
     try {
       const { error } = await (supabase as any)

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { useConfirm } from '@/components/providers/ConfirmProvider'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -73,6 +74,7 @@ const INCIDENT_TYPES = [
 
 export default function IncidentsPage() {
   const supabase = createClient()
+  const confirm = useConfirm()
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [journeys, setJourneys] = useState<any[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -192,7 +194,7 @@ export default function IncidentsPage() {
         return
       }
 
-      if (!confirm(`Delete incident "${incident.type}"?`)) {
+      if (!await confirm({ message: `Delete incident "${incident.type}"?`, variant: 'destructive' })) {
         return
       }
 
