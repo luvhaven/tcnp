@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -11,889 +11,6 @@ export type Database = {
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
-  }
-  auth: {
-    Tables: {
-      audit_log_entries: {
-        Row: {
-          created_at: string | null
-          id: string
-          instance_id: string | null
-          ip_address: string
-          payload: Json | null
-        }
-        Insert: {
-          created_at?: string | null
-          id: string
-          instance_id?: string | null
-          ip_address?: string
-          payload?: Json | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          instance_id?: string | null
-          ip_address?: string
-          payload?: Json | null
-        }
-        Relationships: []
-      }
-      flow_state: {
-        Row: {
-          auth_code: string
-          auth_code_issued_at: string | null
-          authentication_method: string
-          code_challenge: string
-          code_challenge_method: Database["auth"]["Enums"]["code_challenge_method"]
-          created_at: string | null
-          id: string
-          provider_access_token: string | null
-          provider_refresh_token: string | null
-          provider_type: string
-          updated_at: string | null
-          user_id: string | null
-        }
-        Insert: {
-          auth_code: string
-          auth_code_issued_at?: string | null
-          authentication_method: string
-          code_challenge: string
-          code_challenge_method: Database["auth"]["Enums"]["code_challenge_method"]
-          created_at?: string | null
-          id: string
-          provider_access_token?: string | null
-          provider_refresh_token?: string | null
-          provider_type: string
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          auth_code?: string
-          auth_code_issued_at?: string | null
-          authentication_method?: string
-          code_challenge?: string
-          code_challenge_method?: Database["auth"]["Enums"]["code_challenge_method"]
-          created_at?: string | null
-          id?: string
-          provider_access_token?: string | null
-          provider_refresh_token?: string | null
-          provider_type?: string
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
-      identities: {
-        Row: {
-          created_at: string | null
-          email: string | null
-          id: string
-          identity_data: Json
-          last_sign_in_at: string | null
-          provider: string
-          provider_id: string
-          updated_at: string | null
-          user_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          email?: string | null
-          id?: string
-          identity_data: Json
-          last_sign_in_at?: string | null
-          provider: string
-          provider_id: string
-          updated_at?: string | null
-          user_id: string
-        }
-        Update: {
-          created_at?: string | null
-          email?: string | null
-          id?: string
-          identity_data?: Json
-          last_sign_in_at?: string | null
-          provider?: string
-          provider_id?: string
-          updated_at?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "identities_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      instances: {
-        Row: {
-          created_at: string | null
-          id: string
-          raw_base_config: string | null
-          updated_at: string | null
-          uuid: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          id: string
-          raw_base_config?: string | null
-          updated_at?: string | null
-          uuid?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          raw_base_config?: string | null
-          updated_at?: string | null
-          uuid?: string | null
-        }
-        Relationships: []
-      }
-      mfa_amr_claims: {
-        Row: {
-          authentication_method: string
-          created_at: string
-          id: string
-          session_id: string
-          updated_at: string
-        }
-        Insert: {
-          authentication_method: string
-          created_at: string
-          id: string
-          session_id: string
-          updated_at: string
-        }
-        Update: {
-          authentication_method?: string
-          created_at?: string
-          id?: string
-          session_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mfa_amr_claims_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "sessions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      mfa_challenges: {
-        Row: {
-          created_at: string
-          factor_id: string
-          id: string
-          ip_address: unknown
-          otp_code: string | null
-          verified_at: string | null
-          web_authn_session_data: Json | null
-        }
-        Insert: {
-          created_at: string
-          factor_id: string
-          id: string
-          ip_address: unknown
-          otp_code?: string | null
-          verified_at?: string | null
-          web_authn_session_data?: Json | null
-        }
-        Update: {
-          created_at?: string
-          factor_id?: string
-          id?: string
-          ip_address?: unknown
-          otp_code?: string | null
-          verified_at?: string | null
-          web_authn_session_data?: Json | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mfa_challenges_auth_factor_id_fkey"
-            columns: ["factor_id"]
-            isOneToOne: false
-            referencedRelation: "mfa_factors"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      mfa_factors: {
-        Row: {
-          created_at: string
-          factor_type: Database["auth"]["Enums"]["factor_type"]
-          friendly_name: string | null
-          id: string
-          last_challenged_at: string | null
-          last_webauthn_challenge_data: Json | null
-          phone: string | null
-          secret: string | null
-          status: Database["auth"]["Enums"]["factor_status"]
-          updated_at: string
-          user_id: string
-          web_authn_aaguid: string | null
-          web_authn_credential: Json | null
-        }
-        Insert: {
-          created_at: string
-          factor_type: Database["auth"]["Enums"]["factor_type"]
-          friendly_name?: string | null
-          id: string
-          last_challenged_at?: string | null
-          last_webauthn_challenge_data?: Json | null
-          phone?: string | null
-          secret?: string | null
-          status: Database["auth"]["Enums"]["factor_status"]
-          updated_at: string
-          user_id: string
-          web_authn_aaguid?: string | null
-          web_authn_credential?: Json | null
-        }
-        Update: {
-          created_at?: string
-          factor_type?: Database["auth"]["Enums"]["factor_type"]
-          friendly_name?: string | null
-          id?: string
-          last_challenged_at?: string | null
-          last_webauthn_challenge_data?: Json | null
-          phone?: string | null
-          secret?: string | null
-          status?: Database["auth"]["Enums"]["factor_status"]
-          updated_at?: string
-          user_id?: string
-          web_authn_aaguid?: string | null
-          web_authn_credential?: Json | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mfa_factors_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      oauth_authorizations: {
-        Row: {
-          approved_at: string | null
-          authorization_code: string | null
-          authorization_id: string
-          client_id: string
-          code_challenge: string | null
-          code_challenge_method:
-            | Database["auth"]["Enums"]["code_challenge_method"]
-            | null
-          created_at: string
-          expires_at: string
-          id: string
-          redirect_uri: string
-          resource: string | null
-          response_type: Database["auth"]["Enums"]["oauth_response_type"]
-          scope: string
-          state: string | null
-          status: Database["auth"]["Enums"]["oauth_authorization_status"]
-          user_id: string | null
-        }
-        Insert: {
-          approved_at?: string | null
-          authorization_code?: string | null
-          authorization_id: string
-          client_id: string
-          code_challenge?: string | null
-          code_challenge_method?:
-            | Database["auth"]["Enums"]["code_challenge_method"]
-            | null
-          created_at?: string
-          expires_at?: string
-          id: string
-          redirect_uri: string
-          resource?: string | null
-          response_type?: Database["auth"]["Enums"]["oauth_response_type"]
-          scope: string
-          state?: string | null
-          status?: Database["auth"]["Enums"]["oauth_authorization_status"]
-          user_id?: string | null
-        }
-        Update: {
-          approved_at?: string | null
-          authorization_code?: string | null
-          authorization_id?: string
-          client_id?: string
-          code_challenge?: string | null
-          code_challenge_method?:
-            | Database["auth"]["Enums"]["code_challenge_method"]
-            | null
-          created_at?: string
-          expires_at?: string
-          id?: string
-          redirect_uri?: string
-          resource?: string | null
-          response_type?: Database["auth"]["Enums"]["oauth_response_type"]
-          scope?: string
-          state?: string | null
-          status?: Database["auth"]["Enums"]["oauth_authorization_status"]
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "oauth_authorizations_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "oauth_clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "oauth_authorizations_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      oauth_clients: {
-        Row: {
-          client_name: string | null
-          client_secret_hash: string | null
-          client_type: Database["auth"]["Enums"]["oauth_client_type"]
-          client_uri: string | null
-          created_at: string
-          deleted_at: string | null
-          grant_types: string
-          id: string
-          logo_uri: string | null
-          redirect_uris: string
-          registration_type: Database["auth"]["Enums"]["oauth_registration_type"]
-          updated_at: string
-        }
-        Insert: {
-          client_name?: string | null
-          client_secret_hash?: string | null
-          client_type?: Database["auth"]["Enums"]["oauth_client_type"]
-          client_uri?: string | null
-          created_at?: string
-          deleted_at?: string | null
-          grant_types: string
-          id: string
-          logo_uri?: string | null
-          redirect_uris: string
-          registration_type: Database["auth"]["Enums"]["oauth_registration_type"]
-          updated_at?: string
-        }
-        Update: {
-          client_name?: string | null
-          client_secret_hash?: string | null
-          client_type?: Database["auth"]["Enums"]["oauth_client_type"]
-          client_uri?: string | null
-          created_at?: string
-          deleted_at?: string | null
-          grant_types?: string
-          id?: string
-          logo_uri?: string | null
-          redirect_uris?: string
-          registration_type?: Database["auth"]["Enums"]["oauth_registration_type"]
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      oauth_consents: {
-        Row: {
-          client_id: string
-          granted_at: string
-          id: string
-          revoked_at: string | null
-          scopes: string
-          user_id: string
-        }
-        Insert: {
-          client_id: string
-          granted_at?: string
-          id: string
-          revoked_at?: string | null
-          scopes: string
-          user_id: string
-        }
-        Update: {
-          client_id?: string
-          granted_at?: string
-          id?: string
-          revoked_at?: string | null
-          scopes?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "oauth_consents_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "oauth_clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "oauth_consents_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      one_time_tokens: {
-        Row: {
-          created_at: string
-          id: string
-          relates_to: string
-          token_hash: string
-          token_type: Database["auth"]["Enums"]["one_time_token_type"]
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id: string
-          relates_to: string
-          token_hash: string
-          token_type: Database["auth"]["Enums"]["one_time_token_type"]
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          relates_to?: string
-          token_hash?: string
-          token_type?: Database["auth"]["Enums"]["one_time_token_type"]
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "one_time_tokens_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      refresh_tokens: {
-        Row: {
-          created_at: string | null
-          id: number
-          instance_id: string | null
-          parent: string | null
-          revoked: boolean | null
-          session_id: string | null
-          token: string | null
-          updated_at: string | null
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          id?: number
-          instance_id?: string | null
-          parent?: string | null
-          revoked?: boolean | null
-          session_id?: string | null
-          token?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: number
-          instance_id?: string | null
-          parent?: string | null
-          revoked?: boolean | null
-          session_id?: string | null
-          token?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "refresh_tokens_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "sessions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      saml_providers: {
-        Row: {
-          attribute_mapping: Json | null
-          created_at: string | null
-          entity_id: string
-          id: string
-          metadata_url: string | null
-          metadata_xml: string
-          name_id_format: string | null
-          sso_provider_id: string
-          updated_at: string | null
-        }
-        Insert: {
-          attribute_mapping?: Json | null
-          created_at?: string | null
-          entity_id: string
-          id: string
-          metadata_url?: string | null
-          metadata_xml: string
-          name_id_format?: string | null
-          sso_provider_id: string
-          updated_at?: string | null
-        }
-        Update: {
-          attribute_mapping?: Json | null
-          created_at?: string | null
-          entity_id?: string
-          id?: string
-          metadata_url?: string | null
-          metadata_xml?: string
-          name_id_format?: string | null
-          sso_provider_id?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "saml_providers_sso_provider_id_fkey"
-            columns: ["sso_provider_id"]
-            isOneToOne: false
-            referencedRelation: "sso_providers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      saml_relay_states: {
-        Row: {
-          created_at: string | null
-          flow_state_id: string | null
-          for_email: string | null
-          id: string
-          redirect_to: string | null
-          request_id: string
-          sso_provider_id: string
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          flow_state_id?: string | null
-          for_email?: string | null
-          id: string
-          redirect_to?: string | null
-          request_id: string
-          sso_provider_id: string
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          flow_state_id?: string | null
-          for_email?: string | null
-          id?: string
-          redirect_to?: string | null
-          request_id?: string
-          sso_provider_id?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "saml_relay_states_flow_state_id_fkey"
-            columns: ["flow_state_id"]
-            isOneToOne: false
-            referencedRelation: "flow_state"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "saml_relay_states_sso_provider_id_fkey"
-            columns: ["sso_provider_id"]
-            isOneToOne: false
-            referencedRelation: "sso_providers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      schema_migrations: {
-        Row: {
-          version: string
-        }
-        Insert: {
-          version: string
-        }
-        Update: {
-          version?: string
-        }
-        Relationships: []
-      }
-      sessions: {
-        Row: {
-          aal: Database["auth"]["Enums"]["aal_level"] | null
-          created_at: string | null
-          factor_id: string | null
-          id: string
-          ip: unknown
-          not_after: string | null
-          oauth_client_id: string | null
-          refresh_token_counter: number | null
-          refresh_token_hmac_key: string | null
-          refreshed_at: string | null
-          tag: string | null
-          updated_at: string | null
-          user_agent: string | null
-          user_id: string
-        }
-        Insert: {
-          aal?: Database["auth"]["Enums"]["aal_level"] | null
-          created_at?: string | null
-          factor_id?: string | null
-          id: string
-          ip?: unknown
-          not_after?: string | null
-          oauth_client_id?: string | null
-          refresh_token_counter?: number | null
-          refresh_token_hmac_key?: string | null
-          refreshed_at?: string | null
-          tag?: string | null
-          updated_at?: string | null
-          user_agent?: string | null
-          user_id: string
-        }
-        Update: {
-          aal?: Database["auth"]["Enums"]["aal_level"] | null
-          created_at?: string | null
-          factor_id?: string | null
-          id?: string
-          ip?: unknown
-          not_after?: string | null
-          oauth_client_id?: string | null
-          refresh_token_counter?: number | null
-          refresh_token_hmac_key?: string | null
-          refreshed_at?: string | null
-          tag?: string | null
-          updated_at?: string | null
-          user_agent?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sessions_oauth_client_id_fkey"
-            columns: ["oauth_client_id"]
-            isOneToOne: false
-            referencedRelation: "oauth_clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sessions_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sso_domains: {
-        Row: {
-          created_at: string | null
-          domain: string
-          id: string
-          sso_provider_id: string
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          domain: string
-          id: string
-          sso_provider_id: string
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          domain?: string
-          id?: string
-          sso_provider_id?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sso_domains_sso_provider_id_fkey"
-            columns: ["sso_provider_id"]
-            isOneToOne: false
-            referencedRelation: "sso_providers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sso_providers: {
-        Row: {
-          created_at: string | null
-          disabled: boolean | null
-          id: string
-          resource_id: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          disabled?: boolean | null
-          id: string
-          resource_id?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          disabled?: boolean | null
-          id?: string
-          resource_id?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      users: {
-        Row: {
-          aud: string | null
-          banned_until: string | null
-          confirmation_sent_at: string | null
-          confirmation_token: string | null
-          confirmed_at: string | null
-          created_at: string | null
-          deleted_at: string | null
-          email: string | null
-          email_change: string | null
-          email_change_confirm_status: number | null
-          email_change_sent_at: string | null
-          email_change_token_current: string | null
-          email_change_token_new: string | null
-          email_confirmed_at: string | null
-          encrypted_password: string | null
-          id: string
-          instance_id: string | null
-          invited_at: string | null
-          is_anonymous: boolean
-          is_sso_user: boolean
-          is_super_admin: boolean | null
-          last_sign_in_at: string | null
-          phone: string | null
-          phone_change: string | null
-          phone_change_sent_at: string | null
-          phone_change_token: string | null
-          phone_confirmed_at: string | null
-          raw_app_meta_data: Json | null
-          raw_user_meta_data: Json | null
-          reauthentication_sent_at: string | null
-          reauthentication_token: string | null
-          recovery_sent_at: string | null
-          recovery_token: string | null
-          role: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          aud?: string | null
-          banned_until?: string | null
-          confirmation_sent_at?: string | null
-          confirmation_token?: string | null
-          confirmed_at?: string | null
-          created_at?: string | null
-          deleted_at?: string | null
-          email?: string | null
-          email_change?: string | null
-          email_change_confirm_status?: number | null
-          email_change_sent_at?: string | null
-          email_change_token_current?: string | null
-          email_change_token_new?: string | null
-          email_confirmed_at?: string | null
-          encrypted_password?: string | null
-          id: string
-          instance_id?: string | null
-          invited_at?: string | null
-          is_anonymous?: boolean
-          is_sso_user?: boolean
-          is_super_admin?: boolean | null
-          last_sign_in_at?: string | null
-          phone?: string | null
-          phone_change?: string | null
-          phone_change_sent_at?: string | null
-          phone_change_token?: string | null
-          phone_confirmed_at?: string | null
-          raw_app_meta_data?: Json | null
-          raw_user_meta_data?: Json | null
-          reauthentication_sent_at?: string | null
-          reauthentication_token?: string | null
-          recovery_sent_at?: string | null
-          recovery_token?: string | null
-          role?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          aud?: string | null
-          banned_until?: string | null
-          confirmation_sent_at?: string | null
-          confirmation_token?: string | null
-          confirmed_at?: string | null
-          created_at?: string | null
-          deleted_at?: string | null
-          email?: string | null
-          email_change?: string | null
-          email_change_confirm_status?: number | null
-          email_change_sent_at?: string | null
-          email_change_token_current?: string | null
-          email_change_token_new?: string | null
-          email_confirmed_at?: string | null
-          encrypted_password?: string | null
-          id?: string
-          instance_id?: string | null
-          invited_at?: string | null
-          is_anonymous?: boolean
-          is_sso_user?: boolean
-          is_super_admin?: boolean | null
-          last_sign_in_at?: string | null
-          phone?: string | null
-          phone_change?: string | null
-          phone_change_sent_at?: string | null
-          phone_change_token?: string | null
-          phone_confirmed_at?: string | null
-          raw_app_meta_data?: Json | null
-          raw_user_meta_data?: Json | null
-          reauthentication_sent_at?: string | null
-          reauthentication_token?: string | null
-          recovery_sent_at?: string | null
-          recovery_token?: string | null
-          role?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      email: { Args: never; Returns: string }
-      jwt: { Args: never; Returns: Json }
-      role: { Args: never; Returns: string }
-      uid: { Args: never; Returns: string }
-    }
-    Enums: {
-      aal_level: "aal1" | "aal2" | "aal3"
-      code_challenge_method: "s256" | "plain"
-      factor_status: "unverified" | "verified"
-      factor_type: "totp" | "webauthn" | "phone"
-      oauth_authorization_status: "pending" | "approved" | "denied" | "expired"
-      oauth_client_type: "public" | "confidential"
-      oauth_registration_type: "dynamic" | "manual"
-      oauth_response_type: "code"
-      one_time_token_type:
-        | "confirmation_token"
-        | "reauthentication_token"
-        | "recovery_token"
-        | "email_change_token_new"
-        | "email_change_token_current"
-        | "phone_change_token"
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
   }
   public: {
     Tables: {
@@ -990,11 +107,12 @@ export type Database = {
           content: string
           created_at: string | null
           deleted_at: string | null
+          edited_at: string | null
           id: string
           is_private: boolean | null
           mentions: Json | null
-          program_id: string | null
           papa_id: string | null
+          program_id: string | null
           read_by: Json | null
           reply_to_id: string | null
           sender_id: string
@@ -1005,11 +123,12 @@ export type Database = {
           content: string
           created_at?: string | null
           deleted_at?: string | null
+          edited_at?: string | null
           id?: string
           is_private?: boolean | null
           mentions?: Json | null
-          program_id?: string | null
           papa_id?: string | null
+          program_id?: string | null
           read_by?: Json | null
           reply_to_id?: string | null
           sender_id: string
@@ -1020,11 +139,12 @@ export type Database = {
           content?: string
           created_at?: string | null
           deleted_at?: string | null
+          edited_at?: string | null
           id?: string
           is_private?: boolean | null
           mentions?: Json | null
-          program_id?: string | null
           papa_id?: string | null
+          program_id?: string | null
           read_by?: Json | null
           reply_to_id?: string | null
           sender_id?: string
@@ -1032,17 +152,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "chat_messages_program_id_fkey"
-            columns: ["program_id"]
-            isOneToOne: false
-            referencedRelation: "programs"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "chat_messages_papa_id_fkey"
             columns: ["papa_id"]
             isOneToOne: false
             referencedRelation: "papas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
             referencedColumns: ["id"]
           },
           {
@@ -1206,6 +326,140 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      equipment: {
+        Row: {
+          additional_info: string | null
+          assigned_to: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          last_checked_at: string | null
+          last_checked_by: string | null
+          location: string | null
+          name: string
+          program_id: string | null
+          quantity: number | null
+          serial_number: string | null
+          status: string | null
+          subtype: string | null
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          additional_info?: string | null
+          assigned_to?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          last_checked_at?: string | null
+          last_checked_by?: string | null
+          location?: string | null
+          name: string
+          program_id?: string | null
+          quantity?: number | null
+          serial_number?: string | null
+          status?: string | null
+          subtype?: string | null
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          additional_info?: string | null
+          assigned_to?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          last_checked_at?: string | null
+          last_checked_by?: string | null
+          location?: string | null
+          name?: string
+          program_id?: string | null
+          quantity?: number | null
+          serial_number?: string | null
+          status?: string | null
+          subtype?: string | null
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipment_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipment_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipment_last_checked_by_fkey"
+            columns: ["last_checked_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipment_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      equipment_logs: {
+        Row: {
+          action: string
+          created_at: string | null
+          equipment_id: string
+          id: string
+          new_status: string | null
+          notes: string | null
+          performed_by: string | null
+          previous_status: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          equipment_id: string
+          id?: string
+          new_status?: string | null
+          notes?: string | null
+          performed_by?: string | null
+          previous_status?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          equipment_id?: string
+          id?: string
+          new_status?: string | null
+          notes?: string | null
+          performed_by?: string | null
+          previous_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipment_logs_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipment_logs_performed_by_fkey"
+            columns: ["performed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       flight_tracking: {
         Row: {
@@ -1515,23 +769,64 @@ export type Database = {
           },
         ]
       }
+      journey_status_updates: {
+        Row: {
+          created_at: string | null
+          id: string
+          journey_id: string
+          notes: string | null
+          status: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          journey_id: string
+          notes?: string | null
+          status: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          journey_id?: string
+          notes?: string | null
+          status?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journey_status_updates_journey_id_fkey"
+            columns: ["journey_id"]
+            isOneToOne: false
+            referencedRelation: "journeys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       journeys: {
         Row: {
+          archived_at: string | null
+          archived_by: string | null
           assigned_cheetah_id: string | null
           assigned_do_id: string | null
           assigned_duty_officer_id: string | null
           assigned_eagle_square_id: string | null
           assigned_nest_id: string | null
           assigned_theatre_id: string | null
+          completed_at: string | null
+          completed_by: string | null
           created_at: string | null
           created_by: string | null
           current_call_sign: Database["public"]["Enums"]["call_sign"] | null
+          current_status: string | null
           description: string | null
           destination: string | null
           end_date: string | null
           eta: string | null
           etd: string | null
           id: string
+          journey_type: string
           last_latitude: number | null
           last_location_update: string | null
           last_longitude: number | null
@@ -1541,27 +836,36 @@ export type Database = {
           papa_id: string | null
           program_id: string | null
           route_geojson: Json | null
+          scheduled_arrival: string | null
+          scheduled_departure: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["journey_status"] | null
+          status_updated_at: string | null
           telemetry_enabled: boolean | null
           updated_at: string | null
         }
         Insert: {
+          archived_at?: string | null
+          archived_by?: string | null
           assigned_cheetah_id?: string | null
           assigned_do_id?: string | null
           assigned_duty_officer_id?: string | null
           assigned_eagle_square_id?: string | null
           assigned_nest_id?: string | null
           assigned_theatre_id?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           created_at?: string | null
           created_by?: string | null
           current_call_sign?: Database["public"]["Enums"]["call_sign"] | null
+          current_status?: string | null
           description?: string | null
           destination?: string | null
           end_date?: string | null
           eta?: string | null
           etd?: string | null
           id?: string
+          journey_type?: string
           last_latitude?: number | null
           last_location_update?: string | null
           last_longitude?: number | null
@@ -1571,27 +875,36 @@ export type Database = {
           papa_id?: string | null
           program_id?: string | null
           route_geojson?: Json | null
+          scheduled_arrival?: string | null
+          scheduled_departure?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["journey_status"] | null
+          status_updated_at?: string | null
           telemetry_enabled?: boolean | null
           updated_at?: string | null
         }
         Update: {
+          archived_at?: string | null
+          archived_by?: string | null
           assigned_cheetah_id?: string | null
           assigned_do_id?: string | null
           assigned_duty_officer_id?: string | null
           assigned_eagle_square_id?: string | null
           assigned_nest_id?: string | null
           assigned_theatre_id?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           created_at?: string | null
           created_by?: string | null
           current_call_sign?: Database["public"]["Enums"]["call_sign"] | null
+          current_status?: string | null
           description?: string | null
           destination?: string | null
           end_date?: string | null
           eta?: string | null
           etd?: string | null
           id?: string
+          journey_type?: string
           last_latitude?: number | null
           last_location_update?: string | null
           last_longitude?: number | null
@@ -1601,8 +914,11 @@ export type Database = {
           papa_id?: string | null
           program_id?: string | null
           route_geojson?: Json | null
+          scheduled_arrival?: string | null
+          scheduled_departure?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["journey_status"] | null
+          status_updated_at?: string | null
           telemetry_enabled?: boolean | null
           updated_at?: string | null
         }
@@ -1686,6 +1002,45 @@ export type Database = {
           },
         ]
       }
+      message_reactions: {
+        Row: {
+          created_at: string
+          emoji: string
+          id: string
+          message_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          emoji: string
+          id?: string
+          message_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          emoji?: string
+          id?: string
+          message_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_reactions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_reactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nest_amenities: {
         Row: {
           amenity: string
@@ -1740,8 +1095,11 @@ export type Database = {
           latitude: number | null
           longitude: number | null
           name: string
+          phone: string | null
+          program_id: string | null
           rating: number | null
           room_assignments: Json | null
+          type: Database["public"]["Enums"]["nest_type"] | null
           updated_at: string | null
         }
         Insert: {
@@ -1758,8 +1116,11 @@ export type Database = {
           latitude?: number | null
           longitude?: number | null
           name: string
+          phone?: string | null
+          program_id?: string | null
           rating?: number | null
           room_assignments?: Json | null
+          type?: Database["public"]["Enums"]["nest_type"] | null
           updated_at?: string | null
         }
         Update: {
@@ -1776,11 +1137,100 @@ export type Database = {
           latitude?: number | null
           longitude?: number | null
           name?: string
+          phone?: string | null
+          program_id?: string | null
           rating?: number | null
           room_assignments?: Json | null
+          type?: Database["public"]["Enums"]["nest_type"] | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "nests_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      noscar_assignments: {
+        Row: {
+          assigned_date: string | null
+          assignment_type: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          is_active: boolean | null
+          nest_id: string | null
+          notes: string | null
+          program_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          assigned_date?: string | null
+          assignment_type: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          nest_id?: string | null
+          notes?: string | null
+          program_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          assigned_date?: string | null
+          assignment_type?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          nest_id?: string | null
+          notes?: string | null
+          program_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "noscar_assignments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "noscar_assignments_nest_id_fkey"
+            columns: ["nest_id"]
+            isOneToOne: false
+            referencedRelation: "nests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "noscar_assignments_nest_id_fkey"
+            columns: ["nest_id"]
+            isOneToOne: false
+            referencedRelation: "nests_with_amenities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "noscar_assignments_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "noscar_assignments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notification_templates: {
         Row: {
@@ -1824,6 +1274,8 @@ export type Database = {
           created_at: string | null
           delivered_at: string | null
           id: string
+          is_read: boolean | null
+          journey_id: string | null
           message: string
           metadata: Json | null
           read_at: string | null
@@ -1838,6 +1290,8 @@ export type Database = {
           created_at?: string | null
           delivered_at?: string | null
           id?: string
+          is_read?: boolean | null
+          journey_id?: string | null
           message: string
           metadata?: Json | null
           read_at?: string | null
@@ -1852,6 +1306,8 @@ export type Database = {
           created_at?: string | null
           delivered_at?: string | null
           id?: string
+          is_read?: boolean | null
+          journey_id?: string | null
           message?: string
           metadata?: Json | null
           read_at?: string | null
@@ -1862,6 +1318,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "notifications_journey_id_fkey"
+            columns: ["journey_id"]
+            isOneToOne: false
+            referencedRelation: "journeys"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "notifications_user_id_fkey"
             columns: ["user_id"]
@@ -2075,6 +1538,38 @@ export type Database = {
           },
         ]
       }
+      program_days: {
+        Row: {
+          created_at: string | null
+          date: string
+          id: string
+          program_id: string | null
+          title: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          id?: string
+          program_id?: string | null
+          title?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          program_id?: string | null
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "program_days_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       program_exports: {
         Row: {
           created_at: string | null
@@ -2116,6 +1611,50 @@ export type Database = {
             columns: ["program_id"]
             isOneToOne: false
             referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      program_sessions: {
+        Row: {
+          created_at: string | null
+          day_id: string | null
+          description: string | null
+          end_time: string
+          id: string
+          session_type: Database["public"]["Enums"]["session_type"] | null
+          start_time: string
+          title: string
+          venue: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          day_id?: string | null
+          description?: string | null
+          end_time: string
+          id?: string
+          session_type?: Database["public"]["Enums"]["session_type"] | null
+          start_time: string
+          title: string
+          venue?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          day_id?: string | null
+          description?: string | null
+          end_time?: string
+          id?: string
+          session_type?: Database["public"]["Enums"]["session_type"] | null
+          start_time?: string
+          title?: string
+          venue?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "program_sessions_day_id_fkey"
+            columns: ["day_id"]
+            isOneToOne: false
+            referencedRelation: "program_days"
             referencedColumns: ["id"]
           },
         ]
@@ -2287,6 +1826,54 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      session_speakers: {
+        Row: {
+          created_at: string | null
+          duration_minutes: number | null
+          id: string
+          is_keynote: boolean | null
+          papa_id: string | null
+          session_id: string | null
+          time_slot: string | null
+          topic: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          duration_minutes?: number | null
+          id?: string
+          is_keynote?: boolean | null
+          papa_id?: string | null
+          session_id?: string | null
+          time_slot?: string | null
+          topic?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          duration_minutes?: number | null
+          id?: string
+          is_keynote?: boolean | null
+          papa_id?: string | null
+          session_id?: string | null
+          time_slot?: string | null
+          topic?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_speakers_papa_id_fkey"
+            columns: ["papa_id"]
+            isOneToOne: false
+            referencedRelation: "papas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_speakers_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "program_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       settings: {
         Row: {
@@ -2476,6 +2063,127 @@ export type Database = {
           },
         ]
       }
+      testimonials: {
+        Row: {
+          client_company: string
+          client_image: string | null
+          client_name: string
+          client_role: string
+          content: string
+          created_at: string | null
+          id: string
+          is_featured: boolean | null
+          order_index: number | null
+          rating: number | null
+          result_metric: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          client_company: string
+          client_image?: string | null
+          client_name: string
+          client_role: string
+          content: string
+          created_at?: string | null
+          id?: string
+          is_featured?: boolean | null
+          order_index?: number | null
+          rating?: number | null
+          result_metric?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          client_company?: string
+          client_image?: string | null
+          client_name?: string
+          client_role?: string
+          content?: string
+          created_at?: string | null
+          id?: string
+          is_featured?: boolean | null
+          order_index?: number | null
+          rating?: number | null
+          result_metric?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      theatre_vips: {
+        Row: {
+          access_level: string | null
+          contact_info: string | null
+          created_at: string | null
+          created_by: string | null
+          face_descriptor: Json | null
+          full_name: string
+          id: string
+          notes: string | null
+          organization: string | null
+          photo_url: string | null
+          program_id: string | null
+          theatre_id: string | null
+          title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          access_level?: string | null
+          contact_info?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          face_descriptor?: Json | null
+          full_name: string
+          id?: string
+          notes?: string | null
+          organization?: string | null
+          photo_url?: string | null
+          program_id?: string | null
+          theatre_id?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          access_level?: string | null
+          contact_info?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          face_descriptor?: Json | null
+          full_name?: string
+          id?: string
+          notes?: string | null
+          organization?: string | null
+          photo_url?: string | null
+          program_id?: string | null
+          theatre_id?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "theatre_vips_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "theatre_vips_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "theatre_vips_theatre_id_fkey"
+            columns: ["theatre_id"]
+            isOneToOne: false
+            referencedRelation: "theatres"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       theatres: {
         Row: {
           address: string
@@ -2658,6 +2366,7 @@ export type Database = {
           notification_preferences: Json | null
           oscar: string | null
           phone: string | null
+          photo_url: string | null
           role: Database["public"]["Enums"]["user_role"]
           timezone: string | null
           unit: string | null
@@ -2678,6 +2387,7 @@ export type Database = {
           notification_preferences?: Json | null
           oscar?: string | null
           phone?: string | null
+          photo_url?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           timezone?: string | null
           unit?: string | null
@@ -2698,6 +2408,7 @@ export type Database = {
           notification_preferences?: Json | null
           oscar?: string | null
           phone?: string | null
+          photo_url?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           timezone?: string | null
           unit?: string | null
@@ -3125,29 +2836,6 @@ export type Database = {
       addgeometrycolumn:
         | {
             Args: {
-              column_name: string
-              new_dim: number
-              new_srid: number
-              new_type: string
-              schema_name: string
-              table_name: string
-              use_typmod?: boolean
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              column_name: string
-              new_dim: number
-              new_srid: number
-              new_type: string
-              table_name: string
-              use_typmod?: boolean
-            }
-            Returns: string
-          }
-        | {
-            Args: {
               catalog_name: string
               column_name: string
               new_dim: number
@@ -3159,6 +2847,30 @@ export type Database = {
             }
             Returns: string
           }
+        | {
+            Args: {
+              column_name: string
+              new_dim: number
+              new_srid: number
+              new_type: string
+              schema_name: string
+              table_name: string
+              use_typmod?: boolean
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              column_name: string
+              new_dim: number
+              new_srid: number
+              new_type: string
+              table_name: string
+              use_typmod?: boolean
+            }
+            Returns: string
+          }
+      archive_journey: { Args: { p_journey_id: string }; Returns: undefined }
       assign_do_to_journey: {
         Args: { do_uuid: string; journey_uuid: string }
         Returns: undefined
@@ -3175,6 +2887,7 @@ export type Database = {
       can_view_all_tracking: { Args: never; Returns: boolean }
       can_view_call_signs: { Args: never; Returns: boolean }
       cleanup_old_locations: { Args: never; Returns: undefined }
+      complete_journey: { Args: { p_journey_id: string }; Returns: undefined }
       create_audit_log: {
         Args: {
           p_action: string
@@ -3188,8 +2901,18 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"][]
       }
+      delete_old_notifications: { Args: never; Returns: undefined }
       disablelongtransactions: { Args: never; Returns: string }
       dropgeometrycolumn:
+        | {
+            Args: {
+              catalog_name: string
+              column_name: string
+              schema_name: string
+              table_name: string
+            }
+            Returns: string
+          }
         | {
             Args: {
               column_name: string
@@ -3199,26 +2922,21 @@ export type Database = {
             Returns: string
           }
         | { Args: { column_name: string; table_name: string }; Returns: string }
+      dropgeometrytable:
         | {
             Args: {
               catalog_name: string
-              column_name: string
               schema_name: string
               table_name: string
             }
             Returns: string
           }
-      dropgeometrytable:
         | { Args: { schema_name: string; table_name: string }; Returns: string }
         | { Args: { table_name: string }; Returns: string }
-        | {
-            Args: {
-              catalog_name: string
-              schema_name: string
-              table_name: string
-            }
-            Returns: string
-          }
+      edit_chat_message: {
+        Args: { message_id: string; new_content: string }
+        Returns: Json
+      }
       enablelongtransactions: { Args: never; Returns: string }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
       export_program_data: { Args: { program_uuid: string }; Returns: Json }
@@ -3348,6 +3066,19 @@ export type Database = {
         }[]
       }
       get_current_oscar: { Args: never; Returns: string }
+      get_journey_location_trail: {
+        Args: { journey_uuid: string }
+        Returns: {
+          accuracy: number
+          created_at: string
+          latitude: number
+          longitude: number
+        }[]
+      }
+      get_unread_count: {
+        Args: { p_program_id: string; p_user_id: string }
+        Returns: number
+      }
       get_unread_message_count: { Args: { user_uuid: string }; Returns: number }
       get_user_latest_location: {
         Args: { user_uuid: string }
@@ -3365,13 +3096,13 @@ export type Database = {
       gettransactionid: { Args: never; Returns: unknown }
       has_any_claim_role:
         | {
-            Args: { p_roles: Database["public"]["Enums"]["user_role"][] }
+            Args: { p_roles: string[] }
             Returns: {
               error: true
             } & "Could not choose the best candidate function between: public.has_any_claim_role(p_roles => _text), public.has_any_claim_role(p_roles => _user_role). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
           }
         | {
-            Args: { p_roles: string[] }
+            Args: { p_roles: Database["public"]["Enums"]["user_role"][] }
             Returns: {
               error: true
             } & "Could not choose the best candidate function between: public.has_any_claim_role(p_roles => _text), public.has_any_claim_role(p_roles => _user_role). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
@@ -3395,13 +3126,13 @@ export type Database = {
       }
       has_claim_role:
         | {
-            Args: { p_role: Database["public"]["Enums"]["user_role"] }
+            Args: { p_role: string }
             Returns: {
               error: true
             } & "Could not choose the best candidate function between: public.has_claim_role(p_role => text), public.has_claim_role(p_role => user_role). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
           }
         | {
-            Args: { p_role: string }
+            Args: { p_role: Database["public"]["Enums"]["user_role"] }
             Returns: {
               error: true
             } & "Could not choose the best candidate function between: public.has_claim_role(p_role => text), public.has_claim_role(p_role => user_role). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
@@ -3409,13 +3140,13 @@ export type Database = {
       has_program_admin_access: { Args: never; Returns: boolean }
       has_role:
         | {
-            Args: { p_role: Database["public"]["Enums"]["user_role"] }
+            Args: { p_role: string }
             Returns: {
               error: true
             } & "Could not choose the best candidate function between: public.has_role(p_role => text), public.has_role(p_role => user_role). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
           }
         | {
-            Args: { p_role: string }
+            Args: { p_role: Database["public"]["Enums"]["user_role"] }
             Returns: {
               error: true
             } & "Could not choose the best candidate function between: public.has_role(p_role => text), public.has_role(p_role => user_role). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
@@ -3436,9 +3167,13 @@ export type Database = {
         Args: { message_uuid: string; user_uuid: string }
         Returns: undefined
       }
+      mark_messages_as_read: {
+        Args: { p_program_id: string; p_user_id: string }
+        Returns: undefined
+      }
       populate_geometry_columns:
-        | { Args: { use_typmod?: boolean }; Returns: string }
         | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }
+        | { Args: { use_typmod?: boolean }; Returns: string }
       postgis_constraint_dims: {
         Args: { geomcolumn: string; geomschema: string; geomtable: string }
         Returns: number
@@ -3538,6 +3273,14 @@ export type Database = {
       st_asewkt: { Args: { "": string }; Returns: string }
       st_asgeojson:
         | {
+            Args: { geog: unknown; maxdecimaldigits?: number; options?: number }
+            Returns: string
+          }
+        | {
+            Args: { geom: unknown; maxdecimaldigits?: number; options?: number }
+            Returns: string
+          }
+        | {
             Args: {
               geom_column?: string
               maxdecimaldigits?: number
@@ -3546,18 +3289,32 @@ export type Database = {
             }
             Returns: string
           }
-        | {
-            Args: { geom: unknown; maxdecimaldigits?: number; options?: number }
-            Returns: string
-          }
-        | {
-            Args: { geog: unknown; maxdecimaldigits?: number; options?: number }
-            Returns: string
-          }
         | { Args: { "": string }; Returns: string }
       st_asgml:
         | {
+            Args: {
+              geog: unknown
+              id?: string
+              maxdecimaldigits?: number
+              nprefix?: string
+              options?: number
+            }
+            Returns: string
+          }
+        | {
             Args: { geom: unknown; maxdecimaldigits?: number; options?: number }
+            Returns: string
+          }
+        | { Args: { "": string }; Returns: string }
+        | {
+            Args: {
+              geog: unknown
+              id?: string
+              maxdecimaldigits?: number
+              nprefix?: string
+              options?: number
+              version: number
+            }
             Returns: string
           }
         | {
@@ -3571,35 +3328,13 @@ export type Database = {
             }
             Returns: string
           }
-        | {
-            Args: {
-              geog: unknown
-              id?: string
-              maxdecimaldigits?: number
-              nprefix?: string
-              options?: number
-              version: number
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              geog: unknown
-              id?: string
-              maxdecimaldigits?: number
-              nprefix?: string
-              options?: number
-            }
-            Returns: string
-          }
-        | { Args: { "": string }; Returns: string }
       st_askml:
         | {
-            Args: { geom: unknown; maxdecimaldigits?: number; nprefix?: string }
+            Args: { geog: unknown; maxdecimaldigits?: number; nprefix?: string }
             Returns: string
           }
         | {
-            Args: { geog: unknown; maxdecimaldigits?: number; nprefix?: string }
+            Args: { geom: unknown; maxdecimaldigits?: number; nprefix?: string }
             Returns: string
           }
         | { Args: { "": string }; Returns: string }
@@ -3620,11 +3355,11 @@ export type Database = {
       }
       st_assvg:
         | {
-            Args: { geom: unknown; maxdecimaldigits?: number; rel?: number }
+            Args: { geog: unknown; maxdecimaldigits?: number; rel?: number }
             Returns: string
           }
         | {
-            Args: { geog: unknown; maxdecimaldigits?: number; rel?: number }
+            Args: { geom: unknown; maxdecimaldigits?: number; rel?: number }
             Returns: string
           }
         | { Args: { "": string }; Returns: string }
@@ -3632,8 +3367,7 @@ export type Database = {
       st_astwkb:
         | {
             Args: {
-              geom: unknown[]
-              ids: number[]
+              geom: unknown
               prec?: number
               prec_m?: number
               prec_z?: number
@@ -3644,7 +3378,8 @@ export type Database = {
           }
         | {
             Args: {
-              geom: unknown
+              geom: unknown[]
+              ids: number[]
               prec?: number
               prec_m?: number
               prec_z?: number
@@ -3658,8 +3393,8 @@ export type Database = {
         Returns: string
       }
       st_azimuth:
-        | { Args: { geom1: unknown; geom2: unknown }; Returns: number }
         | { Args: { geog1: unknown; geog2: unknown }; Returns: number }
+        | { Args: { geom1: unknown; geom2: unknown }; Returns: number }
       st_boundingdiagonal: {
         Args: { fits?: boolean; geom: unknown }
         Returns: unknown
@@ -3724,11 +3459,11 @@ export type Database = {
         Returns: boolean
       }
       st_distance:
-        | { Args: { geom1: unknown; geom2: unknown }; Returns: number }
         | {
             Args: { geog1: unknown; geog2: unknown; use_spheroid?: boolean }
             Returns: number
           }
+        | { Args: { geom1: unknown; geom2: unknown }; Returns: number }
       st_distancesphere:
         | { Args: { geom1: unknown; geom2: unknown }; Returns: number }
         | {
@@ -3750,6 +3485,11 @@ export type Database = {
       }
       st_equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
       st_expand:
+        | { Args: { box: unknown; dx: number; dy: number }; Returns: unknown }
+        | {
+            Args: { box: unknown; dx: number; dy: number; dz?: number }
+            Returns: unknown
+          }
         | {
             Args: {
               dm?: number
@@ -3760,11 +3500,6 @@ export type Database = {
             }
             Returns: unknown
           }
-        | {
-            Args: { box: unknown; dx: number; dy: number; dz?: number }
-            Returns: unknown
-          }
-        | { Args: { box: unknown; dx: number; dy: number }; Returns: unknown }
       st_force3d: { Args: { geom: unknown; zvalue?: number }; Returns: unknown }
       st_force3dm: {
         Args: { geom: unknown; mvalue?: number }
@@ -3787,8 +3522,8 @@ export type Database = {
       st_geogfromtext: { Args: { "": string }; Returns: unknown }
       st_geographyfromtext: { Args: { "": string }; Returns: unknown }
       st_geohash:
-        | { Args: { geom: unknown; maxchars?: number }; Returns: string }
         | { Args: { geog: unknown; maxchars?: number }; Returns: string }
+        | { Args: { geom: unknown; maxchars?: number }; Returns: string }
       st_geomcollfromtext: { Args: { "": string }; Returns: unknown }
       st_geometricmedian: {
         Args: {
@@ -3832,8 +3567,8 @@ export type Database = {
         Returns: unknown
       }
       st_intersects:
-        | { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
         | { Args: { geog1: unknown; geog2: unknown }; Returns: boolean }
+        | { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
       st_isvaliddetail: {
         Args: { flags?: number; geom: unknown }
         Returns: Database["public"]["CompositeTypes"]["valid_detail"]
@@ -3986,8 +3721,8 @@ export type Database = {
         Returns: unknown
       }
       st_setsrid:
-        | { Args: { geom: unknown; srid: number }; Returns: unknown }
         | { Args: { geog: unknown; srid: number }; Returns: unknown }
+        | { Args: { geom: unknown; srid: number }; Returns: unknown }
       st_sharedpaths: {
         Args: { geom1: unknown; geom2: unknown }
         Returns: unknown
@@ -4010,8 +3745,8 @@ export type Database = {
         Returns: Record<string, unknown>[]
       }
       st_srid:
-        | { Args: { geom: unknown }; Returns: number }
         | { Args: { geog: unknown }; Returns: number }
+        | { Args: { geom: unknown }; Returns: number }
       st_subdivide: {
         Args: { geom: unknown; gridsize?: number; maxvertices?: number }
         Returns: unknown[]
@@ -4040,15 +3775,15 @@ export type Database = {
       }
       st_touches: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
       st_transform:
-        | { Args: { geom: unknown; to_proj: string }; Returns: unknown }
-        | {
-            Args: { from_proj: string; geom: unknown; to_srid: number }
-            Returns: unknown
-          }
         | {
             Args: { from_proj: string; geom: unknown; to_proj: string }
             Returns: unknown
           }
+        | {
+            Args: { from_proj: string; geom: unknown; to_srid: number }
+            Returns: unknown
+          }
+        | { Args: { geom: unknown; to_proj: string }; Returns: unknown }
       st_triangulatepolygon: { Args: { g1: unknown }; Returns: unknown }
       st_union:
         | { Args: { geom1: unknown; geom2: unknown }; Returns: unknown }
@@ -4075,6 +3810,10 @@ export type Database = {
       update_journey_call_sign: {
         Args: { journey_uuid: string; new_status: string }
         Returns: Json
+      }
+      update_journey_status: {
+        Args: { p_journey_id: string; p_notes?: string; p_status: string }
+        Returns: string
       }
       update_user_online_status: {
         Args: { p_is_online: boolean }
@@ -4130,8 +3869,10 @@ export type Database = {
         | "distress"
         | "active"
         | "planning"
+      nest_type: "den" | "nest"
       notification_channel: "email" | "sms" | "push" | "whatsapp"
       notification_status: "pending" | "sent" | "failed" | "delivered"
+      session_type: "morning" | "afternoon" | "evening" | "special"
       user_role:
         | "super_admin"
         | "admin"
@@ -4151,6 +3892,15 @@ export type Database = {
         | "vice_captain"
         | "command"
         | "head_of_operations"
+        | "head_alpha_oscar"
+        | "head_victor_oscar"
+        | "head_echo_oscar"
+        | "noscar_den"
+        | "head_noscar_den"
+        | "noscar_nest"
+        | "head_noscar_nest"
+        | "echo_oscar"
+        | "dev_admin"
       vehicle_status:
         | "idle"
         | "on_mission"
@@ -4168,511 +3918,6 @@ export type Database = {
         reason: string | null
         location: unknown
       }
-    }
-  }
-  storage: {
-    Tables: {
-      buckets: {
-        Row: {
-          allowed_mime_types: string[] | null
-          avif_autodetection: boolean | null
-          created_at: string | null
-          file_size_limit: number | null
-          id: string
-          name: string
-          owner: string | null
-          owner_id: string | null
-          public: boolean | null
-          type: Database["storage"]["Enums"]["buckettype"]
-          updated_at: string | null
-        }
-        Insert: {
-          allowed_mime_types?: string[] | null
-          avif_autodetection?: boolean | null
-          created_at?: string | null
-          file_size_limit?: number | null
-          id: string
-          name: string
-          owner?: string | null
-          owner_id?: string | null
-          public?: boolean | null
-          type?: Database["storage"]["Enums"]["buckettype"]
-          updated_at?: string | null
-        }
-        Update: {
-          allowed_mime_types?: string[] | null
-          avif_autodetection?: boolean | null
-          created_at?: string | null
-          file_size_limit?: number | null
-          id?: string
-          name?: string
-          owner?: string | null
-          owner_id?: string | null
-          public?: boolean | null
-          type?: Database["storage"]["Enums"]["buckettype"]
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      buckets_analytics: {
-        Row: {
-          created_at: string
-          deleted_at: string | null
-          format: string
-          id: string
-          name: string
-          type: Database["storage"]["Enums"]["buckettype"]
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          deleted_at?: string | null
-          format?: string
-          id?: string
-          name: string
-          type?: Database["storage"]["Enums"]["buckettype"]
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          deleted_at?: string | null
-          format?: string
-          id?: string
-          name?: string
-          type?: Database["storage"]["Enums"]["buckettype"]
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      buckets_vectors: {
-        Row: {
-          created_at: string
-          id: string
-          type: Database["storage"]["Enums"]["buckettype"]
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          id: string
-          type?: Database["storage"]["Enums"]["buckettype"]
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          type?: Database["storage"]["Enums"]["buckettype"]
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      migrations: {
-        Row: {
-          executed_at: string | null
-          hash: string
-          id: number
-          name: string
-        }
-        Insert: {
-          executed_at?: string | null
-          hash: string
-          id: number
-          name: string
-        }
-        Update: {
-          executed_at?: string | null
-          hash?: string
-          id?: number
-          name?: string
-        }
-        Relationships: []
-      }
-      objects: {
-        Row: {
-          bucket_id: string | null
-          created_at: string | null
-          id: string
-          last_accessed_at: string | null
-          level: number | null
-          metadata: Json | null
-          name: string | null
-          owner: string | null
-          owner_id: string | null
-          path_tokens: string[] | null
-          updated_at: string | null
-          user_metadata: Json | null
-          version: string | null
-        }
-        Insert: {
-          bucket_id?: string | null
-          created_at?: string | null
-          id?: string
-          last_accessed_at?: string | null
-          level?: number | null
-          metadata?: Json | null
-          name?: string | null
-          owner?: string | null
-          owner_id?: string | null
-          path_tokens?: string[] | null
-          updated_at?: string | null
-          user_metadata?: Json | null
-          version?: string | null
-        }
-        Update: {
-          bucket_id?: string | null
-          created_at?: string | null
-          id?: string
-          last_accessed_at?: string | null
-          level?: number | null
-          metadata?: Json | null
-          name?: string | null
-          owner?: string | null
-          owner_id?: string | null
-          path_tokens?: string[] | null
-          updated_at?: string | null
-          user_metadata?: Json | null
-          version?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "objects_bucketId_fkey"
-            columns: ["bucket_id"]
-            isOneToOne: false
-            referencedRelation: "buckets"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      prefixes: {
-        Row: {
-          bucket_id: string
-          created_at: string | null
-          level: number
-          name: string
-          updated_at: string | null
-        }
-        Insert: {
-          bucket_id: string
-          created_at?: string | null
-          level?: number
-          name: string
-          updated_at?: string | null
-        }
-        Update: {
-          bucket_id?: string
-          created_at?: string | null
-          level?: number
-          name?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "prefixes_bucketId_fkey"
-            columns: ["bucket_id"]
-            isOneToOne: false
-            referencedRelation: "buckets"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      s3_multipart_uploads: {
-        Row: {
-          bucket_id: string
-          created_at: string
-          id: string
-          in_progress_size: number
-          key: string
-          owner_id: string | null
-          upload_signature: string
-          user_metadata: Json | null
-          version: string
-        }
-        Insert: {
-          bucket_id: string
-          created_at?: string
-          id: string
-          in_progress_size?: number
-          key: string
-          owner_id?: string | null
-          upload_signature: string
-          user_metadata?: Json | null
-          version: string
-        }
-        Update: {
-          bucket_id?: string
-          created_at?: string
-          id?: string
-          in_progress_size?: number
-          key?: string
-          owner_id?: string | null
-          upload_signature?: string
-          user_metadata?: Json | null
-          version?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "s3_multipart_uploads_bucket_id_fkey"
-            columns: ["bucket_id"]
-            isOneToOne: false
-            referencedRelation: "buckets"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      s3_multipart_uploads_parts: {
-        Row: {
-          bucket_id: string
-          created_at: string
-          etag: string
-          id: string
-          key: string
-          owner_id: string | null
-          part_number: number
-          size: number
-          upload_id: string
-          version: string
-        }
-        Insert: {
-          bucket_id: string
-          created_at?: string
-          etag: string
-          id?: string
-          key: string
-          owner_id?: string | null
-          part_number: number
-          size?: number
-          upload_id: string
-          version: string
-        }
-        Update: {
-          bucket_id?: string
-          created_at?: string
-          etag?: string
-          id?: string
-          key?: string
-          owner_id?: string | null
-          part_number?: number
-          size?: number
-          upload_id?: string
-          version?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "s3_multipart_uploads_parts_bucket_id_fkey"
-            columns: ["bucket_id"]
-            isOneToOne: false
-            referencedRelation: "buckets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "s3_multipart_uploads_parts_upload_id_fkey"
-            columns: ["upload_id"]
-            isOneToOne: false
-            referencedRelation: "s3_multipart_uploads"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      vector_indexes: {
-        Row: {
-          bucket_id: string
-          created_at: string
-          data_type: string
-          dimension: number
-          distance_metric: string
-          id: string
-          metadata_configuration: Json | null
-          name: string
-          updated_at: string
-        }
-        Insert: {
-          bucket_id: string
-          created_at?: string
-          data_type: string
-          dimension: number
-          distance_metric: string
-          id?: string
-          metadata_configuration?: Json | null
-          name: string
-          updated_at?: string
-        }
-        Update: {
-          bucket_id?: string
-          created_at?: string
-          data_type?: string
-          dimension?: number
-          distance_metric?: string
-          id?: string
-          metadata_configuration?: Json | null
-          name?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "vector_indexes_bucket_id_fkey"
-            columns: ["bucket_id"]
-            isOneToOne: false
-            referencedRelation: "buckets_vectors"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      add_prefixes: {
-        Args: { _bucket_id: string; _name: string }
-        Returns: undefined
-      }
-      can_insert_object: {
-        Args: { bucketid: string; metadata: Json; name: string; owner: string }
-        Returns: undefined
-      }
-      delete_leaf_prefixes: {
-        Args: { bucket_ids: string[]; names: string[] }
-        Returns: undefined
-      }
-      delete_prefix: {
-        Args: { _bucket_id: string; _name: string }
-        Returns: boolean
-      }
-      extension: { Args: { name: string }; Returns: string }
-      filename: { Args: { name: string }; Returns: string }
-      foldername: { Args: { name: string }; Returns: string[] }
-      get_level: { Args: { name: string }; Returns: number }
-      get_prefix: { Args: { name: string }; Returns: string }
-      get_prefixes: { Args: { name: string }; Returns: string[] }
-      get_size_by_bucket: {
-        Args: never
-        Returns: {
-          bucket_id: string
-          size: number
-        }[]
-      }
-      list_multipart_uploads_with_delimiter: {
-        Args: {
-          bucket_id: string
-          delimiter_param: string
-          max_keys?: number
-          next_key_token?: string
-          next_upload_token?: string
-          prefix_param: string
-        }
-        Returns: {
-          created_at: string
-          id: string
-          key: string
-        }[]
-      }
-      list_objects_with_delimiter: {
-        Args: {
-          bucket_id: string
-          delimiter_param: string
-          max_keys?: number
-          next_token?: string
-          prefix_param: string
-          start_after?: string
-        }
-        Returns: {
-          id: string
-          metadata: Json
-          name: string
-          updated_at: string
-        }[]
-      }
-      lock_top_prefixes: {
-        Args: { bucket_ids: string[]; names: string[] }
-        Returns: undefined
-      }
-      operation: { Args: never; Returns: string }
-      search: {
-        Args: {
-          bucketname: string
-          levels?: number
-          limits?: number
-          offsets?: number
-          prefix: string
-          search?: string
-          sortcolumn?: string
-          sortorder?: string
-        }
-        Returns: {
-          created_at: string
-          id: string
-          last_accessed_at: string
-          metadata: Json
-          name: string
-          updated_at: string
-        }[]
-      }
-      search_legacy_v1: {
-        Args: {
-          bucketname: string
-          levels?: number
-          limits?: number
-          offsets?: number
-          prefix: string
-          search?: string
-          sortcolumn?: string
-          sortorder?: string
-        }
-        Returns: {
-          created_at: string
-          id: string
-          last_accessed_at: string
-          metadata: Json
-          name: string
-          updated_at: string
-        }[]
-      }
-      search_v1_optimised: {
-        Args: {
-          bucketname: string
-          levels?: number
-          limits?: number
-          offsets?: number
-          prefix: string
-          search?: string
-          sortcolumn?: string
-          sortorder?: string
-        }
-        Returns: {
-          created_at: string
-          id: string
-          last_accessed_at: string
-          metadata: Json
-          name: string
-          updated_at: string
-        }[]
-      }
-      search_v2: {
-        Args: {
-          bucket_name: string
-          levels?: number
-          limits?: number
-          prefix: string
-          sort_column?: string
-          sort_column_after?: string
-          sort_order?: string
-          start_after?: string
-        }
-        Returns: {
-          created_at: string
-          id: string
-          key: string
-          last_accessed_at: string
-          metadata: Json
-          name: string
-          updated_at: string
-        }[]
-      }
-    }
-    Enums: {
-      buckettype: "STANDARD" | "ANALYTICS" | "VECTOR"
-    }
-    CompositeTypes: {
-      [_ in never]: never
     }
   }
 }
@@ -4795,26 +4040,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  auth: {
-    Enums: {
-      aal_level: ["aal1", "aal2", "aal3"],
-      code_challenge_method: ["s256", "plain"],
-      factor_status: ["unverified", "verified"],
-      factor_type: ["totp", "webauthn", "phone"],
-      oauth_authorization_status: ["pending", "approved", "denied", "expired"],
-      oauth_client_type: ["public", "confidential"],
-      oauth_registration_type: ["dynamic", "manual"],
-      oauth_response_type: ["code"],
-      one_time_token_type: [
-        "confirmation_token",
-        "reauthentication_token",
-        "recovery_token",
-        "email_change_token_new",
-        "email_change_token_current",
-        "phone_change_token",
-      ],
-    },
-  },
   public: {
     Enums: {
       call_sign: [
@@ -4844,8 +4069,10 @@ export const Constants = {
         "active",
         "planning",
       ],
+      nest_type: ["den", "nest"],
       notification_channel: ["email", "sms", "push", "whatsapp"],
       notification_status: ["pending", "sent", "failed", "delivered"],
+      session_type: ["morning", "afternoon", "evening", "special"],
       user_role: [
         "super_admin",
         "admin",
@@ -4865,6 +4092,15 @@ export const Constants = {
         "vice_captain",
         "command",
         "head_of_operations",
+        "head_alpha_oscar",
+        "head_victor_oscar",
+        "head_echo_oscar",
+        "noscar_den",
+        "head_noscar_den",
+        "noscar_nest",
+        "head_noscar_nest",
+        "echo_oscar",
+        "dev_admin",
       ],
       vehicle_status: [
         "idle",
@@ -4875,9 +4111,5 @@ export const Constants = {
       ],
     },
   },
-  storage: {
-    Enums: {
-      buckettype: ["STANDARD", "ANALYTICS", "VECTOR"],
-    },
-  },
 } as const
+
