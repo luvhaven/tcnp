@@ -1393,7 +1393,7 @@ export default function ChatSystem({
                       <button onClick={() => setShowReactionPicker(showReactionPicker === msg.id ? null : msg.id)} title="React" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><Smile className="h-3.5 w-3.5" /></button>
                       <button onClick={() => handleReply(msg)} title="Reply" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><CornerUpLeft className="h-3.5 w-3.5" /></button>
                       {isEditable && <button onClick={() => handleEdit(msg)} title="Edit" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><Pencil className="h-3.5 w-3.5" /></button>}
-                      {isOwn && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleDeleteMessage(msg.id); }} title="Delete" className="h-6 w-6 rounded-lg hover:bg-destructive/10 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>}
+                      {isOwn && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (window.confirm('Are you sure you want to delete this message?')) { void handleDeleteMessage(msg.id); } }} title="Delete" className="h-6 w-6 rounded-lg hover:bg-destructive/10 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>}
                     </div>
 
                     {showReactionPicker === msg.id && (
