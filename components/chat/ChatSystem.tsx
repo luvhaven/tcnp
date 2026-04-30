@@ -958,7 +958,11 @@ export default function ChatSystem({
   const handleDeleteMessage = useCallback(async (messageId: string) => {
     if (!currentUser?.id) return
     const { error } = await (supabase as any).from('chat_messages').update({ deleted_at: new Date().toISOString() }).eq('id', messageId).eq('sender_id', currentUser.id)
-    if (error) { toast.error('Could not delete message'); return }
+    if (error) { 
+      console.error('Delete error:', error);
+      toast.error(`Could not delete message: ${error.message || 'Unknown error'}`); 
+      return 
+    }
     setMessages(prev => prev.filter(m => m.id !== messageId))
   }, [supabase, currentUser])
 
