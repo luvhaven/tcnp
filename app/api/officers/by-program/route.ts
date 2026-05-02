@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+const EXCLUDED_ROLES = new Set([
+  'captain', 'super_admin', 'dev_admin', 'admin',
+  'head_of_command', 'head_of_operations', 'command', 'hod', 'hop'
+])
+
 export async function GET(req: NextRequest) {
   try {
     const supabase = await createClient()
@@ -13,43 +18,60 @@ export async function GET(req: NextRequest) {
 
     const adminClient = createAdminClient()
 
-    // Fetch all users assigned to this program via current_title_assignments
-    const { data: assignments, error } = await adminClient
+    // Step 1: Get all title assignments for this program
+    const { data: assignments, error: assignError } = await (adminClient as any)
       .from('current_title_assignments')
       .select('user_id, full_name, title_name, title_code, unit')
       .eq('program_id', programId)
       .eq('is_active', true)
 
-    if (error) throw error
+    if (assignError) {
+      console.error('by-program assignments error:', assignError)
+      return NextResponse.json({ error: assignError.message }, { status: 500 })
+    }
 
     if (!assignments || assignments.length === 0) {
       return NextResponse.json({ officers: [] })
     }
 
-    // Get unique user IDs (exclude captain role)
-    const userIds = [...new Set(assignments.map((a: any) => a.user_id))]
-
-    const { data: users, error: usersError } = await adminClient
+    // Step 2: Get user details for those user_ids
+    const userIds = assignments.map((a: any) => a.user_id).filter(Boolean)
+    const { data: usersData, error: usersError } = await (adminClient as any)
       .from('users')
-      .select('id, full_name, role, oscar, activation_status, photo_url')
+      .select('id, role, oscar, photo_url, activation_status')
       .in('id', userIds)
-      // Captains are admin heads, not DOs
-      .not('role', 'in', '(captain,super_admin,dev_admin,admin)')
-      .eq('activation_status', 'active')
-      .order('full_name')
 
-    if (usersError) throw usersError
+    if (usersError) {
+      console.error('by-program users error:', usersError)
+      return NextResponse.json({ error: usersError.message }, { status: 500 })
+    }
 
-    // Merge title info from assignments
-    const officers = (users || []).map((u: any) => {
-      const assignment = assignments.find((a: any) => a.user_id === u.id)
-      return {
-        ...u,
-        title_name: assignment?.title_name ?? null,
-        title_code: assignment?.title_code ?? null,
-        unit: assignment?.unit ?? null,
-      }
-    })
+    // Step 3: Build a lookup map
+    const userMap: Record<string, any> = {}
+    for (const u of (usersData || [])) {
+      userMap[u.id] = u
+    }
+
+    // Step 4: Merge and filter out pure admin/command roles
+    const officers = assignments
+      .map((a: any) => {
+        const u = userMap[a.user_id]
+        if (!u) return null
+        if (EXCLUDED_ROLES.has(u.role)) return null
+        return {
+          id: a.user_id,
+          full_name: a.full_name,
+          role: u.role,
+          oscar: u.oscar,
+          photo_url: u.photo_url,
+          title_name: a.title_name,
+          title_code: a.title_code,
+          unit: a.unit,
+        }
+      })
+      .filter(Boolean)
+      // Sort by name
+      .sort((a: any, b: any) => (a.full_name ?? '').localeCompare(b.full_name ?? ''))
 
     return NextResponse.json({ officers })
   } catch (err: any) {

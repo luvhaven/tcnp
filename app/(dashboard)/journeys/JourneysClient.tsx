@@ -173,10 +173,25 @@ export default function JourneysClient({
       setLoadingOfficers(true)
       try {
         const res = await fetch(`/api/officers/by-program?program_id=${formData.program_id}`)
+        if (!res.ok) {
+          const errText = await res.text()
+          console.error('by-program error response:', errText)
+          toast.error('Could not load officers for this program')
+          setProgramOfficers([])
+          return
+        }
         const json = await res.json()
-        setProgramOfficers(json.officers || [])
+        if (json.error) {
+          console.error('by-program API error:', json.error)
+          toast.error('Could not load officers: ' + json.error)
+          setProgramOfficers([])
+        } else {
+          setProgramOfficers(json.officers || [])
+        }
       } catch (err) {
         console.error('Error fetching program officers:', err)
+        toast.error('Failed to load officers for this program')
+        setProgramOfficers([])
       } finally {
         setLoadingOfficers(false)
       }
@@ -337,9 +352,24 @@ export default function JourneysClient({
 
     try {
       const lead = teamLeadId || selectedDOs[0] || null
+      // Convert empty-string UUID fields to null to avoid Postgres uuid parse errors
+      const sanitized = {
+        ...formData,
+        papa_id:                   formData.papa_id                   || null,
+        assigned_cheetah_id:       formData.assigned_cheetah_id       || null,
+        program_id:                formData.program_id                || null,
+        assigned_nest_id:          formData.assigned_nest_id          || null,
+        assigned_eagle_square_id:  formData.assigned_eagle_square_id  || null,
+        assigned_duty_officer_id:  lead,
+        assigned_do_id:            lead,
+        scheduled_departure:       formData.scheduled_departure       || null,
+        scheduled_arrival:         formData.scheduled_arrival         || null,
+        etd:                       formData.etd                       || null,
+        eta:                       formData.eta                       || null,
+      }
       const { data: newJourney, error } = await (supabase as any)
         .from('journeys')
-        .insert([{ ...formData, assigned_duty_officer_id: lead, assigned_do_id: lead, status: 'planned' }])
+        .insert([{ ...sanitized, status: 'planned' }])
         .select('id')
         .single()
 
@@ -406,19 +436,24 @@ export default function JourneysClient({
 
     try {
       const lead = teamLeadId || selectedDOs[0] || formData.assigned_duty_officer_id || null
-
+      const sanitized = {
+        ...formData,
+        papa_id:                   formData.papa_id                   || null,
+        assigned_cheetah_id:       formData.assigned_cheetah_id       || null,
+        program_id:                formData.program_id                || null,
+        assigned_nest_id:          formData.assigned_nest_id          || null,
+        assigned_eagle_square_id:  formData.assigned_eagle_square_id  || null,
+        assigned_duty_officer_id:  lead,
+        assigned_do_id:            lead,
+        scheduled_departure:       formData.scheduled_departure       || null,
+        scheduled_arrival:         formData.scheduled_arrival         || null,
+        etd:                       formData.etd                       || null,
+        eta:                       formData.eta                       || null,
+        updated_at:                new Date().toISOString(),
+      }
       const { error } = await (supabase as any)
         .from('journeys')
-        .update({
-          ...formData,
-          assigned_cheetah_id: formData.assigned_cheetah_id || null,
-          assigned_duty_officer_id: lead,
-          assigned_do_id: lead,
-          assigned_nest_id: formData.assigned_nest_id || null,
-          assigned_eagle_square_id: formData.assigned_eagle_square_id || null,
-          program_id: formData.program_id || null,
-          updated_at: new Date().toISOString()
-        })
+        .update(sanitized)
         .eq('id', selectedJourney.id)
 
       if (error) throw error
