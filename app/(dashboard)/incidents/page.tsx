@@ -206,12 +206,15 @@ export default function IncidentsPage() {
       }
 
       try {
-        const { error } = await supabase
+        const { error, count } = await supabase
           .from('incidents')
-          .delete()
+          .delete({ count: 'exact' })
           .eq('id', incident.id)
 
         if (error) throw error
+        if (count === 0) {
+          throw new Error('Deletion failed: You may lack permissions or the incident was already removed.')
+        }
 
         await createAuditLog('delete_incident', 'incident', incident.id, {
           type: incident.type,

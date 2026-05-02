@@ -16,7 +16,7 @@ export default async function OfficersPage() {
     }
   )
 
-  const { data: initialOfficers } = await supabase
+  const { data: initialOfficers, error } = await supabase
     .from('users')
     .select(`
       id,
@@ -27,14 +27,17 @@ export default async function OfficersPage() {
       phone,
       is_active,
       oscar,
-      last_sign_in_at,
+      last_seen,
       created_at,
       current_title_id,
       activation_status,
-      photo_url,
-      noscar_assignments(id, assignment_type, nest:nests(name), program:programs(name))
+      photo_url
     `)
     .order('full_name')
+
+  if (error) {
+    console.error('Officers fetch error:', error)
+  }
 
   return (
     <OfficersClient 
