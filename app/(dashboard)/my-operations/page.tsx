@@ -135,7 +135,15 @@ export default function MyOperationsPage() {
         .map((a: any) => a.program_id)
         .filter(Boolean)
 
-      // Load all active journeys (admin) or program journeys
+      // Step 1: Get all journey_ids where this user is a DO (lead or not)
+      const { data: myDORows } = await (supabase as any)
+        .from('journey_duty_officers')
+        .select('journey_id')
+        .eq('user_id', user.id)
+
+      const myDOJourneyIds: string[] = (myDORows || []).map((r: any) => r.journey_id).filter(Boolean)
+
+      // Build journey query: admin sees all; others see program journeys OR own DO assignments
       let query = (supabase as any)
         .from('journeys')
         .select(`
@@ -151,10 +159,14 @@ export default function MyOperationsPage() {
         .not('status', 'in', '(completed,cancelled)')
         .order('etd', { ascending: true, nullsFirst: false })
 
-      if (!isAdmin && programIds.length > 0) {
-        query = query.or(`program_id.in.(${programIds.join(',')}),assigned_duty_officer_id.eq.${user.id}`)
-      } else if (!isAdmin) {
-        query = query.eq('assigned_duty_officer_id', user.id)
+      if (!isAdmin) {
+        // Build OR: journeys in my programs OR journeys I'm a DO for
+        const orParts: string[] = []
+        if (programIds.length > 0) orParts.push(`program_id.in.(${programIds.join(',')})`)
+        if (myDOJourneyIds.length > 0) orParts.push(`id.in.(${myDOJourneyIds.join(',')})`)
+        // Always include journeys where I'm the lead
+        orParts.push(`assigned_duty_officer_id.eq.${user.id}`)
+        query = query.or(orParts.join(','))
       }
 
       const { data: rawJourneys, error } = await query
@@ -407,12 +419,52 @@ function JourneyOperationsPanel({
   currentUserId: string | null
   isAdmin: boolean
 }) {
+  const supabase = createClient()
   const isAssignedDO = journey.duty_officers?.some(d => d.user_id === currentUserId) ?? false
   const isLead = journey.duty_officers?.find(d => d.user_id === currentUserId)?.is_lead ?? false
   const canUpdate = isAssignedDO || isAdmin
+  const isPlanned = journey.status === 'planned'
+  const [starting, setStarting] = useState(false)
 
   const statusKey = resolveCallSignKey(journey.status)
   const statusColor = statusKey ? TNCP_CALL_SIGN_COLORS[statusKey] : 'bg-gray-500 text-white'
+
+  // Determine first active call sign based on journey type / destination
+  const getFirstCallSign = (): string => {
+    const dest = (journey.destination ?? '').toLowerCase()
+    const origin = (journey.origin ?? '').toLowerCase()
+    if (dest.includes('eagle') || dest.includes('airport')) return 'first_course'
+    if (dest.includes('theatre') || dest.includes('venue')) return 'cocktail'
+    if (dest.includes('nest')) return 'blue_cocktail'
+    // Fallback: if origin is nest/airport, try to infer
+    if (origin.includes('eagle') || origin.includes('airport')) return 'first_course'
+    return 'first_course' // safest default — admin can override
+  }
+
+  const handleStartJourney = async () => {
+    if (!canUpdate) return
+    setStarting(true)
+    try {
+      const firstCallSign = getFirstCallSign()
+      const { error } = await (supabase as any).rpc('update_journey_call_sign', {
+        journey_uuid: journey.id,
+        new_status: firstCallSign,
+      })
+      if (error) {
+        // Fallback: direct update if RPC not available
+        const { error: updateError } = await (supabase as any)
+          .from('journeys')
+          .update({ status: firstCallSign, current_call_sign: firstCallSign, status_updated_at: new Date().toISOString() })
+          .eq('id', journey.id)
+        if (updateError) throw updateError
+      }
+      toast.success('Journey started! Call sign updated.')
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to start journey')
+    } finally {
+      setStarting(false)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -492,8 +544,27 @@ function JourneyOperationsPanel({
         </CardContent>
       </Card>
 
-      {/* Call sign panel */}
-      {canUpdate ? (
+      {/* ── Start Journey ── prominent CTA when status is planned */}
+      {canUpdate && isPlanned && (
+        <button
+          onClick={handleStartJourney}
+          disabled={starting}
+          className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-xl
+            bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700
+            text-white font-bold text-base shadow-lg shadow-emerald-500/30
+            transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]
+            disabled:opacity-60 disabled:cursor-not-allowed disabled:scale-100"
+        >
+          {starting ? (
+            <><Loader2 className="h-5 w-5 animate-spin" /> Starting Journey…</>
+          ) : (
+            <><Radio className="h-5 w-5 animate-pulse" /> Start Journey — Go!</>
+          )}
+        </button>
+      )}
+
+      {/* Call sign panel — shown once journey is active */}
+      {canUpdate && !isPlanned ? (
         <CallSignPanel
           journeyId={journey.id}
           papaName={journey.papas ? `${journey.papas.title} ${journey.papas.full_name}` : undefined}
@@ -501,7 +572,7 @@ function JourneyOperationsPanel({
           origin={journey.origin}
           destination={journey.destination}
         />
-      ) : (
+      ) : !canUpdate ? (
         <Card>
           <CardContent className="py-6 text-center text-sm text-muted-foreground">
             <Radio className="h-8 w-8 mx-auto mb-3 opacity-40" />
@@ -509,7 +580,7 @@ function JourneyOperationsPanel({
             <p className="text-xs mt-1">Only assigned Duty Officers can update this journey&apos;s call sign status.</p>
           </CardContent>
         </Card>
-      )}
+      ) : null}
     </div>
   )
 }
