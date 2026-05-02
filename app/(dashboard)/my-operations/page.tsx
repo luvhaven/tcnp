@@ -50,7 +50,10 @@ function journeyMatchesRole(journey: Journey, role: string, userId: string): boo
   if (ADMIN_ROLES.includes(role)) return true
 
   if (role === 'delta_oscar') {
-    return !!(journey.duty_officers?.some(d => d.user_id === userId))
+    return !!(
+      journey.duty_officers?.some(d => d.user_id === userId) ||
+      journey.assigned_duty_officer_id === userId
+    )
   }
   if (role === 'alpha_oscar' || role === 'head_alpha_oscar') {
     return !!(journey.assigned_eagle_square_id ||
@@ -76,8 +79,11 @@ function journeyMatchesRole(journey: Journey, role: string, userId: string): boo
       journey.origin?.toLowerCase().includes('theatre')
     )
   }
-  // Default: show journeys user is directly assigned to
-  return !!(journey.duty_officers?.some(d => d.user_id === userId))
+  // Default: show journeys user is directly assigned to (junction table OR legacy field)
+  return !!(
+    journey.duty_officers?.some(d => d.user_id === userId) ||
+    journey.assigned_duty_officer_id === userId
+  )
 }
 
 const getStatusColor = (status: string) => {
@@ -231,7 +237,10 @@ export default function MyOperationsPage() {
   const checkReminders = useCallback(() => {
     if (!userId || !userRole) return
     const now = Date.now()
-    const myJourneys = journeys.filter(j => j.duty_officers?.some(d => d.user_id === userId))
+    const myJourneys = journeys.filter(j =>
+      j.duty_officers?.some(d => d.user_id === userId) ||
+      j.assigned_duty_officer_id === userId
+    )
 
     for (const j of myJourneys) {
       const fireReminder = async (key: string, title: string, body: string) => {
@@ -293,7 +302,10 @@ export default function MyOperationsPage() {
   }
 
   const isAdmin = userRole ? ADMIN_ROLES.includes(userRole) : false
-  const myAssigned = journeys.filter(j => j.duty_officers?.some(d => d.user_id === userId))
+  const myAssigned = journeys.filter(j =>
+    j.duty_officers?.some(d => d.user_id === userId) ||
+    j.assigned_duty_officer_id === userId
+  )
   const programFeed = journeys.filter(j => !myAssigned.some(a => a.id === j.id))
   const upcoming = journeys.filter(j => j.status === 'planned').sort((a, b) =>
     new Date(a.scheduled_departure ?? 0).getTime() - new Date(b.scheduled_departure ?? 0).getTime()
@@ -420,8 +432,12 @@ function JourneyOperationsPanel({
   isAdmin: boolean
 }) {
   const supabase = createClient()
-  const isAssignedDO = journey.duty_officers?.some(d => d.user_id === currentUserId) ?? false
-  const isLead = journey.duty_officers?.find(d => d.user_id === currentUserId)?.is_lead ?? false
+  const isAssignedDO = !!(
+    journey.duty_officers?.some(d => d.user_id === currentUserId) ||
+    journey.assigned_duty_officer_id === currentUserId
+  )
+  const isLead = !!(journey.duty_officers?.find(d => d.user_id === currentUserId)?.is_lead ||
+    journey.assigned_duty_officer_id === currentUserId)
   const canUpdate = isAssignedDO || isAdmin
   const isPlanned = journey.status === 'planned'
   const [starting, setStarting] = useState(false)
