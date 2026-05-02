@@ -27,6 +27,12 @@ import { CALL_SIGNS, getCallSignLabel, getCallSignColor, type CallSignKey } from
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
+interface DutyOfficerRow {
+    user_id: string
+    is_lead: boolean
+    users: { full_name: string; oscar: string | null } | null
+}
+
 interface Journey {
     id: string
     program_id: string
@@ -42,6 +48,7 @@ interface Journey {
     papas: { full_name: string; title: string } | null
     cheetahs: { call_sign: string; registration_number: string } | null
     assigned_do: { full_name: string; oscar: string } | null
+    duty_officers?: DutyOfficerRow[]
 }
 
 export default function JourneyStatusTable() {
@@ -178,7 +185,6 @@ export default function JourneyStatusTable() {
 
     const loadActiveJourneys = async () => {
         try {
-            // Single joined query — eliminates N+1 problem
             const { data, error } = await (supabase as any)
                 .from('journeys')
                 .select(`
@@ -195,7 +201,23 @@ export default function JourneyStatusTable() {
                 throw error
             }
 
-            setJourneys((data || []) as any)
+            const rawJourneys = (data || []) as Journey[]
+
+            // Fetch duty officer teams for all journeys
+            const ids = rawJourneys.map(j => j.id)
+            let doMap: Record<string, DutyOfficerRow[]> = {}
+            if (ids.length > 0) {
+                const { data: doData } = await (supabase as any)
+                    .from('journey_duty_officers')
+                    .select('journey_id, user_id, is_lead, users:user_id(full_name, oscar)')
+                    .in('journey_id', ids)
+                for (const row of doData || []) {
+                    if (!doMap[row.journey_id]) doMap[row.journey_id] = []
+                    doMap[row.journey_id].push(row)
+                }
+            }
+
+            setJourneys(rawJourneys.map(j => ({ ...j, duty_officers: doMap[j.id] || [] })))
         } catch (error) {
             console.error('Error loading journeys:', JSON.stringify(error, null, 2))
             toast.error('Failed to load active journeys')
@@ -253,17 +275,13 @@ export default function JourneyStatusTable() {
     }
 
     const handleCallSignClick = (journey: Journey) => {
-        if (!canUpdateCallSigns) {
-            toast.error('You do not have permission to update call signs')
-            return
-        }
+        const isAdmin = currentUser?.role &&
+            ['super_admin', 'dev_admin', 'admin', 'captain', 'head_of_command', 'head_of_operations', 'command', 'hod', 'hop'].includes(currentUser.role)
+        const isAssignedDO = !!(journey.duty_officers?.some(d => d.user_id === currentUser?.id)) ||
+            currentUser?.id === journey.assigned_duty_officer_id
 
-        // Check if user is assigned DO or admin
-        const isAssignedDO = currentUser?.id === journey.assigned_duty_officer_id
-        const isAdmin = currentUser?.role && ['super_admin', 'dev_admin', 'admin', 'captain', 'head_of_command'].includes(currentUser.role)
-
-        if (!isAssignedDO && !isAdmin) {
-            toast.error('Only the assigned DO or admins can update this journey')
+        if (!isAdmin && !isAssignedDO) {
+            toast.error('Only the assigned DO team or admins can update this journey')
             return
         }
 
@@ -314,17 +332,30 @@ export default function JourneyStatusTable() {
         return 'bg-green-500 text-white'
     }
 
+    const ADMIN_ROLES = ['super_admin', 'dev_admin', 'admin', 'captain', 'head_of_command', 'head_of_operations', 'command', 'hod', 'hop']
+    const isAdmin = currentUser?.role && ADMIN_ROLES.includes(currentUser.role)
+
     const filteredJourneys = journeys.filter(journey => {
+        const doNames = journey.duty_officers?.map(d => d.users?.full_name?.toLowerCase() ?? '').join(' ') ??
+            (journey.assigned_do?.full_name?.toLowerCase() ?? '')
         const matchesSearch =
             journey.papas?.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            journey.assigned_do?.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            doNames.includes(searchQuery.toLowerCase()) ||
             journey.cheetahs?.call_sign.toLowerCase().includes(searchQuery.toLowerCase())
 
-        const matchesStatus = statusFilter === 'all' || journey.current_call_sign === statusFilter
+        const matchesStatus = statusFilter === 'all' || journey.current_call_sign === statusFilter || journey.status === statusFilter
         const matchesProgram = selectedProgram === 'all' || journey.program_id === selectedProgram
 
         return matchesSearch && matchesStatus && matchesProgram
     })
+
+    // Stats
+    const stats = {
+        total:        journeys.length,
+        inTransit:    journeys.filter(j => ['cocktail','first_course','dessert','re_order'].includes(j.status)).length,
+        brokenArrow:  journeys.filter(j => j.status === 'broken_arrow').length,
+        planned:      journeys.filter(j => j.status === 'planned').length,
+    }
 
     if (loading) {
         return (
@@ -336,6 +367,41 @@ export default function JourneyStatusTable() {
 
     return (
         <div className="space-y-4">
+
+            {/* ─── Live Stats Strip ────────────────────────────────────── */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="rounded-lg border bg-card px-4 py-3 flex items-center justify-between">
+                    <div>
+                        <p className="text-xs text-muted-foreground">Total Active</p>
+                        <p className="text-2xl font-bold">{stats.total}</p>
+                    </div>
+                    <Radio className="h-6 w-6 text-primary opacity-50" />
+                </div>
+                <div className="rounded-lg border bg-card px-4 py-3 flex items-center justify-between">
+                    <div>
+                        <p className="text-xs text-muted-foreground">In Transit</p>
+                        <p className="text-2xl font-bold text-emerald-600">{stats.inTransit}</p>
+                    </div>
+                    <Radio className="h-6 w-6 text-emerald-500 animate-pulse" />
+                </div>
+                <div className="rounded-lg border bg-card px-4 py-3 flex items-center justify-between">
+                    <div>
+                        <p className="text-xs text-muted-foreground">Planned</p>
+                        <p className="text-2xl font-bold text-blue-600">{stats.planned}</p>
+                    </div>
+                    <Clock className="h-6 w-6 text-blue-400" />
+                </div>
+                <div className={cn(
+                    "rounded-lg border px-4 py-3 flex items-center justify-between",
+                    stats.brokenArrow > 0 ? "border-destructive bg-destructive/10 animate-pulse" : "bg-card"
+                )}>
+                    <div>
+                        <p className="text-xs text-muted-foreground">Broken Arrow</p>
+                        <p className={cn("text-2xl font-bold", stats.brokenArrow > 0 ? "text-destructive" : "")}>{stats.brokenArrow}</p>
+                    </div>
+                    <Radio className={cn("h-6 w-6", stats.brokenArrow > 0 ? "text-destructive" : "text-muted-foreground/30")} />
+                </div>
+            </div>
             {/* Filters */}
             <div className="flex flex-col md:flex-row gap-4">
                 <div className="relative flex-1">
@@ -381,12 +447,13 @@ export default function JourneyStatusTable() {
                     <TableHeader>
                         <TableRow className="bg-muted/50">
                             <TableHead className="font-semibold">Papa</TableHead>
-                            <TableHead className="font-semibold">Duty Officer (DO)</TableHead>
+                            <TableHead className="font-semibold">DO Team</TableHead>
                             <TableHead className="font-semibold">Status</TableHead>
                             <TableHead className="font-semibold">Call Sign</TableHead>
                             <TableHead className="font-semibold">ETA</TableHead>
                             <TableHead className="font-semibold">ETD</TableHead>
-                            <TableHead className="font-semibold">Actions</TableHead>
+                            <TableHead className="font-semibold">Updated</TableHead>
+                                            <TableHead className="font-semibold">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -399,12 +466,23 @@ export default function JourneyStatusTable() {
                             </TableRow>
                         ) : (
                             filteredJourneys.map((journey) => {
-                                const callSign = journey.current_call_sign || 'planned'
-                                const callSignLabel = getCallSignLabel(callSign)
+                                const callSign = journey.current_call_sign || journey.status || 'planned'
+                                const callSignLabel = getCallSignLabel(callSign) || callSign.replace(/_/g,' ')
                                 const callSignColor = getCallSignBadgeColor(callSign)
+                                const canClick = !!(isAdmin || journey.duty_officers?.some(d => d.user_id === currentUser?.id) || currentUser?.id === journey.assigned_duty_officer_id)
+                                const isBroken = callSign === 'broken_arrow'
+                                const leadDO = journey.duty_officers?.find(d => d.is_lead) ?? null
+                                const allDOs = journey.duty_officers ?? []
 
                                 return (
-                                    <TableRow key={journey.id} data-journey-id={journey.id} className="hover:bg-muted/30 transition-colors transition-all duration-300">
+                                    <TableRow
+                                        key={journey.id}
+                                        data-journey-id={journey.id}
+                                        className={cn(
+                                            "hover:bg-muted/30 transition-all duration-300",
+                                            isBroken && "border-destructive/50 bg-destructive/5 animate-pulse"
+                                        )}
+                                    >
                                         <TableCell>
                                             <div className="flex flex-col">
                                                 <span className="font-medium">{journey.papas?.full_name || 'Unknown Papa'}</span>
@@ -412,31 +490,34 @@ export default function JourneyStatusTable() {
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            <div className="flex flex-col">
-                                                <span className="font-medium">{journey.assigned_do?.full_name || 'Unassigned'}</span>
-                                                {journey.assigned_do?.oscar && (
-                                                    <span className="text-xs text-muted-foreground">{journey.assigned_do.oscar}</span>
-                                                )}
-                                            </div>
+                                            {allDOs.length > 0 ? (
+                                                <div className="flex flex-col gap-0.5">
+                                                    {allDOs.map(d => (
+                                                        <div key={d.user_id} className="flex items-center gap-1 text-xs">
+                                                            {d.is_lead && <span className="text-yellow-500" title="Team Lead">⭐</span>}
+                                                            <span className={d.is_lead ? 'font-semibold' : ''}>{d.users?.full_name ?? '—'}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <span className="text-xs text-muted-foreground">{journey.assigned_do?.full_name || 'Unassigned'}</span>
+                                            )}
                                         </TableCell>
-                                        <TableCell>
-                                            <Badge variant="outline" className={cn("capitalize whitespace-nowrap", getStatusBadgeColor(journey.status))}>
-                                                {journey.status === 'in_progress' ? 'En Route' : journey.status.replace('_', ' ')}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>
+                                        <TableCell colSpan={1}>
                                             <button
                                                 onClick={() => handleCallSignClick(journey)}
-                                                disabled={!canUpdateCallSigns}
+                                                disabled={!canClick}
+                                                title={!canClick ? 'Only assigned DOs or admins can update' : `Update call sign: ${callSignLabel}`}
                                                 className={cn(
-                                                    "px-3 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2",
+                                                    "px-3 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 w-full",
                                                     callSignColor,
-                                                    canUpdateCallSigns ? "cursor-pointer" : "cursor-default opacity-80"
+                                                    canClick ? "cursor-pointer hover:opacity-90" : "cursor-default opacity-70",
+                                                    isBroken && "animate-pulse ring-2 ring-destructive ring-offset-1"
                                                 )}
                                             >
                                                 <Radio className="h-3 w-3" />
                                                 {callSignLabel}
-                                                {canUpdateCallSigns && <ChevronDown className="h-3 w-3" />}
+                                                {canClick && <ChevronDown className="h-3 w-3 ml-auto" />}
                                             </button>
                                         </TableCell>
                                         <TableCell>
@@ -445,9 +526,7 @@ export default function JourneyStatusTable() {
                                                     <Clock className="h-3 w-3 text-muted-foreground" />
                                                     {new Date(journey.eta).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                                                 </div>
-                                            ) : (
-                                                <span className="text-muted-foreground text-xs">—</span>
-                                            )}
+                                            ) : <span className="text-muted-foreground text-xs">—</span>}
                                         </TableCell>
                                         <TableCell>
                                             {journey.etd ? (
@@ -455,22 +534,25 @@ export default function JourneyStatusTable() {
                                                     <Clock className="h-3 w-3 text-muted-foreground" />
                                                     {new Date(journey.etd).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                                                 </div>
-                                            ) : (
-                                                <span className="text-muted-foreground text-xs">—</span>
-                                            )}
+                                            ) : <span className="text-muted-foreground text-xs">—</span>}
                                         </TableCell>
                                         <TableCell>
-                                            <div className="flex gap-2">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-8 text-xs"
-                                                    onClick={() => handleSetTimes(journey)}
-                                                >
-                                                    <Clock className="h-3 w-3 mr-1" />
-                                                    {journey.eta ? 'Edit Times' : 'Set Times'}
-                                                </Button>
-                                            </div>
+                                            {journey.status_updated_at ? (
+                                                <span className="text-xs text-muted-foreground">
+                                                    {formatDistanceToNow(new Date(journey.status_updated_at), { addSuffix: true })}
+                                                </span>
+                                            ) : <span className="text-xs text-muted-foreground">—</span>}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-8 text-xs"
+                                                onClick={() => handleSetTimes(journey)}
+                                            >
+                                                <Clock className="h-3 w-3 mr-1" />
+                                                {journey.eta ? 'Edit Times' : 'Set Times'}
+                                            </Button>
                                         </TableCell>
                                     </TableRow>
                                 )

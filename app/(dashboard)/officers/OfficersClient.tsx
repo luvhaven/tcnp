@@ -692,7 +692,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                     {getTitleByUnit('leadership').filter(t => t.is_fixed).map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.is_team_lead && '(Team Lead)'}</SelectItem>)}
                     {getTitleByUnit('leadership').filter(t => !t.is_fixed).map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.max_positions > 1 && `(${title.max_positions} positions)`}</SelectItem>)}
                     {getTitleByUnit('command').map((title) => <SelectItem key={title.id} value={title.id}>{title.name}</SelectItem>)}
-                    {getTitleByUnit('oscar').map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.is_team_lead && '⭐'}</SelectItem>)}
+                    {getTitleByUnit('oscar').filter(t => !['DELTA_OSCAR', 'DELTA_OSCAR_LEAD'].includes(t.code)).map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.is_team_lead && '⭐'}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

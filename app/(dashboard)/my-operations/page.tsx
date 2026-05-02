@@ -3,13 +3,23 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import CallSignPanel from '@/components/operations/CallSignPanel'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, Radio, MapPin, Car, User, Calendar } from 'lucide-react'
-import { format } from 'date-fns'
+import { Loader2, Radio, MapPin, Car, User, Calendar, Clock, Crown, Shield } from 'lucide-react'
+import { format, formatDistanceToNow } from 'date-fns'
 import { notificationService } from '@/lib/services/notificationService'
 import { toast } from 'sonner'
+import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from '@/lib/constants/tncpCallSigns'
+import { cn } from '@/lib/utils'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface DutyOfficer {
+  user_id: string
+  is_lead: boolean
+  users: { full_name: string; role: string; oscar: string | null; photo_url: string | null } | null
+}
 
 interface Journey {
   id: string
@@ -17,25 +27,84 @@ interface Journey {
   origin: string
   destination: string
   scheduled_departure: string | null
+  scheduled_arrival: string | null
   etd: string | null
   eta: string | null
   notes: string | null
+  program_id: string | null
   assigned_duty_officer_id: string | null
+  assigned_nest_id: string | null
+  assigned_eagle_square_id: string | null
+  assigned_theatre_id: string | null
   papas: { full_name: string; title: string } | null
   cheetahs: { call_sign: string | null; registration_number: string } | null
   nests: { name: string } | null
   eagle_squares: { name: string; code: string } | null
+  duty_officers?: DutyOfficer[]
 }
+
+const ADMIN_ROLES = ['super_admin', 'dev_admin', 'admin', 'captain', 'head_of_command', 'head_of_operations', 'command', 'hod', 'hop']
+
+// ─── Role-based journey filter ─────────────────────────────────────────────
+function journeyMatchesRole(journey: Journey, role: string, userId: string): boolean {
+  if (ADMIN_ROLES.includes(role)) return true
+
+  if (role === 'delta_oscar') {
+    return !!(journey.duty_officers?.some(d => d.user_id === userId))
+  }
+  if (role === 'alpha_oscar' || role === 'head_alpha_oscar') {
+    return !!(journey.assigned_eagle_square_id ||
+      journey.origin?.toLowerCase().includes('eagle') ||
+      journey.destination?.toLowerCase().includes('eagle'))
+  }
+  if (role === 'tango_oscar' || role === 'head_tango_oscar') {
+    return true // Transport overseer sees all active journeys
+  }
+  if (role === 'victor_oscar' || role === 'head_victor_oscar') {
+    return !!(journey.assigned_theatre_id ||
+      journey.destination?.toLowerCase().includes('theatre') ||
+      journey.origin?.toLowerCase().includes('theatre'))
+  }
+  if (['november_oscar', 'head_noscar_den', 'head_noscar_nest', 'noscar_den', 'noscar_nest'].includes(role)) {
+    // Nest AND Theatre legs
+    return !!(
+      journey.assigned_nest_id ||
+      journey.assigned_theatre_id ||
+      journey.destination?.toLowerCase().includes('nest') ||
+      journey.origin?.toLowerCase().includes('nest') ||
+      journey.destination?.toLowerCase().includes('theatre') ||
+      journey.origin?.toLowerCase().includes('theatre')
+    )
+  }
+  // Default: show journeys user is directly assigned to
+  return !!(journey.duty_officers?.some(d => d.user_id === userId))
+}
+
+const getStatusColor = (status: string) => {
+  const key = resolveCallSignKey(status)
+  if (key && TNCP_CALL_SIGN_COLORS[key]) return TNCP_CALL_SIGN_COLORS[key]
+  const fallback: Record<string, string> = {
+    planned: 'bg-blue-500 text-white',
+    completed: 'bg-green-500 text-white',
+    cancelled: 'bg-red-500 text-white',
+  }
+  return fallback[status] || 'bg-gray-500 text-white'
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function MyOperationsPage() {
   const supabase = createClient()
   const [journeys, setJourneys] = useState<Journey[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedJourneyId, setSelectedJourneyId] = useState<string | null>(null)
-  const knownIds = useRef<Set<string>>(new Set())
-
   const [userId, setUserId] = useState<string | null>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [selectedJourneyId, setSelectedJourneyId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState('assigned')
+
+  // Reminder tracking: keys that have already fired
+  const firedReminders = useRef<Set<string>>(new Set())
+  const knownIds = useRef<Set<string>>(new Set())
 
   const loadJourneys = useCallback(async (isInitial = false) => {
     try {
@@ -43,17 +112,17 @@ export default function MyOperationsPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Get user role
       const { data: userData } = await supabase
         .from('users')
         .select('id, role')
         .eq('id', user.id)
         .single()
 
+      const role = (userData as any)?.role ?? null
       setUserId(user.id)
-      setUserRole((userData as any)?.role ?? null)
+      setUserRole(role)
 
-      const isAdmin = ['super_admin', 'dev_admin', 'admin'].includes((userData as any)?.role)
+      const isAdmin = ADMIN_ROLES.includes(role)
 
       // Get program IDs where this user is assigned
       const { data: assignments } = await (supabase as any)
@@ -66,13 +135,14 @@ export default function MyOperationsPage() {
         .map((a: any) => a.program_id)
         .filter(Boolean)
 
-      // Build journey query — include journeys the user is DO for OR in their assigned programs
+      // Load all active journeys (admin) or program journeys
       let query = (supabase as any)
         .from('journeys')
         .select(`
           id, status, origin, destination,
-          scheduled_departure, etd, eta, notes,
-          assigned_duty_officer_id,
+          scheduled_departure, scheduled_arrival, etd, eta, notes,
+          program_id, assigned_duty_officer_id,
+          assigned_nest_id, assigned_eagle_square_id, assigned_theatre_id,
           papas:papas!papa_id(full_name, title),
           cheetahs:cheetahs!assigned_cheetah_id(call_sign, registration_number),
           nests:nests!assigned_nest_id(name),
@@ -81,40 +151,62 @@ export default function MyOperationsPage() {
         .not('status', 'in', '(completed,cancelled)')
         .order('etd', { ascending: true, nullsFirst: false })
 
-      if (!isAdmin) {
-        // Build OR filter: direct DO assignment OR in assigned programs
-        const filters: string[] = [`assigned_duty_officer_id.eq.${user.id}`]
-        if (programIds.length > 0) {
-          filters.push(`program_id.in.(${programIds.join(',')})`)
-        }
-        query = query.or(filters.join(','))
+      if (!isAdmin && programIds.length > 0) {
+        query = query.or(`program_id.in.(${programIds.join(',')}),assigned_duty_officer_id.eq.${user.id}`)
+      } else if (!isAdmin) {
+        query = query.eq('assigned_duty_officer_id', user.id)
       }
 
-      const { data, error } = await query
+      const { data: rawJourneys, error } = await query
       if (error) throw error
 
-      const incoming = (data || []) as unknown as Journey[]
+      // Fetch duty officers for each journey
+      const journeyIds = (rawJourneys || []).map((j: any) => j.id)
+      let dutyOfficersMap: Record<string, DutyOfficer[]> = {}
 
-      // Detect newly assigned journeys
+      if (journeyIds.length > 0) {
+        const { data: doData } = await (supabase as any)
+          .from('journey_duty_officers')
+          .select('journey_id, user_id, is_lead, users:user_id(full_name, role, oscar, photo_url)')
+          .in('journey_id', journeyIds)
+
+        for (const row of doData || []) {
+          if (!dutyOfficersMap[row.journey_id]) dutyOfficersMap[row.journey_id] = []
+          dutyOfficersMap[row.journey_id].push(row)
+        }
+      }
+
+      const incoming: Journey[] = (rawJourneys || []).map((j: any) => ({
+        ...j,
+        duty_officers: dutyOfficersMap[j.id] || [],
+      }))
+
+      // Filter by role
+      const filtered = incoming.filter(j => journeyMatchesRole(j, role, user.id))
+
+      // Detect new assignments
       if (!isInitial && knownIds.current.size > 0) {
-        for (const j of incoming) {
+        for (const j of filtered) {
           if (!knownIds.current.has(j.id)) {
             const papa = j.papas?.full_name || 'Unknown Papa'
-            toast.info(`📋 New assignment: ${papa}`, { description: `${j.origin} → ${j.destination}`, duration: 8000 })
-            void notificationService.notifyAssignment(
-              `Assignment: ${papa}`,
-              `New journey. ${j.origin} → ${j.destination}`
-            )
+            toast.info(`📋 New assignment: ${papa}`, {
+              description: `${j.origin} → ${j.destination}`,
+              duration: 10000,
+            })
+            void notificationService.showNotification({
+              title: `📋 New Assignment: ${papa}`,
+              body: `${j.origin} → ${j.destination}`,
+              tag: `assign-${j.id}`,
+              requireInteraction: true,
+            })
+            // Mark as read by fetching
           }
         }
       }
 
-      knownIds.current = new Set(incoming.map(j => j.id))
-      setJourneys(incoming)
-
-      if (isInitial && incoming.length > 0) {
-        setSelectedJourneyId(incoming[0].id)
-      }
+      knownIds.current = new Set(filtered.map(j => j.id))
+      setJourneys(filtered)
+      if (isInitial && filtered.length > 0) setSelectedJourneyId(filtered[0].id)
     } catch (err) {
       console.error('Error loading operations:', err)
       if (isInitial) toast.error('Failed to load operations')
@@ -123,23 +215,62 @@ export default function MyOperationsPage() {
     }
   }, [supabase])
 
+  // ── Reminder engine ─────────────────────────────────────────────────────
+  const checkReminders = useCallback(() => {
+    if (!userId || !userRole) return
+    const now = Date.now()
+    const myJourneys = journeys.filter(j => j.duty_officers?.some(d => d.user_id === userId))
 
+    for (const j of myJourneys) {
+      const fireReminder = async (key: string, title: string, body: string) => {
+        if (firedReminders.current.has(key)) return
+        firedReminders.current.add(key)
+        toast.warning(title, { description: body, duration: 15000 })
+        void notificationService.showNotification({ title, body, tag: key, requireInteraction: true })
+        // Write to DB
+        try {
+          await fetch('/api/notifications/journey-reminder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ journey_id: j.id, type: key }),
+          })
+        } catch { /* non-critical */ }
+      }
+
+      const papa = j.papas ? `${j.papas.title} ${j.papas.full_name}` : 'Papa'
+      const route = `${j.origin} → ${j.destination}`
+
+      if (j.scheduled_departure) {
+        const mins = (new Date(j.scheduled_departure).getTime() - now) / 60000
+        if (mins <= 15 && mins > 14) void fireReminder(`${j.id}:dep:15`, '⏰ Departing in 15 minutes', `${papa}: ${route}`)
+        if (mins <= 5  && mins > 4)  void fireReminder(`${j.id}:dep:5`,  '🚨 Departing in 5 minutes!',  `${papa}: ${route}`)
+      }
+      if (j.scheduled_arrival) {
+        const mins = (new Date(j.scheduled_arrival).getTime() - now) / 60000
+        if (mins <= 15 && mins > 14) void fireReminder(`${j.id}:arr:15`, '⏰ Arriving in 15 minutes', `${papa}: ${route}`)
+        if (mins <= 5  && mins > 4)  void fireReminder(`${j.id}:arr:5`,  '🚨 Arriving in 5 minutes!',  `${papa}: ${route}`)
+      }
+    }
+  }, [journeys, userId, userRole])
 
   useEffect(() => {
     const init = async () => {
       await loadJourneys(true)
-
       const channel = supabase
-        .channel('my-operations-realtime')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'journeys' }, () => {
-          void loadJourneys(false)
-        })
+        .channel('my-ops-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'journeys' }, () => void loadJourneys(false))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'journey_duty_officers' }, () => void loadJourneys(false))
         .subscribe()
-
       return () => { supabase.removeChannel(channel) }
     }
     void init()
   }, [loadJourneys, supabase])
+
+  useEffect(() => {
+    checkReminders()
+    const interval = setInterval(checkReminders, 60_000)
+    return () => clearInterval(interval)
+  }, [checkReminders])
 
   if (loading) {
     return (
@@ -149,13 +280,37 @@ export default function MyOperationsPage() {
     )
   }
 
-  if (journeys.length === 0) {
-    return (
-      <div className="space-y-6">
+  const isAdmin = userRole ? ADMIN_ROLES.includes(userRole) : false
+  const myAssigned = journeys.filter(j => j.duty_officers?.some(d => d.user_id === userId))
+  const programFeed = journeys.filter(j => !myAssigned.some(a => a.id === j.id))
+  const upcoming = journeys.filter(j => j.status === 'planned').sort((a, b) =>
+    new Date(a.scheduled_departure ?? 0).getTime() - new Date(b.scheduled_departure ?? 0).getTime()
+  )
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">My Operations</h1>
-          <p className="text-muted-foreground">Your active journey assignments and call sign controls</p>
+          <p className="text-muted-foreground">
+            {isAdmin ? 'Full operational view — admin override enabled' : 'Your assignments, updates and journey reminders'}
+          </p>
         </div>
+        <div className="flex gap-2 mt-1">
+          <Badge variant="secondary" className="flex items-center gap-1">
+            <Radio className="h-3 w-3 animate-pulse text-green-500" />
+            {journeys.length} Active
+          </Badge>
+          {isAdmin && (
+            <Badge className="bg-primary/20 text-primary border-primary/30 border">
+              <Shield className="h-3 w-3 mr-1" />Admin
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      {journeys.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Radio className="h-16 w-16 text-muted-foreground/30 mb-4" />
@@ -165,68 +320,129 @@ export default function MyOperationsPage() {
             </p>
           </CardContent>
         </Card>
-      </div>
-    )
-  }
-
-  const selectedJourney = journeys.find(j => j.id === selectedJourneyId) ?? journeys[0]
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">My Operations</h1>
-          <p className="text-muted-foreground">Execute call signs and manage your assigned journeys</p>
-        </div>
-        <Badge variant="secondary" className="flex items-center gap-1 mt-1">
-          <Radio className="h-3 w-3 animate-pulse text-green-500" />
-          {journeys.length} Active
-        </Badge>
-      </div>
-
-      {/* Journey tabs (if multiple) */}
-      {journeys.length > 1 ? (
-        <Tabs value={selectedJourneyId ?? journeys[0].id} onValueChange={setSelectedJourneyId}>
-          <TabsList className="h-auto flex-wrap gap-1">
-            {journeys.map(j => (
-              <TabsTrigger key={j.id} value={j.id} className="text-xs">
-                {j.papas?.title} {j.papas?.full_name ?? 'Journey'}
+      ) : (
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="assigned" className="flex items-center gap-2">
+              My Assignments
+              {myAssigned.length > 0 && (
+                <Badge className="ml-1 bg-primary text-primary-foreground h-5 px-1.5 text-xs">
+                  {myAssigned.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            {(programFeed.length > 0 || isAdmin) && (
+              <TabsTrigger value="program">
+                Program Feed
+                {programFeed.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">{programFeed.length}</Badge>
+                )}
               </TabsTrigger>
-            ))}
+            )}
+            {upcoming.length > 0 && (
+              <TabsTrigger value="upcoming">
+                Upcoming
+                <Badge variant="outline" className="ml-1 h-5 px-1.5 text-xs">{upcoming.length}</Badge>
+              </TabsTrigger>
+            )}
           </TabsList>
 
-          {journeys.map(j => (
-            <TabsContent key={j.id} value={j.id}>
-              <JourneyOperationsPanel journey={j} currentUserId={userId} />
-            </TabsContent>
-          ))}
+          {/* ── My Assignments ─────────────────────────────────────────── */}
+          <TabsContent value="assigned" className="space-y-4">
+            {myAssigned.length === 0 ? (
+              <Card>
+                <CardContent className="py-10 text-center text-muted-foreground text-sm">
+                  <Radio className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                  No journeys directly assigned to you.
+                </CardContent>
+              </Card>
+            ) : myAssigned.length > 1 ? (
+              <Tabs value={selectedJourneyId ?? myAssigned[0].id} onValueChange={setSelectedJourneyId}>
+                <TabsList className="h-auto flex-wrap gap-1 mb-4">
+                  {myAssigned.map(j => (
+                    <TabsTrigger key={j.id} value={j.id} className="text-xs">
+                      {j.papas?.title} {j.papas?.full_name ?? 'Journey'}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+                {myAssigned.map(j => (
+                  <TabsContent key={j.id} value={j.id}>
+                    <JourneyOperationsPanel journey={j} currentUserId={userId} isAdmin={isAdmin} />
+                  </TabsContent>
+                ))}
+              </Tabs>
+            ) : (
+              <JourneyOperationsPanel journey={myAssigned[0]} currentUserId={userId} isAdmin={isAdmin} />
+            )}
+          </TabsContent>
+
+          {/* ── Program Feed ────────────────────────────────────────────── */}
+          <TabsContent value="program" className="space-y-3">
+            <p className="text-xs text-muted-foreground">View-only feed of all journeys in your programs.</p>
+            {(isAdmin ? journeys : programFeed).map(j => (
+              <JourneyFeedCard key={j.id} journey={j} />
+            ))}
+          </TabsContent>
+
+          {/* ── Upcoming ────────────────────────────────────────────────── */}
+          <TabsContent value="upcoming" className="space-y-3">
+            {upcoming.map(j => (
+              <JourneyFeedCard key={j.id} journey={j} showCountdown />
+            ))}
+          </TabsContent>
         </Tabs>
-      ) : (
-        <JourneyOperationsPanel journey={selectedJourney} currentUserId={userId} />
       )}
     </div>
   )
 }
 
-// ─── Sub-panel for one journey ─────────────────────────────────────────────
+// ─── Journey operations panel (for assigned DOs + admins) ─────────────────────
 
-function JourneyOperationsPanel({ journey, currentUserId }: { journey: Journey; currentUserId: string | null }) {
-  const isDO = journey.assigned_duty_officer_id === currentUserId
+function JourneyOperationsPanel({
+  journey,
+  currentUserId,
+  isAdmin,
+}: {
+  journey: Journey
+  currentUserId: string | null
+  isAdmin: boolean
+}) {
+  const isAssignedDO = journey.duty_officers?.some(d => d.user_id === currentUserId) ?? false
+  const isLead = journey.duty_officers?.find(d => d.user_id === currentUserId)?.is_lead ?? false
+  const canUpdate = isAssignedDO || isAdmin
+
+  const statusKey = resolveCallSignKey(journey.status)
+  const statusColor = statusKey ? TNCP_CALL_SIGN_COLORS[statusKey] : 'bg-gray-500 text-white'
 
   return (
     <div className="space-y-4">
-      {/* Journey summary card */}
-      <Card className="bg-gradient-to-r from-primary/5 to-primary/10">
+      {/* Journey summary */}
+      <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
         <CardContent className="pt-4 pb-4">
+          <div className="flex items-center justify-between mb-3">
+            <Badge className={cn(statusColor, 'text-xs font-semibold')}>
+              {getCallSignLabel(journey.status) || journey.status.replace(/_/g, ' ')}
+            </Badge>
+            <div className="flex gap-2 items-center">
+              {isLead && (
+                <Badge className="bg-yellow-400 text-yellow-900 text-xs">
+                  <Crown className="h-3 w-3 mr-1" />Team Lead
+                </Badge>
+              )}
+              {isAdmin && !isAssignedDO && (
+                <Badge variant="outline" className="text-xs border-primary/40 text-primary">
+                  <Shield className="h-3 w-3 mr-1" />Admin View
+                </Badge>
+              )}
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div className="flex items-start gap-2">
               <User className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
               <div>
                 <p className="text-xs text-muted-foreground">Papa</p>
-                <p className="font-semibold">
-                  {journey.papas?.title} {journey.papas?.full_name ?? '—'}
-                </p>
+                <p className="font-semibold">{journey.papas?.title} {journey.papas?.full_name ?? '—'}</p>
               </div>
             </div>
             <div className="flex items-start gap-2">
@@ -240,7 +456,7 @@ function JourneyOperationsPanel({ journey, currentUserId }: { journey: Journey; 
               <MapPin className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
               <div>
                 <p className="text-xs text-muted-foreground">Route</p>
-                <p className="font-semibold text-xs">{journey.origin} &rarr; {journey.destination}</p>
+                <p className="font-semibold text-xs">{journey.origin} → {journey.destination}</p>
               </div>
             </div>
             <div className="flex items-start gap-2">
@@ -254,17 +470,30 @@ function JourneyOperationsPanel({ journey, currentUserId }: { journey: Journey; 
             </div>
           </div>
 
-          {(journey.nests || journey.eagle_squares) && (
-            <div className="mt-3 pt-3 border-t border-primary/10 flex gap-4 text-xs text-muted-foreground">
-              {journey.nests && <span>Nest: {journey.nests.name}</span>}
-              {journey.eagle_squares && <span>Eagle Square: {journey.eagle_squares.name}</span>}
+          {/* DO Team */}
+          {(journey.duty_officers?.length ?? 0) > 0 && (
+            <div className="mt-3 pt-3 border-t border-primary/10">
+              <p className="text-xs text-muted-foreground mb-1.5">DO Team</p>
+              <div className="flex flex-wrap gap-2">
+                {journey.duty_officers?.map(d => (
+                  <div key={d.user_id} className={cn(
+                    'flex items-center gap-1.5 text-xs px-2 py-1 rounded-full',
+                    d.user_id === currentUserId
+                      ? 'bg-primary/15 text-primary font-medium'
+                      : 'bg-muted text-muted-foreground'
+                  )}>
+                    {d.is_lead && <Crown className="h-3 w-3 text-yellow-500" />}
+                    {d.users?.full_name ?? 'Officer'}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* CallSignPanel only for the assigned Delta Oscar */}
-      {isDO ? (
+      {/* Call sign panel */}
+      {canUpdate ? (
         <CallSignPanel
           journeyId={journey.id}
           papaName={journey.papas ? `${journey.papas.title} ${journey.papas.full_name}` : undefined}
@@ -275,12 +504,55 @@ function JourneyOperationsPanel({ journey, currentUserId }: { journey: Journey; 
       ) : (
         <Card>
           <CardContent className="py-6 text-center text-sm text-muted-foreground">
-            <Radio className="h-8 w-8 mx-auto mb-3 text-muted-foreground/40" />
-            <p className="font-medium">Journey Update Panel</p>
-            <p className="text-xs mt-1">Only the assigned Delta Oscar can update this journey&apos;s call sign status.</p>
+            <Radio className="h-8 w-8 mx-auto mb-3 opacity-40" />
+            <p className="font-medium">View Only</p>
+            <p className="text-xs mt-1">Only assigned Duty Officers can update this journey&apos;s call sign status.</p>
           </CardContent>
         </Card>
       )}
     </div>
+  )
+}
+
+// ─── Read-only feed card ───────────────────────────────────────────────────────
+
+function JourneyFeedCard({ journey, showCountdown = false }: { journey: Journey; showCountdown?: boolean }) {
+  const statusKey = resolveCallSignKey(journey.status)
+  const statusColor = statusKey ? TNCP_CALL_SIGN_COLORS[statusKey] : 'bg-gray-500 text-white'
+  const lead = journey.duty_officers?.find(d => d.is_lead)
+  const depTime = journey.scheduled_departure ? new Date(journey.scheduled_departure) : null
+
+  return (
+    <Card className="transition-all hover:shadow-md">
+      <CardContent className="pt-4 pb-4">
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <p className="font-semibold text-sm">{journey.papas?.title} {journey.papas?.full_name ?? 'Unknown Papa'}</p>
+            <p className="text-xs text-muted-foreground">{journey.origin} → {journey.destination}</p>
+          </div>
+          <Badge className={cn(statusColor, 'text-xs')}>
+            {getCallSignLabel(journey.status) || journey.status.replace(/_/g, ' ')}
+          </Badge>
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          {lead && (
+            <span className="flex items-center gap-1">
+              <Crown className="h-3 w-3 text-yellow-500" />{lead.users?.full_name ?? 'DO'}
+            </span>
+          )}
+          {journey.cheetahs?.call_sign && (
+            <span className="flex items-center gap-1"><Car className="h-3 w-3" />{journey.cheetahs.call_sign}</span>
+          )}
+          {depTime && (
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {showCountdown
+                ? `Departs ${formatDistanceToNow(depTime, { addSuffix: true })}`
+                : format(depTime, 'HH:mm')}
+            </span>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   )
 }

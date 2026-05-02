@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { createClient } from "@/lib/supabase/client"
 import { useUnreadChatCount } from '@/hooks/useUnreadChatCount'
+import { useUnreadAssignments } from '@/hooks/useUnreadAssignments'
 import {
   LayoutDashboard,
   Users,
@@ -32,26 +33,64 @@ import {
   BookOpen,
 } from "lucide-react"
 
-const navigation = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "My Operations", href: "/my-operations", icon: Navigation },
-  { name: "Ops Monitor", href: "/operations-monitor", icon: Activity },
-  { name: "Programs", href: "/programs", icon: Calendar },
-  { name: "Journeys", href: "/journeys", icon: Route },
-  { name: "Papas", href: "/papas", icon: Users },
-  { name: "Cheetahs", href: "/cheetahs", icon: Car },
-  { name: "Echo", href: "/echo", icon: Volume2 },
-  { name: "Eagle Operations", href: "/eagles", icon: Plane },
-  { name: "Live Tracking", href: "/tracking/live", icon: MapPin },
-  { name: "Team Chat", href: "/chat", icon: MessageCircle },
-  { name: "Officers", href: "/officers", icon: UserCircle },
-  { name: "NOscar", href: "/nests", icon: Hotel },
-  { name: "Theatres", href: "/theatres", icon: Landmark },
-  { name: "Incidents", href: "/incidents", icon: AlertTriangle },
-  { name: "Audit Log", href: "/audit-logs", icon: FileText },
-  { name: "Guide", href: "/guide", icon: BookOpen },
-  { name: "Settings", href: "/settings", icon: Settings },
+const ALL_NAV = [
+  { name: "Dashboard",       href: "/dashboard",            icon: LayoutDashboard },
+  { name: "My Operations",   href: "/my-operations",        icon: Navigation },
+  { name: "Ops Monitor",     href: "/operations-monitor",   icon: Activity },
+  { name: "Programs",        href: "/programs",             icon: Calendar },
+  { name: "Journeys",        href: "/journeys",             icon: Route },
+  { name: "Papas",           href: "/papas",                icon: Users },
+  { name: "Cheetahs",        href: "/cheetahs",             icon: Car },
+  { name: "Echo",            href: "/echo",                 icon: Volume2 },
+  { name: "Eagle Operations",href: "/eagles",               icon: Plane },
+  { name: "Live Tracking",   href: "/tracking/live",        icon: MapPin },
+  { name: "Team Chat",       href: "/chat",                 icon: MessageCircle },
+  { name: "Officers",        href: "/officers",             icon: UserCircle },
+  { name: "NOscar",          href: "/nests",                icon: Hotel },
+  { name: "Theatres",        href: "/theatres",             icon: Landmark },
+  { name: "Incidents",       href: "/incidents",            icon: AlertTriangle },
+  { name: "Audit Log",       href: "/audit-logs",           icon: FileText },
+  { name: "Guide",           href: "/guide",                icon: BookOpen },
+  { name: "Settings",        href: "/settings",             icon: Settings },
 ]
+
+/** Pages every authenticated user always sees */
+const BASE_HREFS = ["/dashboard", "/my-operations", "/chat", "/programs"]
+
+/**
+ * Role-scoped extra pages (beyond BASE_HREFS).
+ * Admins/captain/command see everything — handled by a fallback.
+ */
+const ROLE_EXTRA: Record<string, string[]> = {
+  delta_oscar:         [],
+  alpha_oscar:         ["/eagles"],
+  head_alpha_oscar:    ["/eagles"],
+  tango_oscar:         ["/journeys", "/cheetahs", "/tracking/live"],
+  head_tango_oscar:    ["/journeys", "/cheetahs", "/tracking/live"],
+  victor_oscar:        ["/theatres"],
+  head_victor_oscar:   ["/theatres"],
+  november_oscar:      ["/nests"],
+  head_noscar_den:     ["/nests"],
+  head_noscar_nest:    ["/nests"],
+  noscar_den:          ["/nests"],
+  noscar_nest:         ["/nests"],
+  echo_oscar:          ["/echo"],
+  head_echo_oscar:     ["/echo"],
+}
+
+const ADMIN_ROLES = new Set([
+  "super_admin", "dev_admin", "admin",
+  "captain", "head_of_command", "head_of_operations", "command",
+  "hod", "hop",
+])
+
+function getVisibleNav(role: string | null): typeof ALL_NAV {
+  if (!role) return ALL_NAV.filter(n => BASE_HREFS.includes(n.href))
+  if (ADMIN_ROLES.has(role)) return ALL_NAV
+  const extra = ROLE_EXTRA[role] ?? []
+  const allowed = new Set([...BASE_HREFS, ...extra])
+  return ALL_NAV.filter(n => allowed.has(n.href))
+}
 
 type SidebarProps = {
   isMobile?: boolean
@@ -62,88 +101,31 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   const supabase = useMemo(() => createClient(), [])
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
-  const { count: unreadCount } = useUnreadChatCount()
-  const [currentUser, setCurrentUser] = useState<string | null>(null)
+  const { count: unreadChat } = useUnreadChatCount()
+  const { count: unreadAssignments } = useUnreadAssignments()
   const [userRole, setUserRole] = useState<string | null>(null)
-  const [userOscar, setUserOscar] = useState<string | null>(null)
+  const [currentUser, setCurrentUser] = useState<string | null>(null)
 
   useEffect(() => {
     const loadUser = async () => {
       try {
-        const {
-          data: { user }
-        } = await supabase.auth.getUser()
-
-        if (!user) {
-          setCurrentUser(null)
-          setUserRole(null)
-          setUserOscar(null)
-          return
-        }
-
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { setCurrentUser(null); setUserRole(null); return }
         setCurrentUser(user.id)
-
         const { data: profile, error } = await supabase
           .from('users')
-          .select('role, oscar')
+          .select('role')
           .eq('id', user.id)
-          .single<{ role: string | null; oscar: string | null }>()
-
-        if (!error && profile) {
-          setUserRole(profile.role ?? null)
-          setUserOscar(profile.oscar ?? null)
-        }
-      } catch (error) {
-        // iOS Safari can throw during hydration - suppress to prevent crash
-        console.warn('Sidebar user load failed (non-fatal):', error)
+          .single<{ role: string | null }>()
+        if (!error && profile) setUserRole(profile.role ?? null)
+      } catch (err) {
+        console.warn('Sidebar user load failed:', err)
       }
     }
-
     void loadUser()
   }, [supabase])
 
-  useEffect(() => {
-    if (!currentUser) return
-
-    try {
-      const channel = supabase.channel('chat-notifications')
-
-      channel
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
-          // Hook will handle updates via chat_messages subscription.
-        })
-        .subscribe()
-
-      return () => {
-        supabase.removeChannel(channel)
-      }
-    } catch (error) {
-      // Realtime subscription can fail on iOS - non-fatal
-      console.warn('Sidebar realtime subscription failed (non-fatal):', error)
-    }
-  }, [supabase, currentUser])
-
-  const isDeltaOscar = (userRole === 'delta_oscar') || (userOscar === 'delta_oscar')
-  const isEchoOscar = (userRole === 'echo_oscar') || (userRole === 'head_echo_oscar')
-
-  const visibleNavigation = useMemo(
-    () => {
-      if (isDeltaOscar) {
-        return navigation.filter((item) =>
-          item.href === '/dashboard' || item.href === '/my-operations' || item.href === '/chat'
-        )
-      }
-
-      if (isEchoOscar) {
-        return navigation.filter((item) =>
-          item.href === '/dashboard' || item.href === '/echo' || item.href === '/chat' || item.href === '/programs'
-        )
-      }
-
-      return navigation
-    },
-    [isDeltaOscar, isEchoOscar]
-  )
+  const visibleNavigation = useMemo(() => getVisibleNav(userRole), [userRole])
 
   return (
     <div
@@ -171,26 +153,16 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
           </div>
         </Link>
         {!isMobile && !collapsed && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setCollapsed(!collapsed)}
-            className="h-8 w-8 flex-shrink-0"
-          >
+          <Button variant="ghost" size="icon" onClick={() => setCollapsed(true)} className="h-8 w-8 flex-shrink-0">
             <ChevronLeft className="h-4 w-4" />
           </Button>
         )}
       </div>
 
-      {/* Collapse Toggle - Only visible when collapsed */}
+      {/* Collapse toggle when collapsed */}
       {!isMobile && collapsed && (
         <div className="px-2 py-2 border-b flex justify-center">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setCollapsed(!collapsed)}
-            className="h-8 w-8"
-          >
+          <Button variant="ghost" size="icon" onClick={() => setCollapsed(false)} className="h-8 w-8">
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -200,6 +172,8 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">
         {visibleNavigation.map((item) => {
           const isActive = pathname === item.href
+          const isChat = item.name === "Team Chat"
+          const isOps  = item.name === "My Operations"
           return (
             <Link
               key={item.name}
@@ -215,9 +189,12 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
             >
               <div className="relative flex-shrink-0">
                 <item.icon className="h-5 w-5" />
-                {/* Collapsed badge dot - only show when sidebar is collapsed */}
-                {item.name === "Team Chat" && unreadCount > 0 && collapsed && (
+                {/* Collapsed badge dots */}
+                {isChat && unreadChat > 0 && collapsed && (
                   <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                )}
+                {isOps && unreadAssignments > 0 && collapsed && (
+                  <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
                 )}
               </div>
               <span className={cn(
@@ -225,14 +202,18 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
                 collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
               )}>
                 <span>{item.name}</span>
-                {item.name === "Team Chat" && unreadCount > 0 && !collapsed && (
-                  <Badge
-                    variant="destructive"
-                    className="ml-auto bg-red-500 text-white font-semibold animate-pulse shadow-lg"
-                  >
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </Badge>
-                )}
+                <span className="flex gap-1 ml-auto">
+                  {isChat && unreadChat > 0 && !collapsed && (
+                    <Badge variant="destructive" className="bg-red-500 text-white font-semibold animate-pulse shadow-lg">
+                      {unreadChat > 99 ? '99+' : unreadChat}
+                    </Badge>
+                  )}
+                  {isOps && unreadAssignments > 0 && !collapsed && (
+                    <Badge className="bg-orange-500 text-white font-semibold animate-pulse shadow-lg">
+                      {unreadAssignments > 9 ? '9+' : unreadAssignments}
+                    </Badge>
+                  )}
+                </span>
               </span>
             </Link>
           )

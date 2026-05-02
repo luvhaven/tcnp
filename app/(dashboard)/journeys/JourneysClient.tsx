@@ -135,6 +135,13 @@ export default function JourneysClient({
   const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentRole, setCurrentRole] = useState<string | null>(null)
+
+  // Multi-DO state
+  const [programOfficers, setProgramOfficers] = useState<any[]>([])
+  const [loadingOfficers, setLoadingOfficers] = useState(false)
+  const [selectedDOs, setSelectedDOs] = useState<string[]>([])
+  const [teamLeadId, setTeamLeadId] = useState<string>('')
+
   const [formData, setFormData] = useState({
     papa_id: '',
     assigned_cheetah_id: '',
@@ -153,6 +160,46 @@ export default function JourneysClient({
   })
 
   const canCreateJourney = currentRole ? isAdmin(currentRole) : false
+
+  // Fetch officers for selected program
+  useEffect(() => {
+    if (!formData.program_id) {
+      setProgramOfficers([])
+      setSelectedDOs([])
+      setTeamLeadId('')
+      return
+    }
+    const fetchOfficers = async () => {
+      setLoadingOfficers(true)
+      try {
+        const res = await fetch(`/api/officers/by-program?program_id=${formData.program_id}`)
+        const json = await res.json()
+        setProgramOfficers(json.officers || [])
+      } catch (err) {
+        console.error('Error fetching program officers:', err)
+      } finally {
+        setLoadingOfficers(false)
+      }
+    }
+    void fetchOfficers()
+  }, [formData.program_id])
+
+  const toggleDO = (userId: string) => {
+    setSelectedDOs(prev => {
+      const next = prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+      // If removing the current team lead, clear it
+      if (!next.includes(teamLeadId)) setTeamLeadId(next[0] ?? '')
+      // Auto-set lead if first selection
+      if (next.length === 1) setTeamLeadId(next[0])
+      return next
+    })
+  }
+
+  const resetDOState = () => {
+    setSelectedDOs([])
+    setTeamLeadId('')
+    setProgramOfficers([])
+  }
 
   useEffect(() => {
     const init = async () => {
@@ -289,33 +336,35 @@ export default function JourneysClient({
     }
 
     try {
-      const { error } = await (supabase as any).from('journeys').insert([
-        {
-          ...formData,
-          status: 'planned'
-        }
-      ])
+      const lead = teamLeadId || selectedDOs[0] || null
+      const { data: newJourney, error } = await (supabase as any)
+        .from('journeys')
+        .insert([{ ...formData, assigned_duty_officer_id: lead, assigned_do_id: lead, status: 'planned' }])
+        .select('id')
+        .single()
 
       if (error) throw error
+
+      // Save DO assignments to junction table
+      if (selectedDOs.length > 0 && newJourney?.id) {
+        const doPayload = selectedDOs.map(uid => ({ user_id: uid, is_lead: uid === (lead ?? '') }))
+        await fetch('/api/journey-duty-officers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ journey_id: newJourney.id, officers: doPayload })
+        })
+      }
 
       toast.success('Journey created successfully!')
       setCreateDialogOpen(false)
       setFormData({
-        papa_id: '',
-        assigned_cheetah_id: '',
-        program_id: '',
-        journey_type: 'airport_to_nest_to_theatre',
-        assigned_duty_officer_id: '',
-        assigned_nest_id: '',
-        assigned_eagle_square_id: '',
-        origin: '',
-        destination: '',
-        scheduled_departure: '',
-        scheduled_arrival: '',
-        etd: '',
-        eta: '',
-        notes: ''
+        papa_id: '', assigned_cheetah_id: '', program_id: '',
+        journey_type: 'airport_to_nest_to_theatre', assigned_duty_officer_id: '',
+        assigned_nest_id: '', assigned_eagle_square_id: '', origin: '',
+        destination: '', scheduled_departure: '', scheduled_arrival: '',
+        etd: '', eta: '', notes: ''
       })
+      resetDOState()
       resetPage()
       loadJourneys(false)
     } catch (error: any) {
@@ -350,18 +399,21 @@ export default function JourneysClient({
     e.preventDefault()
 
     if (!selectedJourney) return
-    if (!canCreateJourney) { // Re-use admin check for editing
+    if (!canCreateJourney) {
       toast.error('You are not authorized to edit journeys')
       return
     }
 
     try {
+      const lead = teamLeadId || selectedDOs[0] || formData.assigned_duty_officer_id || null
+
       const { error } = await (supabase as any)
         .from('journeys')
         .update({
           ...formData,
           assigned_cheetah_id: formData.assigned_cheetah_id || null,
-          assigned_duty_officer_id: formData.assigned_duty_officer_id || null,
+          assigned_duty_officer_id: lead,
+          assigned_do_id: lead,
           assigned_nest_id: formData.assigned_nest_id || null,
           assigned_eagle_square_id: formData.assigned_eagle_square_id || null,
           program_id: formData.program_id || null,
@@ -371,8 +423,19 @@ export default function JourneysClient({
 
       if (error) throw error
 
+      // Sync DO assignments if any were selected
+      if (selectedDOs.length > 0) {
+        const doPayload = selectedDOs.map(uid => ({ user_id: uid, is_lead: uid === (lead ?? '') }))
+        await fetch('/api/journey-duty-officers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ journey_id: selectedJourney.id, officers: doPayload })
+        })
+      }
+
       toast.success('Journey updated successfully!')
       setSelectedJourney(null)
+      resetDOState()
       resetPage()
       loadJourneys(false)
     } catch (error: any) {
@@ -812,21 +875,56 @@ export default function JourneysClient({
                 </select>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="assigned_duty_officer_id">Designated Officer (DO)</Label>
-                <select
-                  id="assigned_duty_officer_id"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={formData.assigned_duty_officer_id}
-                  onChange={(e) => setFormData({ ...formData, assigned_duty_officer_id: e.target.value })}
-                >
-                  <option value="">No DO assigned</option>
-                  {officers.map((officer) => (
-                    <option key={officer.id} value={officer.id}>
-                      {officer.full_name}
-                    </option>
-                  ))}
-                </select>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Duty Officer(s) — DO Team</Label>
+                {!formData.program_id ? (
+                  <p className="text-xs text-muted-foreground bg-muted rounded-md px-3 py-2">Select a Program above to load available officers.</p>
+                ) : loadingOfficers ? (
+                  <p className="text-xs text-muted-foreground animate-pulse">Loading officers for this program…</p>
+                ) : programOfficers.length === 0 ? (
+                  <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-md px-3 py-2">No officers are assigned to this program yet. Assign officers in the Officers page first.</p>
+                ) : (
+                  <div className="border rounded-md divide-y max-h-52 overflow-y-auto">
+                    {programOfficers.map(officer => {
+                      const isSelected = selectedDOs.includes(officer.id)
+                      const isLead = teamLeadId === officer.id
+                      return (
+                        <div key={officer.id} className={`flex items-center gap-3 px-3 py-2 transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/50'}`}>
+                          <input
+                            type="checkbox"
+                            id={`do-${officer.id}`}
+                            checked={isSelected}
+                            onChange={() => toggleDO(officer.id)}
+                            className="h-4 w-4 rounded border-input"
+                          />
+                          <label htmlFor={`do-${officer.id}`} className="flex-1 cursor-pointer">
+                            <span className="font-medium text-sm">{officer.full_name}</span>
+                            <span className="ml-2 text-xs text-muted-foreground">{officer.title_name || officer.role}</span>
+                          </label>
+                          {isSelected && selectedDOs.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setTeamLeadId(officer.id)}
+                              className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
+                                isLead
+                                  ? 'bg-yellow-400 text-yellow-900 border-yellow-500 font-bold'
+                                  : 'bg-muted text-muted-foreground border-border hover:border-yellow-400'
+                              }`}
+                            >
+                              {isLead ? '⭐ Lead' : 'Set Lead'}
+                            </button>
+                          )}
+                          {isSelected && selectedDOs.length === 1 && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-400 text-yellow-900 font-bold">⭐ Lead</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+                {selectedDOs.length > 0 && (
+                  <p className="text-xs text-muted-foreground">{selectedDOs.length} DO{selectedDOs.length > 1 ? 's' : ''} selected. {selectedDOs.length > 1 ? 'Team lead marked with ⭐.' : 'Auto-designated as Team Lead.'}</p>
+                )}
               </div>
             </div>
 
@@ -1133,20 +1231,39 @@ export default function JourneysClient({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="edit_assigned_duty_officer_id">Designated Officer (DO)</Label>
-                <select
-                  id="edit_assigned_duty_officer_id"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  value={formData.assigned_duty_officer_id}
-                  onChange={(e) => setFormData({ ...formData, assigned_duty_officer_id: e.target.value })}
-                >
-                  <option value="">Select Officer</option>
-                  {officers.map((officer) => (
-                    <option key={officer.id} value={officer.id}>
-                      {officer.full_name} ({officer.role})
-                    </option>
-                  ))}
-                </select>
+                <Label>Duty Officer(s) — DO Team</Label>
+                {!formData.program_id ? (
+                  <p className="text-xs text-muted-foreground bg-muted rounded-md px-3 py-2">Select a Program to load available officers.</p>
+                ) : loadingOfficers ? (
+                  <p className="text-xs text-muted-foreground animate-pulse">Loading officers…</p>
+                ) : programOfficers.length === 0 ? (
+                  <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-md px-3 py-2">No officers assigned to this program.</p>
+                ) : (
+                  <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
+                    {programOfficers.map(officer => {
+                      const isSelected = selectedDOs.includes(officer.id)
+                      const isLead = teamLeadId === officer.id
+                      return (
+                        <div key={officer.id} className={`flex items-center gap-3 px-3 py-2 transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/50'}`}>
+                          <input type="checkbox" id={`edit-do-${officer.id}`} checked={isSelected} onChange={() => toggleDO(officer.id)} className="h-4 w-4 rounded border-input" />
+                          <label htmlFor={`edit-do-${officer.id}`} className="flex-1 cursor-pointer">
+                            <span className="font-medium text-sm">{officer.full_name}</span>
+                            <span className="ml-2 text-xs text-muted-foreground">{officer.title_name || officer.role}</span>
+                          </label>
+                          {isSelected && selectedDOs.length > 1 && (
+                            <button type="button" onClick={() => setTeamLeadId(officer.id)}
+                              className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
+                                isLead ? 'bg-yellow-400 text-yellow-900 border-yellow-500 font-bold' : 'bg-muted text-muted-foreground border-border hover:border-yellow-400'
+                              }`}>{isLead ? '⭐ Lead' : 'Set Lead'}</button>
+                          )}
+                          {isSelected && selectedDOs.length === 1 && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-400 text-yellow-900 font-bold">⭐ Lead</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 
