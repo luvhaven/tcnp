@@ -568,7 +568,7 @@ export default function ChatSystem({
       payload: RealtimePostgresChangesPayload<ChatMessageRow>
     ) => {
       if (!mounted) return
-      console.log('ðŸ“¨ Realtime payload received:', payload.eventType, payload)
+      console.log('📦 Realtime payload received:', payload.eventType, payload)
 
       const newRow = payload.new as ChatMessageRow
 
@@ -576,6 +576,12 @@ export default function ChatSystem({
         if (mounted && payload.old?.id) {
           setMessages(prev => prev.filter(m => m.id !== payload.old.id))
         }
+        return
+      }
+
+      // UPDATE: if soft-deleted, remove from state immediately
+      if (payload.eventType === 'UPDATE' && (newRow as any).deleted_at) {
+        if (mounted) setMessages(prev => prev.filter(m => m.id !== newRow.id))
         return
       }
 
@@ -634,29 +640,31 @@ export default function ChatSystem({
             return
           }
         } catch (err) {
-          console.error('âŒ Error fetching full message:', err)
+          console.error('❌ Error fetching full message:', err)
         }
       }
 
-      // UPDATE: if soft-deleted, remove from state immediately
-      if (payload.eventType === 'UPDATE' && (newRow as any).deleted_at) {
-        if (mounted) setMessages(prev => prev.filter(m => m.id !== newRow.id))
-        return
-      }
-
-      // UPDATE: message was edited — refresh it in state
+      // UPDATE: message was edited or read_by updated — refresh it in state
       if (payload.eventType === 'UPDATE' && mounted) {
-        const message = transformMessage(raw)
         setMessages(prev => {
-          const idx = prev.findIndex(m => m.id === message.id)
-          if (idx !== -1) { const next = [...prev]; next[idx] = message; return next }
+          const idx = prev.findIndex(m => m.id === newRow.id)
+          if (idx !== -1) { 
+            const next = [...prev]
+            next[idx] = { 
+              ...next[idx], 
+              content: newRow.content,
+              read_by: (newRow.read_by as string[]) || [],
+              mentions: (newRow.mentions as string[]) || []
+            }
+            return next 
+          }
           return prev
         })
         return
       }
 
-      // INSERT fallback
-      if (mounted) {
+      // Fallback
+      if (mounted && payload.eventType === 'INSERT') {
         const message = transformMessage(raw)
         setMessages((prev) => {
           if (prev.some(m => m.id === message.id)) return prev
