@@ -51,6 +51,8 @@ const NOSCAR_DEN_FIELDS: PapaField[] = [
   { key: 'needs_water_on_stage',label: 'Water on Stage',            type: 'boolean' },
   { key: 'water_temperature',   label: 'Water Temperature',         type: 'select', options: WATER_TEMP_OPTIONS },
   { key: 'needs_face_towels',   label: 'Needs Face Towels',         type: 'boolean' },
+  { key: 'entourage_size',      label: 'Entourage Size',            type: 'number' },
+  { key: 'entourage_count',     label: 'Entourage Count (official)', type: 'number' },
   { key: 'special_requirements',label: 'Special Requirements',      type: 'textarea' },
 ]
 
