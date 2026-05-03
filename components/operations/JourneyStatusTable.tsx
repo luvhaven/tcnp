@@ -470,7 +470,7 @@ export default function JourneyStatusTable() {
                             </TableRow>
                         ) : (
                             filteredJourneys.map((journey) => {
-                                const callSign = journey.current_call_sign || journey.status || 'planned'
+                                const callSign = journey.status || journey.current_call_sign || 'planned'
                                 const callSignLabel = getCallSignLabel(callSign) || callSign.replace(/_/g,' ')
                                 const callSignColor = getCallSignBadgeColor(callSign)
                                 const canClick = !!(journey.duty_officers?.some(d => d.user_id === currentUser?.id) || currentUser?.id === journey.assigned_duty_officer_id || currentUser?.id === (journey as any).assigned_do_id)

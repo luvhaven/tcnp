@@ -143,8 +143,10 @@ export function useNotifications() {
               setNotifications((prev) => [incoming, ...prev.slice(0, NOTIFICATION_PAGE_SIZE - 1)])
               setUnreadCount((c) => c + 1)
 
-              // Teams-quality alerts
-              playChime(incoming.type)
+              // Teams-quality alerts — skip for broken_arrow (BrokenArrowAlert owns that audio)
+              if (incoming.type !== 'broken_arrow') {
+                playChime(incoming.type)
+              }
               vibrateDevice(incoming.type)
 
               // Toast
