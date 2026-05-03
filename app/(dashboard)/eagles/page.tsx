@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -44,12 +45,32 @@ const Popup = dynamic(
 )
 
 export default function EaglesPage() {
+    const supabase = createClient()
+    const [userRole, setUserRole] = useState<string | null>(null)
+
+    useEffect(() => {
+        const loadRole = async () => {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) return
+            const { data } = await supabase.from('users').select('role').eq('id', user.id).single()
+            if (data?.role) setUserRole(data.role)
+        }
+        void loadRole()
+    }, [])
+
     return (
         <div className="space-y-6 animate-fade-in">
             <div>
                 <h1 className="text-3xl font-bold tracking-tight">Eagle Operations</h1>
                 <p className="text-muted-foreground">Manage airports and track flights</p>
             </div>
+
+            {/* ── Papa Arrival Briefings for Alpha Oscar ── */}
+            {userRole && ['alpha_oscar', 'head_alpha_oscar'].includes(userRole) && (
+                <div className="border rounded-xl p-4 bg-muted/30">
+                    <PapaBriefingsSection role={userRole} />
+                </div>
+            )}
 
             <Tabs defaultValue="squares" className="space-y-6">
                 <TabsList className="grid w-full grid-cols-2 max-w-md">

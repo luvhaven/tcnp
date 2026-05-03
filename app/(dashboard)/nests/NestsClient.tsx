@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
 import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -354,6 +355,13 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
           </SelectContent>
         </Select>
       </motion.div>
+
+      {/* ── Papa Briefings for NOScar roles ── */}
+      {userRole && ['noscar_nest', 'head_noscar_nest', 'noscar_den', 'head_noscar_den', 'november_oscar'].includes(userRole) && (
+        <div className="border rounded-xl p-4 bg-muted/30">
+          <PapaBriefingsSection role={userRole} />
+        </div>
+      )}
 
       <Tabs defaultValue="den" className="space-y-4">
         <TabsList>

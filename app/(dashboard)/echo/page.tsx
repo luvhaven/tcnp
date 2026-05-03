@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
+import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -89,7 +90,8 @@ export default function EchoPage() {
     const [loading, setLoading] = useState(true)
     const [dialogOpen, setDialogOpen] = useState(false)
     const [editing, setEditing] = useState<Equipment | null>(null)
-    const [canManage, setCanManage] = useState(false)
+const [canManage, setCanManage] = useState(false)
+    const [userRole, setUserRole] = useState('')
     const [searchQuery, setSearchQuery] = useState('')
     const [filterType, setFilterType] = useState('all')
     const [filterStatus, setFilterStatus] = useState('all')
@@ -138,6 +140,7 @@ export default function EchoPage() {
             if (data && ALLOWED_ROLES.includes(data.role)) {
                 setCanManage(true)
             }
+            if (data) setUserRole(data.role)
         } catch (error) {
             console.error('Error checking permissions:', error)
         }
@@ -348,6 +351,11 @@ export default function EchoPage() {
 
     return (
         <div className="space-y-6 animate-fade-in">
+            {/* ── Papa AV Briefings ── shown for Echo Oscar roles */}
+            {userRole && ['echo_oscar', 'head_echo_oscar'].includes(userRole) && (
+                <PapaBriefingsSection role={userRole} />
+            )}
+
             {/* Header */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>

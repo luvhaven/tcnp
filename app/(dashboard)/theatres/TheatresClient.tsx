@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
 import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -49,6 +50,16 @@ export default function TheatresClient({
       return data || []
     },
     initialData: initialTheatres
+  })
+
+  const { data: userRole } = useQuery({
+    queryKey: ['userRole'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return null
+      const { data } = await supabase.from('users').select('role').eq('id', user.id).single()
+      return data?.role || null
+    }
   })
 
   useEffect(() => {
@@ -159,6 +170,13 @@ export default function TheatresClient({
           Add Venue
         </Button>
       </motion.div>
+
+      {/* ── Papa Briefings for Victor Oscar roles ── */}
+      {userRole && ['victor_oscar', 'head_victor_oscar'].includes(userRole) && (
+        <div className="border rounded-xl p-4 bg-muted/30">
+          <PapaBriefingsSection role={userRole} />
+        </div>
+      )}
 
       {/* Stats Cards */}
       <motion.div layout className="grid gap-4 md:grid-cols-3">
