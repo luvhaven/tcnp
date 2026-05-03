@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { AlertTriangle, X, ShieldAlert, Volume2, VolumeX } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { cn } from '@/lib/utils'
 
 interface BrokenArrowEvent {
   journeyId: string
@@ -190,32 +191,15 @@ export function BrokenArrowAlert() {
             className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
           >
             <div className="relative w-full max-w-lg rounded-2xl border-4 border-red-500 bg-red-950 text-white shadow-[0_0_80px_rgba(239,68,68,0.8)] animate-pulse-slow">
-              {/* Top-right controls: Mute + Dismiss */}
-              <div className="absolute right-3 top-3 flex items-center gap-2">
-                {/* Mute / Unmute toggle */}
-                <button
-                  type="button"
-                  onClick={handleMuteToggle}
-                  className="rounded-full bg-red-800/70 p-2 hover:bg-red-700 transition-colors"
-                  aria-label={muted ? 'Unmute alarm' : 'Mute alarm'}
-                  title={muted ? 'Unmute alarm' : 'Mute alarm'}
-                >
-                  {muted
-                    ? <VolumeX className="h-4 w-4" />
-                    : <Volume2 className="h-4 w-4" />
-                  }
-                </button>
-
-                {/* Dismiss */}
-                <button
-                  type="button"
-                  onClick={handleDismiss}
-                  className="rounded-full bg-red-800 p-1.5 hover:bg-red-700 transition-colors"
-                  aria-label="Dismiss alert"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+              {/* Top-right: dismiss only */}
+              <button
+                type="button"
+                onClick={handleDismiss}
+                className="absolute right-3 top-3 rounded-full bg-red-800 p-1.5 hover:bg-red-700 transition-colors"
+                aria-label="Dismiss alert"
+              >
+                <X className="h-4 w-4" />
+              </button>
 
               <div className="p-8 text-center space-y-4">
                 {/* Animated icon */}
@@ -259,8 +243,24 @@ export function BrokenArrowAlert() {
                   </div>
                 </div>
 
-                {/* Actions */}
-                <div className="flex gap-3 justify-center pt-2">
+                {/* Action row: mute toggle + acknowledge */}
+                <div className="flex flex-col sm:flex-row gap-2 justify-center pt-2 w-full">
+                  {/* Mute / Unmute — prominent, labelled */}
+                  <button
+                    type="button"
+                    onClick={handleMuteToggle}
+                    className={cn(
+                      "flex items-center justify-center gap-2 rounded-lg border-2 px-4 py-2 text-sm font-semibold transition-all",
+                      muted
+                        ? "border-yellow-400 bg-yellow-400/10 text-yellow-300 hover:bg-yellow-400/20"
+                        : "border-red-400 bg-red-900/60 text-red-200 hover:bg-red-800"
+                    )}
+                  >
+                    {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                    {muted ? 'Unmute Alarm' : 'Mute Alarm'}
+                  </button>
+
+                  {/* Acknowledge */}
                   <Button
                     type="button"
                     variant="outline"
