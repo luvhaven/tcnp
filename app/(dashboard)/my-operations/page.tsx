@@ -462,18 +462,27 @@ function JourneyOperationsPanel({
     setStarting(true)
     try {
       const firstCallSign = getFirstCallSign()
-      const { error } = await (supabase as any).rpc('update_journey_call_sign', {
-        journey_uuid: journey.id,
-        new_status: firstCallSign,
+
+      // ── Direct update: journey_status enum uses underscores — safe ────────
+      const { error: updateError } = await (supabase as any)
+        .from('journeys')
+        .update({
+          status: firstCallSign,                          // journey_status enum ✓
+          status_updated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', journey.id)
+
+      if (updateError) throw updateError
+
+      // ── Log the event ────────────────────────────────────────────────────
+      await (supabase as any).from('journey_events').insert({
+        journey_id: journey.id,
+        event_type: firstCallSign,
+        description: 'Journey started',
+        triggered_at: new Date().toISOString(),
       })
-      if (error) {
-        // Fallback: direct update if RPC not available
-        const { error: updateError } = await (supabase as any)
-          .from('journeys')
-          .update({ status: firstCallSign, current_call_sign: firstCallSign, status_updated_at: new Date().toISOString() })
-          .eq('id', journey.id)
-        if (updateError) throw updateError
-      }
+
       toast.success('Journey started! Call sign updated.')
     } catch (err: any) {
       toast.error(err.message || 'Failed to start journey')

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -23,17 +23,17 @@ interface CallSignPanelProps {
   destination?: string
 }
 
-// ─── Button styling per call sign ─────────────────────────────────────────────
+// ─── Hex colours per call sign (guaranteed render — no Tailwind purge risk) ────
 
-const CALL_SIGN_STYLES: Record<string, { bg: string; text: string; border: string; ring: string }> = {
-  first_course:  { bg: 'bg-blue-600 hover:bg-blue-700',       text: 'text-white', border: 'border-blue-700',    ring: 'ring-blue-400' },
-  cocktail:      { bg: 'bg-emerald-600 hover:bg-emerald-700', text: 'text-white', border: 'border-emerald-700', ring: 'ring-emerald-400' },
-  chapman:       { bg: 'bg-teal-600 hover:bg-teal-700',       text: 'text-white', border: 'border-teal-700',    ring: 'ring-teal-400' },
-  dessert:       { bg: 'bg-indigo-600 hover:bg-indigo-700',   text: 'text-white', border: 'border-indigo-700',  ring: 'ring-indigo-400' },
-  blue_cocktail: { bg: 'bg-sky-500 hover:bg-sky-600',         text: 'text-white', border: 'border-sky-600',     ring: 'ring-sky-300' },
-  red_cocktail:  { bg: 'bg-orange-500 hover:bg-orange-600',   text: 'text-white', border: 'border-orange-600',  ring: 'ring-orange-300' },
-  re_order:      { bg: 'bg-purple-600 hover:bg-purple-700',   text: 'text-white', border: 'border-purple-700',  ring: 'ring-purple-400' },
-  broken_arrow:  { bg: 'bg-red-600 hover:bg-red-700',         text: 'text-white', border: 'border-red-700',     ring: 'ring-red-400' },
+const SIGN_COLORS: Record<string, { base: string; hover: string }> = {
+  first_course:  { base: '#2563eb', hover: '#1d4ed8' },
+  cocktail:      { base: '#059669', hover: '#047857' },
+  chapman:       { base: '#0d9488', hover: '#0f766e' },
+  dessert:       { base: '#4f46e5', hover: '#4338ca' },
+  blue_cocktail: { base: '#0ea5e9', hover: '#0284c7' },
+  red_cocktail:  { base: '#f97316', hover: '#ea580c' },
+  re_order:      { base: '#9333ea', hover: '#7e22ce' },
+  broken_arrow:  { base: '#dc2626', hover: '#b91c1c' },
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -49,6 +49,13 @@ export default function CallSignPanel({
   const [selectedSign, setSelectedSign] = useState<CallSign | null>(null)
   const [notes, setNotes] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null)
+
+  const getBtnStyle = useCallback((key: string, isHovered: boolean) => {
+    const c = SIGN_COLORS[key]
+    if (!c) return { backgroundColor: '#6b7280', color: '#ffffff' }
+    return { backgroundColor: isHovered ? c.hover : c.base, color: '#ffffff', transition: 'background-color 150ms ease' }
+  }, [])
 
   const isTerminal = status === 'completed' || status === 'cancelled' || status === 'broken_arrow'
 
@@ -123,18 +130,19 @@ export default function CallSignPanel({
             <CardContent>
               <div className="grid grid-cols-2 gap-2">
                 {CALL_SIGNS.filter(s => STATUS_CALL_SIGNS.includes(s.key)).map(sign => {
-                  const styles = CALL_SIGN_STYLES[sign.key] || { bg: 'bg-muted', text: '', border: '', ring: '' }
                   const isActive = status === sign.key
+                  const isHov = hoveredKey === sign.key
                   return (
                     <button
                       key={sign.key}
                       onClick={() => handleSignClick(sign)}
                       disabled={loading}
+                      onMouseEnter={() => setHoveredKey(sign.key)}
+                      onMouseLeave={() => setHoveredKey(null)}
+                      style={getBtnStyle(sign.key, isHov)}
                       className={cn(
-                        'py-3 px-2 rounded-lg border-2 flex flex-col items-center gap-1 text-center transition-all hover:scale-[1.03] active:scale-[0.98]',
-                        isActive
-                          ? cn(styles.bg, styles.text, `ring-2 ring-offset-2 ${styles.ring}`)
-                          : cn('border-border hover:border-primary/50', styles.bg, styles.text),
+                        'py-3 px-2 rounded-lg border-2 border-transparent flex flex-col items-center gap-1 text-center transition-transform hover:scale-[1.03] active:scale-[0.98]',
+                        isActive && 'ring-2 ring-white/60 ring-offset-2',
                         loading && 'opacity-60 cursor-not-allowed'
                       )}
                     >
@@ -161,15 +169,17 @@ export default function CallSignPanel({
             </CardHeader>
             <CardContent className="space-y-2">
               {CALL_SIGNS.filter(s => EVENT_CALL_SIGNS.includes(s.key)).map(sign => {
-                const styles = CALL_SIGN_STYLES[sign.key] || { bg: 'bg-muted', text: '', border: '', ring: '' }
+                const isHov = hoveredKey === sign.key
                 return (
                   <button
                     key={sign.key}
                     onClick={() => handleSignClick(sign)}
                     disabled={loading}
+                    onMouseEnter={() => setHoveredKey(sign.key)}
+                    onMouseLeave={() => setHoveredKey(null)}
+                    style={getBtnStyle(sign.key, isHov)}
                     className={cn(
-                      'w-full py-2 px-3 rounded-lg border-2 border-border flex items-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98]',
-                      styles.bg, styles.text,
+                      'w-full py-2 px-3 rounded-lg border-2 border-transparent flex items-center gap-3 transition-transform hover:scale-[1.02] active:scale-[0.98]',
                       loading && 'opacity-60 cursor-not-allowed'
                     )}
                   >
