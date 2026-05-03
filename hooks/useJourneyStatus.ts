@@ -125,6 +125,26 @@ export function useJourneyStatus(journeyId: string) {
       // Log the event — non-critical, errors are swallowed
       await logJourneyEvent(supabase, journeyId, callSign, notes)
 
+      // ── Auto-log Broken Arrow to incidents ─────────────────────────────────
+      // Creates a CRITICAL incident record automatically so the Incidents page
+      // always has a timestamped record with full context. Non-critical.
+      if (callSign === 'broken_arrow') {
+        try {
+          const { data: { user } } = await supabase.auth.getUser()
+          await (supabase as any).from('incidents').insert({
+            journey_id:  journeyId,
+            type:        'BROKEN ARROW',
+            severity:    'critical',
+            description: `BROKEN ARROW automatically declared by duty officer. Major incident — Cheetah immobilized. Auto-logged at ${new Date().toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'medium' })}.`,
+            status:      'open',
+            reported_by: user?.id ?? null,
+            created_by:  user?.id ?? null,
+          })
+        } catch (e) {
+          console.warn('Auto-incident log failed (non-critical):', e)
+        }
+      }
+
       return { callSign, isEventOnly }
     },
     onMutate: async ({ callSign }) => {

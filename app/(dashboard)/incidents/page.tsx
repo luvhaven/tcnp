@@ -37,13 +37,19 @@ type Incident = {
   created_at: string
   resolved_at: string | null
   journeys?: {
-    papas: { full_name: string; title: string }
-    cheetahs: { call_sign: string }
+    origin: string | null
+    destination: string | null
+    papas: { full_name: string; title: string } | null
+    cheetahs: {
+      call_sign: string | null
+      driver_name: string | null
+      registration_number: string | null
+    } | null
   } | null
   reporter?: {
     full_name: string
     oscar: string
-  }
+  } | null
 }
 
 const SEVERITY_CONFIG = {
@@ -128,8 +134,9 @@ export default function IncidentsPage() {
         .select(`
           *,
           journeys:journey_id (
+            origin, destination,
             papas:papa_id (full_name, title),
-            cheetahs:assigned_cheetah_id (call_sign)
+            cheetahs:assigned_cheetah_id (call_sign, driver_name, registration_number)
           ),
           reporter:reported_by (full_name, oscar)
         `)
@@ -368,24 +375,25 @@ export default function IncidentsPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full text-sm">
               <thead>
-                <tr className="border-b">
-                  <th className="text-left py-3 px-4 font-medium text-sm text-muted-foreground">Call Sign</th>
-                  <th className="text-left py-3 px-4 font-medium text-sm text-muted-foreground">Type</th>
-                  <th className="text-left py-3 px-4 font-medium text-sm text-muted-foreground">Severity</th>
-                  <th className="text-left py-3 px-4 font-medium text-sm text-muted-foreground">Description</th>
-                  <th className="text-left py-3 px-4 font-medium text-sm text-muted-foreground">Status</th>
-                  <th className="text-left py-3 px-4 font-medium text-sm text-muted-foreground">Reported</th>
+                <tr className="border-b bg-muted/40">
+                  <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wide">Papa</th>
+                  <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wide">DO / Reporter</th>
+                  <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wide">Cheetah &amp; Driver</th>
+                  <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wide">Location</th>
+                  <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wide">Type / Severity</th>
+                  <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wide">Status</th>
+                  <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wide">Time</th>
                   {canManage && (
-                    <th className="text-right py-3 px-4 font-medium text-sm text-muted-foreground">Actions</th>
+                    <th className="text-right py-3 px-4 font-semibold text-xs uppercase tracking-wide">Actions</th>
                   )}
                 </tr>
               </thead>
               <tbody>
                 {incidents.length === 0 ? (
                   <tr>
-                    <td colSpan={canManage ? 7 : 6} className="text-center py-12 text-muted-foreground">
+                    <td colSpan={canManage ? 8 : 7} className="text-center py-12 text-muted-foreground">
                       <AlertTriangle className="h-12 w-12 mx-auto mb-3 opacity-50" />
                       <p>No incidents reported</p>
                     </td>
@@ -393,40 +401,117 @@ export default function IncidentsPage() {
                 ) : (
                   incidents.map((incident) => {
                     const severityConfig = SEVERITY_CONFIG[incident.severity]
-                    const statusConfig = STATUS_CONFIG[incident.status]
-                    const StatusIcon = statusConfig.icon
+                    const statusConfig   = STATUS_CONFIG[incident.status]
+                    const StatusIcon     = statusConfig.icon
+                    const isBrokenArrow  = incident.type === 'BROKEN ARROW'
 
                     return (
                       <tr
                         key={incident.id}
-                        className="border-b hover:bg-muted/50 cursor-pointer transition-colors"
+                        className={`border-b cursor-pointer transition-colors ${
+                          isBrokenArrow
+                            ? 'bg-red-50/60 dark:bg-red-950/20 hover:bg-red-100/60 dark:hover:bg-red-950/30'
+                            : 'hover:bg-muted/50'
+                        }`}
                         onClick={() => openDialog(incident)}
                       >
+                        {/* Papa */}
                         <td className="py-4 px-4">
-                          <div className="flex items-center gap-2">
-                            <Radio className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">{getCallSign(incident)}</span>
+                          <div className="flex flex-col">
+                            <span className="font-semibold">
+                              {incident.journeys?.papas?.full_name ?? '—'}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {incident.journeys?.papas?.title ?? ''}
+                            </span>
                           </div>
                         </td>
+
+                        {/* DO / Reporter */}
                         <td className="py-4 px-4">
-                          <span className="font-medium">{incident.type}</span>
+                          <div className="flex flex-col">
+                            <span className="font-medium">
+                              {incident.reporter?.full_name ?? '—'}
+                            </span>
+                            {incident.reporter?.oscar && (
+                              <span className="text-xs text-muted-foreground uppercase">
+                                {incident.reporter.oscar}
+                              </span>
+                            )}
+                          </div>
                         </td>
+
+                        {/* Cheetah & Driver */}
                         <td className="py-4 px-4">
-                          <Badge className={`${severityConfig.color} text-white font-semibold`}>
-                            {severityConfig.label}
-                          </Badge>
+                          <div className="flex flex-col">
+                            <span className="font-medium flex items-center gap-1">
+                              <Radio className="h-3 w-3 text-muted-foreground" />
+                              {incident.journeys?.cheetahs?.call_sign ?? '—'}
+                            </span>
+                            {(incident.journeys?.cheetahs as any)?.driver_name && (
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <User className="h-3 w-3" />
+                                {(incident.journeys?.cheetahs as any).driver_name}
+                              </span>
+                            )}
+                            {(incident.journeys?.cheetahs as any)?.registration_number && (
+                              <span className="text-xs text-muted-foreground">
+                                {(incident.journeys?.cheetahs as any).registration_number}
+                              </span>
+                            )}
+                          </div>
                         </td>
-                        <td className="py-4 px-4 max-w-md">
-                          <p className="text-sm line-clamp-2">{incident.description}</p>
-                        </td>
+
+                        {/* Location */}
                         <td className="py-4 px-4">
-                          <Badge className={`${statusConfig.color} text-white`}>
+                          {(incident.journeys as any)?.origin || (incident.journeys as any)?.destination ? (
+                            <div className="flex flex-col text-xs text-muted-foreground">
+                              {(incident.journeys as any)?.origin && (
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="h-3 w-3 flex-shrink-0" />
+                                  From: {(incident.journeys as any).origin}
+                                </span>
+                              )}
+                              {(incident.journeys as any)?.destination && (
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="h-3 w-3 flex-shrink-0 text-primary" />
+                                  To: {(incident.journeys as any).destination}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </td>
+
+                        {/* Type / Severity */}
+                        <td className="py-4 px-4">
+                          <div className="flex flex-col gap-1">
+                            <span className={`font-semibold text-sm ${
+                              isBrokenArrow ? 'text-destructive' : ''
+                            }`}>
+                              {isBrokenArrow && '🚨 '}{incident.type}
+                            </span>
+                            <Badge className={`${severityConfig.color} text-white text-[10px] w-fit`}>
+                              {severityConfig.label}
+                            </Badge>
+                          </div>
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-4 px-4">
+                          <Badge className={`${statusConfig.color} text-white flex items-center gap-1 w-fit`}>
+                            <StatusIcon className="h-3 w-3" />
                             {statusConfig.label}
                           </Badge>
                         </td>
-                        <td className="py-4 px-4 text-sm text-muted-foreground">
-                          {format(new Date(incident.created_at), 'dd/MM/yyyy, HH:mm:ss')}
+
+                        {/* Time */}
+                        <td className="py-4 px-4 text-sm text-muted-foreground whitespace-nowrap">
+                          {format(new Date(incident.created_at), 'dd/MM/yy, HH:mm')}
                         </td>
+
+                        {/* Actions */}
                         {canManage && (
                           <td className="py-4 px-4">
                             <div className="flex justify-end">
