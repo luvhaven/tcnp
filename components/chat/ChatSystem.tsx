@@ -1542,8 +1542,8 @@ export default function ChatSystem({
               }}
               disabled={isReadOnlyProgramChat}
               rows={1}
-              className="w-full resize-none rounded-xl border bg-background/80 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all placeholder:text-muted-foreground/60 max-h-32 disabled:opacity-50 leading-relaxed"
-              style={{ minHeight: '42px' }}
+              className="w-full resize-none rounded-xl border bg-background/80 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all placeholder:text-muted-foreground/60 max-h-32 disabled:opacity-50"
+              style={{ minHeight: '40px', height: '40px', padding: '9px 14px', lineHeight: '22px', boxSizing: 'border-box' }}
             />
             {showMentionSuggestions && filteredUsers.length > 0 && (
               <div className="absolute bottom-full left-0 right-0 mb-2 bg-background border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in slide-in-from-bottom-2 duration-150">
@@ -1561,7 +1561,12 @@ export default function ChatSystem({
               </div>
             )}
           </div>
-          <Button onClick={() => void handleSendMessage()} disabled={isReadOnlyProgramChat || !newMessage.trim()} size="icon" className="h-[42px] w-[42px] rounded-xl flex-shrink-0 shadow-sm">
+          <Button
+            onClick={() => void handleSendMessage()}
+            disabled={isReadOnlyProgramChat || !newMessage.trim()}
+            className="rounded-xl flex-shrink-0 shadow-sm p-0 self-end"
+            style={{ height: '40px', width: '40px', minHeight: '40px', minWidth: '40px' }}
+          >
             <Send className="h-4 w-4" />
           </Button>
         </div>

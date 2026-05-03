@@ -4,26 +4,9 @@ import { useEffect, useRef, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { usePathname, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { audioManager } from '@/lib/audio/AudioManager'
 
-/** Plays a subtle ping via Web Audio API — no external file needed */
-function playPing() {
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    osc.type = 'triangle'
-    osc.frequency.setValueAtTime(880, ctx.currentTime)
-    osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.12)
-    gain.gain.setValueAtTime(0.12, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45)
-    osc.start(ctx.currentTime)
-    osc.stop(ctx.currentTime + 0.45)
-  } catch {
-    // Audio not available — silently skip
-  }
-}
+// Audio is handled by the global AudioManager singleton (respects global mute)
 
 /**
  * Global hook — mount once in the dashboard layout.
@@ -81,8 +64,8 @@ export function useChatNotifications(currentUserId: string | null) {
             ? `${senderName} mentioned you`
             : senderName
 
-          // Play ping sound
-          playPing()
+          // Play ping sound via global AudioManager (respects mute state)
+          audioManager.playChime('chat')
 
           // Show Sonner toast with navigation action
           toast(toastTitle, {

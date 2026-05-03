@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { AlertTriangle, X, ShieldAlert, Volume2, VolumeX } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
+import { audioManager } from '@/lib/audio/AudioManager'
 
 interface BrokenArrowEvent {
   journeyId: string
@@ -18,96 +19,29 @@ export function BrokenArrowAlert() {
   const supabase = createClient()
   const [alert, setAlert] = useState<BrokenArrowEvent | null>(null)
   const [dismissed, setDismissed] = useState(false)
-  const [muted, setMuted] = useState(false)
-
-  // We keep a ref to the muted state so the interval callback always reads the latest value
-  // without needing to be recreated.
-  const mutedRef = useRef(false)
-  const audioCtxRef = useRef<AudioContext | null>(null)
-  const alarmIntervalRef = useRef<NodeJS.Timeout | null>(null)
-
-  const stopCurrentAudio = useCallback(() => {
-    try {
-      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
-        audioCtxRef.current.close()
-      }
-    } catch (e) {}
-    audioCtxRef.current = null
-  }, [])
-
-  const stopAlarm = useCallback(() => {
-    if (alarmIntervalRef.current) {
-      clearInterval(alarmIntervalRef.current)
-      alarmIntervalRef.current = null
-    }
-    stopCurrentAudio()
-  }, [stopCurrentAudio])
-
-  const playAlarm = useCallback(() => {
-    // Respect the muted ref so the closure never needs to be rebuilt
-    if (mutedRef.current) return
-
-    try {
-      // Create a fresh AudioContext each burst so oscillators are clean
-      stopCurrentAudio()
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-      audioCtxRef.current = ctx
-
-      const playTone = (freq: number, start: number, duration: number) => {
-        const osc = ctx.createOscillator()
-        const gain = ctx.createGain()
-        osc.type = 'sawtooth'
-        osc.frequency.value = freq
-        gain.gain.setValueAtTime(0.4, ctx.currentTime + start)
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + start + duration)
-        osc.connect(gain)
-        gain.connect(ctx.destination)
-        osc.start(ctx.currentTime + start)
-        osc.stop(ctx.currentTime + start + duration)
-      }
-
-      // Alarm pattern: two tones rapidly (total ~1.35 s)
-      playTone(880, 0, 0.3)
-      playTone(660, 0.35, 0.3)
-      playTone(880, 0.7, 0.3)
-      playTone(660, 1.05, 0.3)
-
-      if ('vibrate' in navigator) {
-        navigator.vibrate([200, 100, 200, 100, 400])
-      }
-    } catch (e) {
-      // AudioContext may require user interaction on some browsers
-    }
-  }, [stopCurrentAudio])
+  // Mirror the global muted state for rendering
+  const [muted, setMuted] = useState(() => audioManager.muted)
 
   const handleDismiss = useCallback(() => {
-    stopAlarm()
+    audioManager.stopAlarm()
     setDismissed(true)
     setAlert(null)
-  }, [stopAlarm])
+  }, [])
 
   const handleMuteToggle = useCallback(() => {
-    const nowMuted = !mutedRef.current
-    mutedRef.current = nowMuted
+    const nowMuted = audioManager.toggleMute()
     setMuted(nowMuted)
-    if (nowMuted) {
-      // Stop any currently playing audio immediately
-      stopCurrentAudio()
-    } else {
-      // Unmuting — play one burst immediately so the user hears it
-      playAlarm()
-    }
-  }, [stopCurrentAudio, playAlarm])
+    // If unmuting, restart the alarm so they hear feedback immediately
+    if (!nowMuted) audioManager.startAlarm()
+  }, [])
 
-  // Start / stop alarm interval based on alert + dismissed state
+  // Start / stop alarm loop via AudioManager
   useEffect(() => {
     if (!alert || dismissed) return
-
-    playAlarm()
-    alarmIntervalRef.current = setInterval(playAlarm, 5000)
-
-    return () => stopAlarm()
-  }, [alert, dismissed, playAlarm, stopAlarm])
+    audioManager.startAlarm()
+    audioManager.vibrateEmergency()
+    return () => audioManager.stopAlarm()
+  }, [alert, dismissed])
 
   // Realtime listener: watch for broken_arrow status changes
   useEffect(() => {
@@ -142,7 +76,7 @@ export function BrokenArrowAlert() {
           }
 
           // Reset mute for each new incident so it always alerts
-          mutedRef.current = false
+          audioManager.setMuted(false)
           setMuted(false)
           setDismissed(false)
           setAlert({

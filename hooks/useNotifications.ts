@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { audioManager } from '@/lib/audio/AudioManager'
 
 export type NotificationType = 'info' | 'success' | 'warning' | 'error' | 'broken_arrow' | 'call_sign' | 'chat'
 
@@ -18,58 +19,6 @@ export interface AppNotification {
 
 const NOTIFICATION_PAGE_SIZE = 20
 
-// --- Audio Engine ---
-// Synthesises a clean two-tone chime identical to Microsoft Teams notification
-function playChime(type: NotificationType = 'info') {
-  try {
-    if (typeof window === 'undefined') return
-    const Ctx = window.AudioContext || (window as any).webkitAudioContext
-    if (!Ctx) return
-
-    const ctx = new Ctx()
-
-    // Emergency sound for Broken Arrow — urgent triple beep
-    if (type === 'broken_arrow') {
-      const freqs = [880, 1100, 880]
-      freqs.forEach((freq, i) => {
-        const osc = ctx.createOscillator()
-        const gain = ctx.createGain()
-        osc.connect(gain)
-        gain.connect(ctx.destination)
-        osc.type = 'square'
-        osc.frequency.value = freq
-        const t = ctx.currentTime + i * 0.22
-        gain.gain.setValueAtTime(0, t)
-        gain.gain.linearRampToValueAtTime(0.25, t + 0.01)
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18)
-        osc.start(t)
-        osc.stop(t + 0.18)
-      })
-      return
-    }
-
-    // Standard Teams-like two-note chime
-    const tones: [number, number, number][] = [
-      [587, ctx.currentTime, 0.14],       // D5 — short
-      [784, ctx.currentTime + 0.14, 0.22], // G5 — sustained
-    ]
-    tones.forEach(([freq, start, dur]) => {
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.connect(gain)
-      gain.connect(ctx.destination)
-      osc.type = 'sine'
-      osc.frequency.value = freq
-      gain.gain.setValueAtTime(0, start)
-      gain.gain.linearRampToValueAtTime(0.28, start + 0.012)
-      gain.gain.exponentialRampToValueAtTime(0.001, start + dur)
-      osc.start(start)
-      osc.stop(start + dur)
-    })
-  } catch {
-    // Silent — audio can fail on iOS or low-power mode
-  }
-}
 
 function vibrateDevice(type: NotificationType = 'info') {
   try {
@@ -143,10 +92,8 @@ export function useNotifications() {
               setNotifications((prev) => [incoming, ...prev.slice(0, NOTIFICATION_PAGE_SIZE - 1)])
               setUnreadCount((c) => c + 1)
 
-              // Teams-quality alerts — skip for broken_arrow (BrokenArrowAlert owns that audio)
-              if (incoming.type !== 'broken_arrow') {
-                playChime(incoming.type)
-              }
+              // Teams-quality alerts — route through AudioManager (BrokenArrowAlert owns broken_arrow audio)
+              audioManager.playChime(incoming.type)
               vibrateDevice(incoming.type)
 
               // Toast

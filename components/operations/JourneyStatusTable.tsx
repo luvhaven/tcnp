@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { audioManager } from '@/lib/audio/AudioManager'
 import {
     Table,
     TableBody,
@@ -22,7 +23,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { formatDistanceToNow } from 'date-fns'
-import { Search, Radio, Clock, Loader2, ChevronDown } from 'lucide-react'
+import { Search, Radio, Clock, Loader2, ChevronDown, Download } from 'lucide-react'
 import { CALL_SIGNS, getCallSignLabel, getCallSignColor, type CallSignKey } from '@/lib/constants/call-signs'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -67,6 +68,12 @@ export default function JourneyStatusTable() {
     const [selectedJourneyForTimes, setSelectedJourneyForTimes] = useState<Journey | null>(null)
     const [timesForm, setTimesForm] = useState({ eta: '', etd: '' })
     const [savingTimes, setSavingTimes] = useState(false)
+    // Realtime connection status for the status dot in the footer
+    const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
+    // Stable per-tab channel name — prevents multi-tab subscription collision
+    const channelName = useRef(`journey-monitor-${Math.random().toString(36).slice(2)}`).current
+    // Debounce timer for INSERT-triggered full reloads
+    const insertDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     useEffect(() => {
         let mounted = true
@@ -75,9 +82,9 @@ export default function JourneyStatusTable() {
         loadPrograms()
         loadActiveJourneys()
 
-        // Realtime subscription for journey updates - with DIRECT state updates
+        // Unique channel per tab — prevents multi-admin-tab subscription conflicts
         const channel = supabase
-            .channel('journey-monitor')
+            .channel(channelName)
             .on(
                 'postgres_changes',
                 {
@@ -87,11 +94,6 @@ export default function JourneyStatusTable() {
                 },
                 (payload) => {
                     if (!mounted) return
-                    console.log('🔄 Journey UPDATE received:', {
-                        id: payload.new?.id,
-                        status: payload.new?.status,
-                        current_call_sign: payload.new?.current_call_sign
-                    })
 
                     // DIRECT state update for instant UI change
                     setJourneys(prev => {
@@ -128,29 +130,45 @@ export default function JourneyStatusTable() {
                 },
                 (payload) => {
                     if (!mounted) return
-                    console.log('➕ Journey INSERT received:', payload.new?.id)
-                    // For new journeys, we need to reload to get relations
-                    loadActiveJourneys()
+                    // Debounce burst inserts — reload once after 200ms of quiet
+                    if (insertDebounceRef.current) clearTimeout(insertDebounceRef.current)
+                    insertDebounceRef.current = setTimeout(() => {
+                        if (mounted) loadActiveJourneys()
+                    }, 200)
+                }
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: 'DELETE',
+                    schema: 'public',
+                    table: 'journeys'
+                },
+                (payload) => {
+                    if (!mounted) return
+                    // Remove deleted journey from state immediately
+                    setJourneys(prev => prev.filter(j => j.id !== (payload.old as any)?.id))
                 }
             )
             .subscribe((status, err) => {
                 if (status === 'SUBSCRIBED') {
-                    console.log('✅ Ops Monitor realtime subscription active')
-                } else if (status === 'CHANNEL_ERROR') {
-                    console.error('❌ Ops Monitor realtime error:', err)
+                    if (mounted) setRealtimeStatus('connected')
+                } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                    if (mounted) setRealtimeStatus('disconnected')
+                    console.error('Ops Monitor realtime error:', err)
+                } else if (status === 'CLOSED') {
+                    if (mounted) setRealtimeStatus('disconnected')
                 }
             })
 
         // Reduced polling to 60 seconds as fallback (realtime is primary)
         const pollInterval = setInterval(() => {
-            if (mounted) {
-                console.log('⏰ Fallback polling for journey updates...')
-                loadActiveJourneys()
-            }
+            if (mounted) loadActiveJourneys()
         }, 60000)
 
         return () => {
             mounted = false
+            if (insertDebounceRef.current) clearTimeout(insertDebounceRef.current)
             clearInterval(pollInterval)
             supabase.removeChannel(channel)
         }
@@ -259,19 +277,7 @@ export default function JourneyStatusTable() {
     }
 
     const playCallSignChime = () => {
-        try {
-            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-            const osc = ctx.createOscillator()
-            const gain = ctx.createGain()
-            osc.type = 'sine'
-            osc.frequency.value = 660
-            gain.gain.setValueAtTime(0.25, ctx.currentTime)
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4)
-            osc.connect(gain)
-            gain.connect(ctx.destination)
-            osc.start()
-            osc.stop(ctx.currentTime + 0.4)
-        } catch (e) {}
+        audioManager.playChime('success')
     }
 
     const handleCallSignClick = (journey: Journey) => {
@@ -354,6 +360,32 @@ export default function JourneyStatusTable() {
         return matchesSearch && matchesStatus && matchesProgram
     })
 
+    // CSV Export
+    const handleExportCSV = () => {
+        const headers = ['Papa', 'Title', 'DO Name', 'Cheetah', 'Status', 'ETA', 'ETD', 'Last Updated']
+        const rows = filteredJourneys.map(j => [
+            j.papas?.full_name ?? '',
+            j.papas?.title ?? '',
+            j.duty_officers?.find(d => d.is_lead)?.users?.full_name ?? j.assigned_do?.full_name ?? '',
+            j.cheetahs?.call_sign ?? '',
+            j.status || j.current_call_sign || '',
+            j.eta ? new Date(j.eta).toLocaleString('en-GB') : '',
+            j.etd ? new Date(j.etd).toLocaleString('en-GB') : '',
+            j.status_updated_at ? new Date(j.status_updated_at).toLocaleString('en-GB') : '',
+        ])
+        const csv = [headers, ...rows]
+            .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+            .join('\n')
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `ops-monitor-${new Date().toISOString().slice(0, 10)}.csv`
+        a.click()
+        URL.revokeObjectURL(url)
+        toast.success(`Exported ${filteredJourneys.length} journey${filteredJourneys.length !== 1 ? 's' : ''} to CSV`)
+    }
+
     // Stats
     const stats = {
         total:        journeys.length,
@@ -364,8 +396,48 @@ export default function JourneyStatusTable() {
 
     if (loading) {
         return (
-            <div className="flex justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="space-y-4">
+                {/* Stats strip skeleton */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {[...Array(4)].map((_, i) => (
+                        <div key={i} className="rounded-lg border bg-card px-4 py-3 flex items-center justify-between">
+                            <div className="space-y-2">
+                                <div className="h-3 w-20 rounded skeleton" />
+                                <div className="h-7 w-10 rounded skeleton" />
+                            </div>
+                            <div className="h-6 w-6 rounded skeleton" />
+                        </div>
+                    ))}
+                </div>
+                {/* Filter bar skeleton */}
+                <div className="flex flex-col md:flex-row gap-3">
+                    <div className="h-10 flex-1 rounded-md skeleton" />
+                    <div className="h-10 w-[180px] rounded-md skeleton" />
+                    <div className="h-10 w-[180px] rounded-md skeleton" />
+                    <div className="h-10 w-24 rounded-md skeleton" />
+                </div>
+                {/* Table skeleton */}
+                <div className="border rounded-lg overflow-hidden">
+                    <div className="bg-muted/50 px-4 py-3 border-b flex gap-4">
+                        {['w-24','w-28','w-20','w-16','w-16','w-20','w-16'].map((w, i) => (
+                            <div key={i} className={`h-3 ${w} rounded skeleton`} />
+                        ))}
+                    </div>
+                    {[...Array(5)].map((_, i) => (
+                        <div key={i} className="flex items-center gap-4 px-4 py-4 border-b last:border-b-0">
+                            <div className="space-y-1.5 flex-1">
+                                <div className="h-4 w-32 rounded skeleton" />
+                                <div className="h-3 w-20 rounded skeleton" />
+                            </div>
+                            <div className="h-4 w-28 rounded skeleton" />
+                            <div className="h-6 w-24 rounded-full skeleton" />
+                            <div className="h-3 w-14 rounded skeleton" />
+                            <div className="h-3 w-14 rounded skeleton" />
+                            <div className="h-3 w-20 rounded skeleton" />
+                            <div className="h-7 w-20 rounded skeleton" />
+                        </div>
+                    ))}
+                </div>
             </div>
         )
     }
@@ -407,8 +479,8 @@ export default function JourneyStatusTable() {
                     <Radio className={cn("h-6 w-6", stats.brokenArrow > 0 ? "text-destructive" : "text-muted-foreground/30")} />
                 </div>
             </div>
-            {/* Filters */}
-            <div className="flex flex-col md:flex-row gap-4">
+            {/* Filters + Export */}
+            <div className="flex flex-col md:flex-row gap-3">
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -419,7 +491,7 @@ export default function JourneyStatusTable() {
                     />
                 </div>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-[200px]">
+                    <SelectTrigger className="w-[180px]">
                         <SelectValue placeholder="Filter by Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -432,7 +504,7 @@ export default function JourneyStatusTable() {
                     </SelectContent>
                 </Select>
                 <Select value={selectedProgram} onValueChange={setSelectedProgram}>
-                    <SelectTrigger className="w-[200px]">
+                    <SelectTrigger className="w-[180px]">
                         <SelectValue placeholder="Filter by Program" />
                     </SelectTrigger>
                     <SelectContent>
@@ -444,6 +516,17 @@ export default function JourneyStatusTable() {
                         ))}
                     </SelectContent>
                 </Select>
+                <Button
+                    variant="outline"
+                    size="default"
+                    onClick={handleExportCSV}
+                    disabled={filteredJourneys.length === 0}
+                    title="Export visible journeys to CSV"
+                    className="shrink-0"
+                >
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                </Button>
             </div>
 
             {/* Journey Table */}
@@ -566,14 +649,22 @@ export default function JourneyStatusTable() {
                 </Table>
             </div>
 
-            {/* Summary Stats */}
+            {/* Summary Stats + Realtime Status */}
             <div className="flex items-center justify-between text-sm text-muted-foreground border-t pt-4">
                 <span>
                     Showing {filteredJourneys.length} of {journeys.length} active {journeys.length === 1 ? 'journey' : 'journeys'}
                 </span>
                 <span className="flex items-center gap-2">
-                    <Radio className="h-4 w-4 text-green-500 animate-pulse" />
-                    Live updates enabled
+                    <span
+                        className={cn(
+                            "h-2.5 w-2.5 rounded-full inline-block transition-colors duration-500",
+                            realtimeStatus === 'connected' && "bg-green-500 animate-pulse",
+                            realtimeStatus === 'connecting' && "bg-amber-400 animate-pulse",
+                            realtimeStatus === 'disconnected' && "bg-red-500"
+                        )}
+                        title={realtimeStatus === 'connected' ? 'Live updates active' : realtimeStatus === 'connecting' ? 'Connecting...' : 'Realtime disconnected — data may be stale'}
+                    />
+                    {realtimeStatus === 'connected' ? 'Live' : realtimeStatus === 'connecting' ? 'Connecting...' : '⚠ Disconnected'}
                 </span>
             </div>
 

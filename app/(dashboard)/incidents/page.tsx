@@ -16,10 +16,12 @@ import {
   Plus,
   Radio,
   CheckCircle,
+  CheckCircle2,
   Clock,
   XCircle,
   MapPin,
-  User
+  User,
+  Download
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -60,10 +62,10 @@ const SEVERITY_CONFIG = {
 }
 
 const STATUS_CONFIG = {
-  open: { label: 'OPEN', color: 'bg-yellow-500', icon: Clock },
-  in_progress: { label: 'IN PROGRESS', color: 'bg-blue-500', icon: Radio },
-  resolved: { label: 'RESOLVED', color: 'bg-gray-500', icon: CheckCircle },
-  closed: { label: 'CLOSED', color: 'bg-green-500', icon: CheckCircle }
+  open: { label: 'Open', className: 'bg-amber-500/15 text-amber-600 border border-amber-500/30', icon: Clock },
+  in_progress: { label: 'In Progress', className: 'bg-blue-500/15 text-blue-600 border border-blue-500/30', icon: Radio },
+  resolved: { label: 'Resolved', className: 'bg-gray-500/15 text-gray-500 border border-gray-500/30', icon: CheckCircle2 },
+  closed: { label: 'Closed', className: 'bg-emerald-500/15 text-emerald-600 border border-emerald-500/30', icon: CheckCircle2 }
 }
 
 const INCIDENT_TYPES = [
@@ -167,17 +169,14 @@ export default function IncidentsPage() {
 
   const subscribeToIncidents = () => {
     const channel = supabase
-      .channel('incidents-realtime')
+      // Unique channel per tab to avoid multi-tab conflicts
+      .channel(`incidents-realtime-${Math.random().toString(36).slice(2)}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'incidents' },
-        (payload) => {
-          console.log('📡 Incident update:', payload)
-          loadData()
-        }
+        () => { loadData() }
       )
       .subscribe()
-
     return channel
   }
 
@@ -240,6 +239,52 @@ export default function IncidentsPage() {
     [canManage, supabase, createAuditLog, editing?.id, loadData]
   )
 
+
+  const handleQuickResolve = useCallback(async (incident: Incident) => {
+    if (incident.status === 'resolved' || incident.status === 'closed') return
+    // Optimistic update
+    setIncidents(prev => prev.map(i => i.id === incident.id
+      ? { ...i, status: 'resolved', resolved_at: new Date().toISOString() }
+      : i
+    ))
+    try {
+      const { error } = await (supabase as any)
+        .from('incidents')
+        .update({ status: 'resolved', resolved_at: new Date().toISOString() })
+        .eq('id', incident.id)
+      if (error) throw error
+      toast.success('Incident marked as resolved')
+      await createAuditLog('resolve_incident', 'incident', incident.id, { previous_status: incident.status })
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to resolve incident')
+      await loadData() // rollback
+    }
+  }, [supabase, createAuditLog, loadData])
+
+  const handleExportCSV = useCallback(() => {
+    const headers = ['Type', 'Severity', 'Status', 'Papa', 'Cheetah', 'Reporter', 'Created', 'Resolved']
+    const rows = incidents.map(i => [
+      i.type,
+      i.severity,
+      i.status,
+      i.journeys?.papas?.full_name ?? '',
+      i.journeys?.cheetahs?.call_sign ?? '',
+      i.reporter?.full_name ?? '',
+      format(new Date(i.created_at), 'dd/MM/yyyy HH:mm'),
+      i.resolved_at ? format(new Date(i.resolved_at), 'dd/MM/yyyy HH:mm') : '',
+    ])
+    const csv = [headers, ...rows]
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `incidents-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Exported ${incidents.length} incident${incidents.length !== 1 ? 's' : ''}`)
+  }, [incidents])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -360,12 +405,18 @@ export default function IncidentsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Incident Management</h1>
-          <p className="text-sm text-muted-foreground mt-1 max-w-xl">Track and resolve journey incidents</p>
+          <p className="text-sm text-muted-foreground mt-1 max-w-xl">Track, manage, and resolve journey incidents in real-time</p>
         </div>
-        <Button onClick={() => openDialog()} className="bg-primary hover:bg-primary/90">
-          <Plus className="h-4 w-4 mr-2" />
-          Report Incident
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleExportCSV} disabled={incidents.length === 0}>
+            <Download className="h-4 w-4 mr-2" />
+            Export CSV
+          </Button>
+          <Button onClick={() => openDialog()} className="bg-primary hover:bg-primary/90">
+            <Plus className="h-4 w-4 mr-2" />
+            Report Incident
+          </Button>
+        </div>
       </div>
 
       {/* Incidents Table */}
@@ -379,15 +430,12 @@ export default function IncidentsPage() {
               <thead>
                 <tr className="border-b bg-muted/40">
                   <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wide">Papa</th>
-                  <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wide">DO / Reporter</th>
-                  <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wide">Cheetah &amp; Driver</th>
-                  <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wide">Location</th>
+                  <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wide">Reporter</th>
+                  <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wide">Cheetah</th>
                   <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wide">Type / Severity</th>
                   <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wide">Status</th>
                   <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wide">Time</th>
-                  {canManage && (
-                    <th className="text-right py-3 px-4 font-semibold text-xs uppercase tracking-wide">Actions</th>
-                  )}
+                  <th className="text-right py-3 px-4 font-semibold text-xs uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -500,10 +548,15 @@ export default function IncidentsPage() {
 
                         {/* Status */}
                         <td className="py-4 px-4">
-                          <Badge className={`${statusConfig.color} text-white flex items-center gap-1 w-fit`}>
+                          <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full ${statusConfig.className}`}>
                             <StatusIcon className="h-3 w-3" />
                             {statusConfig.label}
-                          </Badge>
+                          </span>
+                          {incident.resolved_at && (
+                            <div className="text-[10px] text-muted-foreground mt-1">
+                              {format(new Date(incident.resolved_at), 'dd/MM HH:mm')}
+                            </div>
+                          )}
                         </td>
 
                         {/* Time */}
@@ -512,22 +565,31 @@ export default function IncidentsPage() {
                         </td>
 
                         {/* Actions */}
-                        {canManage && (
-                          <td className="py-4 px-4">
-                            <div className="flex justify-end">
+                        <td className="py-4 px-4">
+                          <div className="flex justify-end gap-1.5">
+                            {incident.status !== 'resolved' && incident.status !== 'closed' && (
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  handleDelete(incident)
-                                }}
+                                className="h-7 text-xs text-emerald-600 border-emerald-400/50 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                                onClick={(e) => { e.stopPropagation(); handleQuickResolve(incident) }}
+                              >
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                Resolve
+                              </Button>
+                            )}
+                            {canManage && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={(e) => { e.stopPropagation(); handleDelete(incident) }}
                               >
                                 Delete
                               </Button>
-                            </div>
-                          </td>
-                        )}
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     )
                   })

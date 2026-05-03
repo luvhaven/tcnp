@@ -1,20 +1,21 @@
 "use client"
 
+import { audioManager } from '@/lib/audio/AudioManager'
+
 /**
  * Notification Service
  * Microsoft Teams-like notification system with sound and vibration
+ * Audio is routed through the global AudioManager singleton so that
+ * the mute button in BrokenArrowAlert silences everything.
  */
 
 export class NotificationService {
     private static instance: NotificationService
-    private audioContext: AudioContext | null = null
-    private notificationSound: HTMLAudioElement | null = null
     private permission: NotificationPermission = 'default'
 
     private constructor() {
         if (typeof window !== 'undefined') {
             this.permission = Notification.permission
-            this.initializeAudio()
         }
     }
 
@@ -23,19 +24,6 @@ export class NotificationService {
             NotificationService.instance = new NotificationService()
         }
         return NotificationService.instance
-    }
-
-    private initializeAudio() {
-        try {
-            // Create notification sound (Microsoft Teams-like chime)
-            this.notificationSound = new Audio()
-            this.notificationSound.volume = 0.5
-
-            // Create audio context for custom sounds
-            this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-        } catch (error) {
-            console.error('Failed to initialize audio:', error)
-        }
     }
 
     /**
@@ -61,37 +49,10 @@ export class NotificationService {
     }
 
     /**
-     * Play notification sound (Teams-like chime)
+     * Play notification sound via the global AudioManager singleton.
      */
     private playNotificationSound() {
-        if (!this.audioContext) return
-
-        try {
-            const oscillator = this.audioContext.createOscillator()
-            const gainNode = this.audioContext.createGain()
-
-            // Create a pleasant chime sound (similar to Teams)
-            oscillator.type = 'sine'
-            oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime)
-            oscillator.frequency.exponentialRampToValueAtTime(
-                600,
-                this.audioContext.currentTime + 0.1
-            )
-
-            gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime)
-            gainNode.gain.exponentialRampToValueAtTime(
-                0.01,
-                this.audioContext.currentTime + 0.3
-            )
-
-            oscillator.connect(gainNode)
-            gainNode.connect(this.audioContext.destination)
-
-            oscillator.start(this.audioContext.currentTime)
-            oscillator.stop(this.audioContext.currentTime + 0.3)
-        } catch (error) {
-            console.error('Error playing notification sound:', error)
-        }
+        audioManager.playChime('info')
     }
 
     /**
@@ -196,7 +157,9 @@ export class NotificationService {
     }
 
     /**
-     * Show notification for emergency/broken arrow
+     * Show notification for emergency/broken arrow.
+     * Audio is intentionally NOT started here — BrokenArrowAlert owns the alarm loop
+     * via AudioManager so that a single mute button silences everything.
      */
     async notifyEmergency(message: string) {
         await this.showNotification({
@@ -204,44 +167,8 @@ export class NotificationService {
             body: message,
             tag: 'emergency',
             requireInteraction: true,
-            silent: false,
+            silent: true, // BrokenArrowAlert handles audio via AudioManager
         })
-
-        // Play additional alert sound for emergency
-        this.playEmergencySound()
-    }
-
-    /**
-     * Play emergency alert sound (more urgent)
-     */
-    private playEmergencySound() {
-        if (!this.audioContext) return
-
-        try {
-            for (let i = 0; i < 3; i++) {
-                setTimeout(() => {
-                    const oscillator = this.audioContext!.createOscillator()
-                    const gainNode = this.audioContext!.createGain()
-
-                    oscillator.type = 'square'
-                    oscillator.frequency.setValueAtTime(1000, this.audioContext!.currentTime)
-
-                    gainNode.gain.setValueAtTime(0.4, this.audioContext!.currentTime)
-                    gainNode.gain.exponentialRampToValueAtTime(
-                        0.01,
-                        this.audioContext!.currentTime + 0.2
-                    )
-
-                    oscillator.connect(gainNode)
-                    gainNode.connect(this.audioContext!.destination)
-
-                    oscillator.start(this.audioContext!.currentTime)
-                    oscillator.stop(this.audioContext!.currentTime + 0.2)
-                }, i * 300)
-            }
-        } catch (error) {
-            console.error('Error playing emergency sound:', error)
-        }
     }
 }
 

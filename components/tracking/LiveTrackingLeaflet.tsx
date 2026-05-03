@@ -58,9 +58,9 @@ const buildPopupContent = (
   const roleLabel = escapeHtml(roleDisplay.label)
   const papaName = location.papa_name ? escapeHtml(location.papa_name) : null
   const isDO = location.oscar?.toLowerCase().includes('do') || location.role === 'delta_oscar'
-  const titleDisplay = (isDO && papaName) ? `${name} - ${papaName}` : name
+  const titleDisplay = (isDO && papaName) ? `${name} - Papa ${papaName}` : name
   const papaLine = (isDO && papaName)
-    ? `<p style="font-size:11px;color:#2563EB;font-weight:600;margin:2px 0 6px">📋 Papa: ${papaName}</p>`
+    ? `<p style="font-size:11px;color:#2563EB;font-weight:600;margin:2px 0 6px">📋 Papa ${papaName}</p>`
     : ''
 
   const speedLine =

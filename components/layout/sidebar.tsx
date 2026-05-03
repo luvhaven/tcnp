@@ -180,10 +180,10 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
               href={item.href}
               onClick={isMobile ? onClose : undefined}
               className={cn(
-                "relative flex items-center justify-start px-3 py-2 text-sm font-medium transition-all duration-200 border-l-[3px] gap-3 mr-2 rounded-r-md",
+                "relative flex items-center justify-start px-3 py-2 text-sm font-medium rounded-lg gap-3 mr-1 transition-all duration-150 border-l-[3px]",
                 isActive
-                  ? "text-primary border-primary"
-                  : "text-muted-foreground border-transparent hover:text-foreground hover:border-muted-foreground/30"
+                  ? "text-primary border-primary bg-primary/10 shadow-sm"
+                  : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/60 hover:border-muted-foreground/20"
               )}
               title={collapsed ? item.name : undefined}
             >
