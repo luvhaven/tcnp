@@ -25,6 +25,10 @@ export type LiveTrackingLeafletProps = {
   trails?: Record<string, [number, number][]>
   getUserStatus: (updatedAt: string) => { label: string; color: string }
   getRoleDisplay: (role?: string | null) => { label: string; color: string }
+  /** Show TomTom traffic flow overlay */
+  showTraffic?: boolean
+  /** TomTom API key — read from NEXT_PUBLIC_TOMTOM_API_KEY */
+  tomtomKey?: string
 }
 
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -96,10 +100,13 @@ export default function LiveTrackingLeaflet({
   trails,
   getUserStatus,
   getRoleDisplay,
+  showTraffic = false,
+  tomtomKey,
 }: LiveTrackingLeafletProps) {
-  const mapRef = useRef<L.Map | null>(null)
-  const markersRef = useRef<Record<string, L.Marker>>({})
+  const mapRef       = useRef<L.Map | null>(null)
+  const markersRef   = useRef<Record<string, L.Marker>>({})
   const polylinesRef = useRef<Record<string, L.Polyline>>({})
+  const trafficRef   = useRef<L.TileLayer | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const hasFitBoundsRef = useRef(false)
 
@@ -125,6 +132,27 @@ export default function LiveTrackingLeaflet({
 
     mapRef.current = map
   }, [center])
+
+  // ── Traffic overlay (TomTom flow tiles) ──────────────────────────────────
+  // Standard traffic colours shown by TomTom:
+  //   Green  = free flow   | Yellow = moderate
+  //   Orange = heavy       | Red    = very heavy / standstill
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    if (showTraffic && tomtomKey) {
+      if (!trafficRef.current) {
+        trafficRef.current = L.tileLayer(
+          `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${tomtomKey}`,
+          { attribution: '© TomTom', maxZoom: 19, opacity: 0.75 }
+        ).addTo(map)
+      }
+    } else {
+      trafficRef.current?.remove()
+      trafficRef.current = null
+    }
+  }, [showTraffic, tomtomKey])
 
   useEffect(() => {
     if (mapRef.current) mapRef.current.setView(center, mapRef.current.getZoom() ?? 12)
@@ -228,6 +256,8 @@ export default function LiveTrackingLeaflet({
       markersRef.current = {}
       Object.values(polylinesRef.current).forEach((l) => l.remove())
       polylinesRef.current = {}
+      trafficRef.current?.remove()
+      trafficRef.current = null
       mapRef.current?.remove()
       mapRef.current = null
     }

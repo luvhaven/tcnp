@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { MapPin, Users, Car, Navigation, Search, ChevronLeft, ChevronRight, Wifi, WifiOff } from 'lucide-react'
+import { MapPin, Users, Car, Navigation, Search, ChevronLeft, ChevronRight, Wifi, WifiOff, Radio } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CallSignKey, getCallSignLabel, getCallSignColor, CALL_SIGNS } from '@/lib/constants/call-signs'
 import { useLocationTracking } from '@/hooks/useLocationTracking'
@@ -36,6 +36,8 @@ type LiveTrackingLeafletProps = {
   trails?: Record<string, [number, number][]>
   getUserStatus: (updatedAt: string) => { label: string; color: string }
   getRoleDisplay: (role?: string | null) => { label: string; color: string }
+  showTraffic?: boolean
+  tomtomKey?: string
 }
 
 const LiveTrackingLeaflet = dynamic<LiveTrackingLeafletProps>(
@@ -133,6 +135,8 @@ export default function LiveTrackingMap() {
   const [mapCenter, setMapCenter] = useState<[number, number]>([6.5244, 3.3792]) // Lagos, Nigeria
   const [isClient, setIsClient] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [showTraffic, setShowTraffic] = useState(false)
+  const tomtomKey = process.env.NEXT_PUBLIC_TOMTOM_API_KEY ?? ''
   /** Keeps the last 10 GPS positions per user for trail polylines */
   const locationTrailsRef = useRef<Record<string, [number, number][]>>({})
   const [locationTrails, setLocationTrails] = useState<Record<string, [number, number][]>>({})
@@ -507,11 +511,31 @@ export default function LiveTrackingMap() {
               <span className="font-semibold text-green-600">{stats.active}</span>
             </span>
           </div>
+          {/* Traffic toggle */}
+          <Button
+            type="button"
+            variant={showTraffic ? 'default' : 'outline'}
+            size="sm"
+            className="flex items-center gap-1.5 text-xs"
+            onClick={() => {
+              if (!tomtomKey) {
+                toast.error('Traffic overlay needs a TomTom API key. Add NEXT_PUBLIC_TOMTOM_API_KEY to .env.local')
+                return
+              }
+              setShowTraffic((v) => !v)
+            }}
+            aria-label={showTraffic ? 'Hide traffic' : 'Show traffic'}
+          >
+            <Radio className="h-3.5 w-3.5" />
+            Traffic {showTraffic ? 'ON' : 'OFF'}
+          </Button>
+
+          {/* Sidebar toggle */}
           <Button
             type="button"
             variant="outline"
             size="icon"
-            className="ml-1 h-8 w-8 rounded-full shadow-sm"
+            className="h-8 w-8 rounded-full shadow-sm"
             onClick={() => setSidebarOpen((open) => !open)}
             aria-label={sidebarOpen ? 'Hide details panel' : 'Show details panel'}
           >
@@ -542,6 +566,8 @@ export default function LiveTrackingMap() {
                     trails={locationTrails}
                     getUserStatus={getUserStatus}
                     getRoleDisplay={getRoleDisplayMeta}
+                    showTraffic={showTraffic}
+                    tomtomKey={tomtomKey}
                   />
                 )}
               </div>
@@ -662,7 +688,42 @@ export default function LiveTrackingMap() {
             </CardContent>
           </Card>
 
-          {/* Legend */}
+          {/* Traffic legend — shown when traffic layer is on */}
+          {showTraffic && (
+            <Card className="border-blue-200 dark:border-blue-800">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Radio className="h-4 w-4 text-blue-500" />
+                  Traffic Conditions
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-2">
+                  {[
+                    { color: '#00b200', label: 'Free flow',     desc: 'Road clear, full speed' },
+                    { color: '#92b300', label: 'Mostly free',   desc: 'Minor slowdowns' },
+                    { color: '#ffd700', label: 'Moderate',      desc: 'Noticeable delay' },
+                    { color: '#ff8c00', label: 'Heavy',         desc: 'Significant congestion' },
+                    { color: '#cc0000', label: 'Very heavy',    desc: 'Severe slowdown / jam' },
+                    { color: '#4a0000', label: 'Standstill',    desc: 'Near-stationary traffic' },
+                  ].map(({ color, label, desc }) => (
+                    <div key={label} className="flex items-center gap-2.5">
+                      <div className="h-3.5 w-3.5 flex-shrink-0 rounded-sm" style={{ backgroundColor: color }} />
+                      <div className="min-w-0">
+                        <span className="text-xs font-semibold">{label}</span>
+                        <span className="ml-1.5 text-[10px] text-muted-foreground">{desc}</span>
+                      </div>
+                    </div>
+                  ))}
+                  <p className="mt-1 text-[10px] text-muted-foreground border-t pt-1">
+                    Powered by TomTom Traffic Flow
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Journey call signs legend */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Journey Call Signs</CardTitle>
