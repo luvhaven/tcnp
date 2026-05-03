@@ -211,9 +211,14 @@ export default function NotificationCenter() {
               exit={{ opacity: 0, y: -8, scale: 0.96 }}
               transition={{ type: "spring", stiffness: 400, damping: 28 }}
               className={cn(
-                "absolute right-0 top-[calc(100%+8px)] z-50 w-[380px] overflow-hidden",
+                // Mobile: fixed to viewport so it never overflows
+                "fixed right-2 top-[68px] z-50",
+                // sm+: back to absolute anchored to the bell button
+                "sm:absolute sm:right-0 sm:top-[calc(100%+8px)]",
+                // Responsive width: fills the screen on mobile, capped at 380px on desktop
+                "w-[calc(100vw-1rem)] max-w-[380px] sm:w-[380px] overflow-hidden",
                 "rounded-xl border bg-popover shadow-2xl shadow-black/15 ring-1 ring-border/50",
-                "flex flex-col max-h-[520px]"
+                "flex flex-col max-h-[calc(100vh-80px)] sm:max-h-[520px]"
               )}
             >
               {/* Header */}

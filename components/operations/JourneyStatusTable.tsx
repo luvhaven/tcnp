@@ -275,15 +275,12 @@ export default function JourneyStatusTable() {
     }
 
     const handleCallSignClick = (journey: Journey) => {
-        const isAdmin = currentUser?.role &&
-            ['super_admin', 'dev_admin', 'admin', 'captain', 'head_of_command', 'head_of_operations', 'command', 'hod', 'hop'].includes(currentUser.role)
+        // Admin is READ-ONLY on Ops Monitor — status changes come from the assigned DO only
         const isAssignedDO = !!(journey.duty_officers?.some(d => d.user_id === currentUser?.id)) ||
-            currentUser?.id === journey.assigned_duty_officer_id
+            currentUser?.id === journey.assigned_duty_officer_id ||
+            currentUser?.id === (journey as any).assigned_do_id
 
-        if (!isAdmin && !isAssignedDO) {
-            toast.error('Only the assigned DO team or admins can update this journey')
-            return
-        }
+        if (!isAssignedDO) return   // admin sees the badge but cannot click
 
         setSelectedJourney(journey)
         setCallSignDialogOpen(true)
@@ -293,10 +290,18 @@ export default function JourneyStatusTable() {
         if (!selectedJourney) return
 
         try {
-            const { error } = await (supabase as any).rpc('update_journey_call_sign', {
-                journey_uuid: selectedJourney.id,
-                new_status: newCallSign
-            })
+            // Direct update — journey_status enum accepts underscored keys (e.g. 'first_course') ✓
+            // We intentionally skip the update_journey_call_sign RPC because it writes to
+            // current_call_sign which is a call_sign enum (Title Case) and would reject
+            // the underscore values we send.
+            const { error } = await (supabase as any)
+                .from('journeys')
+                .update({
+                    status: newCallSign,
+                    status_updated_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', selectedJourney.id)
 
             if (error) throw error
 
@@ -469,7 +474,7 @@ export default function JourneyStatusTable() {
                                 const callSign = journey.current_call_sign || journey.status || 'planned'
                                 const callSignLabel = getCallSignLabel(callSign) || callSign.replace(/_/g,' ')
                                 const callSignColor = getCallSignBadgeColor(callSign)
-                                const canClick = !!(isAdmin || journey.duty_officers?.some(d => d.user_id === currentUser?.id) || currentUser?.id === journey.assigned_duty_officer_id)
+                                const canClick = !!(journey.duty_officers?.some(d => d.user_id === currentUser?.id) || currentUser?.id === journey.assigned_duty_officer_id || currentUser?.id === (journey as any).assigned_do_id)
                                 const isBroken = callSign === 'broken_arrow'
                                 const leadDO = journey.duty_officers?.find(d => d.is_lead) ?? null
                                 const allDOs = journey.duty_officers ?? []

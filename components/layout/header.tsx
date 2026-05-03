@@ -69,46 +69,46 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
         >
           <Menu className="h-5 w-5" aria-hidden="true" />
         </button>
-        <div className="flex flex-col">
-          <h1 className="text-base font-semibold tracking-tight md:text-xl">
-            Welcome back, {profile?.full_name || user?.email?.split('@')[0] || 'User'}
+      <div className="flex flex-col min-w-0">
+          <h1 className="text-sm font-semibold tracking-tight md:text-xl truncate max-w-[140px] sm:max-w-xs md:max-w-none">
+            Welcome, {profile?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'User'}
           </h1>
           {profile?.role && (
-            <span className="mt-0.5 inline-flex max-w-full items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary md:mt-1 md:px-3 md:py-1 md:text-[11px]">
+            <span className="mt-0.5 inline-flex max-w-full items-center rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary md:mt-1 md:px-3 md:py-1 md:text-[11px]">
               {formatRole(profile.role)}
             </span>
           )}
         </div>
       </div>
 
-      <div className="flex items-center space-x-4">
-        {/* Install Button */}
+      <div className="flex items-center space-x-1 md:space-x-3">
+        {/* Install Button — desktop only */}
         <InstallButton />
 
         {/* Notifications */}
         <NotificationCenter />
 
-        {/* User Menu */}
-        <div className="flex items-center space-x-3">
-          <Avatar>
-            <AvatarImage src={profile?.avatar_url} />
-            <AvatarFallback>
-              {user?.email ? getInitials(user.email) : 'U'}
-            </AvatarFallback>
-          </Avatar>
-          <div className="hidden md:block">
-            <p className="text-sm font-medium truncate">{user?.email}</p>
-            {profile?.role && (
-              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">
-                {formatRole(profile.role)}
-              </p>
-            )}
-          </div>
+        {/* Avatar — always visible */}
+        <Avatar className="h-8 w-8 md:h-9 md:w-9">
+          <AvatarImage src={profile?.avatar_url} />
+          <AvatarFallback className="text-xs">
+            {user?.email ? getInitials(user.email) : 'U'}
+          </AvatarFallback>
+        </Avatar>
+
+        {/* Email + role — desktop only */}
+        <div className="hidden md:block">
+          <p className="text-sm font-medium truncate max-w-[160px]">{user?.email}</p>
+          {profile?.role && (
+            <p className="text-[11px] text-muted-foreground uppercase tracking-wide">
+              {formatRole(profile.role)}
+            </p>
+          )}
         </div>
 
-        {/* Logout */}
-        <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Sign out">
-          <LogOut className="h-5 w-5" aria-hidden="true" />
+        {/* Logout — icon only on mobile, icon+accessible on desktop */}
+        <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Sign out" className="h-8 w-8 md:h-9 md:w-9">
+          <LogOut className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
     </header>

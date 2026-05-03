@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Download, Share, PlusSquare, Smartphone, CheckCircle } from 'lucide-react'
+import { Download, Share, PlusSquare, Smartphone } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   Dialog,
@@ -20,38 +20,29 @@ export default function InstallButton() {
   const [showIOSInstructions, setShowIOSInstructions] = useState(false)
 
   useEffect(() => {
-    // 1. Check if running in standalone mode (Installed PWA)
+    // 1. Check if running in standalone mode (installed PWA)
     const checkStandalone = () => {
-      const isStandalone =
+      const standalone =
         window.matchMedia('(display-mode: standalone)').matches ||
         (window.navigator as any).standalone === true
-
-      setIsInstalled(isStandalone)
-      if (isStandalone) setShowInstallBanner(false)
+      setIsInstalled(standalone)
+      if (standalone) setShowInstallBanner(false)
     }
 
     checkStandalone()
-    window.matchMedia('(display-mode: standalone)').addEventListener('change', checkStandalone)
+    const mql = window.matchMedia('(display-mode: standalone)')
+    mql.addEventListener('change', checkStandalone)
 
     // 2. Detect iOS
-    const userAgent = window.navigator.userAgent.toLowerCase()
-    const isIosDevice = /iphone|ipad|ipod/.test(userAgent)
-    setIsIOS(isIosDevice)
+    const ua = window.navigator.userAgent.toLowerCase()
+    const iosDevice = /iphone|ipad|ipod/.test(ua)
+    setIsIOS(iosDevice)
 
-    // On iOS, we can't rely on beforeinstallprompt, so we auto-show if not standalone
-    // We wait a moment to avoid flashing if checking standalone takes time
-    if (isIosDevice && !(window.navigator as any).standalone) {
-      setTimeout(() => setShowInstallBanner(true), 1000)
-    }
-
-    // 3. Handle standard install prompt (Android/Desktop)
+    // 3. Standard install prompt (Android / desktop Chrome)
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault()
       setDeferredPrompt(e)
-      // Only show banner if NOT installed
-      if (!isInstalled) {
-        setShowInstallBanner(true)
-      }
+      setShowInstallBanner(true)
     }
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
@@ -63,18 +54,16 @@ export default function InstallButton() {
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
-      window.matchMedia('(display-mode: standalone)').removeEventListener('change', checkStandalone)
+      mql.removeEventListener('change', checkStandalone)
     }
-  }, [isInstalled])
+  }, [])
 
   const handleInstallClick = async () => {
-    if (isInstalled) return // Should act as "Open" if we could link, but we are already in it or it's just a status
+    if (isInstalled) return
 
     if (isIOS) {
-      // Show iOS instructions
       setShowIOSInstructions(true)
     } else if (deferredPrompt) {
-      // Trigger standard prompt
       deferredPrompt.prompt()
       const { outcome } = await deferredPrompt.userChoice
       if (outcome === 'accepted') {
@@ -82,87 +71,75 @@ export default function InstallButton() {
         setShowInstallBanner(false)
       }
     } else {
-      // Fallback (e.g. if installed but browser doesn't know, or unknown device)
       toast.info('To install, look for "Add to Home Screen" in your browser menu.')
     }
   }
 
-  // If app is already installed/running in standalone, simply don't show the button.
-  // The user complained about it "re-opening" the app, which implies they don't want to see it when inside the app.
-  if (isInstalled) {
-    return null
-  }
-
-  // If banner is explicitly hidden or not relevant (though we allow manual click via header button)
-  const showFloating = showInstallBanner && !isInstalled
+  // Already installed → render nothing
+  if (isInstalled) return null
 
   return (
     <>
-      {/* 1. Header Button (Always visible on Desktop if not installed, or generic "Install" intent) */}
-      {!isInstalled && (
+      {/*
+        ── Desktop header button ─────────────────────────────────────────
+        Shown only on md+ screens. On mobile the button is hidden so it
+        never clutters the compact header. iOS users tap "Install" and get
+        the step-by-step dialog. Android/Chrome users get the native prompt.
+      */}
+      <Button
+        onClick={handleInstallClick}
+        variant="outline"
+        size="sm"
+        className="hidden md:flex bg-primary/5 hover:bg-primary/10 border-primary/20 text-primary"
+      >
+        <Download className="mr-2 h-4 w-4" />
+        Install App
+      </Button>
+
+      {/*
+        ── Mobile: compact icon-only CTA ────────────────────────────────
+        Only shown when the browser has confirmed the app CAN be installed
+        (deferredPrompt is set) OR when on iOS (so the user can get the
+        "Add to Home Screen" instructions). Hidden once installed.
+      */}
+      {(deferredPrompt || isIOS) && (
         <Button
           onClick={handleInstallClick}
-          variant="outline"
-          size="sm"
-          className="hidden md:flex bg-primary/5 hover:bg-primary/10 border-primary/20 text-primary"
+          variant="ghost"
+          size="icon"
+          className="flex md:hidden h-8 w-8 text-primary"
+          aria-label="Install app"
         >
-          <Download className="mr-2 h-4 w-4" />
-          Install App
+          <Smartphone className="h-4 w-4" />
         </Button>
       )}
 
-      {/* 2. Floating Banner (Mobile/Prominent) */}
-      {showFloating && (
-        <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-5 fade-in duration-500">
-          <div className="bg-background border border-border shadow-xl rounded-xl p-4 max-w-xs md:max-w-sm">
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Smartphone className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-sm">Install App</h3>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowInstallBanner(false)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <span className="sr-only">Close</span>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
-              </button>
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={handleInstallClick} size="sm" className="w-full hidden">
-                Install
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 3. iOS Instructions Dialog */}
+      {/* iOS step-by-step instructions dialog */}
       <Dialog open={showIOSInstructions} onOpenChange={setShowIOSInstructions}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Install on iPhone/iPad</DialogTitle>
+            <DialogTitle>Install on iPhone / iPad</DialogTitle>
             <DialogDescription>
-              Follow these steps to add the app to your Home Screen.
+              Add this app to your Home Screen for the best experience.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="flex items-center gap-4">
-              <div className="h-10 w-10 flex items-center justify-center rounded-full bg-blue-50 text-blue-600">
+              <div className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-full bg-blue-50 text-blue-600">
                 <Share className="h-5 w-5" />
               </div>
-              <p className="text-sm">1. Tap the <span className="font-semibold">Share</span> icon in your browser bar.</p>
+              <p className="text-sm">
+                1. Tap the <span className="font-semibold">Share</span> icon in your browser toolbar.
+              </p>
             </div>
             <div className="w-full h-px bg-border" />
             <div className="flex items-center gap-4">
-              <div className="h-10 w-10 flex items-center justify-center rounded-full bg-blue-50 text-blue-600">
+              <div className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-full bg-blue-50 text-blue-600">
                 <PlusSquare className="h-5 w-5" />
               </div>
-              <p className="text-sm">2. Scroll down and tap <span className="font-semibold">Add to Home Screen</span>.</p>
+              <p className="text-sm">
+                2. Scroll down and tap <span className="font-semibold">Add to Home Screen</span>.
+              </p>
             </div>
           </div>
           <div className="flex justify-end">

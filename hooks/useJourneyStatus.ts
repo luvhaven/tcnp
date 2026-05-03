@@ -20,6 +20,39 @@ export const EVENT_CALL_SIGNS: CallSignKey[] = [
   're_order',
 ]
 
+// ── journey_events.event_type is the call_sign enum (Title Case + spaces) ────
+// Map from JS key → DB enum value.  Only keys present here will be logged.
+const CALL_SIGN_KEY_TO_DB: Partial<Record<CallSignKey, string>> = {
+  first_course:  'First Course',
+  cocktail:      'Cocktail',
+  chapman:       'Chapman',
+  dessert:       'Dessert',
+  blue_cocktail: 'Blue Cocktail',
+  red_cocktail:  'Red Cocktail',
+  re_order:      'Re-order',
+  broken_arrow:  'Broken Arrow',
+}
+
+async function logJourneyEvent(
+  supabase: ReturnType<typeof createClient>,
+  journeyId: string,
+  callSign: CallSignKey,
+  notes?: string | null
+) {
+  const dbValue = CALL_SIGN_KEY_TO_DB[callSign]
+  if (!dbValue) return // 'completed' and others are not call_sign enum values – skip
+  try {
+    await (supabase as any).from('journey_events').insert({
+      journey_id:   journeyId,
+      event_type:   dbValue,        // call_sign enum (Title Case) ✓
+      description:  notes ?? null,
+      triggered_at: new Date().toISOString(),
+    })
+  } catch (e) {
+    console.warn('journey_events log failed (non-critical):', e)
+  }
+}
+
 export function useJourneyStatus(journeyId: string) {
   const supabase = createClient()
   const confirm = useConfirm()
@@ -54,12 +87,10 @@ export function useJourneyStatus(journeyId: string) {
           filter: `id=eq.${journeyId}`,
         },
         (payload) => {
-          // Immediately update React Query Cache upon realtime event
           queryClient.setQueryData(['journeyStatus', journeyId], {
             status: payload.new.status,
             updated_at: payload.new.updated_at
           })
-          // Also invalidate list views so other components stay fresh
           queryClient.invalidateQueries({ queryKey: ['journeys'] })
         }
       )
@@ -76,15 +107,11 @@ export function useJourneyStatus(journeyId: string) {
       const isEventOnly = EVENT_CALL_SIGNS.includes(callSign)
 
       if (!isEventOnly) {
+        // Only update columns that actually exist in the journeys schema.
+        // NOTE: actual_departure / actual_arrival do NOT exist — do NOT include them.
         const updates: Record<string, any> = {
-          status: callSign,
+          status:     callSign,                   // journey_status enum (underscores ✓)
           updated_at: new Date().toISOString(),
-        }
-        if (callSign === 'first_course' || callSign === 'cocktail') {
-          updates.actual_departure = new Date().toISOString()
-        }
-        if (callSign === 'chapman') {
-          updates.actual_arrival = new Date().toISOString()
         }
 
         const { error } = await (supabase as any)
@@ -95,12 +122,8 @@ export function useJourneyStatus(journeyId: string) {
         if (error) throw error
       }
 
-      await (supabase as any).from('journey_events').insert({
-        journey_id: journeyId,
-        event_type: callSign,
-        description: notes || null,
-        triggered_at: new Date().toISOString(),
-      })
+      // Log the event — non-critical, errors are swallowed
+      await logJourneyEvent(supabase, journeyId, callSign, notes)
 
       return { callSign, isEventOnly }
     },
@@ -123,6 +146,7 @@ export function useJourneyStatus(journeyId: string) {
       if (context?.previousState) {
         queryClient.setQueryData(['journeyStatus', journeyId], context.previousState)
       }
+      console.error('Call sign update failed:', err)
       toast.error('Failed to update call sign')
     },
     onSuccess: (result) => {
@@ -133,23 +157,18 @@ export function useJourneyStatus(journeyId: string) {
 
   const completeMutation = useMutation({
     mutationFn: async () => {
+      // NOTE: actual_arrival does NOT exist in the journeys schema — omitted.
       const { error } = await (supabase as any)
         .from('journeys')
         .update({
-          status: 'completed',
-          actual_arrival: new Date().toISOString(),
+          status:     'completed',
           updated_at: new Date().toISOString(),
         })
         .eq('id', journeyId)
 
       if (error) throw error
 
-      await (supabase as any).from('journey_events').insert({
-        journey_id: journeyId,
-        event_type: 'completed',
-        description: 'Journey completed',
-        triggered_at: new Date().toISOString(),
-      })
+      // 'completed' is not a call_sign enum value so we skip journey_events for completion
     },
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: ['journeyStatus', journeyId] })
