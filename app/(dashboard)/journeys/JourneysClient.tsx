@@ -1083,25 +1083,6 @@ export default function JourneysClient({
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="scheduled_departure">Scheduled Departure *</Label>
-                <DateTimePicker
-                  value={formData.scheduled_departure}
-                  onChange={(value) => setFormData({ ...formData, scheduled_departure: value })}
-                  placeholder="Select departure date & time"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="scheduled_arrival">Scheduled Arrival</Label>
-                <DateTimePicker
-                  value={formData.scheduled_arrival}
-                  onChange={(value) => setFormData({ ...formData, scheduled_arrival: value })}
-                  placeholder="Select arrival date & time"
-                />
-              </div>
-            </div>
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
@@ -1377,24 +1358,6 @@ export default function JourneysClient({
               </div>
             </div>
 
-            {/* Schedule */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label>Scheduled Departure</Label>
-                <DateTimePicker
-                  value={formData.scheduled_departure}
-                  onChange={(date) => setFormData({ ...formData, scheduled_departure: date })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Scheduled Arrival</Label>
-                <DateTimePicker
-                  value={formData.scheduled_arrival}
-                  onChange={(date) => setFormData({ ...formData, scheduled_arrival: date })}
-                />
-              </div>
-            </div>
 
             {/* Notes */}
             <div className="space-y-2">

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { AlertTriangle, X, ShieldAlert } from 'lucide-react'
+import { AlertTriangle, X, ShieldAlert, Volume2, VolumeX } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface BrokenArrowEvent {
@@ -17,11 +17,38 @@ export function BrokenArrowAlert() {
   const supabase = createClient()
   const [alert, setAlert] = useState<BrokenArrowEvent | null>(null)
   const [dismissed, setDismissed] = useState(false)
+  const [muted, setMuted] = useState(false)
+
+  // We keep a ref to the muted state so the interval callback always reads the latest value
+  // without needing to be recreated.
+  const mutedRef = useRef(false)
   const audioCtxRef = useRef<AudioContext | null>(null)
   const alarmIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
-  const playAlarm = useCallback(() => {
+  const stopCurrentAudio = useCallback(() => {
     try {
+      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+        audioCtxRef.current.close()
+      }
+    } catch (e) {}
+    audioCtxRef.current = null
+  }, [])
+
+  const stopAlarm = useCallback(() => {
+    if (alarmIntervalRef.current) {
+      clearInterval(alarmIntervalRef.current)
+      alarmIntervalRef.current = null
+    }
+    stopCurrentAudio()
+  }, [stopCurrentAudio])
+
+  const playAlarm = useCallback(() => {
+    // Respect the muted ref so the closure never needs to be rebuilt
+    if (mutedRef.current) return
+
+    try {
+      // Create a fresh AudioContext each burst so oscillators are clean
+      stopCurrentAudio()
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
       audioCtxRef.current = ctx
 
@@ -38,7 +65,7 @@ export function BrokenArrowAlert() {
         osc.stop(ctx.currentTime + start + duration)
       }
 
-      // Alarm pattern: two tones rapidly
+      // Alarm pattern: two tones rapidly (total ~1.35 s)
       playTone(880, 0, 0.3)
       playTone(660, 0.35, 0.3)
       playTone(880, 0.7, 0.3)
@@ -48,19 +75,9 @@ export function BrokenArrowAlert() {
         navigator.vibrate([200, 100, 200, 100, 400])
       }
     } catch (e) {
-      // Audio context may require user interaction
+      // AudioContext may require user interaction on some browsers
     }
-  }, [])
-
-  const stopAlarm = useCallback(() => {
-    if (alarmIntervalRef.current) {
-      clearInterval(alarmIntervalRef.current)
-      alarmIntervalRef.current = null
-    }
-    try {
-      audioCtxRef.current?.close()
-    } catch (e) {}
-  }, [])
+  }, [stopCurrentAudio])
 
   const handleDismiss = useCallback(() => {
     stopAlarm()
@@ -68,16 +85,30 @@ export function BrokenArrowAlert() {
     setAlert(null)
   }, [stopAlarm])
 
+  const handleMuteToggle = useCallback(() => {
+    const nowMuted = !mutedRef.current
+    mutedRef.current = nowMuted
+    setMuted(nowMuted)
+    if (nowMuted) {
+      // Stop any currently playing audio immediately
+      stopCurrentAudio()
+    } else {
+      // Unmuting — play one burst immediately so the user hears it
+      playAlarm()
+    }
+  }, [stopCurrentAudio, playAlarm])
+
+  // Start / stop alarm interval based on alert + dismissed state
   useEffect(() => {
     if (!alert || dismissed) return
 
-    // Play alarm immediately then every 5 seconds
     playAlarm()
     alarmIntervalRef.current = setInterval(playAlarm, 5000)
 
     return () => stopAlarm()
   }, [alert, dismissed, playAlarm, stopAlarm])
 
+  // Realtime listener: watch for broken_arrow status changes
   useEffect(() => {
     const channel = supabase
       .channel('broken-arrow-monitor')
@@ -88,7 +119,6 @@ export function BrokenArrowAlert() {
           const updated = payload.new as any
           if (updated?.status !== 'broken_arrow') return
 
-          // Fetch papa and cheetah names
           let papaName = 'Unknown Papa'
           let cheetahCallSign = 'Unknown Cheetah'
 
@@ -110,12 +140,19 @@ export function BrokenArrowAlert() {
             if (data?.call_sign) cheetahCallSign = data.call_sign
           }
 
+          // Reset mute for each new incident so it always alerts
+          mutedRef.current = false
+          setMuted(false)
           setDismissed(false)
           setAlert({
             journeyId: updated.id,
             papaName,
             cheetahCallSign,
-            timestamp: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            timestamp: new Date().toLocaleTimeString('en-GB', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+            }),
           })
         }
       )
@@ -153,15 +190,32 @@ export function BrokenArrowAlert() {
             className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
           >
             <div className="relative w-full max-w-lg rounded-2xl border-4 border-red-500 bg-red-950 text-white shadow-[0_0_80px_rgba(239,68,68,0.8)] animate-pulse-slow">
-              {/* Dismiss button */}
-              <button
-                type="button"
-                onClick={handleDismiss}
-                className="absolute right-4 top-4 rounded-full bg-red-800 p-1.5 hover:bg-red-700 transition-colors"
-                aria-label="Dismiss alert"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              {/* Top-right controls: Mute + Dismiss */}
+              <div className="absolute right-3 top-3 flex items-center gap-2">
+                {/* Mute / Unmute toggle */}
+                <button
+                  type="button"
+                  onClick={handleMuteToggle}
+                  className="rounded-full bg-red-800/70 p-2 hover:bg-red-700 transition-colors"
+                  aria-label={muted ? 'Unmute alarm' : 'Mute alarm'}
+                  title={muted ? 'Unmute alarm' : 'Mute alarm'}
+                >
+                  {muted
+                    ? <VolumeX className="h-4 w-4" />
+                    : <Volume2 className="h-4 w-4" />
+                  }
+                </button>
+
+                {/* Dismiss */}
+                <button
+                  type="button"
+                  onClick={handleDismiss}
+                  className="rounded-full bg-red-800 p-1.5 hover:bg-red-700 transition-colors"
+                  aria-label="Dismiss alert"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
 
               <div className="p-8 text-center space-y-4">
                 {/* Animated icon */}
@@ -180,6 +234,13 @@ export function BrokenArrowAlert() {
                   <p className="text-red-400 text-sm font-medium mt-1 tracking-wide">
                     MAJOR INCIDENT DECLARED — ALL UNITS STANDBY
                   </p>
+                  {/* Muted indicator */}
+                  {muted && (
+                    <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-red-300/70 bg-red-900/40 rounded-full px-3 py-1">
+                      <VolumeX className="h-3 w-3" />
+                      Sound muted — alert is still active
+                    </p>
+                  )}
                 </div>
 
                 {/* Details */}

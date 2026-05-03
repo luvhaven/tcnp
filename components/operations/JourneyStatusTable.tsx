@@ -454,11 +454,10 @@ export default function JourneyStatusTable() {
                             <TableHead className="font-semibold">Papa</TableHead>
                             <TableHead className="font-semibold">DO Team</TableHead>
                             <TableHead className="font-semibold">Status</TableHead>
-                            <TableHead className="font-semibold">Call Sign</TableHead>
                             <TableHead className="font-semibold">ETA</TableHead>
                             <TableHead className="font-semibold">ETD</TableHead>
                             <TableHead className="font-semibold">Updated</TableHead>
-                                            <TableHead className="font-semibold">Actions</TableHead>
+                            <TableHead className="font-semibold">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>

@@ -57,7 +57,8 @@ export default function CallSignPanel({
     return { backgroundColor: isHovered ? c.hover : c.base, color: '#ffffff', transition: 'background-color 150ms ease' }
   }, [])
 
-  const isTerminal = status === 'completed' || status === 'cancelled' || status === 'broken_arrow'
+  const isTerminal = status === 'completed' || status === 'cancelled'
+  const isBrokenArrow = status === 'broken_arrow'
 
   const handleSignClick = (sign: CallSign) => {
     setSelectedSign(sign)
@@ -112,6 +113,21 @@ export default function CallSignPanel({
           </p>
         </CardContent>
       </Card>
+
+      {/* ── Broken Arrow: incident-active banner ─────────────────────────── */}
+      {isBrokenArrow && (
+        <Card className="border-destructive/60 bg-destructive/5 animate-pulse">
+          <CardContent className="flex items-start gap-3 py-3">
+            <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-bold text-destructive">INCIDENT ACTIVE — BROKEN ARROW</p>
+              <p className="text-xs text-destructive/80 mt-0.5">
+                Incident acknowledged. When the Cheetah is moving again, tap <strong>Cocktail</strong> or any call sign below to resume operations.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Live call sign panel ─────────────────────────────────────────── */}
       {!isTerminal && (
@@ -221,13 +237,19 @@ export default function CallSignPanel({
                   const sign = CALL_SIGNS.find(s => s.key === 'broken_arrow')
                   if (sign) handleSignClick(sign)
                 }}
-                disabled={loading}
-                className="w-full py-3 px-4 rounded-lg border-2 border-destructive bg-destructive/10 text-destructive hover:bg-destructive hover:text-white flex items-center gap-3 transition-all font-semibold active:scale-[0.98]"
+                disabled={loading || isBrokenArrow}
+                className="w-full py-3 px-4 rounded-lg border-2 border-destructive bg-destructive/10 text-destructive hover:bg-destructive hover:text-white flex items-center gap-3 transition-all font-semibold active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <AlertTriangle className="h-5 w-5" />
                 <div className="text-left">
-                  <span className="text-sm block">BROKEN ARROW</span>
-                  <span className="text-xs font-normal opacity-80">Distress — major incident immobilizing all Cheetahs</span>
+                  <span className="text-sm block">
+                    {isBrokenArrow ? 'INCIDENT ACTIVE — BROKEN ARROW' : 'BROKEN ARROW'}
+                  </span>
+                  <span className="text-xs font-normal opacity-80">
+                    {isBrokenArrow
+                      ? 'Update with Cocktail or another sign above when resolved'
+                      : 'Distress — major incident immobilizing all Cheetahs'}
+                  </span>
                 </div>
               </button>
             </CardContent>
@@ -244,6 +266,12 @@ export default function CallSignPanel({
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {isBrokenArrow && !isTerminal && (
+        <p className="text-[11px] text-center text-destructive/70">
+          Broken Arrow is active. Use the call signs above to clear the incident when safe.
+        </p>
       )}
 
       {/* Confirmation dialog */}
