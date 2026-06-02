@@ -1573,9 +1573,6 @@ export default function ChatSystem({
               placeholder={isReadOnlyProgramChat ? 'Read-only: not assigned to this program' : editingMessage ? 'Edit message...' : 'Message the team...'}
               value={newMessage}
               onChange={handleMessageChange}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!showMentionSuggestions) void handleSendMessage() }
-              }}
               disabled={isReadOnlyProgramChat}
               rows={1}
               className="block w-full resize-none rounded-xl border bg-background/80 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all placeholder:text-muted-foreground/60 max-h-32 disabled:opacity-50"
