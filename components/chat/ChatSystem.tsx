@@ -1461,7 +1461,7 @@ export default function ChatSystem({
                     </div>
 
                     {!msg.deleted_at && (
-                      <div className={`absolute top-0 ${isOwn ? '-left-[6.5rem]' : '-right-[6.5rem]'} opacity-0 group-hover/msg:opacity-100 transition-opacity flex gap-0.5 bg-background/90 backdrop-blur-sm rounded-xl p-1 shadow-lg border z-10`}>
+                      <div className={`absolute -top-9 ${isOwn ? 'right-0' : 'left-0'} opacity-0 group-hover/msg:opacity-100 transition-opacity flex gap-0.5 bg-background/95 backdrop-blur-sm rounded-xl p-1 shadow-lg border z-20`}>
                         <button onClick={() => setShowReactionPicker(showReactionPicker === msg.id ? null : msg.id)} title="React" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><Smile className="h-3.5 w-3.5" /></button>
                         <button onClick={() => handleReply(msg)} title="Reply" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><CornerUpLeft className="h-3.5 w-3.5" /></button>
                         {isEditable && <button onClick={() => handleEdit(msg)} title="Edit" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><Pencil className="h-3.5 w-3.5" /></button>}
@@ -1469,7 +1469,7 @@ export default function ChatSystem({
                       </div>
                     )}
                     {msg.deleted_at && ['super_admin', 'dev_admin', 'admin'].includes(currentUser?.role) && (
-                      <div className={`absolute top-0 ${isOwn ? '-left-[2.5rem]' : '-right-[2.5rem]'} opacity-0 group-hover/msg:opacity-100 transition-opacity flex gap-0.5 bg-background/90 backdrop-blur-sm rounded-xl p-1 shadow-lg border z-10`}>
+                      <div className={`absolute -top-9 ${isOwn ? 'right-0' : 'left-0'} opacity-0 group-hover/msg:opacity-100 transition-opacity flex gap-0.5 bg-background/95 backdrop-blur-sm rounded-xl p-1 shadow-lg border z-20`}>
                         <button onClick={async (e) => { e.preventDefault(); e.stopPropagation(); if (await confirm({ message: 'Permanently destroy this message?', variant: 'destructive' })) { void handleDeleteMessage(msg.id, true); } }} title="Destroy permanently" className="h-6 w-6 rounded-lg hover:bg-destructive/10 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
                       </div>
                     )}
