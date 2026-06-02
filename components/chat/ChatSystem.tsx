@@ -1409,7 +1409,9 @@ export default function ChatSystem({
                       {msg.deleted_at ? (
                         ['super_admin', 'dev_admin', 'admin'].includes(currentUser?.role) ? (
                           <>
-                            <div className="text-[10px] uppercase font-bold text-destructive mb-1.5 px-1 py-0.5 rounded border border-destructive/30 bg-destructive/10 inline-block">Deleted by {displayName}</div>
+                            <div className={`text-[10px] uppercase font-bold mb-1.5 px-1.5 py-0.5 rounded border inline-block ${isOwn ? 'bg-background text-destructive border-transparent shadow-sm' : 'text-destructive border-destructive/30 bg-destructive/10'}`}>
+                              Deleted by {displayName}
+                            </div>
                             {renderContent(msg.content, searchQuery)}
                           </>
                         ) : (
