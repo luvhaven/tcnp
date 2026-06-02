@@ -1289,18 +1289,18 @@ export default function ChatSystem({
   const timeline = useMemo(() => buildTimeline(visibleMessages, firstUnreadId), [visibleMessages, firstUnreadId])
 
   return (
-    <div className="relative flex flex-col h-[calc(100dvh-9rem)] min-h-[520px] bg-card rounded-2xl border shadow-2xl overflow-hidden">
+    <div className="relative flex flex-col h-[calc(100dvh-7.8rem)] min-h-[520px] bg-card rounded-xl border shadow-sm overflow-hidden">
 
       {/* Header */}
-      <div className="flex-none border-b bg-card/95 backdrop-blur-sm px-4 py-3 shadow-sm">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+      <div className="flex-none border-b bg-card/95 backdrop-blur-sm px-3 py-2 shadow-sm">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
               <MessageCircle className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold leading-tight">Team Chat</h2>
-              <p className="text-[11px] text-muted-foreground">{users.filter(u => u.is_online).length} online · {visibleMessages.length} messages</p>
+              <h2 className="text-xs font-semibold leading-tight">Team Chat</h2>
+              <p className="text-[10px] text-muted-foreground">{users.filter(u => u.is_online).length} online · {visibleMessages.length} messages</p>
               {isReadOnlyProgramChat && <p className="text-[10px] text-amber-600 font-medium">Read-only: not assigned to this program</p>}
             </div>
           </div>

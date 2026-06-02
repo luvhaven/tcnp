@@ -180,37 +180,27 @@ function ChatContent() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold break-words leading-tight">{title}</h1>
-          {program && !activePapa && (
-            <p className="text-sm text-muted-foreground mt-1">
-              Program team chat for this TCNP event
-            </p>
-          )}
-          {program && activePapa && (
-            <p className="text-sm text-muted-foreground mt-1">
-              PAPA chatroom for {activePapa.title ? `${activePapa.title} ` : ''}{activePapa.full_name}
-            </p>
-          )}
+    <div className="space-y-3 animate-fade-in">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-xl sm:text-2xl font-bold break-words leading-tight">{title}</h1>
           {!program && !loading && (
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-[11px] text-muted-foreground hidden sm:inline-block">
               {programs.length === 0
-                ? 'You are not assigned to any active programs yet. Ask an admin to add you to a program to participate in chat.'
-                : 'Select a program to start program-specific chat.'}
+                ? 'No program assignments.'
+                : 'Select a program.'}
             </p>
           )}
         </div>
 
         {programs.length > 0 && (
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-muted-foreground">Program</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Program</span>
               <select
                 value={program?.id || ''}
                 onChange={handleProgramChange}
-                className="min-w-[200px] rounded-md border bg-background px-2 py-1 text-xs shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+                className="max-w-[150px] rounded border bg-background px-1.5 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-primary/60"
               >
                 {programs.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -221,12 +211,12 @@ function ChatContent() {
             </div>
 
             {program && papas.length > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-muted-foreground">Chatroom</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Room</span>
                 <select
                   value={papaId || ''}
                   onChange={handlePapaChange}
-                  className="min-w-[220px] rounded-md border bg-background px-2 py-1 text-xs shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+                  className="max-w-[150px] rounded border bg-background px-1.5 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-primary/60"
                 >
                   <option value="">Program team room</option>
                   {papas.map((papa) => (
@@ -245,7 +235,7 @@ function ChatContent() {
         )}
       </div>
 
-      <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+      <Card className="shadow-lg border-0 bg-transparent sm:bg-card">
         {loading ? (
           <div className="h-[320px] w-full rounded-lg skeleton" />
         ) : programs.length === 0 ? (
