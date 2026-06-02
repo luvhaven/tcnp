@@ -139,6 +139,8 @@ type Message = {
   is_private: boolean
   created_at: string
   reply_to_id?: string | null
+  is_archived?: boolean
+  deleted_at?: string | null
   users: MessageUserMeta
 }
 
@@ -382,6 +384,8 @@ export default function ChatSystem({
       mentions,
       read_by: readBy,
       is_private: Boolean(message.is_private),
+      is_archived: Boolean((message as any).is_archived),
+      deleted_at: (message as any).deleted_at ?? null,
       created_at: message.created_at ?? new Date().toISOString(),
       reply_to_id: (message as any).reply_to_id ?? null,
       users: userMeta
@@ -579,12 +583,6 @@ export default function ChatSystem({
         return
       }
 
-      // UPDATE: if soft-deleted, remove from state immediately
-      if (payload.eventType === 'UPDATE' && (newRow as any).deleted_at) {
-        if (mounted) setMessages(prev => prev.filter(m => m.id !== newRow.id))
-        return
-      }
-
       // Context filtering
       if (papaId) {
         if (newRow.papa_id !== papaId) return
@@ -648,15 +646,16 @@ export default function ChatSystem({
       if (payload.eventType === 'UPDATE' && mounted) {
         setMessages(prev => {
           const idx = prev.findIndex(m => m.id === newRow.id)
-          if (idx !== -1) { 
+          if (idx !== -1) {
             const next = [...prev]
-            next[idx] = { 
-              ...next[idx], 
+            next[idx] = {
+              ...next[idx],
               content: newRow.content,
               read_by: (newRow.read_by as string[]) || [],
-              mentions: (newRow.mentions as string[]) || []
+              mentions: (newRow.mentions as string[]) || [],
+              deleted_at: (newRow as any).deleted_at ?? null
             }
-            return next 
+            return next
           }
           return prev
         })
@@ -823,7 +822,6 @@ export default function ChatSystem({
                       *,
                       users:sender_id(full_name, oscar, role)
                       `)
-        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(50)
 
@@ -889,7 +887,6 @@ export default function ChatSystem({
       let query = supabase
         .from('chat_messages')
         .select(`*, users:sender_id(full_name, oscar, role)`)
-        .is('deleted_at', null)
         .lt('created_at', oldestTimestampRef.current)
         .order('created_at', { ascending: false })
         .limit(50)
@@ -939,12 +936,12 @@ export default function ChatSystem({
     const { data } = await (supabase as any).from('message_reactions').select('message_id,user_id,emoji').in('message_id', ids)
     if (!data) return
     const map: ReactionMap = {}
-    ;(data as { message_id: string; user_id: string; emoji: string }[]).forEach(r => {
-      if (!map[r.message_id]) map[r.message_id] = []
-      const ex = map[r.message_id].find(x => x.emoji === r.emoji)
-      if (ex) { ex.count++; ex.userIds.push(r.user_id) }
-      else map[r.message_id].push({ emoji: r.emoji, count: 1, userIds: [r.user_id] })
-    })
+      ; (data as { message_id: string; user_id: string; emoji: string }[]).forEach(r => {
+        if (!map[r.message_id]) map[r.message_id] = []
+        const ex = map[r.message_id].find(x => x.emoji === r.emoji)
+        if (ex) { ex.count++; ex.userIds.push(r.user_id) }
+        else map[r.message_id].push({ emoji: r.emoji, count: 1, userIds: [r.user_id] })
+      })
     setReactions(map)
   }, [supabase])
 
@@ -967,13 +964,25 @@ export default function ChatSystem({
 
   const handleDeleteMessage = useCallback(async (messageId: string) => {
     if (!currentUser?.id) return
-    const { error } = await (supabase as any).from('chat_messages').update({ deleted_at: new Date().toISOString() }).eq('id', messageId).eq('sender_id', currentUser.id)
-    if (error) { 
-      console.error('Delete error:', error);
-      toast.error(`Could not delete message: ${error.message || 'Unknown error'}`); 
-      return 
+    const isAdmin = ['super_admin', 'dev_admin', 'admin'].includes(currentUser.role)
+    if (isAdmin) {
+      // Hard delete by Admin
+      const { error } = await (supabase as any).from('chat_messages').delete().eq('id', messageId)
+      if (error) {
+        toast.error(`Could not delete message: ${error.message}`);
+        return
+      }
+      setMessages(prev => prev.filter(m => m.id !== messageId))
+    } else {
+      // Soft delete by User
+      const deletedAt = new Date().toISOString()
+      const { error } = await (supabase as any).from('chat_messages').update({ deleted_at: deletedAt }).eq('id', messageId).eq('sender_id', currentUser.id)
+      if (error) {
+        toast.error(`Could not delete message: ${error.message}`);
+        return
+      }
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, deleted_at: deletedAt } : m))
     }
-    setMessages(prev => prev.filter(m => m.id !== messageId))
   }, [supabase, currentUser])
 
   const handleReply = (message: Message) => {
@@ -1240,6 +1249,7 @@ export default function ChatSystem({
   }
 
   const canViewMessage = (message: Message) => {
+    if (message.is_archived) return false
     if (!currentUser) return false
 
     // Admins can see all messages
@@ -1324,7 +1334,7 @@ export default function ChatSystem({
 
           {loadingMessages && (
             <div className="space-y-4 py-4">
-              {[1,2,3,4].map(i => (
+              {[1, 2, 3, 4].map(i => (
                 <div key={i} className={`flex items-end gap-3 ${i % 3 === 0 ? 'flex-row-reverse' : ''}`}>
                   <div className="h-8 w-8 rounded-full bg-muted animate-pulse flex-shrink-0" />
                   <div className="space-y-1.5"><div className="h-2.5 w-16 rounded bg-muted animate-pulse" /><div className="h-10 w-52 rounded-2xl bg-muted animate-pulse" /></div>
@@ -1394,17 +1404,41 @@ export default function ChatSystem({
                   <div className="relative group/msg">
                     <div className={`rounded-2xl px-3.5 py-2.5 shadow-sm text-sm leading-relaxed whitespace-pre-wrap break-words
                       ${isOwn ? 'bg-gradient-to-br from-primary to-primary/80 text-primary-foreground rounded-br-sm' : 'bg-muted/60 border border-border/50 rounded-bl-sm'}
-                      ${msg.is_private && !isOwn ? 'border-l-2 border-l-amber-400' : ''}`}>
-                      {renderContent(msg.content, searchQuery)}
-                      {(msg as any).edited_at && <span className={`text-[10px] italic ml-1 ${isOwn ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>(edited)</span>}
+                      ${msg.is_private && !isOwn ? 'border-l-2 border-l-amber-400' : ''}
+                      ${msg.deleted_at ? 'opacity-70' : ''}`}>
+                      {msg.deleted_at ? (
+                        ['super_admin', 'dev_admin', 'admin'].includes(currentUser?.role) ? (
+                          <>
+                            <div className="text-[10px] uppercase font-bold text-destructive mb-1.5 px-1 py-0.5 rounded border border-destructive/30 bg-destructive/10 inline-block">Deleted by {displayName}</div>
+                            {renderContent(msg.content, searchQuery)}
+                          </>
+                        ) : (
+                          <div className={`italic text-xs ${isOwn ? 'text-primary-foreground/80' : 'text-muted-foreground/60'}`}>
+                            This message was deleted by {displayName}
+                          </div>
+                        )
+                      ) : (
+                        <>
+                          {renderContent(msg.content, searchQuery)}
+                          {(msg as any).edited_at && <span className={`text-[10px] italic ml-1 ${isOwn ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>(edited)</span>}
+                        </>
+                      )}
                     </div>
 
-                    <div className={`absolute top-0 ${isOwn ? '-left-[6.5rem]' : '-right-[6.5rem]'} opacity-0 group-hover/msg:opacity-100 transition-opacity flex gap-0.5 bg-background/90 backdrop-blur-sm rounded-xl p-1 shadow-lg border z-10`}>
-                      <button onClick={() => setShowReactionPicker(showReactionPicker === msg.id ? null : msg.id)} title="React" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><Smile className="h-3.5 w-3.5" /></button>
-                      <button onClick={() => handleReply(msg)} title="Reply" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><CornerUpLeft className="h-3.5 w-3.5" /></button>
-                      {isEditable && <button onClick={() => handleEdit(msg)} title="Edit" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><Pencil className="h-3.5 w-3.5" /></button>}
-                      {isOwn && <button onClick={async (e) => { e.preventDefault(); e.stopPropagation(); if (await confirm({ message: 'Are you sure you want to delete this message?', variant: 'destructive' })) { void handleDeleteMessage(msg.id); } }} title="Delete" className="h-6 w-6 rounded-lg hover:bg-destructive/10 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>}
-                    </div>
+                    {!msg.deleted_at && (
+                      <div className={`absolute top-0 ${isOwn ? '-left-[6.5rem]' : '-right-[6.5rem]'} opacity-0 group-hover/msg:opacity-100 transition-opacity flex gap-0.5 bg-background/90 backdrop-blur-sm rounded-xl p-1 shadow-lg border z-10`}>
+                        <button onClick={() => setShowReactionPicker(showReactionPicker === msg.id ? null : msg.id)} title="React" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><Smile className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => handleReply(msg)} title="Reply" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><CornerUpLeft className="h-3.5 w-3.5" /></button>
+                        {isEditable && <button onClick={() => handleEdit(msg)} title="Edit" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><Pencil className="h-3.5 w-3.5" /></button>}
+                        {(isOwn || ['super_admin', 'dev_admin', 'admin'].includes(currentUser?.role)) && <button onClick={async (e) => { e.preventDefault(); e.stopPropagation(); if (await confirm({ message: 'Are you sure you want to delete this message?', variant: 'destructive' })) { void handleDeleteMessage(msg.id); } }} title="Delete" className="h-6 w-6 rounded-lg hover:bg-destructive/10 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>}
+                      </div>
+                    )}
+                    {msg.deleted_at && ['super_admin', 'dev_admin', 'admin'].includes(currentUser?.role) && (
+                      <div className={`absolute top-0 ${isOwn ? '-left-[2.5rem]' : '-right-[2.5rem]'} opacity-0 group-hover/msg:opacity-100 transition-opacity flex gap-0.5 bg-background/90 backdrop-blur-sm rounded-xl p-1 shadow-lg border z-10`}>
+                        <button onClick={async (e) => { e.preventDefault(); e.stopPropagation(); if (await confirm({ message: 'Permanently destroy this message?', variant: 'destructive' })) { void handleDeleteMessage(msg.id); } }} title="Destroy permanently" className="h-6 w-6 rounded-lg hover:bg-destructive/10 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
+                      </div>
+                    )}
+
 
                     {showReactionPicker === msg.id && (
                       <div className={`absolute bottom-full ${isOwn ? 'right-0' : 'left-0'} mb-1.5 flex gap-1 bg-background border rounded-2xl p-1.5 shadow-2xl z-20 animate-in slide-in-from-bottom-2 duration-150`}>
@@ -1542,7 +1576,7 @@ export default function ChatSystem({
               }}
               disabled={isReadOnlyProgramChat}
               rows={1}
-              className="w-full resize-none rounded-xl border bg-background/80 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all placeholder:text-muted-foreground/60 max-h-32 disabled:opacity-50"
+              className="block w-full resize-none rounded-xl border bg-background/80 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all placeholder:text-muted-foreground/60 max-h-32 disabled:opacity-50"
               style={{ minHeight: '40px', height: '40px', padding: '9px 14px', lineHeight: '22px', boxSizing: 'border-box' }}
             />
             {showMentionSuggestions && filteredUsers.length > 0 && (

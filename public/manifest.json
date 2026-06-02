@@ -2,8 +2,19 @@
   "name": "TCNP Journey Management",
   "short_name": "TCNP Journey",
   "description": "Enterprise Journey Management System for The Covenant Nation Protocol",
+  "id": "/",
   "start_url": "/",
   "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone"
+  ],
+  "launch_handler": {
+    "client_mode": [
+      "navigate-existing",
+      "auto"
+    ]
+  },
   "background_color": "#0f172a",
   "theme_color": "#F26522",
   "orientation": "portrait-primary",
@@ -21,7 +32,10 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["business", "productivity"],
+  "categories": [
+    "business",
+    "productivity"
+  ],
   "screenshots": [],
   "shortcuts": [
     {

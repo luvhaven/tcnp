@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { Card } from '@/components/ui/card'
 import ChatSystem from '@/components/chat/ChatSystem'
+import { AdminChatControls } from '@/components/chat/AdminChatControls'
 import { createClient } from '@/lib/supabase/client'
 import { useSearchParams } from 'next/navigation'
 
@@ -235,6 +236,10 @@ function ChatContent() {
                   ))}
                 </select>
               </div>
+            )}
+
+            {role && ['super_admin', 'dev_admin', 'admin'].includes(role) && (
+              <AdminChatControls programId={program?.id} programName={program?.name} />
             )}
           </div>
         )}
