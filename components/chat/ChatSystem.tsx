@@ -141,6 +141,7 @@ type Message = {
   reply_to_id?: string | null
   is_archived?: boolean
   deleted_at?: string | null
+  deleted_by_admin?: boolean
   users: MessageUserMeta
 }
 
@@ -386,6 +387,7 @@ export default function ChatSystem({
       is_private: Boolean(message.is_private),
       is_archived: Boolean((message as any).is_archived),
       deleted_at: (message as any).deleted_at ?? null,
+      deleted_by_admin: Boolean((message as any).deleted_by_admin),
       created_at: message.created_at ?? new Date().toISOString(),
       reply_to_id: (message as any).reply_to_id ?? null,
       users: userMeta
@@ -653,7 +655,8 @@ export default function ChatSystem({
               content: newRow.content,
               read_by: (newRow.read_by as string[]) || [],
               mentions: (newRow.mentions as string[]) || [],
-              deleted_at: (newRow as any).deleted_at ?? null
+              deleted_at: (newRow as any).deleted_at ?? null,
+              deleted_by_admin: Boolean((newRow as any).deleted_by_admin)
             }
             return next
           }
@@ -962,28 +965,35 @@ export default function ChatSystem({
     void loadReactions(messages.map(m => m.id))
   }, [supabase, currentUser, reactions, messages, loadReactions])
 
-  const handleDeleteMessage = useCallback(async (messageId: string) => {
+  const handleDeleteMessage = useCallback(async (messageId: string, hardDelete: boolean = false) => {
     if (!currentUser?.id) return
     const isAdmin = ['super_admin', 'dev_admin', 'admin'].includes(currentUser.role)
-    if (isAdmin) {
-      // Hard delete by Admin
+
+    if (hardDelete && isAdmin) {
       const { error } = await (supabase as any).from('chat_messages').delete().eq('id', messageId)
       if (error) {
         toast.error(`Could not delete message: ${error.message}`);
         return
       }
       setMessages(prev => prev.filter(m => m.id !== messageId))
+      return
+    }
+
+    const deletedAt = new Date().toISOString()
+    const isOwner = messages.find(m => m.id === messageId)?.sender_id === currentUser.id
+
+    if (isAdmin && !isOwner) {
+      // Soft delete by Admin
+      const { error } = await (supabase as any).from('chat_messages').update({ deleted_at: deletedAt, deleted_by_admin: true }).eq('id', messageId)
+      if (error) { toast.error(error.message); return }
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, deleted_at: deletedAt, deleted_by_admin: true } : m))
     } else {
       // Soft delete by User
-      const deletedAt = new Date().toISOString()
       const { error } = await (supabase as any).from('chat_messages').update({ deleted_at: deletedAt }).eq('id', messageId).eq('sender_id', currentUser.id)
-      if (error) {
-        toast.error(`Could not delete message: ${error.message}`);
-        return
-      }
+      if (error) { toast.error(error.message); return }
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, deleted_at: deletedAt } : m))
     }
-  }, [supabase, currentUser])
+  }, [supabase, currentUser, messages])
 
   const handleReply = (message: Message) => {
     setEditingMessage(null)
@@ -1407,17 +1417,23 @@ export default function ChatSystem({
                       ${msg.is_private && !isOwn ? 'border-l-2 border-l-amber-400' : ''}
                       ${msg.deleted_at ? 'opacity-70' : ''}`}>
                       {msg.deleted_at ? (
-                        ['super_admin', 'dev_admin', 'admin'].includes(currentUser?.role) ? (
-                          <>
-                            <div className={`text-[10px] uppercase font-bold mb-1.5 px-1.5 py-0.5 rounded border inline-block ${isOwn ? 'bg-background text-destructive border-transparent shadow-sm' : 'text-destructive border-destructive/30 bg-destructive/10'}`}>
-                              Deleted by {displayName}
-                            </div>
-                            {renderContent(msg.content, searchQuery)}
-                          </>
-                        ) : (
-                          <div className={`italic text-xs ${isOwn ? 'text-primary-foreground/80' : 'text-muted-foreground/60'}`}>
-                            This message was deleted by {displayName}
+                        msg.deleted_by_admin ? (
+                          <div className={`italic text-xs w-full ${isOwn ? 'text-primary-foreground/80' : 'text-muted-foreground/60'}`}>
+                            This message was deleted by Admin
                           </div>
+                        ) : (
+                          ['super_admin', 'dev_admin', 'admin'].includes(currentUser?.role) ? (
+                            <>
+                              <div className={`text-[10px] uppercase font-bold mb-1.5 px-1.5 py-0.5 rounded border inline-block ${isOwn ? 'bg-background text-destructive border-transparent shadow-sm' : 'text-destructive border-destructive/30 bg-destructive/10'}`}>
+                                Deleted by {displayName}
+                              </div>
+                              {renderContent(msg.content, searchQuery)}
+                            </>
+                          ) : (
+                            <div className={`italic text-xs ${isOwn ? 'text-primary-foreground/80' : 'text-muted-foreground/60'}`}>
+                              This message was deleted by {displayName}
+                            </div>
+                          )
                         )
                       ) : (
                         <>
@@ -1437,7 +1453,7 @@ export default function ChatSystem({
                     )}
                     {msg.deleted_at && ['super_admin', 'dev_admin', 'admin'].includes(currentUser?.role) && (
                       <div className={`absolute top-0 ${isOwn ? '-left-[2.5rem]' : '-right-[2.5rem]'} opacity-0 group-hover/msg:opacity-100 transition-opacity flex gap-0.5 bg-background/90 backdrop-blur-sm rounded-xl p-1 shadow-lg border z-10`}>
-                        <button onClick={async (e) => { e.preventDefault(); e.stopPropagation(); if (await confirm({ message: 'Permanently destroy this message?', variant: 'destructive' })) { void handleDeleteMessage(msg.id); } }} title="Destroy permanently" className="h-6 w-6 rounded-lg hover:bg-destructive/10 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
+                        <button onClick={async (e) => { e.preventDefault(); e.stopPropagation(); if (await confirm({ message: 'Permanently destroy this message?', variant: 'destructive' })) { void handleDeleteMessage(msg.id, true); } }} title="Destroy permanently" className="h-6 w-6 rounded-lg hover:bg-destructive/10 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
                       </div>
                     )}
 
