@@ -1383,64 +1383,81 @@ export default function ChatSystem({
             const repliedMsg = (msg as any).reply_to_id ? messages.find(m => m.id === (msg as any).reply_to_id) : null
             const msgReactions = reactions[msg.id] ?? []
 
+            const outgoingTailClasses = isFirst ? 'rounded-2xl rounded-tr-sm' : 'rounded-2xl'
+            const incomingTailClasses = isFirst ? 'rounded-2xl rounded-tl-sm' : 'rounded-2xl'
+            const bubbleClasses = isOwn
+              ? `bg-gradient-to-br from-primary to-primary/80 text-primary-foreground ${outgoingTailClasses}`
+              : `bg-card border border-border/50 text-foreground ${incomingTailClasses}`
+
             return (
               <div key={item.id} id={`msg-${msg.id}`}
-                className={`flex items-end gap-2 group ${isOwn ? 'flex-row-reverse' : ''} ${isFirst ? 'mt-3' : 'mt-0.5'} ${highlightedMessageId === msg.id ? 'ring-2 ring-primary/40 rounded-xl bg-primary/5 px-1' : ''}`}
+                className={`flex items-end gap-2 group w-full ${isOwn ? 'flex-row-reverse justify-start' : 'justify-start'} ${isFirst ? 'mt-3' : 'mt-0.5'} ${highlightedMessageId === msg.id ? 'ring-2 ring-primary/40 rounded-xl bg-primary/5 px-2' : ''}`}
               >
-                <div className="w-8 flex-shrink-0 self-end">
-                  {isLast ? (
-                    <Avatar className="h-8 w-8 border border-background shadow-sm">
-                      <AvatarFallback className={`text-[11px] font-bold ${isOwn ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>{getInitials(displayName)}</AvatarFallback>
-                    </Avatar>
-                  ) : null}
-                </div>
+                {!isOwn && (
+                  <div className="w-7 flex-shrink-0 self-end mb-1">
+                    {isLast ? (
+                      <Avatar className="h-7 w-7 border border-background shadow-sm">
+                        <AvatarFallback className="text-[10px] font-bold bg-muted">{getInitials(displayName)}</AvatarFallback>
+                      </Avatar>
+                    ) : <div className="h-7 w-7" />}
+                  </div>
+                )}
 
-                <div className={`flex flex-col max-w-[72%] ${isOwn ? 'items-end' : 'items-start'}`}>
-                  {isFirst && (
-                    <div className={`flex items-center gap-2 mb-1 px-0.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
-                      <span className="text-[11px] font-semibold">{displayName}</span>
-                      <span className="text-[10px] text-muted-foreground">{format(new Date(msg.created_at), 'HH:mm')}</span>
-                      {msg.is_private && <span className="flex items-center gap-0.5 text-[10px] text-amber-600 font-medium"><Lock className="h-2.5 w-2.5" />Private</span>}
+                <div className={`flex flex-col relative max-w-[calc(100%-2.5rem)] sm:max-w-[75%] min-w-[140px] ${isOwn ? 'items-end' : 'items-start'}`}>
+                  {isFirst && isOwn && msg.is_private && (
+                    <div className="flex items-center gap-0.5 text-[10px] text-amber-600 font-medium mb-1 px-1 flex-row-reverse">
+                      <Lock className="h-2.5 w-2.5" />Private
                     </div>
                   )}
 
                   {repliedMsg && (
-                    <div className={`text-[11px] text-muted-foreground mb-1 px-2.5 py-1.5 border-l-2 border-primary/50 bg-muted/40 rounded-r-lg max-w-full ${isOwn ? 'mr-0.5' : 'ml-0.5'}`}>
+                    <div className={`text-[11px] text-muted-foreground mb-1 px-2.5 py-1.5 border-l-2 border-primary/50 bg-muted/40 rounded-t-lg rounded-br-sm rounded-bl-sm max-w-full truncate ${isOwn ? 'mr-0' : 'ml-0'}`}>
                       <strong className="text-foreground/70">{getDisplayName(repliedMsg.users)}: </strong>
-                      <span className="line-clamp-1">{repliedMsg.content}</span>
+                      <span>{repliedMsg.content}</span>
                     </div>
                   )}
 
-                  <div className="relative group/msg">
-                    <div className={`rounded-2xl px-3.5 py-2.5 shadow-sm text-sm leading-relaxed whitespace-pre-wrap break-words
-                      ${isOwn ? 'bg-gradient-to-br from-primary to-primary/80 text-primary-foreground rounded-br-sm' : 'bg-muted/60 border border-border/50 rounded-bl-sm'}
-                      ${msg.is_private && !isOwn ? 'border-l-2 border-l-amber-400' : ''}
+                  <div className="relative group/msg w-full flex flex-col">
+                    <div className={`relative px-3 pt-2 pb-5 shadow-sm text-[13.5px] leading-relaxed whitespace-pre-wrap break-words
+                      ${bubbleClasses}
+                      ${msg.is_private && !isOwn ? 'border-l-4 border-l-amber-400' : ''}
                       ${msg.deleted_at ? 'opacity-70' : ''}`}>
+
+                      {!isOwn && isFirst && (
+                        <div className="text-[11.5px] font-extrabold text-primary mb-0.5 leading-none tracking-tight">
+                          {displayName} {msg.is_private && <Lock className="inline-block h-2.5 w-2.5 text-amber-500 ml-0.5" />}
+                        </div>
+                      )}
+
                       {msg.deleted_at ? (
                         msg.deleted_by_admin ? (
-                          <div className={`italic text-xs w-full ${isOwn ? 'text-primary-foreground/80' : 'text-muted-foreground/60'}`}>
+                          <div className={`italic text-[11px] w-full ${isOwn ? 'text-primary-foreground/80' : 'text-muted-foreground/60'}`}>
                             This message was deleted by Admin
                           </div>
                         ) : (
                           ['super_admin', 'dev_admin', 'admin'].includes(currentUser?.role) ? (
                             <>
-                              <div className={`text-[10px] uppercase font-bold mb-1.5 px-1.5 py-0.5 rounded border inline-block ${isOwn ? 'bg-background text-destructive border-transparent shadow-sm' : 'text-destructive border-destructive/30 bg-destructive/10'}`}>
+                              <div className={`text-[9px] uppercase font-bold mb-1.5 px-1.5 py-0.5 rounded border inline-block ${isOwn ? 'bg-background text-destructive border-transparent shadow-sm' : 'text-destructive border-destructive/30 bg-destructive/10'}`}>
                                 Deleted by {displayName}
                               </div>
-                              {renderContent(msg.content, searchQuery)}
+                              <div className="break-words">{renderContent(msg.content, searchQuery)}</div>
                             </>
                           ) : (
-                            <div className={`italic text-xs ${isOwn ? 'text-primary-foreground/80' : 'text-muted-foreground/60'}`}>
+                            <div className={`italic text-[11px] leading-tight ${isOwn ? 'text-primary-foreground/80' : 'text-muted-foreground/60'}`}>
                               This message was deleted by {displayName}
                             </div>
                           )
                         )
                       ) : (
-                        <>
+                        <div className="break-words">
                           {renderContent(msg.content, searchQuery)}
-                          {(msg as any).edited_at && <span className={`text-[10px] italic ml-1 ${isOwn ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>(edited)</span>}
-                        </>
+                        </div>
                       )}
+
+                      <div className={`absolute bottom-1 right-2 flex items-center gap-1.5 ${isOwn ? 'text-primary-foreground/70' : 'text-muted-foreground/70'}`}>
+                        {(!msg.deleted_at && (msg as any).edited_at) && <span className="text-[9px] italic">(edited)</span>}
+                        <span className="text-[9px] font-medium leading-none">{format(new Date(msg.created_at), 'HH:mm')}</span>
+                      </div>
                     </div>
 
                     {!msg.deleted_at && (
@@ -1457,7 +1474,6 @@ export default function ChatSystem({
                       </div>
                     )}
 
-
                     {showReactionPicker === msg.id && (
                       <div className={`absolute bottom-full ${isOwn ? 'right-0' : 'left-0'} mb-1.5 flex gap-1 bg-background border rounded-2xl p-1.5 shadow-2xl z-20 animate-in slide-in-from-bottom-2 duration-150`}>
                         {QUICK_REACTIONS.map(emoji => (
@@ -1471,18 +1487,14 @@ export default function ChatSystem({
                   </div>
 
                   {msgReactions.length > 0 && (
-                    <div className={`flex flex-wrap gap-1 mt-1.5 px-0.5 ${isOwn ? 'justify-end' : ''}`}>
+                    <div className={`flex flex-wrap gap-1 mt-1.5 px-0.5 ${isOwn ? 'justify-end' : 'justify-start'}`}>
                       {msgReactions.map(r => (
                         <button key={r.emoji} onClick={() => void toggleReaction(msg.id, r.emoji)}
-                          className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs border transition-all hover:scale-105 active:scale-95 ${r.userIds.includes(currentUser?.id ?? '') ? 'bg-primary/15 border-primary/40 text-primary font-semibold' : 'bg-background border-border text-muted-foreground hover:border-primary/30'}`}>
+                          className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] border transition-all hover:scale-105 active:scale-95 ${r.userIds.includes(currentUser?.id ?? '') ? 'bg-primary/15 border-primary/40 text-primary font-bold' : 'bg-background border-border text-muted-foreground hover:border-primary/30'}`}>
                           {r.emoji}<span>{r.count}</span>
                         </button>
                       ))}
                     </div>
-                  )}
-
-                  {!isFirst && isLast && (
-                    <span className="text-[10px] text-muted-foreground/60 px-0.5 mt-0.5">{format(new Date(msg.created_at), 'HH:mm')}</span>
                   )}
                 </div>
               </div>
