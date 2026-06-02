@@ -34,24 +34,24 @@ import {
 } from "lucide-react"
 
 const ALL_NAV = [
-  { name: "Dashboard",       href: "/dashboard",            icon: LayoutDashboard },
-  { name: "My Operations",   href: "/my-operations",        icon: Navigation },
-  { name: "Ops Monitor",     href: "/operations-monitor",   icon: Activity },
-  { name: "Programs",        href: "/programs",             icon: Calendar },
-  { name: "Journeys",        href: "/journeys",             icon: Route },
-  { name: "Papas",           href: "/papas",                icon: Users },
-  { name: "Cheetahs",        href: "/cheetahs",             icon: Car },
-  { name: "Echo",            href: "/echo",                 icon: Volume2 },
-  { name: "Eagle Operations",href: "/eagles",               icon: Plane },
-  { name: "Live Tracking",   href: "/tracking/live",        icon: MapPin },
-  { name: "Team Chat",       href: "/chat",                 icon: MessageCircle },
-  { name: "Officers",        href: "/officers",             icon: UserCircle },
-  { name: "NOscar",          href: "/nests",                icon: Hotel },
-  { name: "Theatres",        href: "/theatres",             icon: Landmark },
-  { name: "Incidents",       href: "/incidents",            icon: AlertTriangle },
-  { name: "Audit Log",       href: "/audit-logs",           icon: FileText },
-  { name: "Guide",           href: "/guide",                icon: BookOpen },
-  { name: "Settings",        href: "/settings",             icon: Settings },
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "My Operations", href: "/my-operations", icon: Navigation },
+  { name: "Ops Monitor", href: "/operations-monitor", icon: Activity },
+  { name: "Programs", href: "/programs", icon: Calendar },
+  { name: "Journeys", href: "/journeys", icon: Route },
+  { name: "Papas", href: "/papas", icon: Users },
+  { name: "Cheetahs", href: "/cheetahs", icon: Car },
+  { name: "Echo", href: "/echo", icon: Volume2 },
+  { name: "Eagle Operations", href: "/eagles", icon: Plane },
+  { name: "Live Tracking", href: "/tracking/live", icon: MapPin },
+  { name: "Team Chat", href: "/chat", icon: MessageCircle },
+  { name: "Officers", href: "/officers", icon: UserCircle },
+  { name: "NOscar", href: "/nests", icon: Hotel },
+  { name: "Theatres", href: "/theatres", icon: Landmark },
+  { name: "Incidents", href: "/incidents", icon: AlertTriangle },
+  { name: "Audit Log", href: "/audit-logs", icon: FileText },
+  { name: "Guide", href: "/guide", icon: BookOpen },
+  { name: "Settings", href: "/settings", icon: Settings },
 ]
 
 /** Pages every authenticated user always sees */
@@ -62,20 +62,20 @@ const BASE_HREFS = ["/dashboard", "/my-operations", "/chat", "/programs"]
  * Admins/captain/command see everything — handled by a fallback.
  */
 const ROLE_EXTRA: Record<string, string[]> = {
-  delta_oscar:         [],
-  alpha_oscar:         ["/eagles"],
-  head_alpha_oscar:    ["/eagles"],
-  tango_oscar:         ["/journeys", "/cheetahs", "/tracking/live"],
-  head_tango_oscar:    ["/journeys", "/cheetahs", "/tracking/live"],
-  victor_oscar:        ["/theatres"],
-  head_victor_oscar:   ["/theatres"],
-  november_oscar:      ["/nests"],
-  head_noscar_den:     ["/nests"],
-  head_noscar_nest:    ["/nests"],
-  noscar_den:          ["/nests"],
-  noscar_nest:         ["/nests"],
-  echo_oscar:          ["/echo"],
-  head_echo_oscar:     ["/echo"],
+  delta_oscar: [],
+  alpha_oscar: ["/eagles"],
+  head_alpha_oscar: ["/eagles"],
+  tango_oscar: ["/journeys", "/cheetahs", "/tracking/live"],
+  head_tango_oscar: ["/journeys", "/cheetahs", "/tracking/live"],
+  victor_oscar: ["/theatres"],
+  head_victor_oscar: ["/theatres"],
+  november_oscar: ["/nests"],
+  head_noscar_den: ["/nests"],
+  head_noscar_nest: ["/nests"],
+  noscar_den: ["/nests"],
+  noscar_nest: ["/nests"],
+  echo_oscar: ["/echo"],
+  head_echo_oscar: ["/echo"],
 }
 
 const ADMIN_ROLES = new Set([
@@ -173,14 +173,14 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
         {visibleNavigation.map((item) => {
           const isActive = pathname === item.href
           const isChat = item.name === "Team Chat"
-          const isOps  = item.name === "My Operations"
+          const isOps = item.name === "My Operations"
           return (
             <Link
               key={item.name}
               href={item.href}
               onClick={isMobile ? onClose : undefined}
               className={cn(
-                "relative flex items-center justify-start px-3 py-2 text-sm font-medium rounded-lg gap-3 mr-1 transition-all duration-150 border-l-[3px]",
+                "relative flex items-center justify-start px-3 py-2 text-sm font-medium rounded-r-lg rounded-l-none gap-3 mr-1 transition-all duration-150 border-l-[3px]",
                 isActive
                   ? "text-primary border-primary bg-primary/10 shadow-sm"
                   : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/60 hover:border-muted-foreground/20"
