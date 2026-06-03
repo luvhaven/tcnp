@@ -1300,10 +1300,12 @@ export default function ChatSystem({
   const timeline = useMemo(() => buildTimeline(visibleMessages, firstUnreadId), [visibleMessages, firstUnreadId])
 
   return (
-    <div className="relative flex flex-col h-[calc(100dvh-7.8rem)] min-h-[520px] bg-card rounded-xl border shadow-sm overflow-hidden">
+    <div className="relative flex flex-col h-[calc(100dvh-7.8rem)] min-h-[520px] bg-zinc-50/50 dark:bg-zinc-950/50 rounded-xl border shadow-sm overflow-hidden">
+      {/* Background Texture Drop */}
+      <div className="absolute inset-0 z-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:16px_16px] opacity-60 pointer-events-none" />
 
       {/* Header */}
-      <div className="flex-none border-b bg-card/95 backdrop-blur-sm px-3 py-2 shadow-sm">
+      <div className="flex-none border-b border-border/40 bg-card/70 backdrop-blur-xl px-3 py-2 shadow-sm z-10">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
             <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -1331,7 +1333,7 @@ export default function ChatSystem({
       </div>
 
       {/* Messages */}
-      <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto scroll-smooth">
+      <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto scroll-smooth z-10 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border/40 hover:[&::-webkit-scrollbar-thumb]:bg-border/60 [&::-webkit-scrollbar-thumb]:rounded-full">
         <div className="px-4 py-3">
           {hasMoreMessages && !loadingMessages && (
             <div className="flex justify-center py-3">
@@ -1474,7 +1476,7 @@ export default function ChatSystem({
       )}
 
       {/* Input area */}
-      <div className="flex-none border-t bg-card/95 px-4 pt-3 pb-4">
+      <div className="flex-none border-t border-border/50 bg-card/80 backdrop-blur-xl px-4 pt-3 pb-4 shadow-[0_-8px_30px_-15px_rgba(0,0,0,0.1)] z-10">
         {replyTo && (
           <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-xl px-3 py-2 mb-2 text-xs">
             <div className="flex items-center gap-2 text-primary min-w-0">
@@ -1512,7 +1514,7 @@ export default function ChatSystem({
               onChange={handleMessageChange}
               disabled={isReadOnlyProgramChat}
               rows={1}
-              className="block w-full resize-none rounded-xl border bg-background/80 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all placeholder:text-muted-foreground/60 max-h-32 disabled:opacity-50"
+              className="block w-full resize-none rounded-xl border border-border/50 bg-background/50 shadow-inner px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-background transition-all placeholder:text-muted-foreground/60 max-h-32 disabled:opacity-50"
               style={{ minHeight: '40px', height: '40px', padding: '9px 14px', lineHeight: '22px', boxSizing: 'border-box' }}
             />
             {showMentionSuggestions && filteredUsers.length > 0 && (
@@ -1540,7 +1542,7 @@ export default function ChatSystem({
             <Send className="h-4 w-4" />
           </Button>
         </div>
-        <p className="text-[10px] text-muted-foreground/40 mt-1.5 text-right select-none">Enter to send · Shift+Enter for new line</p>
+        <p className="text-[10px] text-muted-foreground/40 mt-1.5 text-right select-none">Click send to post · Shift+Enter for new line</p>
       </div>
     </div>
   )

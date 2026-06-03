@@ -113,15 +113,15 @@ export const MessageBubble = memo(({
     toggleReaction,
     confirm
 }: MessageBubbleProps) => {
-    const outgoingTailClasses = isFirst ? 'rounded-2xl rounded-tr-sm' : 'rounded-2xl'
-    const incomingTailClasses = isFirst ? 'rounded-2xl rounded-tl-sm' : 'rounded-2xl'
+    const outgoingTailClasses = isFirst ? 'rounded-[20px] rounded-tr-[4px]' : 'rounded-[20px]'
+    const incomingTailClasses = isFirst ? 'rounded-[20px] rounded-tl-[4px]' : 'rounded-[20px]'
     const bubbleClasses = isOwn
-        ? `bg-gradient-to-br from-primary to-primary/80 text-primary-foreground ${outgoingTailClasses}`
-        : `bg-card border border-border/50 text-foreground ${incomingTailClasses}`
+        ? `bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-sm shadow-primary/20 ${outgoingTailClasses}`
+        : `bg-card border border-border/50 text-foreground shadow-sm ${incomingTailClasses}`
 
     return (
         <div id={`msg-${msg.id}`}
-            className={`flex items-end gap-2 group w-full ${isOwn ? 'flex-row-reverse justify-start' : 'justify-start'} ${isFirst ? 'mt-3' : 'mt-0.5'} ${highlightedMessageId === msg.id ? 'ring-2 ring-primary/40 rounded-xl bg-primary/5 px-2' : ''}`}
+            className={`flex items-end gap-2 group w-full animate-in fade-in slide-in-from-bottom-2 duration-300 ${isOwn ? 'flex-row-reverse justify-start' : 'justify-start'} ${isFirst ? 'mt-3' : 'mt-0.5'} ${highlightedMessageId === msg.id ? 'ring-2 ring-primary/40 rounded-xl bg-primary/5 px-2' : ''}`}
         >
             {!isOwn && (
                 <div className="w-7 flex-shrink-0 self-end mb-1">
