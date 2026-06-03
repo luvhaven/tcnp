@@ -167,10 +167,10 @@ export const MessageBubble = memo(({
                             ) : (
                                 ['super_admin', 'dev_admin', 'admin'].includes(currentUserRole ?? '') ? (
                                     <>
-                                        <div className="text-[9px] uppercase font-bold mb-1.5 px-1.5 py-0.5 rounded inline-block bg-white/20 text-white border border-white/30">
-                                            Deleted by {displayName}
+                                        <div className="break-words mb-1.5">{renderContent(msg.content, searchQuery, isOwn)}</div>
+                                        <div className={`italic text-[11px] font-medium leading-tight ${isOwn ? 'text-white/80' : 'text-muted-foreground/80'}`}>
+                                            (Deleted by {displayName})
                                         </div>
-                                        <div className="break-words">{renderContent(msg.content, searchQuery, isOwn)}</div>
                                     </>
                                 ) : (
                                     <div className={`italic text-[11px] leading-tight ${isOwn ? 'text-primary-foreground/80' : 'text-muted-foreground/60'}`}>
