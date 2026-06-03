@@ -52,11 +52,11 @@ export interface MessageBubbleProps {
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥'] as const
 
-function renderContent(content: string, searchQuery: string): React.ReactNode {
+function renderContent(content: string, searchQuery: string, isOwnBubble = false): React.ReactNode {
     const parts = content.split(/(@@?[\w]+(?:\s[\w]+)?)/g)
     return parts.map((part, i) => {
-        if (part.startsWith('@@')) return <span key={i} className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 text-[0.78em] font-semibold mx-0.5"><Lock className="inline h-2.5 w-2.5" />{part}</span>
-        if (part.startsWith('@') && part.length > 1) return <span key={i} className="inline-flex items-center rounded-full bg-primary/20 text-primary px-1.5 py-0.5 text-[0.78em] font-semibold mx-0.5">{part}</span>
+        if (part.startsWith('@@')) return <span key={i} className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[0.78em] font-semibold mx-0.5 ${isOwnBubble ? 'bg-white/25 text-white' : 'bg-amber-500/20 text-amber-700 dark:text-amber-300'}`}><Lock className="inline h-2.5 w-2.5" />{part}</span>
+        if (part.startsWith('@') && part.length > 1) return <span key={i} className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[0.78em] font-semibold mx-0.5 ${isOwnBubble ? 'bg-white/25 text-white' : 'bg-primary/20 text-primary'}`}>{part}</span>
         if (searchQuery && part) {
             const segs = part.split(new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'))
             return segs.map((seg, j) => seg.toLowerCase() === searchQuery.toLowerCase()
@@ -167,10 +167,10 @@ export const MessageBubble = memo(({
                             ) : (
                                 ['super_admin', 'dev_admin', 'admin'].includes(currentUserRole ?? '') ? (
                                     <>
-                                        <div className={`text-[9px] uppercase font-bold mb-1.5 px-1.5 py-0.5 rounded border inline-block ${isOwn ? 'bg-background text-destructive border-transparent shadow-sm' : 'text-destructive border-destructive/30 bg-destructive/10'}`}>
+                                        <div className="text-[9px] uppercase font-bold mb-1.5 px-1.5 py-0.5 rounded inline-block bg-white/20 text-white border border-white/30">
                                             Deleted by {displayName}
                                         </div>
-                                        <div className="break-words">{renderContent(msg.content, searchQuery)}</div>
+                                        <div className="break-words">{renderContent(msg.content, searchQuery, isOwn)}</div>
                                     </>
                                 ) : (
                                     <div className={`italic text-[11px] leading-tight ${isOwn ? 'text-primary-foreground/80' : 'text-muted-foreground/60'}`}>
@@ -180,7 +180,7 @@ export const MessageBubble = memo(({
                             )
                         ) : (
                             <div className="break-words">
-                                {renderContent(msg.content, searchQuery)}
+                                {renderContent(msg.content, searchQuery, isOwn)}
                             </div>
                         )}
 
