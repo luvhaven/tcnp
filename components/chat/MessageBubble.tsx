@@ -141,7 +141,7 @@ export const MessageBubble = memo(({
                 )}
 
                 {repliedMsg && (
-                    <div className={`text-[11px] text-muted-foreground mb-1 px-2.5 py-1.5 border-l-2 border-primary/50 bg-muted/40 rounded-t-lg rounded-br-sm rounded-bl-sm max-w-full truncate ${isOwn ? 'mr-0' : 'ml-0'}`}>
+                    <div className={`text-[11px] text-muted-foreground mb-1 px-2.5 py-1.5 border-l-2 border-primary/50 bg-muted/40 max-w-full truncate ${isOwn ? 'mr-0' : 'ml-0'}`}>
                         <strong className="text-foreground/70">{getDisplayName(repliedMsg.users)}: </strong>
                         <span>{repliedMsg.content}</span>
                     </div>
