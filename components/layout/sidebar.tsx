@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { cn } from "@/lib/utils"
+import { cn, oscarToRole } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { createClient } from "@/lib/supabase/client"
@@ -84,11 +84,19 @@ const ADMIN_ROLES = new Set([
   "hod", "hop",
 ])
 
-function getVisibleNav(role: string | null): typeof ALL_NAV {
+function getVisibleNav(role: string | null, oscar?: string | null): typeof ALL_NAV {
   if (!role) return ALL_NAV.filter(n => BASE_HREFS.includes(n.href))
   if (ADMIN_ROLES.has(role)) return ALL_NAV
-  const extra = ROLE_EXTRA[role] ?? []
-  const allowed = new Set([...BASE_HREFS, ...extra])
+
+  // Resolve extra pages from the assigned role (may be delta_oscar)
+  const roleExtra = ROLE_EXTRA[role] ?? []
+
+  // Resolve extra pages from the permanent Oscar unit (even when role=delta_oscar)
+  const oscarRole = oscarToRole(oscar)
+  const oscarExtra = oscarRole && oscarRole !== role ? (ROLE_EXTRA[oscarRole] ?? []) : []
+
+  // Union both sets so base Oscar pages are always visible
+  const allowed = new Set([...BASE_HREFS, ...roleExtra, ...oscarExtra])
   return ALL_NAV.filter(n => allowed.has(n.href))
 }
 
@@ -104,6 +112,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   const { count: unreadChat } = useUnreadChatCount()
   const { count: unreadAssignments } = useUnreadAssignments()
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [userOscar, setUserOscar] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<string | null>(null)
 
   useEffect(() => {
@@ -114,10 +123,13 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
         setCurrentUser(user.id)
         const { data: profile, error } = await supabase
           .from('users')
-          .select('role')
+          .select('role, oscar')
           .eq('id', user.id)
-          .single<{ role: string | null }>()
-        if (!error && profile) setUserRole(profile.role ?? null)
+          .single<{ role: string | null; oscar: string | null }>()
+        if (!error && profile) {
+          setUserRole(profile.role ?? null)
+          setUserOscar(profile.oscar ?? null)
+        }
       } catch (err) {
         console.warn('Sidebar user load failed:', err)
       }
@@ -125,7 +137,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
     void loadUser()
   }, [supabase])
 
-  const visibleNavigation = useMemo(() => getVisibleNav(userRole), [userRole])
+  const visibleNavigation = useMemo(() => getVisibleNav(userRole, userOscar), [userRole, userOscar])
 
   return (
     <div

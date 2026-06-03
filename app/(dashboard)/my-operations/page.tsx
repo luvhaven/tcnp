@@ -12,6 +12,7 @@ import { notificationService } from '@/lib/services/notificationService'
 import { toast } from 'sonner'
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from '@/lib/constants/tncpCallSigns'
 import { cn } from '@/lib/utils'
+import { oscarToRole } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -46,30 +47,42 @@ interface Journey {
 const ADMIN_ROLES = ['super_admin', 'dev_admin', 'admin', 'captain', 'head_of_command', 'head_of_operations', 'command', 'hod', 'hop']
 
 // ─── Role-based journey filter ─────────────────────────────────────────────
-function journeyMatchesRole(journey: Journey, role: string, userId: string): boolean {
+/**
+ * Returns true if the given journey is relevant to the user.
+ *
+ * Permissions are Oscar-based: the permanent `oscar` column governs which
+ * journey types the officer sees. `role=delta_oscar` just means they have an
+ * additional DO assignment for a specific journey — it does NOT strip their
+ * base Oscar access.
+ */
+function journeyMatchesRole(journey: Journey, role: string, userId: string, oscar?: string | null): boolean {
   if (ADMIN_ROLES.includes(role)) return true
 
-  if (role === 'delta_oscar') {
-    return !!(
-      journey.duty_officers?.some(d => d.user_id === userId) ||
-      journey.assigned_duty_officer_id === userId
-    )
-  }
-  if (role === 'alpha_oscar' || role === 'head_alpha_oscar') {
+  // Resolve the effective permanent Oscar even when the user is assigned as DO
+  const effectiveRole = (role !== 'delta_oscar' ? role : null) ?? oscarToRole(oscar) ?? role
+
+  // Anyone assigned as DO to this specific journey always sees it
+  const isAssignedToDO = !!(
+    journey.duty_officers?.some(d => d.user_id === userId) ||
+    journey.assigned_duty_officer_id === userId
+  )
+  if (isAssignedToDO) return true
+
+  // Base Oscar access — governs which journey types are in scope
+  if (effectiveRole === 'alpha_oscar' || effectiveRole === 'head_alpha_oscar') {
     return !!(journey.assigned_eagle_square_id ||
       journey.origin?.toLowerCase().includes('eagle') ||
       journey.destination?.toLowerCase().includes('eagle'))
   }
-  if (role === 'tango_oscar' || role === 'head_tango_oscar') {
+  if (effectiveRole === 'tango_oscar' || effectiveRole === 'head_tango_oscar') {
     return true // Transport overseer sees all active journeys
   }
-  if (role === 'victor_oscar' || role === 'head_victor_oscar') {
+  if (effectiveRole === 'victor_oscar' || effectiveRole === 'head_victor_oscar') {
     return !!(journey.assigned_theatre_id ||
       journey.destination?.toLowerCase().includes('theatre') ||
       journey.origin?.toLowerCase().includes('theatre'))
   }
-  if (['november_oscar', 'head_noscar_den', 'head_noscar_nest', 'noscar_den', 'noscar_nest'].includes(role)) {
-    // Nest AND Theatre legs
+  if (['november_oscar', 'head_noscar_den', 'head_noscar_nest', 'noscar_den', 'noscar_nest'].includes(effectiveRole)) {
     return !!(
       journey.assigned_nest_id ||
       journey.assigned_theatre_id ||
@@ -79,11 +92,9 @@ function journeyMatchesRole(journey: Journey, role: string, userId: string): boo
       journey.origin?.toLowerCase().includes('theatre')
     )
   }
-  // Default: show journeys user is directly assigned to (junction table OR legacy field)
-  return !!(
-    journey.duty_officers?.some(d => d.user_id === userId) ||
-    journey.assigned_duty_officer_id === userId
-  )
+
+  // Default: only journeys directly assigned
+  return false
 }
 
 const getStatusColor = (status: string) => {
@@ -105,6 +116,7 @@ export default function MyOperationsPage() {
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [userOscar, setUserOscar] = useState<string | null>(null)
   const [selectedJourneyId, setSelectedJourneyId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('assigned')
 
@@ -120,13 +132,15 @@ export default function MyOperationsPage() {
 
       const { data: userData } = await supabase
         .from('users')
-        .select('id, role')
+        .select('id, role, oscar')
         .eq('id', user.id)
         .single()
 
       const role = (userData as any)?.role ?? null
+      const oscar = (userData as any)?.oscar ?? null
       setUserId(user.id)
       setUserRole(role)
+      setUserOscar(oscar)
 
       const isAdmin = ADMIN_ROLES.includes(role)
 
@@ -199,8 +213,8 @@ export default function MyOperationsPage() {
         duty_officers: dutyOfficersMap[j.id] || [],
       }))
 
-      // Filter by role
-      const filtered = incoming.filter(j => journeyMatchesRole(j, role, user.id))
+      // Filter by role (oscar-aware)
+      const filtered = incoming.filter(j => journeyMatchesRole(j, role, user.id, oscar))
 
       // Detect new assignments
       if (!isInitial && knownIds.current.size > 0) {
@@ -264,12 +278,12 @@ export default function MyOperationsPage() {
       if (j.scheduled_departure) {
         const mins = (new Date(j.scheduled_departure).getTime() - now) / 60000
         if (mins <= 15 && mins > 14) void fireReminder(`${j.id}:dep:15`, '⏰ Departing in 15 minutes', `${papa}: ${route}`)
-        if (mins <= 5  && mins > 4)  void fireReminder(`${j.id}:dep:5`,  '🚨 Departing in 5 minutes!',  `${papa}: ${route}`)
+        if (mins <= 5 && mins > 4) void fireReminder(`${j.id}:dep:5`, '🚨 Departing in 5 minutes!', `${papa}: ${route}`)
       }
       if (j.scheduled_arrival) {
         const mins = (new Date(j.scheduled_arrival).getTime() - now) / 60000
         if (mins <= 15 && mins > 14) void fireReminder(`${j.id}:arr:15`, '⏰ Arriving in 15 minutes', `${papa}: ${route}`)
-        if (mins <= 5  && mins > 4)  void fireReminder(`${j.id}:arr:5`,  '🚨 Arriving in 5 minutes!',  `${papa}: ${route}`)
+        if (mins <= 5 && mins > 4) void fireReminder(`${j.id}:arr:5`, '🚨 Arriving in 5 minutes!', `${papa}: ${route}`)
       }
     }
   }, [journeys, userId, userRole])
