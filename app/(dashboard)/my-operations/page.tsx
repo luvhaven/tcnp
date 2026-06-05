@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import CallSignPanel from '@/components/operations/CallSignPanel'
+import DOHelpPanel from '@/components/operations/DOHelpPanel'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -347,6 +348,11 @@ export default function MyOperationsPage() {
           )}
         </div>
       </div>
+
+      {/* DO Quick Reference Panel — shown for DOs and when user has DO assignments */}
+      {(userRole === 'delta_oscar' || myAssigned.length > 0) && (
+        <DOHelpPanel />
+      )}
 
       {journeys.length === 0 ? (
         <Card>

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import ComfortChecklist from "@/components/nests/ComfortChecklist"
 import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
 import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
@@ -15,7 +16,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Hotel, Plus, Edit, Trash2, Home, Building, Users, UserPlus, UserCheck, UserX } from "lucide-react"
+import { Hotel, Plus, Edit, Trash2, Home, Building, Users, UserPlus, UserCheck, UserX, ChevronDown } from "lucide-react"
 import { toast } from "sonner"
 import { canManageNests } from "@/lib/utils"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -56,6 +57,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
   const [editing, setEditing] = useState<any>(null)
   const [selectedNest, setSelectedNest] = useState<any>(null)
   const [selectedProgram, setSelectedProgram] = useState<string>('all')
+  const [expandedComfort, setExpandedComfort] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     address: '',
@@ -313,9 +315,9 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }} 
-        animate={{ opacity: 1, y: 0 }} 
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
         className="flex items-center justify-between"
       >
         <div>
@@ -492,6 +494,25 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
                                     </div>
                                   </div>
                                 </CardContent>
+                                {/* Comfort Checklist Toggle */}
+                                <div className="border-t px-4 pb-3 pt-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedComfort(expandedComfort === nest.id ? null : nest.id)}
+                                    className="w-full flex items-center justify-between text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                  >
+                                    <span className="flex items-center gap-1.5">
+                                      <ChevronDown className={`h-3 w-3 transition-transform ${expandedComfort === nest.id ? 'rotate-180' : ''}`} />
+                                      Comfort Checklist
+                                    </span>
+                                    <span className="text-[10px] font-mono text-pink-500">TCNP.01.07</span>
+                                  </button>
+                                  {expandedComfort === nest.id && (
+                                    <div className="mt-2">
+                                      <ComfortChecklist nestId={nest.id} nestName={nest.name} />
+                                    </div>
+                                  )}
+                                </div>
                               </Card>
                             </motion.div>
                           )

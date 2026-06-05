@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import FlowerChecklist from "@/components/cheetahs/FlowerChecklist"
 import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import type { Database } from "@/types/supabase"
@@ -14,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { DatePicker } from "@/components/ui/date-picker"
-import { Car, Plus, Edit, Trash2 } from "lucide-react"
+import { Car, Plus, Edit, Trash2, ChevronDown } from "lucide-react"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 
@@ -66,7 +67,8 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingCheetah, setEditingCheetah] = useState<Cheetah | null>(null)
-  
+  const [expandedFlower, setExpandedFlower] = useState<string | null>(null)
+
   const [formData, setFormData] = useState<CheetahFormState>({
     registration_number: '',
     driver_name: '',
@@ -252,9 +254,9 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }} 
-        animate={{ opacity: 1, y: 0 }} 
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
         className="flex items-center justify-between"
       >
         <div>
@@ -350,42 +352,57 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
             <motion.div layout className="space-y-3">
               <AnimatePresence>
                 {cheetahs.map((cheetah) => (
-                  <motion.div
-                    layout
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0, scale: 0.95 }}
-                    transition={{ duration: 0.2 }}
-                    key={cheetah.id}
-                    className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:-translate-y-0.5 hover:shadow-md hover:border-primary/30"
-                  >
-                    <div className="flex-1">
-                      <p className="font-medium text-lg">
-                        {cheetah.call_sign || 'N/A'}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {cheetah.make} {cheetah.model} ({cheetah.year}) • {cheetah.registration_number}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {cheetah.color} • Capacity: {cheetah.capacity} passengers
-                      </p>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Badge variant={cheetah.status === 'available' ? 'success' : cheetah.status === 'in_use' ? 'warning' : 'secondary'}>
-                        {cheetah.status}
-                      </Badge>
-                      {canManage && (
-                        <>
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(cheetah)} className="hover:bg-primary/10">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(cheetah.id)} className="hover:bg-destructive/10">
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </motion.div>
+                  <div key={cheetah.id}>
+                    <motion.div
+                      layout
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0, scale: 0.95 }}
+                      transition={{ duration: 0.2 }}
+                      className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:-translate-y-0.5 hover:shadow-md hover:border-primary/30"
+                    >
+                      <div className="flex-1">
+                        <p className="font-medium text-lg">
+                          {cheetah.call_sign || 'N/A'}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {cheetah.make} {cheetah.model} ({cheetah.year}) • {cheetah.registration_number}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {cheetah.color} • Capacity: {cheetah.capacity} passengers
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Badge variant={cheetah.status === 'available' ? 'success' : cheetah.status === 'in_use' ? 'warning' : 'secondary'}>
+                          {cheetah.status}
+                        </Badge>
+                        {canManage && (
+                          <>
+                            <Button variant="ghost" size="icon" onClick={() => handleEdit(cheetah)} className="hover:bg-primary/10">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDelete(cheetah.id)} className="hover:bg-destructive/10">
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="hover:bg-teal-500/10"
+                          title="FLOWER Checklist"
+                          onClick={() => setExpandedFlower(expandedFlower === cheetah.id ? null : cheetah.id)}
+                        >
+                          <ChevronDown className={`h-4 w-4 text-teal-500 transition-transform ${expandedFlower === cheetah.id ? 'rotate-180' : ''}`} />
+                        </Button>
+                      </div>
+                    </motion.div>
+                    {expandedFlower === cheetah.id && (
+                      <div className="px-2 pb-3">
+                        <FlowerChecklist cheetahId={cheetah.id} cheetahCallSign={cheetah.call_sign || cheetah.registration_number} />
+                      </div>
+                    )}
+                  </div>
                 ))}
               </AnimatePresence>
             </motion.div>
