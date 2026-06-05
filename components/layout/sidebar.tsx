@@ -51,11 +51,12 @@ const ALL_NAV = [
   { name: "Incidents", href: "/incidents", icon: AlertTriangle },
   { name: "Audit Log", href: "/audit-logs", icon: FileText },
   { name: "Guide", href: "/guide", icon: BookOpen },
+  { name: "SOP Manual", href: "/sop", icon: FileText },
   { name: "Settings", href: "/settings", icon: Settings },
 ]
 
 /** Pages every authenticated user always sees */
-const BASE_HREFS = ["/dashboard", "/my-operations", "/chat", "/programs"]
+const BASE_HREFS = ["/dashboard", "/my-operations", "/chat", "/programs", "/guide", "/sop"]
 
 /**
  * Role-scoped extra pages (beyond BASE_HREFS).
