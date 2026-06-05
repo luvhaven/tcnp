@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import ComfortChecklist from "@/components/nests/ComfortChecklist"
+import { useNestETAReminder } from "@/hooks/useNestETAReminder"
 import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
 import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
@@ -83,6 +84,26 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       return data?.role || null
     }
   })
+
+  // Fetch this NO's assigned nest so the ETA reminder knows which nest to watch
+  const { data: myNestId } = useQuery({
+    queryKey: ['myNestId'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return null
+      const { data } = await (supabase as any)
+        .from('noscar_nest_assignments')
+        .select('nest_id')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .limit(1)
+        .single()
+      return data?.nest_id || null
+    }
+  })
+
+  // 30-min ETA reminder for this NO's assigned nest
+  useNestETAReminder(myNestId ?? null)
 
   const { data: nests = [] } = useQuery({
     queryKey: ['nests'],

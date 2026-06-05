@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { DatePicker } from "@/components/ui/date-picker"
-import { Car, Plus, Edit, Trash2, ChevronDown } from "lucide-react"
+import { Car, Plus, Edit, Trash2, ChevronDown, AlertTriangle, Gauge } from "lucide-react"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 
@@ -40,6 +40,9 @@ type Cheetah = {
   driver_phone: string
   created_at: string
   programs: { name: string } | null
+  mileage: number | null
+  last_service_mileage: number | null
+  last_service_date: string | null
 }
 
 type CheetahFormState = {
@@ -57,6 +60,7 @@ type CheetahFormState = {
   features: string
   last_maintenance: string
   next_maintenance: string
+  mileage: number
 }
 
 type CheetahUpdatePayload = Database['public']['Tables']['cheetahs']['Update']
@@ -84,7 +88,8 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
     program_id: '',
     features: '',
     last_maintenance: '',
-    next_maintenance: ''
+    next_maintenance: '',
+    mileage: 0
   })
 
   const { data: userRole } = useQuery({
@@ -217,7 +222,8 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
       program_id: cheetah.program_id || '',
       features: cheetah.features || '',
       last_maintenance: cheetah.last_maintenance || '',
-      next_maintenance: cheetah.next_maintenance || ''
+      next_maintenance: cheetah.next_maintenance || '',
+      mileage: cheetah.mileage || 0
     })
     setDialogOpen(true)
   }
@@ -243,7 +249,8 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
       program_id: '',
       features: '',
       last_maintenance: '',
-      next_maintenance: ''
+      next_maintenance: '',
+      mileage: 0
     })
   }
 
@@ -372,6 +379,23 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
                         <p className="text-xs text-muted-foreground mt-1">
                           {cheetah.color} • Capacity: {cheetah.capacity} passengers
                         </p>
+                        {/* Mileage display + SOP 35k warning */}
+                        {cheetah.mileage != null && (
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <Gauge className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">{cheetah.mileage.toLocaleString()} mi</span>
+                            {cheetah.mileage >= 35000 && (
+                              <Badge variant="destructive" className="text-[9px] gap-0.5 h-4 px-1.5">
+                                <AlertTriangle className="h-2.5 w-2.5" />Service Due
+                              </Badge>
+                            )}
+                            {cheetah.mileage >= 30000 && cheetah.mileage < 35000 && (
+                              <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[9px] gap-0.5 h-4 px-1.5">
+                                <AlertTriangle className="h-2.5 w-2.5" />Approaching Limit
+                              </Badge>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center space-x-2">
                         <Badge variant={cheetah.status === 'available' ? 'success' : cheetah.status === 'in_use' ? 'warning' : 'secondary'}>
@@ -506,6 +530,18 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
                   max={new Date().getFullYear() + 1}
                   value={formData.year}
                   onChange={(e) => setFormData({ ...formData, year: parseInt(e.target.value) })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="mileage">Mileage</Label>
+                <Input
+                  id="mileage"
+                  type="number"
+                  min="0"
+                  placeholder="e.g., 25000"
+                  value={formData.mileage}
+                  onChange={(e) => setFormData({ ...formData, mileage: parseInt(e.target.value) || 0 })}
                 />
               </div>
             </div>

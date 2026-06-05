@@ -32,6 +32,7 @@ import {
   Volume2,
   BookOpen,
   Phone,
+  ClipboardList,
 } from "lucide-react"
 
 const ALL_NAV = [
@@ -54,6 +55,7 @@ const ALL_NAV = [
   { name: "Contacts", href: "/contacts", icon: Phone },
   { name: "Guide", href: "/guide", icon: BookOpen },
   { name: "SOP Manual", href: "/sop", icon: FileText },
+  { name: "After-Op Reports", href: "/after-op-reports", icon: ClipboardList },
   { name: "Settings", href: "/settings", icon: Settings },
 ]
 
