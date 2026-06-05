@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
+import AOArrivalTimeline from "@/components/eagles/AOArrivalTimeline"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -65,10 +66,13 @@ export default function EaglesPage() {
                 <p className="text-muted-foreground">Manage airports and track flights</p>
             </div>
 
-            {/* ── Papa Arrival Briefings for Alpha Oscar ── */}
+            {/* ── Papa Arrival Briefings + AO Timeline for Alpha Oscar ── */}
             {userRole && ['alpha_oscar', 'head_alpha_oscar'].includes(userRole) && (
-                <div className="border rounded-xl p-4 bg-muted/30">
-                    <PapaBriefingsSection role={userRole} />
+                <div className="grid gap-4 md:grid-cols-2">
+                    <div className="border rounded-xl p-4 bg-muted/30">
+                        <PapaBriefingsSection role={userRole} />
+                    </div>
+                    <AOArrivalTimeline />
                 </div>
             )}
 
@@ -486,7 +490,7 @@ function TrackEagles() {
             // Fetch all states from OpenSky to avoid rate limits
             const { getAllFlights, parseFlightState, storeFlightData } = await import('@/lib/opensky-api')
             const response = await getAllFlights()
-            
+
             if (!response.states) return
 
             const newActiveFlights: Record<string, FlightState> = {}
@@ -548,7 +552,7 @@ function TrackEagles() {
 
         if (arrTime && now > arrTime) return 'Landed'
         if (depTime && now < depTime) return 'Pre-Flight'
-        
+
         // If between dep and arr but no active flight found on OpenSky, it's either out of coverage or delayed
         if (depTime && arrTime && now >= depTime && now <= arrTime) return 'In Air (No Telemetry)'
 
@@ -619,7 +623,7 @@ function TrackEagles() {
                     {papas.map(papa => {
                         const flight = activeFlights[papa.id]
                         const status = getFlightStatus(papa, flight)
-                        
+
                         let statusColor = "bg-gray-500/10 text-gray-400 border-gray-500/20"
                         if (status === 'In Air') statusColor = "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
                         if (status === 'Landed') statusColor = "bg-blue-500/10 text-blue-400 border-blue-500/20"
@@ -631,7 +635,7 @@ function TrackEagles() {
                                 <div className="absolute top-0 left-0 w-full h-1" style={{
                                     background: status === 'In Air' ? 'linear-gradient(90deg, #10b981 0%, transparent 100%)' : 'transparent'
                                 }} />
-                                
+
                                 <CardContent className="p-6">
                                     <div className="flex items-start justify-between mb-6">
                                         <div className="flex items-center gap-3">
@@ -676,14 +680,14 @@ function TrackEagles() {
                                                 <div className="p-3 bg-background/30 border border-border/50 rounded-lg">
                                                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Altitude</p>
                                                     <p className="font-mono font-bold text-lg leading-none">
-                                                        {metersToFeet(flight.baro_altitude)?.toLocaleString() || '--'} 
+                                                        {metersToFeet(flight.baro_altitude)?.toLocaleString() || '--'}
                                                         <span className="text-[10px] text-muted-foreground font-sans ml-1">ft</span>
                                                     </p>
                                                 </div>
                                                 <div className="p-3 bg-background/30 border border-border/50 rounded-lg">
                                                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Speed</p>
                                                     <p className="font-mono font-bold text-lg leading-none">
-                                                        {metersPerSecondToKnots(flight.velocity)?.toFixed(0) || '--'} 
+                                                        {metersPerSecondToKnots(flight.velocity)?.toFixed(0) || '--'}
                                                         <span className="text-[10px] text-muted-foreground font-sans ml-1">kts</span>
                                                     </p>
                                                 </div>
@@ -702,14 +706,14 @@ function TrackEagles() {
                                                 <div className="bg-card z-10 pr-4">
                                                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Departure</p>
                                                     <p className="font-mono font-medium text-sm">
-                                                        {papa.flight_departure_time ? new Date(papa.flight_departure_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}
+                                                        {papa.flight_departure_time ? new Date(papa.flight_departure_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
                                                     </p>
                                                 </div>
                                                 <ArrowRight className="h-4 w-4 text-muted-foreground/40 z-10 bg-card" />
                                                 <div className="text-right bg-card z-10 pl-4">
                                                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Arrival</p>
                                                     <p className="font-mono font-medium text-sm">
-                                                        {papa.flight_arrival_time ? new Date(papa.flight_arrival_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}
+                                                        {papa.flight_arrival_time ? new Date(papa.flight_arrival_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
                                                     </p>
                                                 </div>
                                             </div>

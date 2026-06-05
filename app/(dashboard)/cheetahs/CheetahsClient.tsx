@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import FlowerChecklist from "@/components/cheetahs/FlowerChecklist"
+import CheetahPrerequisites from "@/components/cheetahs/CheetahPrerequisites"
 import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import type { Database } from "@/types/supabase"
@@ -398,8 +399,9 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
                       </div>
                     </motion.div>
                     {expandedFlower === cheetah.id && (
-                      <div className="px-2 pb-3">
+                      <div className="px-2 pb-3 space-y-2">
                         <FlowerChecklist cheetahId={cheetah.id} cheetahCallSign={cheetah.call_sign || cheetah.registration_number} />
+                        <CheetahPrerequisites cheetahId={cheetah.id} cheetahCallSign={cheetah.call_sign || cheetah.registration_number} />
                       </div>
                     )}
                   </div>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
+import DenChecklist from "@/components/theatre/DenChecklist"
 import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { MapPin, Plus, Edit, Trash2, Users, Scan } from "lucide-react"
+import { MapPin, Plus, Edit, Trash2, Users, Scan, ChevronDown } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -19,10 +20,10 @@ import VIPManagementPanel from "@/components/theatre/VIPManagementPanel"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { motion, AnimatePresence } from "framer-motion"
 
-export default function TheatresClient({ 
-  initialTheatres, 
-  initialEagleSquares 
-}: { 
+export default function TheatresClient({
+  initialTheatres,
+  initialEagleSquares
+}: {
   initialTheatres: any[]
   initialEagleSquares: any[]
 }) {
@@ -41,6 +42,7 @@ export default function TheatresClient({
     facilities: ''
   })
   const [selectedTheatreId, setSelectedTheatreId] = useState<string>("")
+  const [expandedDen, setExpandedDen] = useState<string | null>(null)
 
   const { data: theatres = [] } = useQuery({
     queryKey: ['theatres'],
@@ -156,9 +158,23 @@ export default function TheatresClient({
 
   return (
     <div className="space-y-6">
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }} 
-        animate={{ opacity: 1, y: 0 }} 
+      {/* Den Facility Checklist shown for VO roles */}
+      {userRole && ['victor_oscar', 'head_victor_oscar', 'super_admin', 'admin'].includes(userRole) && theatres.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold">Den Facility Checks</h3>
+            <Badge variant="secondary" className="text-[9px]">Run 4× per day</Badge>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {theatres.slice(0, 2).map((t: any) => (
+              <DenChecklist key={t.id} theatreId={t.id} theatreName={t.name} />
+            ))}
+          </div>
+        </div>
+      )}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
         className="flex items-center justify-between"
       >
         <div>

@@ -31,6 +31,7 @@ import {
   Landmark,
   Volume2,
   BookOpen,
+  Phone,
 } from "lucide-react"
 
 const ALL_NAV = [
@@ -50,13 +51,14 @@ const ALL_NAV = [
   { name: "Theatres", href: "/theatres", icon: Landmark },
   { name: "Incidents", href: "/incidents", icon: AlertTriangle },
   { name: "Audit Log", href: "/audit-logs", icon: FileText },
+  { name: "Contacts", href: "/contacts", icon: Phone },
   { name: "Guide", href: "/guide", icon: BookOpen },
   { name: "SOP Manual", href: "/sop", icon: FileText },
   { name: "Settings", href: "/settings", icon: Settings },
 ]
 
 /** Pages every authenticated user always sees */
-const BASE_HREFS = ["/dashboard", "/my-operations", "/chat", "/programs", "/guide", "/sop"]
+const BASE_HREFS = ["/dashboard", "/my-operations", "/chat", "/programs", "/guide", "/sop", "/contacts"]
 
 /**
  * Role-scoped extra pages (beyond BASE_HREFS).

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import CallSignPanel from '@/components/operations/CallSignPanel'
 import DOHelpPanel from '@/components/operations/DOHelpPanel'
+import DOFeedbackForm from '@/components/operations/DOFeedbackForm'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -389,6 +390,12 @@ export default function MyOperationsPage() {
                 <Badge variant="outline" className="ml-1 h-5 px-1.5 text-xs">{upcoming.length}</Badge>
               </TabsTrigger>
             )}
+            {myAssigned.length > 0 && (
+              <TabsTrigger value="postop" className="flex items-center gap-1.5">
+                Post-Op Report
+                <Badge variant="outline" className="ml-1 h-5 px-1.5 text-xs text-amber-600 border-amber-500/40">{myAssigned.length}</Badge>
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* ── My Assignments ─────────────────────────────────────────── */}
@@ -433,6 +440,26 @@ export default function MyOperationsPage() {
             {upcoming.map(j => (
               <JourneyFeedCard key={j.id} journey={j} showCountdown />
             ))}
+          </TabsContent>
+
+          {/* ── Post-Op Reports (DO only) ────────────────────────── */}
+          <TabsContent value="postop" className="space-y-4">
+            <p className="text-xs text-muted-foreground">Submit your post-operation report after each journey is complete. Required per SOP TCNP.01.08.</p>
+            {myAssigned.length === 0 ? (
+              <Card>
+                <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                  No assigned journeys to report on.
+                </CardContent>
+              </Card>
+            ) : (
+              myAssigned.map(j => (
+                <DOFeedbackForm
+                  key={j.id}
+                  journeyId={j.id}
+                  papaNme={j.papas?.full_name ? `${j.papas.title || ''} ${j.papas.full_name}`.trim() : 'Unknown Papa'}
+                />
+              ))
+            )}
           </TabsContent>
         </Tabs>
       )}
