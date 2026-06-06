@@ -246,7 +246,7 @@ export default function LoginPage() {
                     onChange={(e) => setOscar(e.target.value)}
                     className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner appearance-none cursor-pointer"
                   >
-                    <option value="" className="bg-gray-900 text-gray-400">Auto-generate based on name...</option>
+                    <option value="" className="bg-gray-900 text-gray-400">Select an Oscar Callsign...</option>
                     <option value="Alpha Oscar" className="bg-gray-900 text-white">Alpha Oscar</option>
                     <option value="Delta Oscar" className="bg-gray-900 text-white">Delta Oscar</option>
                     <option value="Echo Oscar" className="bg-gray-900 text-white">Echo Oscar</option>
