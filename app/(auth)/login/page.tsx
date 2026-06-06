@@ -61,8 +61,18 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, full_name: fullName, phone, role, oscar: oscar.trim() || undefined })
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to sign up");
+
+      let data = {};
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        console.error("Non-JSON API response:", text);
+        throw new Error(`Server returned ${res.status}: ${res.statusText}`);
+      }
+
+      if (!res.ok) throw new Error((data as any).error || "Failed to sign up");
       toast.success("Clearance requested successfully. Waiting for Admin approval.");
       setMode('login');
       setPassword('');

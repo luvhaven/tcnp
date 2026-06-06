@@ -81,7 +81,12 @@ export async function middleware(request: NextRequest) {
   }
 
   // Protected routes
-  if (!user && !request.nextUrl.pathname.startsWith('/login') && !request.nextUrl.pathname.startsWith('/signup')) {
+  if (
+    !user &&
+    !request.nextUrl.pathname.startsWith('/login') &&
+    !request.nextUrl.pathname.startsWith('/signup') &&
+    !request.nextUrl.pathname.startsWith('/api/auth/signup')
+  ) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
