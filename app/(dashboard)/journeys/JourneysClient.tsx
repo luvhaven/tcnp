@@ -276,8 +276,8 @@ export default function JourneysClient({
         eagle_squares (name, code),
         programs (name, status)
       `)
-      .order('created_at', { ascending: false })
-      .range(rangeFrom, rangeTo)
+        .order('created_at', { ascending: false })
+        .range(rangeFrom, rangeTo)
 
       if (error) throw error
 
@@ -355,17 +355,17 @@ export default function JourneysClient({
       // Convert empty-string UUID fields to null to avoid Postgres uuid parse errors
       const sanitized = {
         ...formData,
-        papa_id:                   formData.papa_id                   || null,
-        assigned_cheetah_id:       formData.assigned_cheetah_id       || null,
-        program_id:                formData.program_id                || null,
-        assigned_nest_id:          formData.assigned_nest_id          || null,
-        assigned_eagle_square_id:  formData.assigned_eagle_square_id  || null,
-        assigned_duty_officer_id:  lead,
-        assigned_do_id:            lead,
-        scheduled_departure:       formData.scheduled_departure       || null,
-        scheduled_arrival:         formData.scheduled_arrival         || null,
-        etd:                       formData.etd                       || null,
-        eta:                       formData.eta                       || null,
+        papa_id: formData.papa_id || null,
+        assigned_cheetah_id: formData.assigned_cheetah_id || null,
+        program_id: formData.program_id || null,
+        assigned_nest_id: formData.assigned_nest_id || null,
+        assigned_eagle_square_id: formData.assigned_eagle_square_id || null,
+        assigned_duty_officer_id: lead,
+        assigned_do_id: lead,
+        scheduled_departure: formData.scheduled_departure || null,
+        scheduled_arrival: formData.scheduled_arrival || null,
+        etd: formData.etd || null,
+        eta: formData.eta || null,
       }
       const { data: newJourney, error } = await (supabase as any)
         .from('journeys')
@@ -403,15 +403,39 @@ export default function JourneysClient({
     }
   }
 
-  const handleEditClick = (journey: Journey, e: React.MouseEvent) => {
+  const handleEditClick = async (journey: Journey, e: React.MouseEvent) => {
     e.stopPropagation() // Prevent card click
     setSelectedJourney(journey)
+
+    let initialDOs: string[] = []
+    let initialLead = journey.assigned_duty_officer_id || journey.assigned_do_id || ''
+    if (initialLead) {
+      initialDOs = [initialLead]
+    }
+
+    try {
+      const res = await fetch(`/api/journey-duty-officers?journey_id=${journey.id}`)
+      if (res.ok) {
+        const json = await res.json()
+        if (json.duty_officers && json.duty_officers.length > 0) {
+          initialDOs = json.duty_officers.map((d: any) => d.user_id)
+          const leadObj = json.duty_officers.find((d: any) => d.is_lead)
+          initialLead = leadObj ? leadObj.user_id : initialDOs[0]
+        }
+      }
+    } catch {
+      console.warn("Using legacy DO assignment scalar")
+    }
+
+    setSelectedDOs(initialDOs)
+    setTeamLeadId(initialLead)
+
     setFormData({
       papa_id: journey.papa_id || '',
       assigned_cheetah_id: journey.assigned_cheetah_id || '',
       program_id: journey.program_id || '',
       journey_type: journey.journey_type || 'airport_to_nest_to_theatre',
-      assigned_duty_officer_id: journey.assigned_duty_officer_id || journey.assigned_do_id || '',
+      assigned_duty_officer_id: initialLead,
       assigned_nest_id: journey.assigned_nest_id || '',
       assigned_eagle_square_id: journey.assigned_eagle_square_id || '',
       origin: journey.origin || '',
@@ -438,18 +462,18 @@ export default function JourneysClient({
       const lead = teamLeadId || selectedDOs[0] || formData.assigned_duty_officer_id || null
       const sanitized = {
         ...formData,
-        papa_id:                   formData.papa_id                   || null,
-        assigned_cheetah_id:       formData.assigned_cheetah_id       || null,
-        program_id:                formData.program_id                || null,
-        assigned_nest_id:          formData.assigned_nest_id          || null,
-        assigned_eagle_square_id:  formData.assigned_eagle_square_id  || null,
-        assigned_duty_officer_id:  lead,
-        assigned_do_id:            lead,
-        scheduled_departure:       formData.scheduled_departure       || null,
-        scheduled_arrival:         formData.scheduled_arrival         || null,
-        etd:                       formData.etd                       || null,
-        eta:                       formData.eta                       || null,
-        updated_at:                new Date().toISOString(),
+        papa_id: formData.papa_id || null,
+        assigned_cheetah_id: formData.assigned_cheetah_id || null,
+        program_id: formData.program_id || null,
+        assigned_nest_id: formData.assigned_nest_id || null,
+        assigned_eagle_square_id: formData.assigned_eagle_square_id || null,
+        assigned_duty_officer_id: lead,
+        assigned_do_id: lead,
+        scheduled_departure: formData.scheduled_departure || null,
+        scheduled_arrival: formData.scheduled_arrival || null,
+        etd: formData.etd || null,
+        eta: formData.eta || null,
+        updated_at: new Date().toISOString(),
       }
       const { error } = await (supabase as any)
         .from('journeys')
@@ -524,17 +548,17 @@ export default function JourneysClient({
     const type = journeyType || 'airport_to_nest_to_theatre'
     const workflows: Record<string, Record<string, string[]>> = {
       airport_to_nest_to_theatre: {
-        planned:      ['cocktail', 'broken_arrow', 'cancelled'],
-        cocktail:     ['first_course', 'broken_arrow', 'cancelled'],
+        planned: ['cocktail', 'broken_arrow', 'cancelled'],
+        cocktail: ['first_course', 'broken_arrow', 'cancelled'],
         first_course: ['chapman', 'broken_arrow', 'cancelled'],
-        chapman:      ['dessert', 'broken_arrow', 'cancelled'],
-        dessert:      ['completed', 'broken_arrow', 'cancelled'],
+        chapman: ['dessert', 'broken_arrow', 'cancelled'],
+        dessert: ['completed', 'broken_arrow', 'cancelled'],
       },
       airport_to_theatre: {
-        planned:  ['cocktail', 'broken_arrow', 'cancelled'],
+        planned: ['cocktail', 'broken_arrow', 'cancelled'],
         cocktail: ['chapman', 'broken_arrow', 'cancelled'],
-        chapman:  ['dessert', 'broken_arrow', 'cancelled'],
-        dessert:  ['completed', 'broken_arrow', 'cancelled'],
+        chapman: ['dessert', 'broken_arrow', 'cancelled'],
+        dessert: ['completed', 'broken_arrow', 'cancelled'],
       },
       self_arrival: {
         planned: ['chapman', 'broken_arrow', 'cancelled'],
@@ -940,11 +964,10 @@ export default function JourneysClient({
                             <button
                               type="button"
                               onClick={() => setTeamLeadId(officer.id)}
-                              className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
-                                isLead
+                              className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${isLead
                                   ? 'bg-yellow-400 text-yellow-900 border-yellow-500 font-bold'
                                   : 'bg-muted text-muted-foreground border-border hover:border-yellow-400'
-                              }`}
+                                }`}
                             >
                               {isLead ? '⭐ Lead' : 'Set Lead'}
                             </button>
@@ -1268,9 +1291,8 @@ export default function JourneysClient({
                           </label>
                           {isSelected && selectedDOs.length > 1 && (
                             <button type="button" onClick={() => setTeamLeadId(officer.id)}
-                              className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
-                                isLead ? 'bg-yellow-400 text-yellow-900 border-yellow-500 font-bold' : 'bg-muted text-muted-foreground border-border hover:border-yellow-400'
-                              }`}>{isLead ? '⭐ Lead' : 'Set Lead'}</button>
+                              className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${isLead ? 'bg-yellow-400 text-yellow-900 border-yellow-500 font-bold' : 'bg-muted text-muted-foreground border-border hover:border-yellow-400'
+                                }`}>{isLead ? '⭐ Lead' : 'Set Lead'}</button>
                           )}
                           {isSelected && selectedDOs.length === 1 && (
                             <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-400 text-yellow-900 font-bold">⭐ Lead</span>

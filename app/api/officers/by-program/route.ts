@@ -2,11 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-const EXCLUDED_ROLES = new Set([
-  'captain', 'super_admin', 'dev_admin', 'admin',
-  'head_of_command', 'head_of_operations', 'command', 'hod', 'hop'
-])
-
 export async function GET(req: NextRequest) {
   try {
     const supabase = await createClient()
@@ -57,7 +52,6 @@ export async function GET(req: NextRequest) {
       .map((a: any) => {
         const u = userMap[a.user_id]
         if (!u) return null
-        if (EXCLUDED_ROLES.has(u.role)) return null
         return {
           id: a.user_id,
           full_name: a.full_name,

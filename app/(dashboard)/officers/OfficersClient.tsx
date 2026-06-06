@@ -83,8 +83,6 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
 
   const roles = [
     { value: 'admin', label: 'Admin' },
-    { value: 'prof', label: 'Prof (View Only)' },
-    { value: 'duchess', label: 'Duchess (View Only)' },
     { value: 'captain', label: 'Captain' },
     { value: 'vice_captain', label: 'Vice Captain' },
     { value: 'head_of_operations', label: 'Head of Operations' },
@@ -215,7 +213,12 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       if (!response.ok) throw new Error(result.error || 'Failed to update officer status')
       return !officer.is_active
     },
-    onSuccess: (newStatus) => {
+    onSuccess: (newStatus, variables) => {
+      // Optimistically update instead of relying solely on invalidation
+      queryClient.setQueryData(['officers'], (oldData: Officer[] | undefined) => {
+        if (!oldData) return oldData
+        return oldData.map(o => o.id === variables.id ? { ...o, is_active: newStatus } : o)
+      })
       queryClient.invalidateQueries({ queryKey: ['officers'] })
       toast.success(`Officer ${newStatus ? 'activated' : 'deactivated'}!`)
     },

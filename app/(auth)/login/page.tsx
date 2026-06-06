@@ -68,36 +68,61 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 via-white to-slate-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-900 p-4 md:p-6 animate-fade-in">
-      <div className="w-full max-w-md animate-slide-up">
-        <div className="bg-white/90 dark:bg-gray-900/80 rounded-2xl shadow-2xl border border-orange-100/60 dark:border-orange-500/20 p-8 backdrop-blur-sm">
-          <div className="text-center mb-8">
-            <div className="flex justify-center mb-4">
-              <div className="relative h-12 w-12">
+    <div className="min-h-screen flex items-center justify-center bg-gray-950 relative overflow-hidden selection:bg-orange-500/30">
+      {/* 1. Cinematic Wide Shot Background */}
+      <div className="absolute inset-0 z-0">
+        <Image
+          src="/tcnp_cinematic_bg.png"
+          alt="TCNP Protocol Operations"
+          fill
+          className="object-cover opacity-[0.45] mix-blend-luminosity brightness-[0.8] contrast-[1.2]"
+          priority
+        />
+        {/* Subtle slow pulsing vignette overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/40 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-gray-950/80 via-transparent to-gray-950/80" />
+      </div>
+
+      {/* 2. Abstract Neon Aurora Gradients */}
+      <div className="absolute inset-0 z-0 pointer-events-none opacity-50 mix-blend-screen">
+        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-blue-600/30 blur-[130px] rounded-full animate-pulse" style={{ animationDuration: '8s' }} />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-orange-600/20 blur-[150px] rounded-full hidden md:block animate-pulse" style={{ animationDuration: '12s' }} />
+        <div className="absolute top-[30%] right-[10%] w-[30%] h-[30%] bg-purple-600/20 blur-[100px] rounded-full animate-pulse" style={{ animationDuration: '10s' }} />
+      </div>
+
+      {/* 3. The Login Card Container */}
+      <div className="w-full max-w-md relative z-10 px-6 sm:px-4 animate-slide-up">
+        <div className="bg-black/30 dark:bg-black/40 rounded-[2.5rem] shadow-[0_0_80px_rgba(0,0,0,0.8)] border border-white/10 p-8 md:p-10 backdrop-blur-2xl ring-1 ring-white/5 overflow-hidden">
+
+          {/* Internal ambient card glow */}
+          <div className="absolute -top-32 -left-32 w-64 h-64 bg-orange-500/10 rounded-full blur-[80px] pointer-events-none" />
+
+          {/* Header */}
+          <div className="text-center mb-10 relative z-10">
+            <div className="flex justify-center mb-6">
+              <div className="relative h-20 w-20 drop-shadow-[0_0_20px_rgba(255,255,255,0.4)] transition-transform duration-700 hover:scale-105">
                 <Image
                   src="/tcnp_logo.png"
-                  alt="TCNP Journey Management"
+                  alt="TCNP Excellence"
                   fill
                   className="object-contain"
                   priority
                 />
               </div>
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white mb-1">
-              TCNP Journey Management
+            <h1 className="text-3xl font-bold tracking-tight text-white mb-2 drop-shadow-lg">
+              TCNP PLATFORM
             </h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Sign in to your account
+            <p className="text-[11px] font-semibold tracking-[0.25em] text-orange-200/70 uppercase">
+              Global Protocol Operations
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                Email Address
+          <form onSubmit={handleLogin} className="space-y-6 relative z-10">
+            {/* Email Field */}
+            <div className="group">
+              <label htmlFor="email" className="block text-xs font-medium text-gray-300 mb-2 uppercase tracking-wide">
+                Clearance Email
               </label>
               <input
                 id="email"
@@ -105,17 +130,15 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
-                placeholder="your.email@tcnp.org"
+                className="w-full px-5 py-4 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-white/30 focus:bg-white/10 transition-all duration-300 shadow-inner"
+                placeholder="officer@tcnp.org"
               />
             </div>
 
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                Password
+            {/* Password Field */}
+            <div className="group">
+              <label htmlFor="password" className="block text-xs font-medium text-gray-300 mb-2 uppercase tracking-wide">
+                Security Key
               </label>
               <div className="relative">
                 <input
@@ -124,34 +147,58 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent transition pr-10"
+                  className="w-full px-5 py-4 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-white/30 focus:bg-white/10 transition-all duration-300 shadow-inner pr-12"
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none z-10 cursor-pointer"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none z-10"
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 px-4 rounded-lg shadow-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5 hover:shadow-lg"
-            >
-              {loading ? 'Signing in...' : 'Sign In'}
-            </button>
+            {/* Submit Button */}
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="relative w-full group overflow-hidden bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white font-bold py-4 px-4 rounded-xl shadow-[0_0_20px_rgba(234,88,12,0.3)] hover:shadow-[0_0_30px_rgba(234,88,12,0.5)] transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed transform hover:-translate-y-0.5"
+              >
+                {/* Button shine effect */}
+                <span className="absolute top-0 -left-[100%] w-1/2 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-[-25deg] group-hover:animate-[shine_1s_ease-in-out_forwards]" />
+                <span className="relative z-10 uppercase tracking-widest text-sm text-shadow-sm">
+                  {loading ? 'Authenticating...' : 'Commence Operations'}
+                </span>
+              </button>
+            </div>
           </form>
 
+          {/* Footer Insignia */}
+          <div className="mt-10 text-center opacity-50 relative z-10">
+            <p className="text-[10px] text-gray-400 tracking-wider">
+              ENTERPRISE DISPATCH COMMAND
+            </p>
+          </div>
+        </div>
+
+        {/* Floating motivational quote below card */}
+        <div className="mt-8 text-center px-4 animate-fade-in" style={{ animationDelay: '0.8s' }}>
+          <p className="text-gray-400 text-sm italic serif opacity-80 mt-2">
+            "Excellence is not an act, but a habit."
+          </p>
         </div>
       </div>
+
+      {/* Global minimal animation for the button shine */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+        @keyframes shine {
+          100% { left: 200%; }
+        }
+      `}} />
     </div>
   );
 }
