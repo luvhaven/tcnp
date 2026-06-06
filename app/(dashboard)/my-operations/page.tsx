@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import CallSignPanel from '@/components/operations/CallSignPanel'
 import DOHelpPanel from '@/components/operations/DOHelpPanel'
 import DOFeedbackForm from '@/components/operations/DOFeedbackForm'
+import CheetahPrerequisites from '@/components/cheetahs/CheetahPrerequisites'
+import FlowerChecklist from '@/components/cheetahs/FlowerChecklist'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -615,6 +617,20 @@ function JourneyOperationsPanel({
           )}
         </CardContent>
       </Card>
+
+      {/* Pre-Op Checklists (shown when journey is planned) */}
+      {canUpdate && isPlanned && journey.cheetahs?.registration_number && (
+        <div className="grid md:grid-cols-2 gap-4 mt-4">
+          <CheetahPrerequisites
+            cheetahId={journey.cheetahs.registration_number} // fallback since cheetah object might just be partial
+            cheetahCallSign={journey.cheetahs.call_sign ?? journey.cheetahs.registration_number}
+          />
+          <FlowerChecklist
+            cheetahId={journey.cheetahs.registration_number}
+            cheetahCallSign={journey.cheetahs.call_sign ?? journey.cheetahs.registration_number}
+          />
+        </div>
+      )}
 
       {/* ── Start Journey ── prominent CTA when status is planned */}
       {canUpdate && isPlanned && (

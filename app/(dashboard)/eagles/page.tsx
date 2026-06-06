@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
 import AOArrivalTimeline from "@/components/eagles/AOArrivalTimeline"
 import { createClient } from "@/lib/supabase/client"
@@ -431,6 +431,10 @@ function TrackEagles() {
     const [autoRefresh, setAutoRefresh] = useState(true)
     const [currentRole, setCurrentRole] = useState<string | null>(null)
     const [roleChecked, setRoleChecked] = useState(false)
+    const [dbStatuses, setDbStatuses] = useState<Record<string, string>>({})
+
+    // Track previous status to trigger alerts
+    const prevStatusesRef = useRef<Record<string, string>>({})
 
     const canManage = currentRole ? canManageEagles(currentRole) : false
 
@@ -495,7 +499,7 @@ function TrackEagles() {
 
             const newActiveFlights: Record<string, FlightState> = {}
 
-            // Find matching flights
+            // Find matching flights in OpenSky
             response.states.forEach((rawState: any) => {
                 const callsign = rawState[1]?.trim().toLowerCase()
                 if (callsign && callsigns.some(c => callsign.includes(c) || c.includes(callsign))) {
@@ -514,6 +518,27 @@ function TrackEagles() {
             })
 
             setActiveFlights(newActiveFlights)
+
+            // Also check Database historic flight tracking for statuses we may have lost from OpenSky
+            const { data: dbData } = await supabase.from('flight_tracking').select('flight_id, status')
+            const newDbStatuses: Record<string, string> = {}
+            if (dbData) {
+                papasData.forEach(p => {
+                    const pCall = p.flight_number?.trim().toLowerCase()
+                    if (!pCall) return;
+
+                    const match = dbData.find(d => {
+                        const dCall = d.flight_id?.trim().toLowerCase()
+                        if (!dCall) return false;
+                        return dCall.includes(pCall) || pCall.includes(dCall)
+                    })
+                    if (match && match.status) {
+                        newDbStatuses[p.id] = match.status // 'Landed' or 'In Air'
+                    }
+                })
+            }
+            setDbStatuses(newDbStatuses)
+
         } catch (error) {
             console.error('Error refreshing flights:', error)
         }
@@ -541,10 +566,13 @@ function TrackEagles() {
         return () => clearInterval(interval)
     }, [autoRefresh, canManage, papas])
 
-    const getFlightStatus = (papa: any, activeFlight?: FlightState) => {
+    const getFlightStatus = (papa: any, activeFlight?: FlightState, historicalDbStatus?: string) => {
         if (activeFlight) {
             return activeFlight.on_ground ? 'Landed' : 'In Air'
         }
+
+        if (historicalDbStatus === 'Landed') return 'Landed'
+        if (historicalDbStatus === 'In Air') return 'In Air (No Telemetry)'
 
         const now = new Date()
         const depTime = papa.flight_departure_time ? new Date(papa.flight_departure_time) : null
@@ -556,8 +584,37 @@ function TrackEagles() {
         // If between dep and arr but no active flight found on OpenSky, it's either out of coverage or delayed
         if (depTime && arrTime && now >= depTime && now <= arrTime) return 'In Air (No Telemetry)'
 
-        return 'Scheduled'
+        return 'Yet to board'
     }
+
+    // Alert system effect
+    useEffect(() => {
+        if (!papas.length) return
+
+        papas.forEach(papa => {
+            const flight = activeFlights[papa.id]
+            const dbStatus = dbStatuses[papa.id]
+            const newStatus = getFlightStatus(papa, flight, dbStatus)
+
+            const oldStatus = prevStatusesRef.current[papa.id]
+
+            // Only alert if there was a PREVIOUS valid status, and it actively changed to a milestone
+            if (oldStatus && oldStatus !== newStatus) {
+                if (newStatus === 'In Air' || newStatus === 'In Air (No Telemetry)') {
+                    toast.info(`🛫 Flight Alert: ${papa.title || ''} ${papa.full_name} is now in the air!`, {
+                        duration: 8000,
+                    })
+                } else if (newStatus === 'Landed') {
+                    toast.success(`🛬 Flight Alert: ${papa.title || ''} ${papa.full_name} has landed!`, {
+                        duration: 10000,
+                    })
+                }
+            }
+
+            // Update the ref to track this
+            prevStatusesRef.current[papa.id] = newStatus
+        })
+    }, [activeFlights, dbStatuses, papas])
 
     if (!roleChecked || loading) {
         return (
@@ -622,12 +679,12 @@ function TrackEagles() {
                 <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
                     {papas.map(papa => {
                         const flight = activeFlights[papa.id]
-                        const status = getFlightStatus(papa, flight)
+                        const status = getFlightStatus(papa, flight, dbStatuses[papa.id])
 
                         let statusColor = "bg-gray-500/10 text-gray-400 border-gray-500/20"
                         if (status === 'In Air') statusColor = "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
                         if (status === 'Landed') statusColor = "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                        if (status === 'Pre-Flight' || status === 'Scheduled') statusColor = "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                        if (status === 'Pre-Flight' || status === 'Yet to board') statusColor = "bg-amber-500/10 text-amber-400 border-amber-500/20"
                         if (status === 'In Air (No Telemetry)') statusColor = "bg-orange-500/10 text-orange-400 border-orange-500/20"
 
                         return (
