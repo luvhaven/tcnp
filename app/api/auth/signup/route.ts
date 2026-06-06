@@ -9,7 +9,7 @@ export async function POST(request: Request) {
         const db = adminClient as any
 
         const body = await request.json()
-        const { email, password, full_name, phone, role } = body
+        const { email, password, full_name, phone, role, oscar: custom_oscar } = body
 
         if (!email || !password || !full_name || !role) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Failed to create user' }, { status: 500 })
         }
 
-        // Generate OSCAR
+        // Generate OSCAR fallback if not provided manually
         const generateOscar = (fullName: string, userRole: string) => {
             if (!fullName) return null
             const initials = fullName.split(' ').map(n => n[0]).join('').toUpperCase()
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
             return `OSCAR-${initials}-${roleCode}`
         }
 
-        const oscar = generateOscar(full_name, role)
+        const oscar = custom_oscar || generateOscar(full_name, role)
 
         const insertData: any = {
             id: authData.user.id,

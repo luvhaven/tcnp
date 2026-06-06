@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState("delta_oscar");
+  const [oscar, setOscar] = useState("");
   const [quoteIndex, setQuoteIndex] = useState(0);
   const [isFading, setIsFading] = useState(false);
   const [displayText, setDisplayText] = useState("Excellence is not an act, but a habit.");
@@ -58,7 +59,7 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, full_name: fullName, phone, role })
+        body: JSON.stringify({ email, password, full_name: fullName, phone, role, oscar: oscar.trim() || undefined })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to sign up");
@@ -220,7 +221,17 @@ export default function LoginPage() {
               </div>
               <div className="group">
                 <label className="block text-xs font-medium text-gray-300 mb-1 uppercase tracking-wide">Security Key (Password)</label>
-                <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner" />
+                <div className="relative">
+                  <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner pr-12" />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none z-10">
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
+              </div>
+              <div className="group">
+                <label className="block text-xs font-medium text-gray-300 mb-1 uppercase tracking-wide">Oscar Callsign (Optional)</label>
+                <input type="text" value={oscar} onChange={(e) => setOscar(e.target.value)} placeholder="e.g. OSCAR-JD-ALPHA" className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner" />
+                <p className="text-[10px] text-gray-400 mt-1">Leave blank to auto-generate based on your name.</p>
               </div>
 
               <div className="pt-2 space-y-3">

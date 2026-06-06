@@ -111,7 +111,7 @@ export function PasswordEnforcer() {
 
     return (
         <Dialog open={mustChange} onOpenChange={() => { }}>
-            <DialogContent className="sm:max-w-md" onInteractOutside={(e: any) => e.preventDefault()} onEscapeKeyDown={(e: any) => e.preventDefault()}>
+            <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle className="text-red-500 font-bold">Mandatory Password Rotation</DialogTitle>
                     <DialogDescription>
