@@ -17,7 +17,7 @@ export default function LoginPage() {
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState("delta_oscar");
   const [quoteIndex, setQuoteIndex] = useState(0);
-  const [isScrambling, setIsScrambling] = useState(false);
+  const [isFading, setIsFading] = useState(false);
   const [displayText, setDisplayText] = useState("Excellence is not an act, but a habit.");
 
   const router = useRouter();
@@ -31,35 +31,17 @@ export default function LoginPage() {
     "The standard is perfection. We accept nothing less."
   ];
 
-  // Scrambling Engine
+  // Soft Morphing Engine
   useEffect(() => {
     const interval = setInterval(() => {
-      setIsScrambling(true);
-      const nextIndex = (quoteIndex + 1) % QUOTES.length;
-      const targetText = QUOTES[nextIndex];
-      const chars = "!<>-_\\\\/[]{}—=+*^?#________";
+      setIsFading(true);
 
-      let iteration = 0;
-      const scrambleInterval = setInterval(() => {
-        setDisplayText(
-          targetText
-            .split("")
-            .map((letter, index) => {
-              if (index < iteration) {
-                return targetText[index];
-              }
-              return chars[Math.floor(Math.random() * chars.length)];
-            })
-            .join("")
-        );
-
-        if (iteration >= targetText.length) {
-          clearInterval(scrambleInterval);
-          setIsScrambling(false);
-          setQuoteIndex(nextIndex);
-        }
-        iteration += 1 / 3;
-      }, 30);
+      setTimeout(() => {
+        const nextIndex = (quoteIndex + 1) % QUOTES.length;
+        setDisplayText(QUOTES[nextIndex]);
+        setQuoteIndex(nextIndex);
+        setIsFading(false);
+      }, 800); // 800ms fade out, swap, then fade back in
 
     }, 10000);
     return () => clearInterval(interval);
@@ -260,9 +242,9 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Scrambling Quote Engine */}
+        {/* Soft Morphing Quote */}
         <div className="mt-8 text-center px-4">
-          <p className={`text-gray-400 text-sm italic serif opacity-80 mt-2 transition-all duration-300 ${isScrambling ? 'text-orange-400 font-mono tracking-widest opacity-100' : ''}`}>
+          <p className={`text-gray-400 text-sm italic serif mt-2 transition-opacity duration-700 ease-in-out ${isFading ? 'opacity-0' : 'opacity-80'}`}>
             "{displayText}"
           </p>
         </div>
