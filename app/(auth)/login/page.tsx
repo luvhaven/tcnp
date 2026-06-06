@@ -124,7 +124,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-950 relative overflow-hidden selection:bg-orange-500/30">
 
       {/* Background cinematic action music mapping */}
-      <audio src="https://cdns-preview-5.dzcdn.net/stream/c-5fec8763574d6c4eb8716b5a76da0e55-3.mp3" autoPlay loop className="hidden" />
+      <audio src="/cinematic-action.mp3" autoPlay loop className="hidden" />
 
       {/* 1. Cinematic Wide Shot Background */}
       <div className="absolute inset-0 z-0">
