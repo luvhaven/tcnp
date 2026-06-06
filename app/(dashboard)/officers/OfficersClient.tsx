@@ -74,9 +74,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     role: ''
   })
 
-  const [assignForm, setAssignForm] = useState({
-    officer_id: "",
-    title_id: "",
+  const [assignForm, setAssignForm] = useState<{ officer_ids: string[], program_id: string }>({
+    officer_ids: [],
     program_id: "",
   })
   const [assignSearch, setAssignSearch] = useState("")
@@ -262,7 +261,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       setAssignFromDirectoryOpen(false)
       setAssigningTitleFor(null)
       setTitleFormData({ title_id: '', program_id: '', role: '' })
-      setAssignForm({ officer_id: '', title_id: '', program_id: '' })
+      setAssignForm({ officer_ids: [], program_id: '' })
     },
     onError: (error: any) => toast.error(error.message || 'Failed to update officer')
   })
@@ -367,27 +366,32 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     })
   }
 
-  const handleAssignFromDirectory = (e: React.FormEvent) => {
+  const handleAssignFromDirectory = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!assignForm.officer_id || !assignForm.title_id) {
-      toast.error('Select an officer and a title')
+    if (assignForm.officer_ids.length === 0) {
+      toast.error('Select at least one officer')
       return
     }
-    const title = titles.find(t => t.id === assignForm.title_id)
-    if (!title) {
-      toast.error('Selected title not found')
-      return
+
+    try {
+      const response = await fetch("/api/admin/bulk-assign-program", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          officer_ids: assignForm.officer_ids,
+          program_id: assignForm.program_id || null
+        }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || "Failed to batch assign officers")
+
+      queryClient.invalidateQueries({ queryKey: ['officers'] })
+      toast.success(`Successfully assigned ${assignForm.officer_ids.length} officer(s) to program!`)
+      setAssignFromDirectoryOpen(false)
+      setAssignForm({ officer_ids: [], program_id: '' })
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to batch assign officers')
     }
-    assignTitleMutation.mutate({
-      roleUpdate: null,
-      titleData: { title_id: assignForm.title_id },
-      rpcData: {
-        p_user_id: assignForm.officer_id,
-        p_title_code: title.code,
-        p_program_id: assignForm.program_id || null,
-        p_assigned_by: currentUser?.id
-      }
-    })
   }
 
   const handleDelete = async (officer: Officer) => {
@@ -837,29 +841,38 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
             </DialogHeader>
             <form onSubmit={handleAssignFromDirectory} className="space-y-4 mt-4">
               <div className="space-y-2">
-                <Label htmlFor="officer">Protocol Officer *</Label>
+                <div className="flex items-center justify-between mb-2">
+                  <Label>Protocol Officers *</Label>
+                  <span className="text-xs text-muted-foreground">{assignForm.officer_ids.length} selected</span>
+                </div>
                 <Input id="officer_search" placeholder="Filter by name, email, OSCAR or role" value={assignSearch} onChange={(e) => setAssignSearch(e.target.value)} className="text-sm mb-2" />
-                <Select required value={assignForm.officer_id || 'unassigned'} onValueChange={(value) => setAssignForm({ ...assignForm, officer_id: value === 'unassigned' ? '' : value })}>
-                  <SelectTrigger id="officer">
-                    <SelectValue placeholder="Select an officer..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">Select an officer...</SelectItem>
-                    {filteredOfficersForAssign.map((officer: Officer) => <SelectItem key={officer.id} value={officer.id}>{officer.full_name || officer.email} {officer.oscar ? ` • ${officer.oscar}` : ""} {officer.is_active ? "" : " • (inactive)"}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="assign_title">Official Title *</Label>
-                <Select required value={assignForm.title_id || 'unassigned'} onValueChange={(value) => setAssignForm({ ...assignForm, title_id: value === 'unassigned' ? '' : value })}>
-                  <SelectTrigger id="assign_title">
-                    <SelectValue placeholder="Select a title..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">Select a title...</SelectItem>
-                    {titles.map((title) => <SelectItem key={title.id} value={title.id}>{title.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="max-h-[250px] overflow-y-auto space-y-1 border rounded-md p-2 bg-background/50">
+                  {filteredOfficersForAssign.length === 0 ? (
+                    <p className="text-xs text-center text-muted-foreground py-4">No officers found matching search.</p>
+                  ) : (
+                    filteredOfficersForAssign.map((officer: Officer) => (
+                      <label key={officer.id} className="flex items-center space-x-3 p-2 hover:bg-muted/50 rounded-md cursor-pointer transition-colors border border-transparent hover:border-border">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-input text-primary focus:ring-primary bg-background"
+                          checked={assignForm.officer_ids.includes(officer.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) setAssignForm(prev => ({ ...prev, officer_ids: [...prev.officer_ids, officer.id] }))
+                            else setAssignForm(prev => ({ ...prev, officer_ids: prev.officer_ids.filter(id => id !== officer.id) }))
+                          }}
+                        />
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium leading-none mb-1">{officer.full_name || officer.email}</span>
+                          <span className="text-[10px] text-muted-foreground flex gap-1 items-center">
+                            {roles.find(r => r.value === officer.role)?.label}
+                            {officer.oscar && <span className="opacity-50">• {officer.oscar}</span>}
+                            {!officer.is_active && <span className="text-orange-500 font-medium">• Pending</span>}
+                          </span>
+                        </div>
+                      </label>
+                    ))
+                  )}
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="assign_program">Program</Label>
@@ -874,8 +887,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                 </Select>
               </div>
               <div className="flex gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => { setAssignFromDirectoryOpen(false); setAssignForm({ officer_id: '', title_id: '', program_id: '' }) }} className="flex-1">Cancel</Button>
-                <Button type="submit" className="flex-1">Assign Title</Button>
+                <Button type="button" variant="outline" onClick={() => { setAssignFromDirectoryOpen(false); setAssignForm({ officer_ids: [], program_id: '' }) }} className="flex-1">Cancel</Button>
+                <Button type="submit" className="flex-1">Assign to Program</Button>
               </div>
             </form>
           </DialogContent>
