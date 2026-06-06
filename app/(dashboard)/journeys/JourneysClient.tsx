@@ -965,8 +965,8 @@ export default function JourneysClient({
                               type="button"
                               onClick={() => setTeamLeadId(officer.id)}
                               className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${isLead
-                                  ? 'bg-yellow-400 text-yellow-900 border-yellow-500 font-bold'
-                                  : 'bg-muted text-muted-foreground border-border hover:border-yellow-400'
+                                ? 'bg-yellow-400 text-yellow-900 border-yellow-500 font-bold'
+                                : 'bg-muted text-muted-foreground border-border hover:border-yellow-400'
                                 }`}
                             >
                               {isLead ? '⭐ Lead' : 'Set Lead'}
@@ -986,21 +986,41 @@ export default function JourneysClient({
               </div>
             </div>
 
-            {/* Journey Type - drives the DO's call sign steps */}
-            <div className="space-y-2">
-              <Label htmlFor="journey_type">Journey Type *</Label>
-              <select
-                id="journey_type"
-                required
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                value={formData.journey_type}
-                onChange={(e) => setFormData({ ...formData, journey_type: e.target.value })}
-              >
-                <option value="airport_to_nest_to_theatre">Eagle Square → Nest → Theatre → Return</option>
-                <option value="airport_to_theatre">Eagle Square → Theatre (Direct) → Return</option>
-                <option value="self_arrival">Self-Arrival — Papa arrives own way to Theatre</option>
-              </select>
-              <p className="text-[10px] text-muted-foreground">Determines the DO's call sign steps. Cannot be changed once the journey is in progress.</p>
+            {/* Journey Route (FROM and TO) */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="origin">From (Origin) *</Label>
+                <select
+                  id="origin"
+                  required
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={formData.origin}
+                  onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
+                >
+                  <option value="">Select Origin...</option>
+                  <option value="Eagle Square">Eagle Square</option>
+                  <option value="Nest">Nest</option>
+                  <option value="Theatre">Theatre</option>
+                  <option value="Self-Driven">Self-Driven</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="destination">To (Destination) *</Label>
+                <select
+                  id="destination"
+                  required
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={formData.destination}
+                  onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                >
+                  <option value="">Select Destination...</option>
+                  <option value="Eagle Square">Eagle Square</option>
+                  <option value="Nest">Nest</option>
+                  <option value="Theatre">Theatre</option>
+                  <option value="Self-Driven">Self-Driven</option>
+                </select>
+              </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -1082,29 +1102,7 @@ export default function JourneysClient({
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="origin">Origin *</Label>
-                <Input
-                  id="origin"
-                  required
-                  placeholder="e.g., Transcorp Hilton"
-                  value={formData.origin}
-                  onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
-                />
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="destination">Destination *</Label>
-                <Input
-                  id="destination"
-                  required
-                  placeholder="e.g., Aso Rock Villa"
-                  value={formData.destination}
-                  onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
-                />
-              </div>
-            </div>
 
 
             <div className="grid gap-4 md:grid-cols-2">

@@ -238,6 +238,21 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       if (payload.titleData.title_id) {
         const { error } = await supabase.rpc('assign_title', payload.rpcData)
         if (error) throw error
+
+        // Auto-activate logic: if assigned to an active program, and they are currently inactive
+        if (payload.rpcData.p_program_id) {
+          const prog = programs.find((p: any) => p.id === payload.rpcData.p_program_id)
+          if (prog && prog.status === 'active') {
+            const officer = officers.find((o: any) => o.id === payload.rpcData.p_user_id)
+            if (officer && (!officer.is_active || officer.activation_status === 'pending')) {
+              await fetch('/api/officers/toggle-activation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ officerId: officer.id, isActive: false })
+              })
+            }
+          }
+        }
       }
     },
     onSuccess: () => {
@@ -456,6 +471,14 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
         <TabsList>
           <TabsTrigger value="directory">Directory</TabsTrigger>
           {canManageOfficers && <TabsTrigger value="manage">Manage</TabsTrigger>}
+          {canManageOfficers && <TabsTrigger value="pending">
+            Pending
+            {officers.filter(o => o.activation_status === 'pending').length > 0 && (
+              <Badge variant="destructive" className="ml-2 px-1 text-[10px]">
+                {officers.filter(o => o.activation_status === 'pending').length}
+              </Badge>
+            )}
+          </TabsTrigger>}
         </TabsList>
 
         <TabsContent value="directory" className="space-y-4">
@@ -613,6 +636,90 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                 ))}
               </AnimatePresence>
             </motion.div>
+          </TabsContent>
+        )}
+
+        {canManageOfficers && (
+          <TabsContent value="pending" className="space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm text-muted-foreground">
+                Review and approve outstanding self-registration requests
+              </p>
+            </div>
+            {officers.filter(o => o.activation_status === 'pending').length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center bg-white/5 rounded-xl border border-white/10">
+                <UserCheck className="h-12 w-12 text-muted-foreground/50" />
+                <p className="mt-4 text-sm font-medium">No pending approvals</p>
+              </div>
+            ) : (
+              <motion.div layout className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <AnimatePresence>
+                  {officers.filter((o: Officer) => o.activation_status === 'pending').map((officer: Officer) => (
+                    <motion.div
+                      layout
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.2 }}
+                      key={officer.id}
+                    >
+                      <Card className="transition-all hover:-translate-y-0.5 hover:shadow-md h-full flex flex-col border-orange-500/30 bg-orange-500/5">
+                        <CardHeader>
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <Avatar>
+                                {officer.photo_url ? <AvatarImage src={officer.photo_url} /> : <AvatarFallback className="bg-orange-500 text-white">{getInitials(officer.full_name || officer.email)}</AvatarFallback>}
+                              </Avatar>
+                              <div>
+                                <CardTitle className="text-base">{officer.full_name || 'No Name'}</CardTitle>
+                                <CardDescription className="text-xs">{officer.email}</CardDescription>
+                              </div>
+                            </div>
+                            <Badge variant="outline" className="bg-yellow-500/20 text-yellow-500 border-yellow-500/30">
+                              Awaiting
+                            </Badge>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-3 flex-1 flex flex-col justify-between">
+                          <div className="space-y-1 text-sm">
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Requested Role:</span>
+                              <Badge className={getRoleBadgeColor(officer.role)}>
+                                {roles.find(r => r.value === officer.role)?.label || officer.role}
+                              </Badge>
+                            </div>
+                            {officer.phone && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">Phone:</span>
+                                <span className="font-medium">{officer.phone}</span>
+                              </div>
+                            )}
+                            {officer.oscar && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">OSCAR:</span>
+                                <Badge variant="outline">{officer.oscar}</Badge>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex gap-2 pt-2 border-t mt-4">
+                            <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={() => toggleActivationMutation.mutate(officer)}>
+                              <UserCheck className="h-4 w-4 mr-2" />
+                              Approve & Activate
+                            </Button>
+                            {officer.role !== 'dev_admin' && officer.id !== currentUser?.id && (
+                              <Button size="sm" variant="outline" onClick={() => handleDelete(officer)}>
+                                <Trash2 className="h-4 w-4 text-red-600" />
+                              </Button>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </motion.div>
+            )}
           </TabsContent>
         )}
       </Tabs>
