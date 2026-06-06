@@ -230,8 +230,25 @@ export default function LoginPage() {
               </div>
               <div className="group">
                 <label className="block text-xs font-medium text-gray-300 mb-1 uppercase tracking-wide">Oscar Callsign (Optional)</label>
-                <input type="text" value={oscar} onChange={(e) => setOscar(e.target.value)} placeholder="e.g. OSCAR-JD-ALPHA" className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner" />
-                <p className="text-[10px] text-gray-400 mt-1">Leave blank to auto-generate based on your name.</p>
+                <div className="relative">
+                  <select
+                    value={oscar}
+                    onChange={(e) => setOscar(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner appearance-none cursor-pointer"
+                  >
+                    <option value="" className="bg-gray-900 text-gray-400">Auto-generate based on name...</option>
+                    <option value="Alpha Oscar" className="bg-gray-900 text-white">Alpha Oscar</option>
+                    <option value="Delta Oscar" className="bg-gray-900 text-white">Delta Oscar</option>
+                    <option value="Echo Oscar" className="bg-gray-900 text-white">Echo Oscar</option>
+                    <option value="November Oscar" className="bg-gray-900 text-white">November Oscar</option>
+                    <option value="Sierra Oscar" className="bg-gray-900 text-white">Sierra Oscar</option>
+                    <option value="Tango Oscar" className="bg-gray-900 text-white">Tango Oscar</option>
+                    <option value="Victor Oscar" className="bg-gray-900 text-white">Victor Oscar</option>
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
+                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
+                  </div>
+                </div>
               </div>
 
               <div className="pt-2 space-y-3">
