@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -12,8 +12,83 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [role, setRole] = useState("delta_oscar");
+  const [quoteIndex, setQuoteIndex] = useState(0);
+  const [isScrambling, setIsScrambling] = useState(false);
+  const [displayText, setDisplayText] = useState("Excellence is not an act, but a habit.");
+
   const router = useRouter();
   const supabase = createClient();
+
+  const QUOTES = [
+    "Excellence is not an act, but a habit.",
+    "Precision in every detail, power in every action.",
+    "Protocol is the invisible architecture of power.",
+    "Command the room, secure the objective.",
+    "The standard is perfection. We accept nothing less."
+  ];
+
+  // Scrambling Engine
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setIsScrambling(true);
+      const nextIndex = (quoteIndex + 1) % QUOTES.length;
+      const targetText = QUOTES[nextIndex];
+      const chars = "!<>-_\\\\/[]{}—=+*^?#________";
+
+      let iteration = 0;
+      const scrambleInterval = setInterval(() => {
+        setDisplayText(
+          targetText
+            .split("")
+            .map((letter, index) => {
+              if (index < iteration) {
+                return targetText[index];
+              }
+              return chars[Math.floor(Math.random() * chars.length)];
+            })
+            .join("")
+        );
+
+        if (iteration >= targetText.length) {
+          clearInterval(scrambleInterval);
+          setIsScrambling(false);
+          setQuoteIndex(nextIndex);
+        }
+        iteration += 1 / 3;
+      }, 30);
+
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [quoteIndex]);
+
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, full_name: fullName, phone, role })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to sign up");
+      toast.success("Clearance requested successfully. Waiting for Admin approval.");
+      setMode('login');
+      setPassword('');
+    } catch (err: any) {
+      toast.error(err.message || "An error occurred during sign up.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,16 +134,16 @@ export default function LoginPage() {
         toast.error(message);
       }
     } finally {
-      // Only reset loading if login failed
-      if (!loginSuccess) {
-        setLoading(false);
-      }
-      // If success, keep loading during redirect
+      if (!loginSuccess) setLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950 relative overflow-hidden selection:bg-orange-500/30">
+
+      {/* Background cinematic action music mapping */}
+      <audio src="https://cdns-preview-5.dzcdn.net/stream/c-5fec8763574d6c4eb8716b5a76da0e55-3.mp3" autoPlay loop className="hidden" />
+
       {/* 1. Cinematic Wide Shot Background */}
       <div className="absolute inset-0 z-0">
         <Image
@@ -92,22 +167,16 @@ export default function LoginPage() {
 
       {/* 3. The Login Card Container */}
       <div className="w-full max-w-md relative z-10 px-6 sm:px-4 animate-slide-up">
-        <div className="bg-black/30 dark:bg-black/40 rounded-[2.5rem] shadow-[0_0_80px_rgba(0,0,0,0.8)] border border-white/10 p-8 md:p-10 backdrop-blur-2xl ring-1 ring-white/5 overflow-hidden">
+        <div className="bg-black/30 dark:bg-black/40 rounded-[2.5rem] shadow-[0_0_80px_rgba(0,0,0,0.8)] border border-white/10 p-8 md:p-10 backdrop-blur-2xl ring-1 ring-white/5 overflow-hidden transition-all duration-500">
 
           {/* Internal ambient card glow */}
           <div className="absolute -top-32 -left-32 w-64 h-64 bg-orange-500/10 rounded-full blur-[80px] pointer-events-none" />
 
           {/* Header */}
-          <div className="text-center mb-10 relative z-10">
-            <div className="flex justify-center mb-6">
+          <div className="text-center mb-8 relative z-10">
+            <div className="flex justify-center mb-4">
               <div className="relative h-20 w-20 drop-shadow-[0_0_20px_rgba(255,255,255,0.4)] transition-transform duration-700 hover:scale-105">
-                <Image
-                  src="/tcnp_logo.png"
-                  alt="TCNP Excellence"
-                  fill
-                  className="object-contain"
-                  priority
-                />
+                <Image src="/tcnp_logo.png" alt="TCNP Excellence" fill className="object-contain" priority />
               </div>
             </div>
             <h1 className="text-3xl font-bold tracking-tight text-white mb-2 drop-shadow-lg">
@@ -118,86 +187,90 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-6 relative z-10">
-            {/* Email Field */}
-            <div className="group">
-              <label htmlFor="email" className="block text-xs font-medium text-gray-300 mb-2 uppercase tracking-wide">
-                Clearance Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full px-5 py-4 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-white/30 focus:bg-white/10 transition-all duration-300 shadow-inner"
-                placeholder="officer@tcnp.org"
-              />
-            </div>
-
-            {/* Password Field */}
-            <div className="group">
-              <label htmlFor="password" className="block text-xs font-medium text-gray-300 mb-2 uppercase tracking-wide">
-                Security Key
-              </label>
-              <div className="relative">
+          {mode === 'login' ? (
+            <form onSubmit={handleLogin} className="space-y-6 relative z-10 animate-in fade-in zoom-in-95 duration-500">
+              <div className="group">
+                <label htmlFor="email" className="block text-xs font-medium text-gray-300 mb-2 uppercase tracking-wide">
+                  Clearance Email
+                </label>
                 <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="w-full px-5 py-4 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-white/30 focus:bg-white/10 transition-all duration-300 shadow-inner pr-12"
-                  placeholder="••••••••"
+                  id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
+                  className="w-full px-5 py-4 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-white/30 transition-all duration-300 shadow-inner"
+                  placeholder="Enter email"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none z-10"
-                >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </div>
+
+              <div className="group">
+                <label htmlFor="password" className="block text-xs font-medium text-gray-300 mb-2 uppercase tracking-wide">
+                  Security Key
+                </label>
+                <div className="relative">
+                  <input
+                    id="password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required
+                    className="w-full px-5 py-4 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-white/30 transition-all duration-300 shadow-inner pr-12"
+                    placeholder="••••••••"
+                  />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none z-10">
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-2 space-y-4">
+                <button type="submit" disabled={loading} className="relative w-full group overflow-hidden bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white font-bold py-4 px-4 rounded-xl shadow-[0_0_20px_rgba(234,88,12,0.3)] hover:shadow-[0_0_30px_rgba(234,88,12,0.5)] transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed transform hover:-translate-y-0.5">
+                  <span className="absolute top-0 -left-[100%] w-1/2 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-[-25deg] group-hover:animate-[shine_1s_ease-in-out_forwards]" />
+                  <span className="relative z-10 uppercase tracking-widest text-sm text-shadow-sm">{loading ? 'Authenticating...' : 'Commence Operations'}</span>
+                </button>
+                <button type="button" onClick={() => setMode('signup')} className="w-full text-xs text-gray-400 hover:text-white transition-colors uppercase tracking-widest">
+                  Request Clearance (Sign Up)
                 </button>
               </div>
-            </div>
+            </form>
+          ) : (
+            <form onSubmit={handleSignup} className="space-y-4 relative z-10 animate-in fade-in zoom-in-95 duration-500">
+              <div className="group">
+                <label className="block text-xs font-medium text-gray-300 mb-1 uppercase tracking-wide">Official Name</label>
+                <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="John Doe" className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner" />
+              </div>
+              <div className="group">
+                <label className="block text-xs font-medium text-gray-300 mb-1 uppercase tracking-wide">Clearance Email</label>
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="Enter email" className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner" />
+              </div>
+              <div className="group">
+                <label className="block text-xs font-medium text-gray-300 mb-1 uppercase tracking-wide">Security Key (Password)</label>
+                <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner" />
+              </div>
 
-            {/* Submit Button */}
-            <div className="pt-2">
-              <button
-                type="submit"
-                disabled={loading}
-                className="relative w-full group overflow-hidden bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white font-bold py-4 px-4 rounded-xl shadow-[0_0_20px_rgba(234,88,12,0.3)] hover:shadow-[0_0_30px_rgba(234,88,12,0.5)] transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed transform hover:-translate-y-0.5"
-              >
-                {/* Button shine effect */}
-                <span className="absolute top-0 -left-[100%] w-1/2 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-[-25deg] group-hover:animate-[shine_1s_ease-in-out_forwards]" />
-                <span className="relative z-10 uppercase tracking-widest text-sm text-shadow-sm">
-                  {loading ? 'Authenticating...' : 'Commence Operations'}
-                </span>
-              </button>
-            </div>
-          </form>
+              <div className="pt-2 space-y-3">
+                <button type="submit" disabled={loading} className="relative w-full group overflow-hidden bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold py-4 px-4 rounded-xl transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed">
+                  <span className="relative z-10 uppercase tracking-widest text-sm text-shadow-sm">{loading ? 'Processing...' : 'Submit Clearance Request'}</span>
+                </button>
+                <button type="button" onClick={() => setMode('login')} className="w-full text-xs text-gray-400 hover:text-white transition-colors uppercase tracking-widest">
+                  Back to Login
+                </button>
+              </div>
+            </form>
+          )}
 
           {/* Footer Insignia */}
-          <div className="mt-10 text-center opacity-50 relative z-10">
+          <div className="mt-8 text-center opacity-50 relative z-10">
             <p className="text-[10px] text-gray-400 tracking-wider">
-              ENTERPRISE DISPATCH COMMAND
+              COMMAND CENTER
             </p>
           </div>
         </div>
 
-        {/* Floating motivational quote below card */}
-        <div className="mt-8 text-center px-4 animate-fade-in" style={{ animationDelay: '0.8s' }}>
-          <p className="text-gray-400 text-sm italic serif opacity-80 mt-2">
-            "Excellence is not an act, but a habit."
+        {/* Scrambling Quote Engine */}
+        <div className="mt-8 text-center px-4">
+          <p className={`text-gray-400 text-sm italic serif opacity-80 mt-2 transition-all duration-300 ${isScrambling ? 'text-orange-400 font-mono tracking-widest opacity-100' : ''}`}>
+            "{displayText}"
           </p>
         </div>
       </div>
 
-      {/* Global minimal animation for the button shine */}
       <style dangerouslySetInnerHTML={{
         __html: `
-        @keyframes shine {
-          100% { left: 200%; }
-        }
+        @keyframes shine { 100% { left: 200%; } }
       `}} />
     </div>
   );

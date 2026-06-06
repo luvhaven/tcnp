@@ -54,6 +54,11 @@ const PWAInstallPrompt = dynamic(
   { ssr: false }
 )
 
+const PasswordEnforcer = dynamic(
+  () => import("@/components/security/PasswordEnforcer").then((m) => m.PasswordEnforcer),
+  { ssr: false }
+)
+
 /**
  * iOS-Safe Dashboard Layout - NUCLEAR OPTION
  * 
@@ -154,18 +159,16 @@ export default function DashboardLayout({
 
         {/* Mobile Sidebar Overlay */}
         <div
-          className={`fixed inset-0 z-40 flex md:hidden transition-all duration-300 ${
-            mobileSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-          }`}
+          className={`fixed inset-0 z-40 flex md:hidden transition-all duration-300 ${mobileSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+            }`}
         >
           <div
             className="absolute inset-0 bg-black/40"
             onClick={() => setMobileSidebarOpen(false)}
           />
           <div
-            className={`relative z-50 h-full w-72 max-w-[80%] transition-transform duration-300 ${
-              mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-            }`}
+            className={`relative z-50 h-full w-72 max-w-[80%] transition-transform duration-300 ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+              }`}
           >
             <ErrorBoundary>
               <Suspense fallback={<div className="w-72 h-full bg-background animate-pulse" />}>
@@ -201,6 +204,9 @@ export default function DashboardLayout({
             </ErrorBoundary>
             <ErrorBoundary>
               <PWAInstallPrompt />
+            </ErrorBoundary>
+            <ErrorBoundary>
+              <PasswordEnforcer />
             </ErrorBoundary>
           </>
         )}
