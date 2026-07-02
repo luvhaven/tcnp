@@ -818,11 +818,11 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                 <TabsTrigger value="program_role">Program Role</TabsTrigger>
                 <TabsTrigger value="official_oscar">Official Oscar</TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="program_role">
                 <form onSubmit={handleAssignTitle} className="space-y-4 mt-4">
                   <div className="space-y-2">
-                    <Label htmlFor="title">Official Title *</Label>
+                    <Label htmlFor="title">Program Role *</Label>
                     <Select required value={titleFormData.title_id || 'unassigned'} onValueChange={(value) => setTitleFormData({ ...titleFormData, title_id: value === 'unassigned' ? '' : value })}>
                       <SelectTrigger id="title">
                         <SelectValue placeholder="Select a title..." />
@@ -832,7 +832,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                         {getTitleByUnit('leadership').filter(t => t.is_fixed).map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.is_team_lead && '(Team Lead)'}</SelectItem>)}
                         {getTitleByUnit('leadership').filter(t => !t.is_fixed).map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.max_positions > 1 && `(${title.max_positions} positions)`}</SelectItem>)}
                         {getTitleByUnit('command').map((title) => <SelectItem key={title.id} value={title.id}>{title.name}</SelectItem>)}
-                        {getTitleByUnit('oscar').filter(t => !['DELTA_OSCAR', 'DELTA_OSCAR_LEAD'].includes(t.code)).map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.is_team_lead && '⭐'}</SelectItem>)}
+                        {getTitleByUnit('oscar').map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.is_team_lead && '⭐'}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>

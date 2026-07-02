@@ -1017,39 +1017,39 @@ export default function JourneysClient({
                     {programOfficers
                       .filter(officer => !['captain', 'head_of_operations'].includes(officer.role))
                       .map(officer => {
-                      const isSelected = selectedDOs.includes(officer.id)
-                      const isLead = teamLeadId === officer.id
-                      return (
-                        <div key={officer.id} className={`flex items-center gap-3 px-3 py-2 transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/50'}`}>
-                          <input
-                            type="checkbox"
-                            id={`do-${officer.id}`}
-                            checked={isSelected}
-                            onChange={() => toggleDO(officer.id)}
-                            className="h-4 w-4 rounded border-input"
-                          />
-                          <label htmlFor={`do-${officer.id}`} className="flex-1 cursor-pointer">
-                            <span className="font-medium text-sm">{officer.full_name}</span>
-                            <span className="ml-2 text-xs text-muted-foreground">{officer.title_name || officer.role}</span>
-                          </label>
-                          {isSelected && selectedDOs.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => setTeamLeadId(officer.id)}
-                              className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${isLead
-                                ? 'bg-yellow-400 text-yellow-900 border-yellow-500 font-bold'
-                                : 'bg-muted text-muted-foreground border-border hover:border-yellow-400'
-                                }`}
-                            >
-                              {isLead ? '⭐ Lead' : 'Set Lead'}
-                            </button>
-                          )}
-                          {isSelected && selectedDOs.length === 1 && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-400 text-yellow-900 font-bold">⭐ Lead</span>
-                          )}
-                        </div>
-                      )
-                    })}
+                        const isSelected = selectedDOs.includes(officer.id)
+                        const isLead = teamLeadId === officer.id
+                        return (
+                          <div key={officer.id} className={`flex items-center gap-3 px-3 py-2 transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/50'}`}>
+                            <input
+                              type="checkbox"
+                              id={`do-${officer.id}`}
+                              checked={isSelected}
+                              onChange={() => toggleDO(officer.id)}
+                              className="h-4 w-4 rounded border-input"
+                            />
+                            <label htmlFor={`do-${officer.id}`} className="flex-1 cursor-pointer">
+                              <span className="font-medium text-sm">{officer.full_name}</span>
+                              <span className="ml-2 text-xs text-muted-foreground">{officer.title_name || officer.role}</span>
+                            </label>
+                            {isSelected && selectedDOs.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setTeamLeadId(officer.id)}
+                                className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${isLead
+                                  ? 'bg-yellow-400 text-yellow-900 border-yellow-500 font-bold'
+                                  : 'bg-muted text-muted-foreground border-border hover:border-yellow-400'
+                                  }`}
+                              >
+                                {isLead ? '⭐ Lead' : 'Set Lead'}
+                              </button>
+                            )}
+                            {isSelected && selectedDOs.length === 1 && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-400 text-yellow-900 font-bold">⭐ Lead</span>
+                            )}
+                          </div>
+                        )
+                      })}
                   </div>
                 )}
                 {selectedDOs.length > 0 && (
@@ -1114,31 +1114,7 @@ export default function JourneysClient({
                 </select>
               </div>
 
-              <div className="space-y-2">
-                <Label>Secondary Papas (Optional Delegation)</Label>
-                <div className="flex flex-col gap-2 max-h-32 overflow-y-auto border rounded-md p-2 bg-background/50">
-                  {papas.filter(p => p.id !== formData.papa_id).map((papa) => (
-                    <label key={papa.id + '_sec'} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted p-1 rounded transition-colors border border-transparent hover:border-border">
-                      <input
-                        type="checkbox"
-                        className="rounded border-input text-primary focus:ring-primary"
-                        checked={formData.secondary_papa_ids.includes(papa.id)}
-                        onChange={(e) => {
-                          const isChecked = e.target.checked
-                          setFormData(prev => ({
-                            ...prev,
-                            secondary_papa_ids: isChecked
-                              ? [...prev.secondary_papa_ids, papa.id]
-                              : prev.secondary_papa_ids.filter(id => id !== papa.id)
-                          }))
-                        }}
-                      />
-                      <span className="font-medium text-foreground">{papa.title} {papa.full_name}</span>
-                    </label>
-                  ))}
-                  {papas.length <= 1 && <span className="text-xs text-muted-foreground p-1 text-center italic">No additional Papas available.</span>}
-                </div>
-              </div>
+
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
