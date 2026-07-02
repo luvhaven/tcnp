@@ -100,7 +100,13 @@ export default function LoginPage() {
       if (data.user) {
 
         // Enforce activation_status block via admin-secured server route (bypasses RLS)
-        const activationRes = await fetch('/api/auth/check-activation', { method: 'POST' })
+        // Explicitly pass access_token in the body to bypass iOS Safari ITP cookie race condition.
+        // On iOS, cookies are not committed before this fetch fires, causing the server to see no session.
+        const activationRes = await fetch('/api/auth/check-activation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ access_token: data.session?.access_token ?? null }),
+        })
         const activationData = await activationRes.json()
 
         if (!activationRes.ok || activationData.status !== 'active') {
