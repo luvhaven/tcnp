@@ -31,12 +31,7 @@ export type LiveTrackingLeafletProps = {
   tomtomKey?: string
 }
 
-delete (L.Icon.Default.prototype as any)._getIconUrl
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-})
+// No default Icon images; using fully custom DivIcons to avoid CSP/Webpack bugs
 
 const escapeHtml = (value: string) =>
   value.replace(/[&<>'"]/g, (char) => ({
@@ -103,10 +98,10 @@ export default function LiveTrackingLeaflet({
   showTraffic = false,
   tomtomKey,
 }: LiveTrackingLeafletProps) {
-  const mapRef       = useRef<L.Map | null>(null)
-  const markersRef   = useRef<Record<string, L.Marker>>({})
+  const mapRef = useRef<L.Map | null>(null)
+  const markersRef = useRef<Record<string, L.Marker>>({})
   const polylinesRef = useRef<Record<string, L.Polyline>>({})
-  const trafficRef   = useRef<L.TileLayer | null>(null)
+  const trafficRef = useRef<L.TileLayer | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const hasFitBoundsRef = useRef(false)
 
@@ -224,16 +219,23 @@ export default function LiveTrackingLeaflet({
       const roleDisplay = getRoleDisplay(location.role)
       const popupContent = buildPopupContent(location, status, roleDisplay)
 
-      let icon: L.Icon | L.DivIcon = new L.Icon.Default()
-      if (isStale) {
-        icon = L.divIcon({
-          className: 'custom-div-icon',
-          html: `<div style="background:#ef4444;width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 0 0 4px rgba(239,68,68,0.4);animation:pulse-red 1.5s infinite"></div>`,
-          iconSize: [12, 12],
-          iconAnchor: [6, 6],
-          popupAnchor: [0, -6],
-        })
+      const baseColor = isStale ? '#ef4444' : roleDisplay.color || '#3b82f6'
+      const animationHtml = isStale ? ';animation:pulse-red 1.5s infinite' : ''
+      const hexToRgba = (hex: string, alpha: number) => {
+        const r = parseInt(hex.slice(1, 3), 16) || 59
+        const g = parseInt(hex.slice(3, 5), 16) || 130
+        const b = parseInt(hex.slice(5, 7), 16) || 246
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`
       }
+      const shadowColor = isStale ? 'rgba(239,68,68,0.4)' : hexToRgba(baseColor, 0.4)
+
+      const icon = L.divIcon({
+        className: 'custom-div-icon',
+        html: `<div style="background:${baseColor};width:14px;height:14px;border-radius:50%;border:2px solid white;box-shadow:0 0 0 4px ${shadowColor}${animationHtml}; transition:all 300ms ease;"></div>`,
+        iconSize: [14, 14],
+        iconAnchor: [7, 7],
+        popupAnchor: [0, -7],
+      })
 
       if (markers[location.user_id]) {
         markers[location.user_id].setLatLng(position).setPopupContent(popupContent).setIcon(icon)
