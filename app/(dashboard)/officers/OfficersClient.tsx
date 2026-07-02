@@ -840,8 +840,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                         <SelectItem value="unassigned">Select a title...</SelectItem>
                         {getTitleByUnit('leadership').filter(t => t.is_fixed).map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.is_team_lead && '(Team Lead)'}</SelectItem>)}
                         {getTitleByUnit('leadership').filter(t => !t.is_fixed).map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.max_positions > 1 && `(${title.max_positions} positions)`}</SelectItem>)}
-                        {getTitleByUnit('command').map((title) => <SelectItem key={title.id} value={title.id}>{title.name}</SelectItem>)}
-                        {getTitleByUnit('oscar').map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.is_team_lead && '⭐'}</SelectItem>)}
+                        {getTitleByUnit('command').map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.max_positions > 1 && `(${title.max_positions} positions)`}</SelectItem>)}
+                        {getTitleByUnit('oscar').map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.is_team_lead && '⭐'} {title.max_positions > 1 && `(${title.max_positions} positions)`}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
