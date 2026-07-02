@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { UserCircle, Plus, Edit, Trash2, UserCheck, UserX, Award } from "lucide-react"
+import { UserCircle, Plus, Edit, Trash2, UserCheck, UserX, Award, Search } from "lucide-react"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 
@@ -79,6 +79,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     program_id: "",
   })
   const [assignSearch, setAssignSearch] = useState("")
+  const [globalSearch, setGlobalSearch] = useState("")
 
   const roles = [
     { value: 'admin', label: 'Admin' },
@@ -132,6 +133,16 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       return (body.officers || []) as Officer[]
     },
     initialData: initialOfficers
+  })
+
+  // Filter officers based on global search
+  const filteredOfficers = officers.filter((officer: Officer) => {
+    if (!globalSearch.trim()) return true
+    const q = globalSearch.toLowerCase()
+    return (
+      (officer.full_name || "").toLowerCase().includes(q) ||
+      (officer.oscar || "").toLowerCase().includes(q)
+    )
   })
 
   const { data: titles = [] } = useQuery({
@@ -498,18 +509,31 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       </motion.div>
 
       <Tabs defaultValue="directory" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="directory">Directory</TabsTrigger>
-          {canManageOfficers && <TabsTrigger value="manage">Manage</TabsTrigger>}
-          {canManageOfficers && <TabsTrigger value="pending">
-            Pending
-            {officers.filter(o => o.activation_status === 'pending').length > 0 && (
-              <Badge variant="destructive" className="ml-2 px-1 text-[10px]">
-                {officers.filter(o => o.activation_status === 'pending').length}
-              </Badge>
-            )}
-          </TabsTrigger>}
-        </TabsList>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <TabsList>
+            <TabsTrigger value="directory">Directory</TabsTrigger>
+            {canManageOfficers && <TabsTrigger value="manage">Manage</TabsTrigger>}
+            {canManageOfficers && <TabsTrigger value="pending">
+              Pending
+              {filteredOfficers.filter(o => o.activation_status === 'pending').length > 0 && (
+                <Badge variant="destructive" className="ml-2 px-1 text-[10px]">
+                  {filteredOfficers.filter(o => o.activation_status === 'pending').length}
+                </Badge>
+              )}
+            </TabsTrigger>}
+          </TabsList>
+          {canManageOfficers && (
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search name or oscar..."
+                className="pl-8 bg-background border-primary/20 focus-visible:ring-primary/50"
+                value={globalSearch}
+                onChange={(e) => setGlobalSearch(e.target.value)}
+              />
+            </div>
+          )}
+        </div>
 
         <TabsContent value="directory" className="space-y-4">
           <Card>
@@ -521,7 +545,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
               <CardDescription>Protocol staff directory</CardDescription>
             </CardHeader>
             <CardContent>
-              {officers.length === 0 ? (
+              {filteredOfficers.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <UserCircle className="h-12 w-12 text-muted-foreground/50" />
                   <p className="mt-4 text-sm font-medium">No officers yet</p>
@@ -529,7 +553,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
               ) : (
                 <motion.div layout className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   <AnimatePresence>
-                    {officers
+                    {filteredOfficers
                       .filter((officer: Officer) => officer.activation_status !== 'pending')
                       .map((officer: Officer) => (
                         <motion.div
@@ -582,7 +606,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
 
             <motion.div layout className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <AnimatePresence>
-                {officers.map((officer: Officer) => (
+                {filteredOfficers.map((officer: Officer) => (
                   <motion.div
                     layout
                     initial={{ opacity: 0, scale: 0.95 }}
@@ -678,7 +702,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                 Review and approve outstanding self-registration requests
               </p>
             </div>
-            {officers.filter(o => o.activation_status === 'pending').length === 0 ? (
+            {filteredOfficers.filter(o => o.activation_status === 'pending').length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center bg-white/5 rounded-xl border border-white/10">
                 <UserCheck className="h-12 w-12 text-muted-foreground/50" />
                 <p className="mt-4 text-sm font-medium">No pending approvals</p>
@@ -686,7 +710,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
             ) : (
               <motion.div layout className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <AnimatePresence>
-                  {officers.filter((o: Officer) => o.activation_status === 'pending').map((officer: Officer) => (
+                  {filteredOfficers.filter((o: Officer) => o.activation_status === 'pending').map((officer: Officer) => (
                     <motion.div
                       layout
                       initial={{ opacity: 0, scale: 0.95 }}
