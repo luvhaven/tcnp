@@ -879,6 +879,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                         <SelectItem value="unassigned">No specific program</SelectItem>
                         {programs.filter(p => p.status === 'active').map(p => <SelectItem key={p.id} value={p.id}>[Active] {p.name}</SelectItem>)}
                         {programs.filter(p => p.status === 'planning').map(p => <SelectItem key={p.id} value={p.id}>[Planning] {p.name}</SelectItem>)}
+                        {programs.filter(p => p.status === 'completed').map(p => <SelectItem key={p.id} value={p.id}>[Completed] {p.name}</SelectItem>)}
+                        {programs.filter(p => p.status === 'archived').map(p => <SelectItem key={p.id} value={p.id}>[Archived] {p.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
