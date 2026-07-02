@@ -51,9 +51,10 @@ export function LocationEnforcer() {
         setRole(userRole)
 
         // Check permission via Permissions API where available
-        if ('permissions' in navigator) {
+        const nav = navigator as any
+        if ('permissions' in nav && nav.permissions) {
           try {
-            const result = await navigator.permissions.query({ name: 'geolocation' as PermissionName })
+            const result = await nav.permissions.query({ name: 'geolocation' })
             if (result.state === 'granted') return  // Already tracking — hide enforcer
 
             setShow(true)
@@ -63,14 +64,14 @@ export function LocationEnforcer() {
             })
           } catch {
             // Permissions API not available (e.g. Firefox private mode) — try a quick probe
-            navigator.geolocation.getCurrentPosition(
+            nav.geolocation.getCurrentPosition(
               () => setShow(false),
               () => setShow(true),
               { timeout: 3000, maximumAge: 60000 }
             )
           }
         } else {
-          navigator.geolocation.getCurrentPosition(
+          nav.geolocation.getCurrentPosition(
             () => setShow(false),
             () => setShow(true),
             { timeout: 3000, maximumAge: 60000 }
@@ -91,7 +92,8 @@ export function LocationEnforcer() {
     // ── Step 1: Try hardware GPS ───────────────────────────────────────────
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
+        const nav = navigator as any
+        nav.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: false, // Lower bar on desktop — avoids instant denial
           timeout: 10000,
           maximumAge: 60000
