@@ -219,8 +219,21 @@ export default function LiveTrackingLeaflet({
       const roleDisplay = getRoleDisplay(location.role)
       const popupContent = buildPopupContent(location, status, roleDisplay)
 
-      // Use traditional tear-drop pin unless stale
-      let icon: L.Icon | L.DivIcon = new L.Icon.Default()
+      // Use highly stylized inline SVG rather than L.Icon.Default() (which fails in NextJS PWA)
+      const svgMarker = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${roleDisplay.color}" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.3));">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+          <circle cx="12" cy="10" r="3" fill="white"></circle>
+        </svg>
+      `
+
+      let icon: L.Icon | L.DivIcon = L.divIcon({
+        className: 'custom-div-icon',
+        html: `<div style="width:28px;height:28px;margin-top:-14px;margin-left:-14px;">${svgMarker}</div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 28],
+        popupAnchor: [0, -28],
+      })
 
       if (isStale) {
         icon = L.divIcon({
