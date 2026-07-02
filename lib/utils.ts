@@ -104,6 +104,17 @@ export function canManageNOscar(role: string | null | undefined, oscar?: string 
 }
 
 /**
+ * Check if a user can manage Theatres (venues).
+ * Victor Oscars own this page.
+ */
+export function canManageVenues(role: string | null | undefined, oscar?: string | null): boolean {
+  if (!role) return false
+  if (isAdmin(role)) return true
+  const effective = effectiveOscarRole(role, oscar)
+  return ['victor_oscar', 'head_victor_oscar'].includes(effective ?? '')
+}
+
+/**
  * Alias for canManageNOscar for compatibility.
  */
 export function canManageNests(role: string | null | undefined, oscar?: string | null): boolean {

@@ -24,8 +24,10 @@ import {
   Hotel,
   Plane,
   Calendar,
-  Pencil
+  Pencil,
+  History
 } from "lucide-react"
+import { JourneyTimelineDialog } from "@/components/journeys/JourneyTimelineDialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
@@ -136,6 +138,10 @@ export default function JourneysClient({
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentRole, setCurrentRole] = useState<string | null>(null)
 
+  // Timeline UI State
+  const [timelineJourneyId, setTimelineJourneyId] = useState<string | null>(null)
+  const [timelinePapaName, setTimelinePapaName] = useState<string>('')
+
   // Multi-DO state
   const [programOfficers, setProgramOfficers] = useState<any[]>([])
   const [loadingOfficers, setLoadingOfficers] = useState(false)
@@ -144,6 +150,7 @@ export default function JourneysClient({
 
   const [formData, setFormData] = useState({
     papa_id: '',
+    secondary_papa_ids: [] as string[],
     assigned_cheetah_id: '',
     program_id: '',
     journey_type: 'airport_to_nest_to_theatre',
@@ -385,10 +392,20 @@ export default function JourneysClient({
         })
       }
 
+      // Save secondary papas if junction table migration is applied
+      if (formData.secondary_papa_ids.length > 0 && newJourney?.id) {
+        try {
+          const papaPayload = formData.secondary_papa_ids.map(pid => ({ journey_id: newJourney.id, papa_id: pid, is_primary: false }))
+          await (supabase as any).from('journey_papas').insert(papaPayload)
+        } catch (e) {
+          console.warn('Failed to save secondary papas (migration may be missing).', e)
+        }
+      }
+
       toast.success('Journey created successfully!')
       setCreateDialogOpen(false)
       setFormData({
-        papa_id: '', assigned_cheetah_id: '', program_id: '',
+        papa_id: '', secondary_papa_ids: [], assigned_cheetah_id: '', program_id: '',
         journey_type: 'airport_to_nest_to_theatre', assigned_duty_officer_id: '',
         assigned_nest_id: '', assigned_eagle_square_id: '', origin: '',
         destination: '', scheduled_departure: '', scheduled_arrival: '',
@@ -430,8 +447,23 @@ export default function JourneysClient({
     setSelectedDOs(initialDOs)
     setTeamLeadId(initialLead)
 
+    let initialSecondaryPapas: string[] = []
+    try {
+      const { data } = await (supabase as any)
+        .from('journey_papas')
+        .select('papa_id')
+        .eq('journey_id', journey.id)
+        .eq('is_primary', false)
+      if (data) {
+        initialSecondaryPapas = data.map((row: any) => row.papa_id)
+      }
+    } catch (e) {
+      console.warn('Could not fetch secondary papas', e)
+    }
+
     setFormData({
       papa_id: journey.papa_id || '',
+      secondary_papa_ids: initialSecondaryPapas,
       assigned_cheetah_id: journey.assigned_cheetah_id || '',
       program_id: journey.program_id || '',
       journey_type: journey.journey_type || 'airport_to_nest_to_theatre',
@@ -481,6 +513,17 @@ export default function JourneysClient({
         .eq('id', selectedJourney.id)
 
       if (error) throw error
+
+      // Update secondary papas
+      try {
+        await (supabase as any).from('journey_papas').delete().eq('journey_id', selectedJourney.id).eq('is_primary', false)
+        if (formData.secondary_papa_ids.length > 0) {
+          const papaPayload = formData.secondary_papa_ids.map(pid => ({ journey_id: selectedJourney.id, papa_id: pid, is_primary: false }))
+          await (supabase as any).from('journey_papas').insert(papaPayload)
+        }
+      } catch (e) {
+        console.warn('Failed to update secondary papas', e)
+      }
 
       // Sync DO assignments if any were selected
       if (selectedDOs.length > 0) {
@@ -767,6 +810,20 @@ export default function JourneysClient({
                             <div className="text-xs text-muted-foreground">
                               Updated {formatDistanceToNow(new Date(journey.updated_at ?? journey.created_at), { addSuffix: true })}
                             </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 hover:bg-muted text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setTimelineJourneyId(journey.id)
+                                setTimelinePapaName(`${journey.papas?.title || ''} ${journey.papas?.full_name || ''}`)
+                              }}
+                              title="View Audit Trail"
+                            >
+                              <History className="h-4 w-4" />
+                              <span className="sr-only">History</span>
+                            </Button>
                             {canCreateJourney && (
                               <Button
                                 variant="ghost"
@@ -883,6 +940,19 @@ export default function JourneysClient({
                         <Badge variant="outline">
                           {getStatusLabel(journey.status)}
                         </Badge>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 hover:bg-muted text-blue-600"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setTimelineJourneyId(journey.id)
+                            setTimelinePapaName(`${journey.papas?.title || ''} ${journey.papas?.full_name || ''}`)
+                          }}
+                          title="View Audit Trail"
+                        >
+                          <History className="h-4 w-4" />
+                        </Button>
                         <span className="text-xs text-muted-foreground">
                           {new Date(journey.created_at).toLocaleDateString()}
                         </span>
@@ -944,7 +1014,9 @@ export default function JourneysClient({
                   <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-md px-3 py-2">No officers are assigned to this program yet. Assign officers in the Officers page first.</p>
                 ) : (
                   <div className="border rounded-md divide-y max-h-52 overflow-y-auto">
-                    {programOfficers.map(officer => {
+                    {programOfficers
+                      .filter(officer => !['captain', 'head_of_operations'].includes(officer.role))
+                      .map(officer => {
                       const isSelected = selectedDOs.includes(officer.id)
                       const isLead = teamLeadId === officer.id
                       return (
@@ -1043,6 +1115,34 @@ export default function JourneysClient({
               </div>
 
               <div className="space-y-2">
+                <Label>Secondary Papas (Optional Delegation)</Label>
+                <div className="flex flex-col gap-2 max-h-32 overflow-y-auto border rounded-md p-2 bg-background/50">
+                  {papas.filter(p => p.id !== formData.papa_id).map((papa) => (
+                    <label key={papa.id + '_sec'} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted p-1 rounded transition-colors border border-transparent hover:border-border">
+                      <input
+                        type="checkbox"
+                        className="rounded border-input text-primary focus:ring-primary"
+                        checked={formData.secondary_papa_ids.includes(papa.id)}
+                        onChange={(e) => {
+                          const isChecked = e.target.checked
+                          setFormData(prev => ({
+                            ...prev,
+                            secondary_papa_ids: isChecked
+                              ? [...prev.secondary_papa_ids, papa.id]
+                              : prev.secondary_papa_ids.filter(id => id !== papa.id)
+                          }))
+                        }}
+                      />
+                      <span className="font-medium text-foreground">{papa.title} {papa.full_name}</span>
+                    </label>
+                  ))}
+                  {papas.length <= 1 && <span className="text-xs text-muted-foreground p-1 text-center italic">No additional Papas available.</span>}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
                 <Label htmlFor="assigned_cheetah_id">Cheetah (Vehicle) *</Label>
                 <select
                   id="assigned_cheetah_id"
@@ -1110,7 +1210,15 @@ export default function JourneysClient({
                 <Label htmlFor="etd">ETD (Estimated Time of Departure)</Label>
                 <DateTimePicker
                   value={formData.etd}
-                  onChange={(value) => setFormData({ ...formData, etd: value })}
+                  onChange={(value) => {
+                    setFormData(prev => {
+                      const newData = { ...prev, etd: value }
+                      if (newData.eta && value && new Date(value) > new Date(newData.eta)) {
+                        newData.eta = value
+                      }
+                      return newData
+                    })
+                  }}
                   placeholder="Select estimated departure"
                 />
                 <p className="text-xs text-muted-foreground">When DO should depart</p>
@@ -1121,6 +1229,7 @@ export default function JourneysClient({
                 <DateTimePicker
                   value={formData.eta}
                   onChange={(value) => setFormData({ ...formData, eta: value })}
+                  minDate={formData.etd ? new Date(formData.etd) : undefined}
                   placeholder="Select estimated arrival"
                 />
                 <p className="text-xs text-muted-foreground">When DO should arrive</p>
@@ -1402,6 +1511,13 @@ export default function JourneysClient({
           </form>
         </DialogContent>
       </Dialog>
+      {/* Journey Timeline Dialog */}
+      <JourneyTimelineDialog
+        journeyId={timelineJourneyId}
+        papaName={timelinePapaName}
+        open={!!timelineJourneyId}
+        onOpenChange={(open) => !open && setTimelineJourneyId(null)}
+      />
     </div >
   )
 }

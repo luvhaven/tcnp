@@ -15,7 +15,7 @@ export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
-  const [role, setRole] = useState("delta_oscar");
+  const [role, setRole] = useState("viewer");
   const [oscar, setOscar] = useState("");
   const [quoteIndex, setQuoteIndex] = useState(0);
   const [isFading, setIsFading] = useState(false);
@@ -98,6 +98,20 @@ export default function LoginPage() {
       if (error) throw error;
 
       if (data.user) {
+
+        // Enforce activation_status block via admin-secured server route (bypasses RLS)
+        const activationRes = await fetch('/api/auth/check-activation', { method: 'POST' })
+        const activationData = await activationRes.json()
+
+        if (!activationRes.ok || activationData.status !== 'active') {
+          await supabase.auth.signOut()
+          throw new Error(
+            activationData.status === 'pending'
+              ? "Your account is awaiting admin approval."
+              : activationData.error || "Security Clearance Denied: Account is deactivated or restricted."
+          )
+        }
+
         loginSuccess = true;
         toast.success("Login successful!");
 
@@ -248,10 +262,8 @@ export default function LoginPage() {
                   >
                     <option value="" className="bg-gray-900 text-gray-400">Select an Oscar Callsign...</option>
                     <option value="Alpha Oscar" className="bg-gray-900 text-white">Alpha Oscar</option>
-                    <option value="Delta Oscar" className="bg-gray-900 text-white">Delta Oscar</option>
                     <option value="Echo Oscar" className="bg-gray-900 text-white">Echo Oscar</option>
                     <option value="November Oscar" className="bg-gray-900 text-white">November Oscar</option>
-                    <option value="Sierra Oscar" className="bg-gray-900 text-white">Sierra Oscar</option>
                     <option value="Tango Oscar" className="bg-gray-900 text-white">Tango Oscar</option>
                     <option value="Victor Oscar" className="bg-gray-900 text-white">Victor Oscar</option>
                   </select>

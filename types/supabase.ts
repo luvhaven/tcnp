@@ -804,6 +804,54 @@ export type Database = {
           },
         ]
       }
+      journey_duty_officers: {
+        Row: {
+          id: string
+          journey_id: string
+          user_id: string
+          is_lead: boolean
+          status: string | null
+          acknowledged_at: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          journey_id: string
+          user_id: string
+          is_lead?: boolean
+          status?: string | null
+          acknowledged_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          journey_id?: string
+          user_id?: string
+          is_lead?: boolean
+          status?: string | null
+          acknowledged_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journey_duty_officers_journey_id_fkey"
+            columns: ["journey_id"]
+            isOneToOne: false
+            referencedRelation: "journeys"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journey_duty_officers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       journeys: {
         Row: {
           archived_at: string | null

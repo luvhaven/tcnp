@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { audioManager } from '@/lib/audio/AudioManager'
+import FlightStatusBadge from '@/components/tracking/FlightStatusBadge'
 import {
     Table,
     TableBody,
@@ -46,7 +47,7 @@ interface Journey {
     etd: string | null
     status_updated_at: string
     created_at: string
-    papas: { full_name: string; title: string } | null
+    papas: { full_name: string; title: string; flight_number?: string; flight_departure_time?: string; flight_arrival_time?: string } | null
     cheetahs: { call_sign: string; registration_number: string } | null
     assigned_do: { full_name: string; oscar: string } | null
     duty_officers?: DutyOfficerRow[]
@@ -207,7 +208,7 @@ export default function JourneyStatusTable() {
                 .from('journeys')
                 .select(`
                     *,
-                    papas:papa_id(full_name, title),
+                    papas:papa_id(full_name, title, flight_number, flight_departure_time, flight_arrival_time),
                     cheetahs:assigned_cheetah_id(call_sign, registration_number),
                     assigned_do:assigned_duty_officer_id(full_name, oscar)
                 `)
@@ -388,10 +389,10 @@ export default function JourneyStatusTable() {
 
     // Stats
     const stats = {
-        total:        journeys.length,
-        inTransit:    journeys.filter(j => ['cocktail','first_course','dessert','re_order'].includes(j.status)).length,
-        brokenArrow:  journeys.filter(j => j.status === 'broken_arrow').length,
-        planned:      journeys.filter(j => j.status === 'planned').length,
+        total: journeys.length,
+        inTransit: journeys.filter(j => ['cocktail', 'first_course', 'dessert', 're_order'].includes(j.status)).length,
+        brokenArrow: journeys.filter(j => j.status === 'broken_arrow').length,
+        planned: journeys.filter(j => j.status === 'planned').length,
     }
 
     if (loading) {
@@ -419,7 +420,7 @@ export default function JourneyStatusTable() {
                 {/* Table skeleton */}
                 <div className="border rounded-lg overflow-hidden">
                     <div className="bg-muted/50 px-4 py-3 border-b flex gap-4">
-                        {['w-24','w-28','w-20','w-16','w-16','w-20','w-16'].map((w, i) => (
+                        {['w-24', 'w-28', 'w-20', 'w-16', 'w-16', 'w-20', 'w-16'].map((w, i) => (
                             <div key={i} className={`h-3 ${w} rounded skeleton`} />
                         ))}
                     </div>
@@ -554,7 +555,7 @@ export default function JourneyStatusTable() {
                         ) : (
                             filteredJourneys.map((journey) => {
                                 const callSign = journey.status || journey.current_call_sign || 'planned'
-                                const callSignLabel = getCallSignLabel(callSign) || callSign.replace(/_/g,' ')
+                                const callSignLabel = getCallSignLabel(callSign) || callSign.replace(/_/g, ' ')
                                 const callSignColor = getCallSignBadgeColor(callSign)
                                 const canClick = !!(journey.duty_officers?.some(d => d.user_id === currentUser?.id) || currentUser?.id === journey.assigned_duty_officer_id || currentUser?.id === (journey as any).assigned_do_id)
                                 const isBroken = callSign === 'broken_arrow'
@@ -571,9 +572,16 @@ export default function JourneyStatusTable() {
                                         )}
                                     >
                                         <TableCell>
-                                            <div className="flex flex-col">
+                                            <div className="flex flex-col items-start min-w-[140px]">
                                                 <span className="font-medium">{journey.papas?.full_name || 'Unknown Papa'}</span>
                                                 <span className="text-xs text-muted-foreground">{journey.papas?.title}</span>
+                                                {journey.papas?.flight_number && (
+                                                    <FlightStatusBadge
+                                                        flightNumber={journey.papas.flight_number}
+                                                        departureTime={journey.papas.flight_departure_time}
+                                                        arrivalTime={journey.papas.flight_arrival_time}
+                                                    />
+                                                )}
                                             </div>
                                         </TableCell>
                                         <TableCell>

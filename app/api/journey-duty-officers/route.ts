@@ -41,6 +41,8 @@ export async function POST(req: NextRequest) {
         journey_id,
         user_id: o.user_id,
         is_lead: o.is_lead,
+        status: o.user_id === user.id ? 'acknowledged' : 'pending',
+        acknowledged_at: o.user_id === user.id ? new Date().toISOString() : null
       }))
 
       const { error: insertError } = await (adminClient as any)
@@ -84,7 +86,7 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await (adminClient as any)
       .from('journey_duty_officers')
-      .select('id, user_id, is_lead, created_at, users:user_id(full_name, role, oscar, photo_url)')
+      .select('id, user_id, is_lead, status, acknowledged_at, created_at, users:user_id(full_name, role, oscar, photo_url)')
       .eq('journey_id', journeyId)
       .order('is_lead', { ascending: false })
 

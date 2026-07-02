@@ -1,12 +1,40 @@
 /** @type {import('next').NextConfig} */
 
+const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
+  ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
+  : '*.supabase.co'
+
 const securityHeaders = [
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'X-XSS-Protection', value: '1; mode=block' },
-  { key: 'Permissions-Policy', value: 'geolocation=(self), microphone=(self)' },
+  { key: 'Permissions-Policy', value: 'geolocation=(self), microphone=(self), camera=()' },
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+  {
+    key: 'Content-Security-Policy',
+    value: [
+      "default-src 'self'",
+      // Scripts: self + inline (Next.js requires unsafe-inline for hydration)
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      // Styles: self + inline + Google Fonts
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      // Fonts: self + Google Fonts CDN
+      "font-src 'self' https://fonts.gstatic.com",
+      // Images: self + Supabase storage + data URIs + OpenStreetMap tiles
+      `img-src 'self' data: blob: https://${supabaseHost} https://*.tile.openstreetmap.org https://opensky-network.org`,
+      // Connections: self + Supabase REST, Realtime (WSS)
+      `connect-src 'self' https://${supabaseHost} wss://${supabaseHost} https://opensky-network.org`,
+      // Workers: self + blob (Next.js SW, Leaflet workers)
+      "worker-src 'self' blob:",
+      // Frames: none
+      "frame-src 'none'",
+      // Objects: none
+      "object-src 'none'",
+      // Upgrade insecure requests in production
+      "upgrade-insecure-requests",
+    ].join('; '),
+  },
 ]
 
 const nextConfig = {
@@ -24,13 +52,10 @@ const nextConfig = {
     },
   },
   poweredByHeader: false,
-  // Ensure Vercel builds are not blocked by TypeScript or ESLint issues
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // TypeScript and ESLint errors MUST pass — they are your safety net.
+  // Re-enable these only during an emergency hotfix and fix immediately after.
+  // typescript: { ignoreBuildErrors: true },  // ← DO NOT UNCOMMENT without team approval
+  // eslint: { ignoreDuringBuilds: true },      // ← DO NOT UNCOMMENT without team approval
   webpack(config) {
     // Work around lucide-react packaging issue where TriangleAlert references
     // a non-existent ./icons/triangle-alert.js file. Alias it to alert-triangle.

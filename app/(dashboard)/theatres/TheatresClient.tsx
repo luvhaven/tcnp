@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import VIPManagementPanel from "@/components/theatre/VIPManagementPanel"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { motion, AnimatePresence } from "framer-motion"
+import { canManageVenues } from "@/lib/utils"
 
 export default function TheatresClient({
   initialTheatres,
@@ -69,6 +70,8 @@ export default function TheatresClient({
       setSelectedTheatreId(theatres[0].id)
     }
   }, [theatres, selectedTheatreId])
+
+  const canManage = userRole ? canManageVenues(userRole) : false
 
   const saveMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -166,7 +169,7 @@ export default function TheatresClient({
             <Badge variant="secondary" className="text-[9px]">Run 4× per day</Badge>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
-            {theatres.slice(0, 2).map((t: any) => (
+            {theatres.slice(0, 1).map((t: any) => (
               <DenChecklist key={t.id} theatreId={t.id} theatreName={t.name} />
             ))}
           </div>
@@ -181,10 +184,12 @@ export default function TheatresClient({
           <h1 className="text-3xl font-bold tracking-tight">Theatres</h1>
           <p className="text-sm text-muted-foreground max-w-xl">Manage event venues and locations</p>
         </div>
-        <Button onClick={openDialog}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Venue
-        </Button>
+        {canManage && (
+          <Button onClick={openDialog}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Venue
+          </Button>
+        )}
       </motion.div>
 
       {/* ── Papa Briefings for Victor Oscar roles ── */}
@@ -277,10 +282,12 @@ export default function TheatresClient({
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <MapPin className="h-12 w-12 text-muted-foreground/50" />
                   <p className="mt-4 text-sm font-medium">No venues yet</p>
-                  <Button className="mt-4" onClick={openDialog}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Venue
-                  </Button>
+                  {canManage && (
+                    <Button className="mt-4" onClick={openDialog}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Venue
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <motion.div layout className="space-y-3">
@@ -309,14 +316,16 @@ export default function TheatresClient({
                             </span>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(theatre)} className="hover:bg-primary/10">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(theatre.id)} className="hover:bg-destructive/10">
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
+                        {canManage && (
+                          <div className="flex items-center space-x-2">
+                            <Button variant="ghost" size="icon" onClick={() => handleEdit(theatre)} className="hover:bg-primary/10">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDelete(theatre.id)} className="hover:bg-destructive/10">
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        )}
                       </motion.div>
                     ))}
                   </AnimatePresence>

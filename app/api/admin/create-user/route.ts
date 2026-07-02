@@ -75,8 +75,8 @@ export async function POST(request: Request) {
       phone: phone || null,
       oscar,
       role,
-      activation_status: 'active',
-      is_active: true,
+      activation_status: 'pending',
+      is_active: false,
       created_by: user.id
     }
 

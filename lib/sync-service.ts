@@ -93,6 +93,14 @@ class SyncService {
                 await supabase.from('chat_messages').insert([submission.data])
                 break
 
+            case 'journey_update':
+                await supabase.from('journeys').update(submission.data.updates).eq('id', submission.data.id)
+                break
+
+            case 'journey_event':
+                await supabase.from('journey_events').insert([submission.data])
+                break
+
             default:
                 throw new Error(`Unknown submission type: ${submission.type}`)
         }
@@ -112,6 +120,15 @@ class SyncService {
             return await offlineQueue.getQueueCount()
         } catch (e) {
             return 0
+        }
+    }
+
+    async hasPendingEmergency(): Promise<boolean> {
+        try {
+            const pending = await offlineQueue.getAllPending()
+            return pending.some(sub => sub.isEmergency)
+        } catch (e) {
+            return false
         }
     }
 }

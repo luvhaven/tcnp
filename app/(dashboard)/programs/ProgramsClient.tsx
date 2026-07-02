@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Calendar, Plus, Edit, Trash2, Archive, CheckCircle } from "lucide-react"
+import { Calendar, Plus, Edit, Trash2, Archive, CheckCircle, Building2 } from "lucide-react"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import ProgramExport from "@/components/programs/ProgramExport"
@@ -34,7 +34,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
   const supabase = createClient()
   const confirm = useConfirm()
   const queryClient = useQueryClient()
-  
+
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Program | null>(null)
   const [formData, setFormData] = useState({
@@ -47,6 +47,38 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
   })
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [scheduleProgram, setScheduleProgram] = useState<Program | null>(null)
+
+  // ── Inline Theatre Creation ────────────────────────────────────────────────
+  const [theatreDialogOpen, setTheatreDialogOpen] = useState(false)
+  const [newTheatreName, setNewTheatreName] = useState('')
+  const [newTheatreLocation, setNewTheatreLocation] = useState('')
+  const [creatingTheatre, setCreatingTheatre] = useState(false)
+
+  const handleCreateTheatre = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newTheatreName.trim()) return
+    setCreatingTheatre(true)
+    try {
+      const { data, error } = await supabase
+        .from('theatres')
+        .insert([{ name: newTheatreName.trim(), address: newTheatreLocation.trim() || '', city: null }])
+        .select()
+        .single()
+      if (error) throw error
+      // Invalidate theatres query so dropdown refreshes
+      queryClient.invalidateQueries({ queryKey: ['theatres'] })
+      // Immediately select the new theatre
+      setFormData(prev => ({ ...prev, theatre_id: data.id }))
+      toast.success(`Theatre "${data.name}" created and selected!`)
+      setTheatreDialogOpen(false)
+      setNewTheatreName('')
+      setNewTheatreLocation('')
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to create theatre')
+    } finally {
+      setCreatingTheatre(false)
+    }
+  }
 
   // React Query: Fetch Programs
   const { data: programs = [] } = useQuery({
@@ -131,7 +163,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
       await queryClient.cancelQueries({ queryKey: ['programs'] })
       const previousPrograms = queryClient.getQueryData<Program[]>(['programs'])
       if (previousPrograms) {
-        queryClient.setQueryData<Program[]>(['programs'], old => 
+        queryClient.setQueryData<Program[]>(['programs'], old =>
           old?.map(p => p.id === id ? { ...p, status } : p)
         )
       }
@@ -194,25 +226,27 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
     setDialogOpen(true)
   }
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status?: string | null) => {
+    if (!status) return 'bg-gray-500'
     const colors: Record<string, string> = {
       planning: 'bg-blue-500',
       active: 'bg-green-500',
       completed: 'bg-purple-500',
       archived: 'bg-gray-500'
     }
-    return colors[status] || 'bg-gray-500'
+    return colors[status.toLowerCase()] || 'bg-gray-500'
   }
 
-  const getStatusLabel = (status: string) => {
+  const getStatusLabel = (status?: string | null) => {
+    if (!status) return 'Unknown'
     return status.charAt(0).toUpperCase() + status.slice(1)
   }
 
   return (
     <div className="space-y-6">
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }} 
-        animate={{ opacity: 1, y: 0 }} 
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
         className="flex items-center justify-between"
       >
         <div>
@@ -297,7 +331,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                         <div>
                           <p className="font-medium text-lg">{program.name}</p>
                           <p className="text-sm text-muted-foreground">
-                            {program.theatres?.name || 'No venue'} • Starts {new Date(program.start_date).toLocaleDateString()}
+                            {program.theatres?.name || 'No venue'} • Starts {new Date(program.start_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                           </p>
                           {program.description && (
                             <p className="text-xs text-muted-foreground mt-1">{program.description}</p>
@@ -402,7 +436,17 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="theatre_id">Theatre</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="theatre_id">Theatre</Label>
+                  <button
+                    type="button"
+                    onClick={() => setTheatreDialogOpen(true)}
+                    className="flex items-center gap-1 text-xs text-primary hover:underline"
+                  >
+                    <Building2 className="h-3 w-3" />
+                    New Theatre
+                  </button>
+                </div>
                 <Select
                   value={formData.theatre_id || 'unassigned'}
                   onValueChange={(value) => setFormData({ ...formData, theatre_id: value === 'unassigned' ? '' : value })}
@@ -448,7 +492,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                   type="date"
                   required
                   value={formData.start_date}
-                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value, end_date: '' })}
                 />
               </div>
 
@@ -457,6 +501,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                 <Input
                   id="end_date"
                   type="date"
+                  min={formData.start_date || undefined}
                   value={formData.end_date}
                   onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
                 />
@@ -469,6 +514,47 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
               </Button>
               <Button type="submit" disabled={saveMutation.isPending}>
                 {saveMutation.isPending ? "Saving..." : editing ? 'Update Program' : 'Create Program'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Quick-Create Theatre Dialog ─────────────────────────────────── */}
+      <Dialog open={theatreDialogOpen} onOpenChange={setTheatreDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Create New Theatre
+            </DialogTitle>
+            <DialogDescription>Add a theatre directly without leaving the program form.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateTheatre} className="space-y-4 mt-2">
+            <div className="space-y-2">
+              <Label htmlFor="new_theatre_name">Theatre Name *</Label>
+              <Input
+                id="new_theatre_name"
+                required
+                autoFocus
+                placeholder="e.g., Covenant Place Arena"
+                value={newTheatreName}
+                onChange={(e) => setNewTheatreName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new_theatre_location">Address / Location (optional)</Label>
+              <Input
+                id="new_theatre_location"
+                placeholder="e.g., 45 Shehu Shagari Way, Abuja"
+                value={newTheatreLocation}
+                onChange={(e) => setNewTheatreLocation(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setTheatreDialogOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={creatingTheatre}>
+                {creatingTheatre ? 'Creating…' : 'Create & Select'}
               </Button>
             </div>
           </form>

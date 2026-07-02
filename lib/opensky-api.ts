@@ -28,19 +28,19 @@ export interface OpenSkyResponse {
   states: FlightState[] | null
 }
 
-const OPENSKY_BASE_URL = 'https://opensky-network.org/api'
+const OPENSKY_BASE_URL = '/api/flights'
 
 /**
  * Get all flights currently in the air
  */
 export async function getAllFlights(): Promise<OpenSkyResponse> {
   try {
-    const response = await fetch(`${OPENSKY_BASE_URL}/states/all`)
-    
+    const response = await fetch(OPENSKY_BASE_URL)
+
     if (!response.ok) {
       throw new Error(`OpenSky API error: ${response.status}`)
     }
-    
+
     const data = await response.json()
     return data
   } catch (error) {
@@ -54,18 +54,18 @@ export async function getAllFlights(): Promise<OpenSkyResponse> {
  */
 export async function getFlightByIcao24(icao24: string): Promise<FlightState | null> {
   try {
-    const response = await fetch(`${OPENSKY_BASE_URL}/states/all?icao24=${icao24}`)
-    
+    const response = await fetch(`${OPENSKY_BASE_URL}?icao24=${icao24}`)
+
     if (!response.ok) {
       throw new Error(`OpenSky API error: ${response.status}`)
     }
-    
+
     const data: OpenSkyResponse = await response.json()
-    
+
     if (!data.states || data.states.length === 0) {
       return null
     }
-    
+
     return parseFlightState(data.states[0])
   } catch (error) {
     console.error('❌ Error fetching flight by ICAO24:', error)
@@ -78,25 +78,19 @@ export async function getFlightByIcao24(icao24: string): Promise<FlightState | n
  */
 export async function searchFlightsByCallsign(callsign: string): Promise<FlightState[]> {
   try {
-    const response = await fetch(`${OPENSKY_BASE_URL}/states/all`)
-    
+    const response = await fetch(`${OPENSKY_BASE_URL}?callsign=${callsign}`)
+
     if (!response.ok) {
-      throw new Error(`OpenSky API error: ${response.status}`)
+      throw new Error(`Proxy API error: ${response.status}`)
     }
-    
+
     const data: OpenSkyResponse = await response.json()
-    
+
     if (!data.states) {
       return []
     }
-    
-    // Filter by callsign (case-insensitive, partial match)
-    const searchTerm = callsign.toLowerCase().trim()
-    const matchingFlights = data.states
-      .filter(state => state.callsign?.toLowerCase().trim().includes(searchTerm))
-      .map(parseFlightState)
-    
-    return matchingFlights
+
+    return data.states.map(parseFlightState)
   } catch (error) {
     console.error('❌ Error searching flights:', error)
     throw error
@@ -113,19 +107,19 @@ export async function getFlightsInBounds(
   lonMax: number
 ): Promise<FlightState[]> {
   try {
-    const url = `${OPENSKY_BASE_URL}/states/all?lamin=${latMin}&lomin=${lonMin}&lamax=${latMax}&lomax=${lonMax}`
+    const url = `${OPENSKY_BASE_URL}?bounds=${latMin},${lonMin},${latMax},${lonMax}`
     const response = await fetch(url)
-    
+
     if (!response.ok) {
       throw new Error(`OpenSky API error: ${response.status}`)
     }
-    
+
     const data: OpenSkyResponse = await response.json()
-    
+
     if (!data.states) {
       return []
     }
-    
+
     return data.states.map(parseFlightState)
   } catch (error) {
     console.error('❌ Error fetching flights in bounds:', error)
@@ -180,16 +174,16 @@ export function metersToFeet(meters: number | null): number | null {
 export function formatLastContact(timestamp: number): string {
   const now = Math.floor(Date.now() / 1000)
   const secondsAgo = now - timestamp
-  
+
   if (secondsAgo < 60) {
     return `${secondsAgo}s ago`
   }
-  
+
   const minutesAgo = Math.floor(secondsAgo / 60)
   if (minutesAgo < 60) {
     return `${minutesAgo}m ago`
   }
-  
+
   const hoursAgo = Math.floor(minutesAgo / 60)
   return `${hoursAgo}h ago`
 }

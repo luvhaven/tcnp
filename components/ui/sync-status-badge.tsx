@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react'
 import { syncService } from '@/lib/sync-service'
 import { Badge } from '@/components/ui/badge'
-import { Cloud, CloudOff } from 'lucide-react'
+import { Cloud, CloudOff, AlertTriangle } from 'lucide-react'
 
 export function SyncStatusBadge() {
     const [pendingCount, setPendingCount] = useState(0)
+    const [hasEmergency, setHasEmergency] = useState(false)
     const [isOnline, setIsOnline] = useState(true)
 
     useEffect(() => {
@@ -15,6 +16,12 @@ export function SyncStatusBadge() {
         const updateCount = async () => {
             const count = await syncService.getPendingCount()
             setPendingCount(count)
+            if (count > 0) {
+                const emergency = await syncService.hasPendingEmergency()
+                setHasEmergency(emergency)
+            } else {
+                setHasEmergency(false)
+            }
         }
 
         updateCount()
@@ -46,6 +53,20 @@ export function SyncStatusBadge() {
     }, [])
 
     if (pendingCount === 0) return null
+
+    if (hasEmergency) {
+        return (
+            <Badge
+                variant="destructive"
+                className="fixed bottom-4 left-1/2 -translate-x-1/2 md:translate-x-0 md:left-auto md:right-4 z-[9999] gap-2 px-4 py-3 bg-red-600 animate-pulse shadow-2xl border-2 border-red-400 text-white"
+            >
+                <AlertTriangle className="h-5 w-5" />
+                <span className="font-bold uppercase tracking-wider">
+                    PENDING EMERGENCY (OFFLINE)
+                </span>
+            </Badge>
+        )
+    }
 
     return (
         <Badge

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
+import { motion } from "framer-motion"
 import { usePathname } from "next/navigation"
 import { cn, oscarToRole } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -110,8 +111,10 @@ type SidebarProps = {
   onClose?: () => void
 }
 
+// ─── Singleton client ───
+const supabase = createClient()
+
 export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
-  const supabase = useMemo(() => createClient(), [])
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const { count: unreadChat } = useUnreadChatCount()
@@ -187,52 +190,58 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">
-        {visibleNavigation.map((item) => {
+        {visibleNavigation.map((item, index) => {
           const isActive = pathname === item.href
           const isChat = item.name === "Team Chat"
           const isOps = item.name === "My Operations"
           return (
-            <Link
-              key={item.name}
-              href={item.href}
-              onClick={isMobile ? onClose : undefined}
-              className={cn(
-                "relative flex items-center justify-start px-3 py-2 text-sm font-medium rounded-r-lg rounded-l-none gap-3 mr-1 transition-all duration-150 border-l-[3px]",
-                isActive
-                  ? "text-primary border-primary bg-primary/10 shadow-sm"
-                  : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/60 hover:border-muted-foreground/20"
-              )}
-              title={collapsed ? item.name : undefined}
+            <motion.div
+              key={item.href}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: index * 0.04, duration: 0.2, ease: "easeOut" }}
             >
-              <div className="relative flex-shrink-0">
-                <item.icon className="h-5 w-5" />
-                {/* Collapsed badge dots */}
-                {isChat && unreadChat > 0 && collapsed && (
-                  <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+              <Link
+                href={item.href}
+                onClick={isMobile ? onClose : undefined}
+                className={cn(
+                  "relative flex items-center justify-start px-3 py-2 text-sm font-medium rounded-r-lg rounded-l-none gap-3 mr-1 transition-all duration-150 border-l-[3px]",
+                  isActive
+                    ? "text-primary border-primary bg-primary/10 shadow-sm"
+                    : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/60 hover:border-muted-foreground/20"
                 )}
-                {isOps && unreadAssignments > 0 && collapsed && (
-                  <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
-                )}
-              </div>
-              <span className={cn(
-                "flex items-center justify-between w-full transition-all duration-300 overflow-hidden whitespace-nowrap",
-                collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
-              )}>
-                <span>{item.name}</span>
-                <span className="flex gap-1 ml-auto">
-                  {isChat && unreadChat > 0 && !collapsed && (
-                    <Badge variant="destructive" className="bg-red-500 text-white font-semibold animate-pulse shadow-lg">
-                      {unreadChat > 99 ? '99+' : unreadChat}
-                    </Badge>
+                title={collapsed ? item.name : undefined}
+              >
+                <div className="relative flex-shrink-0">
+                  <item.icon className="h-5 w-5" />
+                  {/* Collapsed badge dots */}
+                  {isChat && unreadChat > 0 && collapsed && (
+                    <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
                   )}
-                  {isOps && unreadAssignments > 0 && !collapsed && (
-                    <Badge className="bg-orange-500 text-white font-semibold animate-pulse shadow-lg">
-                      {unreadAssignments > 9 ? '9+' : unreadAssignments}
-                    </Badge>
+                  {isOps && unreadAssignments > 0 && collapsed && (
+                    <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
                   )}
+                </div>
+                <span className={cn(
+                  "flex items-center justify-between w-full transition-all duration-300 overflow-hidden whitespace-nowrap",
+                  collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
+                )}>
+                  <span>{item.name}</span>
+                  <span className="flex gap-1 ml-auto">
+                    {isChat && unreadChat > 0 && !collapsed && (
+                      <Badge variant="destructive" className="bg-red-500 text-white font-semibold animate-pulse shadow-lg">
+                        {unreadChat > 99 ? '99+' : unreadChat}
+                      </Badge>
+                    )}
+                    {isOps && unreadAssignments > 0 && !collapsed && (
+                      <Badge className="bg-orange-500 text-white font-semibold animate-pulse shadow-lg">
+                        {unreadAssignments > 9 ? '9+' : unreadAssignments}
+                      </Badge>
+                    )}
+                  </span>
                 </span>
-              </span>
-            </Link>
+              </Link>
+            </motion.div>
           )
         })}
       </nav>

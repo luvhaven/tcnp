@@ -23,6 +23,8 @@ import { oscarToRole } from '@/lib/utils'
 interface DutyOfficer {
   user_id: string
   is_lead: boolean
+  status?: string
+  acknowledged_at?: string | null
   users: { full_name: string; role: string; oscar: string | null; photo_url: string | null } | null
 }
 
@@ -203,7 +205,7 @@ export default function MyOperationsPage() {
       if (journeyIds.length > 0) {
         const { data: doData } = await (supabase as any)
           .from('journey_duty_officers')
-          .select('journey_id, user_id, is_lead, users:user_id(full_name, role, oscar, photo_url)')
+          .select('journey_id, user_id, is_lead, status, acknowledged_at, users:user_id(full_name, role, oscar, photo_url)')
           .in('journey_id', journeyIds)
 
         for (const row of doData || []) {
@@ -481,15 +483,33 @@ function JourneyOperationsPanel({
   isAdmin: boolean
 }) {
   const supabase = createClient()
-  const isAssignedDO = !!(
-    journey.duty_officers?.some(d => d.user_id === currentUserId) ||
-    journey.assigned_duty_officer_id === currentUserId
-  )
-  const isLead = !!(journey.duty_officers?.find(d => d.user_id === currentUserId)?.is_lead ||
-    journey.assigned_duty_officer_id === currentUserId)
+  const myDORecord = journey.duty_officers?.find(d => d.user_id === currentUserId)
+  const isAssignedDO = !!(myDORecord || journey.assigned_duty_officer_id === currentUserId)
+  const isLead = !!(myDORecord?.is_lead || journey.assigned_duty_officer_id === currentUserId)
+  const isPendingAcknowledge = myDORecord?.status === 'pending'
   const canUpdate = isAssignedDO || isAdmin
   const isPlanned = journey.status === 'planned'
   const [starting, setStarting] = useState(false)
+  const [acknowledging, setAcknowledging] = useState(false)
+
+  const handleAcknowledge = async () => {
+    setAcknowledging(true)
+    try {
+      const { error } = await (supabase as any)
+        .from('journey_duty_officers')
+        .update({ status: 'acknowledged', acknowledged_at: new Date().toISOString() })
+        .eq('journey_id', journey.id)
+        .eq('user_id', currentUserId)
+
+      if (error) throw error
+      toast.success('Assignment acknowledged: Shift handoff complete')
+    } catch (err: any) {
+      console.error('Acknowledgment error:', err)
+      toast.error('Failed to acknowledge assignment (Check network or permissions)')
+    } finally {
+      setAcknowledging(false)
+    }
+  }
 
   const statusKey = resolveCallSignKey(journey.status)
   const statusColor = statusKey ? TNCP_CALL_SIGN_COLORS[statusKey] : 'bg-gray-500 text-white'
@@ -632,8 +652,31 @@ function JourneyOperationsPanel({
         </div>
       )}
 
+      {/* ── Shift Handoff Acknowledgment ── */}
+      {isPendingAcknowledge && (
+        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-4 my-4 animate-in fade-in zoom-in duration-300">
+          <div className="flex items-start gap-3">
+            <Radio className="h-5 w-5 text-amber-600 dark:text-amber-500 mt-0.5 animate-pulse" />
+            <div className="flex-1">
+              <h4 className="font-semibold text-amber-900 dark:text-amber-400 text-sm">Shift Handoff Pending</h4>
+              <p className="text-xs text-amber-800 dark:text-amber-500/80 mt-1 mb-3">
+                You have been assigned to this journey. Please acknowledge to assume operational responsibility.
+              </p>
+              <button
+                onClick={handleAcknowledge}
+                disabled={acknowledging}
+                className="bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+              >
+                {acknowledging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
+                {acknowledging ? 'Confirming...' : 'Acknowledge Assignment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Start Journey ── prominent CTA when status is planned */}
-      {canUpdate && isPlanned && (
+      {canUpdate && isPlanned && !isPendingAcknowledge && (
         <button
           onClick={handleStartJourney}
           disabled={starting}
@@ -652,7 +695,7 @@ function JourneyOperationsPanel({
       )}
 
       {/* Call sign panel — shown once journey is active */}
-      {canUpdate && !isPlanned ? (
+      {canUpdate && !isPlanned && !isPendingAcknowledge ? (
         <CallSignPanel
           journeyId={journey.id}
           papaName={journey.papas ? `${journey.papas.title} ${journey.papas.full_name}` : undefined}
@@ -660,7 +703,7 @@ function JourneyOperationsPanel({
           origin={journey.origin}
           destination={journey.destination}
         />
-      ) : !canUpdate ? (
+      ) : isPendingAcknowledge ? null : !canUpdate ? (
         <Card>
           <CardContent className="py-6 text-center text-sm text-muted-foreground">
             <Radio className="h-8 w-8 mx-auto mb-3 opacity-40" />

@@ -64,7 +64,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     password: '',
     full_name: '',
     phone: '',
-    role: 'delta_oscar',
+    role: '',
     photo_url: ''
   })
 
@@ -87,7 +87,6 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     { value: 'head_of_operations', label: 'Head of Operations' },
     { value: 'head_of_command', label: 'Head of Command' },
     { value: 'command', label: 'Command' },
-    { value: 'delta_oscar', label: 'Delta Oscar (DO)' },
     { value: 'tango_oscar', label: 'Tango Oscar (TO)' },
     { value: 'head_tango_oscar', label: 'Head, Tango Oscar' },
     { value: 'alpha_oscar', label: 'Alpha Oscar (AO)' },
@@ -106,11 +105,19 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
   const { data: currentUser } = useQuery({
     queryKey: ['currentUserProfile'],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return null
-      const { data } = await supabase.from('users').select('*').eq('id', user.id).single()
-      return data
-    }
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser()
+        if (error) console.error('Auth check error:', error)
+        if (!user) return null
+        const { data } = await supabase.from('users').select('*').eq('id', user.id).single()
+        return data
+      } catch (err) {
+        // Suppress network-level "Failed to fetch" errors that crash the component boundary
+        console.warn('Network error while checking auth session, falling back gracefully.', err)
+        return null
+      }
+    },
+    retry: 1
   })
 
   const ADMIN_ROLES = ['super_admin', 'dev_admin', 'admin', 'command', 'head_of_command', 'captain', 'vice_captain']
@@ -234,7 +241,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
         })
         if (!res.ok) throw new Error("Failed to update officer role")
       }
-      if (payload.titleData.title_id) {
+      if (payload.titleData?.title_id) {
         const { error } = await supabase.rpc('assign_title', payload.rpcData)
         if (error) throw error
 
@@ -363,6 +370,16 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
         p_program_id: titleFormData.program_id || null,
         p_assigned_by: currentUser?.id
       }
+    })
+  }
+
+  const handleAssignOfficialOscar = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!assigningTitleFor) return
+    assignTitleMutation.mutate({
+      roleUpdate: { id: assigningTitleFor.id, role: titleFormData.role, currentRole: assigningTitleFor.role },
+      titleData: { title_id: '', program_id: '' }, // empty, bypassing RPC
+      rpcData: {}
     })
   }
 
@@ -503,36 +520,38 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
               ) : (
                 <motion.div layout className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   <AnimatePresence>
-                    {officers.map((officer: Officer) => (
-                      <motion.div
-                        layout
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ duration: 0.2 }}
-                        key={officer.id}
-                        className="flex items-center space-x-3 rounded-lg border p-4 transition-all hover:bg-accent hover:border-primary/30 hover:shadow-sm"
-                      >
-                        <Avatar>
-                          {officer.photo_url ? <AvatarImage src={officer.photo_url} /> : <AvatarFallback>{getInitials(officer.full_name || officer.email)}</AvatarFallback>}
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{officer.full_name || 'No name'}</p>
-                          <p className="text-xs text-muted-foreground truncate">{officer.email}</p>
-                          <div className="flex items-center space-x-2 mt-1">
-                            <Badge className={`text-[10px] uppercase tracking-wide ${getRoleBadgeColor(officer.role)}`}>
-                              {roles.find(r => r.value === officer.role)?.label || officer.role}
-                            </Badge>
-                            <div className="flex items-center space-x-1">
-                              <div className={`h-2 w-2 rounded-full ${officer.is_online ? 'bg-green-500' : 'bg-gray-400'}`} />
-                              <span className="text-xs text-muted-foreground">
-                                {officer.is_online ? 'online' : 'offline'}
-                              </span>
+                    {officers
+                      .filter((officer: Officer) => officer.activation_status !== 'pending')
+                      .map((officer: Officer) => (
+                        <motion.div
+                          layout
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ duration: 0.2 }}
+                          key={officer.id}
+                          className="flex items-center space-x-3 rounded-lg border p-4 transition-all hover:bg-accent hover:border-primary/30 hover:shadow-sm"
+                        >
+                          <Avatar>
+                            {officer.photo_url ? <AvatarImage src={officer.photo_url} /> : <AvatarFallback>{getInitials(officer.full_name || officer.email)}</AvatarFallback>}
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{officer.full_name || 'No name'}</p>
+                            <p className="text-xs text-muted-foreground truncate">{officer.email}</p>
+                            <div className="flex items-center space-x-2 mt-1">
+                              <Badge className={`text-[10px] uppercase tracking-wide ${getRoleBadgeColor(officer.role)}`}>
+                                {roles.find(r => r.value === officer.role)?.label || officer.role}
+                              </Badge>
+                              <div className="flex items-center space-x-1">
+                                <div className={`h-2 w-2 rounded-full ${officer.is_online ? 'bg-green-500' : 'bg-gray-400'}`} />
+                                <span className="text-xs text-muted-foreground">
+                                  {officer.is_online ? 'online' : 'offline'}
+                                </span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </motion.div>
-                    ))}
+                        </motion.div>
+                      ))}
                   </AnimatePresence>
                 </motion.div>
               )}
@@ -756,7 +775,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
               <Input id="phone" type="tel" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="role">{editing ? 'Role *' : 'Default Role *'}</Label>
+              <Label htmlFor="role">{editing ? 'Oscar *' : 'Oscar *'}</Label>
               <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a role..." />
@@ -791,43 +810,72 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
         <Dialog open={titleDialogOpen} onOpenChange={setTitleDialogOpen}>
           <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Assign Official Title</DialogTitle>
-              <DialogDescription>Assign an official title to {assigningTitleFor?.full_name}</DialogDescription>
+              <DialogTitle>Manage Roles & Titles</DialogTitle>
+              <DialogDescription>Modify assignments for {assigningTitleFor?.full_name}</DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleAssignTitle} className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">Official Title *</Label>
-                <Select required value={titleFormData.title_id || 'unassigned'} onValueChange={(value) => setTitleFormData({ ...titleFormData, title_id: value === 'unassigned' ? '' : value })}>
-                  <SelectTrigger id="title">
-                    <SelectValue placeholder="Select a title..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">Select a title...</SelectItem>
-                    {getTitleByUnit('leadership').filter(t => t.is_fixed).map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.is_team_lead && '(Team Lead)'}</SelectItem>)}
-                    {getTitleByUnit('leadership').filter(t => !t.is_fixed).map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.max_positions > 1 && `(${title.max_positions} positions)`}</SelectItem>)}
-                    {getTitleByUnit('command').map((title) => <SelectItem key={title.id} value={title.id}>{title.name}</SelectItem>)}
-                    {getTitleByUnit('oscar').filter(t => !['DELTA_OSCAR', 'DELTA_OSCAR_LEAD'].includes(t.code)).map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.is_team_lead && '⭐'}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="program">Program</Label>
-                <Select value={titleFormData.program_id || 'unassigned'} onValueChange={(value) => setTitleFormData({ ...titleFormData, program_id: value === 'unassigned' ? '' : value })}>
-                  <SelectTrigger id="program">
-                    <SelectValue placeholder="No specific program" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">No specific program</SelectItem>
-                    {programs.filter(p => p.status === 'active').map(p => <SelectItem key={p.id} value={p.id}>[Active] {p.name}</SelectItem>)}
-                    {programs.filter(p => p.status === 'planning').map(p => <SelectItem key={p.id} value={p.id}>[Planning] {p.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => { setTitleDialogOpen(false); setAssigningTitleFor(null); setTitleFormData({ title_id: '', program_id: '', role: '' }) }} className="flex-1">Cancel</Button>
-                <Button type="submit" className="flex-1">Assign Title</Button>
-              </div>
-            </form>
+            <Tabs defaultValue="program_role" className="mt-4">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="program_role">Program Role</TabsTrigger>
+                <TabsTrigger value="official_oscar">Official Oscar</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="program_role">
+                <form onSubmit={handleAssignTitle} className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="title">Official Title *</Label>
+                    <Select required value={titleFormData.title_id || 'unassigned'} onValueChange={(value) => setTitleFormData({ ...titleFormData, title_id: value === 'unassigned' ? '' : value })}>
+                      <SelectTrigger id="title">
+                        <SelectValue placeholder="Select a title..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Select a title...</SelectItem>
+                        {getTitleByUnit('leadership').filter(t => t.is_fixed).map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.is_team_lead && '(Team Lead)'}</SelectItem>)}
+                        {getTitleByUnit('leadership').filter(t => !t.is_fixed).map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.max_positions > 1 && `(${title.max_positions} positions)`}</SelectItem>)}
+                        {getTitleByUnit('command').map((title) => <SelectItem key={title.id} value={title.id}>{title.name}</SelectItem>)}
+                        {getTitleByUnit('oscar').filter(t => !['DELTA_OSCAR', 'DELTA_OSCAR_LEAD'].includes(t.code)).map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.is_team_lead && '⭐'}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="program">Program</Label>
+                    <Select value={titleFormData.program_id || 'unassigned'} onValueChange={(value) => setTitleFormData({ ...titleFormData, program_id: value === 'unassigned' ? '' : value })}>
+                      <SelectTrigger id="program">
+                        <SelectValue placeholder="No specific program" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">No specific program</SelectItem>
+                        {programs.filter(p => p.status === 'active').map(p => <SelectItem key={p.id} value={p.id}>[Active] {p.name}</SelectItem>)}
+                        {programs.filter(p => p.status === 'planning').map(p => <SelectItem key={p.id} value={p.id}>[Planning] {p.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex gap-2 pt-4">
+                    <Button type="button" variant="outline" onClick={() => { setTitleDialogOpen(false); setAssigningTitleFor(null); setTitleFormData({ title_id: '', program_id: '', role: '' }) }} className="flex-1">Cancel</Button>
+                    <Button type="submit" className="flex-1">Assign Program Role</Button>
+                  </div>
+                </form>
+              </TabsContent>
+
+              <TabsContent value="official_oscar">
+                <form onSubmit={handleAssignOfficialOscar} className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="base_role">Official Oscar (Base Role) *</Label>
+                    <Select required value={titleFormData.role || ''} onValueChange={(value) => setTitleFormData({ ...titleFormData, role: value })}>
+                      <SelectTrigger id="base_role">
+                        <SelectValue placeholder="Select official oscar..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {roles.map((role) => <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex gap-2 pt-4">
+                    <Button type="button" variant="outline" onClick={() => { setTitleDialogOpen(false); setAssigningTitleFor(null); setTitleFormData({ title_id: '', program_id: '', role: '' }) }} className="flex-1">Cancel</Button>
+                    <Button type="submit" className="flex-1 text-white bg-amber-600 hover:bg-amber-700">Set Official Oscar</Button>
+                  </div>
+                </form>
+              </TabsContent>
+            </Tabs>
           </DialogContent>
         </Dialog>
       )}
