@@ -217,16 +217,25 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'Failed to update officer status')
-      return !officer.is_active
+      return { is_active: result.is_active, activation_status: result.activation_status }
     },
-    onSuccess: (newStatus, variables) => {
-      // Optimistically update instead of relying solely on invalidation
+    onSuccess: (updatedData, variables) => {
+      // Optimistically update BOTH statuses instantly to avoid UI bounce-back
       queryClient.setQueryData(['officers'], (oldData: Officer[] | undefined) => {
         if (!oldData) return oldData
-        return oldData.map(o => o.id === variables.id ? { ...o, is_active: newStatus } : o)
+        return oldData.map(o => o.id === variables.id ? {
+          ...o,
+          is_active: updatedData.is_active,
+          activation_status: updatedData.activation_status
+        } : o)
       })
-      queryClient.invalidateQueries({ queryKey: ['officers'] })
-      toast.success(`Officer ${newStatus ? 'activated' : 'deactivated'}!`)
+
+      // Delay invalidation slightly to guarantee Supabase DB commit has cleared globally
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['officers'] })
+      }, 500)
+
+      toast.success(`Officer ${updatedData.is_active ? 'activated' : 'deactivated'}!`)
     },
     onError: (error: any) => toast.error(error.message || 'Failed to update officer status')
   })
