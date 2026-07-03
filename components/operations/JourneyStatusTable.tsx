@@ -141,6 +141,22 @@ export default function JourneyStatusTable() {
             .on(
                 'postgres_changes',
                 {
+                    event: '*',
+                    schema: 'public',
+                    table: 'journey_duty_officers'
+                },
+                (payload) => {
+                    if (!mounted) return
+                    // Reload when DOs are assigned or they acknowledge the shift
+                    if (insertDebounceRef.current) clearTimeout(insertDebounceRef.current)
+                    insertDebounceRef.current = setTimeout(() => {
+                        if (mounted) loadActiveJourneys()
+                    }, 200)
+                }
+            )
+            .on(
+                'postgres_changes',
+                {
                     event: 'DELETE',
                     schema: 'public',
                     table: 'journeys'

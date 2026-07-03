@@ -1122,7 +1122,7 @@ export default function ChatSystem({
         user_id: userId,
         title: 'New chat message',
         message,
-        type: 'chat_message',
+        type: 'chat',
         channel: 'push'
       }))
 

@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { formatDistanceToNow } from 'date-fns'
+import 'leaflet/dist/leaflet.css'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'

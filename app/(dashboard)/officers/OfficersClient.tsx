@@ -642,6 +642,9 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
               <div className="flex items-center gap-2">
                 {selectedOfficers.length > 0 && (
                   <>
+                    <Button variant="ghost" onClick={() => setSelectedOfficers([])} className="text-muted-foreground mr-1 h-9 px-3">
+                      Cancel Selection
+                    </Button>
                     <Button variant="outline" onClick={() => {
                       setAssignForm({ officer_ids: selectedOfficers, program_id: '' })
                       setAssignFromDirectoryOpen(true)
