@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import InstallButton from "@/components/pwa/InstallButton"
 import NotificationCenter from "@/components/notifications/NotificationCenter"
+import { ChangePasswordDialog } from "@/components/security/ChangePasswordDialog"
 
 export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
   const router = useRouter()
@@ -69,7 +70,7 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
         >
           <Menu className="h-5 w-5" aria-hidden="true" />
         </button>
-      <div className="flex flex-col min-w-0">
+        <div className="flex flex-col min-w-0">
           <h1 className="text-sm font-semibold tracking-tight md:text-xl truncate max-w-[140px] sm:max-w-xs md:max-w-none">
             Welcome, {profile?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'User'}
           </h1>
@@ -106,10 +107,15 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
           )}
         </div>
 
-        {/* Logout — icon only on mobile, icon+accessible on desktop */}
-        <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Sign out" className="h-8 w-8 md:h-9 md:w-9">
-          <LogOut className="h-4 w-4" aria-hidden="true" />
-        </Button>
+        <div className="flex items-center space-x-1">
+          {/* Change Password Dialog */}
+          <ChangePasswordDialog />
+
+          {/* Logout — icon only on mobile, icon+accessible on desktop */}
+          <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Sign out" className="h-8 w-8 md:h-9 md:w-9 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30">
+            <LogOut className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        </div>
       </div>
     </header>
   )
