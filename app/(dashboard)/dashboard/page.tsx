@@ -280,7 +280,7 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-primary group-hover:to-primary/70 transition-all duration-500 animate-[countUp_0.8s_ease-out]">
+            <div className="stat-figure text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-primary group-hover:to-primary/70 transition-all duration-500 animate-[countUp_0.8s_ease-out]">
               {stats.totalPapas}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
@@ -298,7 +298,7 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-emerald-500 group-hover:to-emerald-600 transition-all duration-500 animate-[countUp_0.8s_ease-out_0.1s_both]">
+            <div className="stat-figure text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-emerald-500 group-hover:to-emerald-600 transition-all duration-500 animate-[countUp_0.8s_ease-out_0.1s_both]">
               {stats.totalCheetahs}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
@@ -316,7 +316,7 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-sky-500 group-hover:to-sky-600 transition-all duration-500 animate-[countUp_0.8s_ease-out_0.2s_both]">
+            <div className="stat-figure text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-sky-500 group-hover:to-sky-600 transition-all duration-500 animate-[countUp_0.8s_ease-out_0.2s_both]">
               {stats.activeJourneys}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
@@ -334,7 +334,7 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-amber-500 group-hover:to-amber-600 transition-all duration-500 animate-[countUp_0.8s_ease-out_0.3s_both]">
+            <div className="stat-figure text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-amber-500 group-hover:to-amber-600 transition-all duration-500 animate-[countUp_0.8s_ease-out_0.3s_both]">
               {stats.incidents}
             </div>
             <p className="text-xs text-muted-foreground mt-1">

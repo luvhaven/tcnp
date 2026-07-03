@@ -438,10 +438,11 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     const oscar = officer.oscar ? ` (${officer.oscar})` : ''
     const confirmed = await confirm({
       title: '⚠️ Delete Officer',
-      message: `You are about to permanently delete ${name}${oscar}. This action cannot be undone — all assignments, roles and history for this officer will be removed. Are you sure?`,
+      message: `You are about to permanently delete ${name}${oscar}. This action cannot be undone — all assignments, roles and history for this officer will be removed.`,
       confirmText: 'Yes, Delete Permanently',
       cancelText: 'Cancel',
-      variant: 'destructive'
+      variant: 'destructive',
+      requireInput: 'DELETE'
     })
     if (!confirmed) return
     deleteOfficerMutation.mutate(officer.id)
