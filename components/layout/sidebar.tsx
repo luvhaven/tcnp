@@ -11,7 +11,6 @@ import { Badge } from "@/components/ui/badge"
 import { createClient } from "@/lib/supabase/client"
 import { useUnreadChatCount } from '@/hooks/useUnreadChatCount'
 import { useUnreadAssignments } from '@/hooks/useUnreadAssignments'
-import { ChangePasswordDialog } from '@/components/security/ChangePasswordDialog'
 import {
   LayoutDashboard,
   Users,
@@ -35,7 +34,9 @@ import {
   BookOpen,
   Phone,
   ClipboardList,
+  KeyRound,
 } from "lucide-react"
+
 
 const ALL_NAV = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -59,10 +60,11 @@ const ALL_NAV = [
   { name: "SOP Manual", href: "/sop", icon: FileText },
   { name: "After-Op Reports", href: "/after-op-reports", icon: ClipboardList },
   { name: "Settings", href: "/settings", icon: Settings },
+  { name: "Change Password", href: "/change-password", icon: KeyRound },
 ]
 
 /** Pages every authenticated user always sees */
-const BASE_HREFS = ["/dashboard", "/my-operations", "/chat", "/programs", "/guide", "/sop", "/contacts"]
+const BASE_HREFS = ["/dashboard", "/my-operations", "/chat", "/programs", "/guide", "/sop", "/contacts", "/change-password"]
 
 /**
  * Role-scoped extra pages (beyond BASE_HREFS).
@@ -250,9 +252,6 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
       {/* Footer */}
       {!collapsed && (
         <div className="mt-auto border-t border-border/50 bg-background/50 p-4 backdrop-blur-sm">
-          <div className="mb-3">
-            <ChangePasswordDialog />
-          </div>
           <div className="flex flex-col gap-1 text-xs text-muted-foreground">
             <span>Version 1.0.1</span>
             <span>&copy; {new Date().getFullYear()} TCNP</span>
