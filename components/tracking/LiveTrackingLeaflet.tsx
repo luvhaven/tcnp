@@ -120,13 +120,39 @@ export default function LiveTrackingLeaflet({
       }`
     document.head.appendChild(style)
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors',
-      maxZoom: 19,
-    }).addTo(map)
+    const isDark = document.documentElement.classList.contains('dark')
+
+    const getTile = (dark: boolean) =>
+      dark
+        ? L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+          attribution: '© OpenStreetMap contributors © CARTO',
+          subdomains: 'abcd',
+          maxZoom: 19,
+        })
+        : L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors',
+          maxZoom: 19,
+        })
+
+    getTile(isDark).addTo(map)
+
+    // Observe theme changes and swap tile layers on-the-fly
+    const observer = new MutationObserver(() => {
+      const nowDark = document.documentElement.classList.contains('dark')
+      map.eachLayer((layer) => {
+        if ((layer as any)._url?.includes('tile.openstreetmap') || (layer as any)._url?.includes('cartocdn')) {
+          map.removeLayer(layer)
+        }
+      })
+      getTile(nowDark).addTo(map)
+    })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
 
     mapRef.current = map
+
+    return () => observer.disconnect()
   }, [center])
+
 
   // ── Traffic overlay (TomTom flow tiles) ──────────────────────────────────
   // Standard traffic colours shown by TomTom:

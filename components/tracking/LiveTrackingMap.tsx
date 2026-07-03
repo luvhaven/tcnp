@@ -177,9 +177,7 @@ export default function LiveTrackingMap() {
         event: '*',
         schema: 'public',
         table: 'user_locations'
-      }, (payload) => {
-        console.log('📍 Location update received:', payload.eventType)
-        // Reload for both UPDATE and INSERT events
+      }, () => {
         loadUserLocations()
       })
       .subscribe()
@@ -192,7 +190,6 @@ export default function LiveTrackingMap() {
         schema: 'public',
         table: 'journeys'
       }, () => {
-        console.log('🚗 Journey update received')
         loadJourneys()
       })
       .subscribe()
@@ -272,8 +269,6 @@ export default function LiveTrackingMap() {
         }
       })
       setLocationTrails({ ...trails })
-
-      console.log('✅ Loaded user locations:', enrichedData.length, 'with', userToPapaMap.size, 'Papa assignments')
       setUserLocations(enrichedData)
     } catch (error) {
       console.error('❌ Error loading user locations (unexpected):', error)
@@ -294,7 +289,6 @@ export default function LiveTrackingMap() {
 
       if (error) throw error
 
-      console.log('✅ Loaded journeys:', data)
       const journeysData = (data ?? []) as Journey[]
       const normalizedJourneys: Journey[] = journeysData.map((journey) => {
         const callSignKey = journey.status as CallSignKey | null
@@ -700,12 +694,12 @@ export default function LiveTrackingMap() {
               <CardContent>
                 <div className="grid gap-2">
                   {[
-                    { color: '#00b200', label: 'Free flow',     desc: 'Road clear, full speed' },
-                    { color: '#92b300', label: 'Mostly free',   desc: 'Minor slowdowns' },
-                    { color: '#ffd700', label: 'Moderate',      desc: 'Noticeable delay' },
-                    { color: '#ff8c00', label: 'Heavy',         desc: 'Significant congestion' },
-                    { color: '#cc0000', label: 'Very heavy',    desc: 'Severe slowdown / jam' },
-                    { color: '#4a0000', label: 'Standstill',    desc: 'Near-stationary traffic' },
+                    { color: '#00b200', label: 'Free flow', desc: 'Road clear, full speed' },
+                    { color: '#92b300', label: 'Mostly free', desc: 'Minor slowdowns' },
+                    { color: '#ffd700', label: 'Moderate', desc: 'Noticeable delay' },
+                    { color: '#ff8c00', label: 'Heavy', desc: 'Significant congestion' },
+                    { color: '#cc0000', label: 'Very heavy', desc: 'Severe slowdown / jam' },
+                    { color: '#4a0000', label: 'Standstill', desc: 'Near-stationary traffic' },
                   ].map(({ color, label, desc }) => (
                     <div key={label} className="flex items-center gap-2.5">
                       <div className="h-3.5 w-3.5 flex-shrink-0 rounded-sm" style={{ backgroundColor: color }} />

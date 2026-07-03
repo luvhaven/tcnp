@@ -70,10 +70,14 @@ export default function LiveTrackingPage() {
     )
   }
 
-  // No access — show nothing (no error card, just blank)
+  // No access — show nothing
   if (!currentUser || !ALLOWED_ROLES.includes(currentUser.role ?? '')) {
     return null
   }
 
-  return <LiveTrackingMap />
+  return (
+    <div className="h-[calc(100vh-4rem)] -mx-3 -mb-4 sm:-mx-4 sm:-mb-6 overflow-hidden rounded-none">
+      <LiveTrackingMap />
+    </div>
+  )
 }

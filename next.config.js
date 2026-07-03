@@ -21,8 +21,8 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       // Fonts: self + Google Fonts CDN
       "font-src 'self' https://fonts.gstatic.com",
-      // Images: self + Supabase storage + data URIs + OpenStreetMap + Leaflet Icons
-      `img-src 'self' data: blob: https://${supabaseHost} https://*.tile.openstreetmap.org https://opensky-network.org https://cdnjs.cloudflare.com https://unpkg.com`,
+      // Images: self + Supabase storage + data URIs + OpenStreetMap + CartoDB (dark tiles) + Leaflet Icons
+      `img-src 'self' data: blob: https://${supabaseHost} https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://opensky-network.org https://cdnjs.cloudflare.com https://unpkg.com`,
       // Connections: self + Supabase REST, Realtime (WSS)
       `connect-src 'self' https://${supabaseHost} wss://${supabaseHost} https://opensky-network.org`,
       // Workers: self + blob (Next.js SW, Leaflet workers)

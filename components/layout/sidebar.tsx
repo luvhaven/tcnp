@@ -119,7 +119,14 @@ const supabase = createClient()
 
 export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   const pathname = usePathname()
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsedState] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem('sidebar-collapsed') === 'true'
+  })
+  const setCollapsed = (value: boolean) => {
+    setCollapsedState(value)
+    try { window.localStorage.setItem('sidebar-collapsed', String(value)) } catch (_) { }
+  }
   const { count: unreadChat } = useUnreadChatCount()
   const { count: unreadAssignments } = useUnreadAssignments()
   const [userRole, setUserRole] = useState<string | null>(null)
