@@ -2,8 +2,15 @@ import { createClient } from '@supabase/supabase-js'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { checkRateLimit } from '@/lib/security/rate-limit'
 
 export async function DELETE(request: Request) {
+    // Enforce strict rate limit (20 deletes per IP per minute)
+    const limitCheck = checkRateLimit(request, 'admin-delete', 20, 60000)
+    if (!limitCheck.success) {
+        return NextResponse.json({ error: 'Rate limit exceeded for admin operations.' }, { status: 429 })
+    }
+
     const cookieStore = await cookies()
 
     // 1. Create authenticated client to check caller's permissions

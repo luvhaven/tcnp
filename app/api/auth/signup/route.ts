@@ -2,9 +2,15 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/supabase'
 import { NextResponse } from 'next/server'
+import { checkRateLimit } from '@/lib/security/rate-limit'
 
 export async function POST(request: Request) {
     try {
+        // Enforce strict rate limit (5 signups per IP per 5 minutes)
+        const limitCheck = checkRateLimit(request, 'auth-signup', 5, 5 * 60 * 1000)
+        if (!limitCheck.success) {
+            return NextResponse.json({ error: 'Too many signup attempts. Please try again later.' }, { status: 429 })
+        }
         const adminClient = createAdminClient()
         const db = adminClient as any
 
