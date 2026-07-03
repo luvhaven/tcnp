@@ -434,7 +434,16 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
   const handleDelete = async (officer: Officer) => {
     if (officer.role === 'dev_admin') return toast.error('Cannot delete Super Admin account')
     if (officer.id === currentUser?.id) return toast.error('Cannot delete your own account')
-    if (!await confirm({ message: `Are you sure you want to delete ${officer.full_name}?`, variant: 'destructive' })) return
+    const name = officer.full_name || officer.email
+    const oscar = officer.oscar ? ` (${officer.oscar})` : ''
+    const confirmed = await confirm({
+      title: '⚠️ Delete Officer',
+      message: `You are about to permanently delete ${name}${oscar}. This action cannot be undone — all assignments, roles and history for this officer will be removed. Are you sure?`,
+      confirmText: 'Yes, Delete Permanently',
+      cancelText: 'Cancel',
+      variant: 'destructive'
+    })
+    if (!confirmed) return
     deleteOfficerMutation.mutate(officer.id)
   }
 

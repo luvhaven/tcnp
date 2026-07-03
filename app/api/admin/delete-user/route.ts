@@ -39,7 +39,7 @@ export async function DELETE(request: Request) {
         .eq('id', user.id)
         .single()
 
-    const isAdmin = userRole && ['super_admin', 'admin', 'dev_admin', 'head_of_command'].includes(userRole.role)
+    const isAdmin = userRole && ['super_admin', 'admin', 'dev_admin', 'head_of_command', 'command', 'captain', 'vice_captain'].includes(userRole.role)
 
     if (!isAdmin) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
