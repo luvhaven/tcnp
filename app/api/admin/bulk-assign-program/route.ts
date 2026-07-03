@@ -89,14 +89,27 @@ export async function POST(request: Request) {
                 continue // Skip to next, do not crash the entire batch
             }
 
+            // Manually sync `current_title_id` & `unit` because `assign_title` RPC 
+            // skips it when a program is explicitly assigned (`p_program_id != null`)
+            const updates: any = {}
+            if (titles) {
+                const matchedRecord = titles.find((t: any) => t.code === titleCode)
+                if (matchedRecord) {
+                    updates.current_title_id = matchedRecord.id
+                    updates.unit = matchedRecord.unit
+                }
+            }
+
             // Auto-Activate if program is active AND user is inactive/pending
             if (isProgramActive && (!u.is_active || u.activation_status === 'pending')) {
+                updates.is_active = true
+                updates.activation_status = 'active'
+            }
+
+            if (Object.keys(updates).length > 0) {
                 await (adminClient as any)
                     .from('users')
-                    .update({
-                        is_active: true,
-                        activation_status: 'active'
-                    })
+                    .update(updates)
                     .eq('id', u.id)
             }
         }
