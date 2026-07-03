@@ -16,6 +16,10 @@ interface FeedbackReport {
     overall_rating: number | null
     principal_wellbeing: string
     logistics_notes: string | null
+    what_went_well: string | null
+    what_didnt_go_as_plan: string | null
+    team_feedback: string | null
+    finance_expenses: string | null
     accommodation_notes: string | null
     incidents: string | null
     monetary_gifts: string | null
@@ -59,6 +63,7 @@ export default function AfterOpReportPage() {
                     .select(`
             id, submitted_at, submitted_by_name, overall_rating,
             principal_wellbeing, logistics_notes, accommodation_notes,
+            what_went_well, what_didnt_go_as_plan, team_feedback, finance_expenses,
             incidents, monetary_gifts, improvements,
             journey:journey_id(id, origin, destination, papas:papas!papa_id(full_name, title))
           `)
@@ -73,7 +78,7 @@ export default function AfterOpReportPage() {
     }, [supabase])
 
     const handleExportCSV = () => {
-        const headers = ['Date', 'DO Name', 'Papa', 'Origin', 'Destination', 'Rating', 'Wellbeing', 'Logistics', 'Accommodation', 'Incidents', 'Monetary Gifts', 'Improvements']
+        const headers = ['Date', 'DO Name', 'Papa', 'Origin', 'Destination', 'Rating', 'Wellbeing', 'What Went Well', 'What Didn\'t Go As Plan', 'Team Feedback', 'Finance & Expenses', 'Logistics', 'Accommodation', 'Incidents', 'Monetary Gifts', 'Improvements']
         const rows = reports.map(r => [
             format(new Date(r.submitted_at), 'yyyy-MM-dd HH:mm'),
             r.submitted_by_name,
@@ -82,6 +87,10 @@ export default function AfterOpReportPage() {
             r.journey?.destination || '',
             r.overall_rating?.toString() || '',
             r.principal_wellbeing,
+            r.what_went_well || '',
+            r.what_didnt_go_as_plan || '',
+            r.team_feedback || '',
+            r.finance_expenses || '',
             r.logistics_notes || '',
             r.accommodation_notes || '',
             r.incidents || '',
@@ -175,11 +184,15 @@ export default function AfterOpReportPage() {
                                     <div className="grid gap-2 text-xs">
                                         {[
                                             { label: 'Principal Wellbeing', value: report.principal_wellbeing },
-                                            { label: 'Logistics', value: report.logistics_notes },
-                                            { label: 'Accommodation', value: report.accommodation_notes },
+                                            { label: 'What Went Well', value: report.what_went_well },
+                                            { label: 'What Didn\'t Go As Plan', value: report.what_didnt_go_as_plan },
+                                            { label: 'Team Feedback', value: report.team_feedback },
+                                            { label: 'Finance & Expenses', value: report.finance_expenses },
+                                            { label: 'Logistics (Legacy)', value: report.logistics_notes },
+                                            { label: 'Accommodation (Legacy)', value: report.accommodation_notes },
                                             { label: '⚠ Incidents', value: report.incidents, highlight: true },
                                             { label: '💰 Monetary Gifts', value: report.monetary_gifts, highlight: true },
-                                            { label: 'Improvements', value: report.improvements },
+                                            { label: 'Required Improvements', value: report.improvements },
                                         ].filter(f => !!f.value?.trim()).map(field => (
                                             <div key={field.label} className={cn('rounded-md px-3 py-2', field.highlight ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-muted/30 border border-border/30')}>
                                                 <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">{field.label}</p>

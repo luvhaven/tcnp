@@ -22,11 +22,12 @@ const RATING_OPTIONS = ['5 — Excellent', '4 — Good', '3 — Satisfactory', '
 
 const FEEDBACK_FIELDS = [
     { key: 'principal_wellbeing', label: 'Principal Wellbeing', placeholder: 'How was the principal throughout the journey? Any concerns?', required: true },
-    { key: 'logistics_notes', label: 'Logistics Notes', placeholder: 'Any issues with Cheetah, route, timing, or pickups?', required: false },
-    { key: 'accommodation_notes', label: 'Nest / Accommodation', placeholder: 'Any issues with room, comfort, or hotel services?', required: false },
-    { key: 'incidents', label: 'Incidents / Deviations', placeholder: 'Any Broken Arrow situations, emergencies, or deviations from plan?', required: false },
-    { key: 'monetary_gifts', label: 'Monetary Gifts Received', placeholder: 'Any gifts received? Note amount, currency, giver, and time. Report to finance.', required: false },
-    { key: 'improvements', label: 'Suggestions for Next Time', placeholder: 'What could be improved in future operations?', required: false },
+    { key: 'what_went_well', label: 'What Went Well', placeholder: 'What were the highlights or smooth parts of the operation?', required: false },
+    { key: 'what_didnt_go_as_plan', label: 'What Didn\'t Go As Plan', placeholder: 'Were there delays, vehicle issues, or accommodation problems?', required: false },
+    { key: 'team_feedback', label: 'Feedback on Team Members', placeholder: 'How did the Tango, November, or Victor Oscars perform?', required: false },
+    { key: 'finance_expenses', label: 'Finance / Expenses / Gifts', placeholder: 'Any expenses incurred or monetary gifts received? State amounts.', required: false },
+    { key: 'improvements', label: 'Key Recommendations (Improvements)', placeholder: 'Who? Deadline? What exactly should be improved?', required: false },
+    { key: 'incidents', label: 'Additional Notes / Incidents', placeholder: 'Any Broken Arrow situations or other observations.', required: false },
 ]
 
 export default function DOFeedbackForm({ journeyId, papaNme, onSubmit }: DOFeedbackFormProps) {
@@ -35,11 +36,12 @@ export default function DOFeedbackForm({ journeyId, papaNme, onSubmit }: DOFeedb
     const [rating, setRating] = useState('')
     const [fields, setFields] = useState<Record<string, string>>({
         principal_wellbeing: '',
-        logistics_notes: '',
-        accommodation_notes: '',
-        incidents: '',
-        monetary_gifts: '',
+        what_went_well: '',
+        what_didnt_go_as_plan: '',
+        team_feedback: '',
+        finance_expenses: '',
         improvements: '',
+        incidents: '',
     })
 
     const handleSubmit = async (e: React.FormEvent) => {

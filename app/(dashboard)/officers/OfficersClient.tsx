@@ -641,14 +641,26 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
               </p>
               <div className="flex items-center gap-2">
                 {selectedOfficers.length > 0 && (
-                  <Button variant="destructive" onClick={handleBulkDelete} className="gap-2">
-                    <Trash2 className="h-4 w-4" />
-                    <span>Delete Selected ({selectedOfficers.length})</span>
-                  </Button>
+                  <>
+                    <Button variant="outline" onClick={() => {
+                      setAssignForm({ officer_ids: selectedOfficers, program_id: '' })
+                      setAssignFromDirectoryOpen(true)
+                    }} className="gap-2 text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-900 dark:hover:bg-blue-950">
+                      <UserCheck className="h-4 w-4" />
+                      <span>Assign Selected ({selectedOfficers.length}) to Program</span>
+                    </Button>
+                    <Button variant="destructive" onClick={handleBulkDelete} className="gap-2">
+                      <Trash2 className="h-4 w-4" />
+                      <span>Delete Selected ({selectedOfficers.length})</span>
+                    </Button>
+                  </>
                 )}
-                <Button onClick={() => setAssignFromDirectoryOpen(true)} className="gap-2">
+                <Button onClick={() => {
+                  setAssignForm({ officer_ids: [], program_id: '' })
+                  setAssignFromDirectoryOpen(true)
+                }} className="gap-2">
                   <UserCheck className="h-4 w-4" />
-                  <span>Assign to Program</span>
+                  <span>Assign from Directory</span>
                 </Button>
               </div>
             </div>
