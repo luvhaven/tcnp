@@ -72,6 +72,11 @@ export async function DELETE(request: Request) {
         { table: 'notifications', column: 'user_id' },
         { table: 'chat_messages', column: 'sender_id' },
         { table: 'telemetry_data', column: 'user_id' },
+        { table: 'cheetah_flower_logs', column: 'performed_by' },
+        { table: 'nest_comfort_logs', column: 'performed_by' },
+        { table: 'eo_checklist_logs', column: 'performed_by' },
+        { table: 'den_checklist_logs', column: 'performed_by' },
+        { table: 'do_feedback_forms', column: 'submitted_by' },
     ]
 
     for (const { table, column } of tables) {
