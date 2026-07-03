@@ -80,6 +80,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
   })
   const [assignSearch, setAssignSearch] = useState("")
   const [globalSearch, setGlobalSearch] = useState("")
+  const [selectedOfficers, setSelectedOfficers] = useState<string[]>([])
 
   const roles = [
     { value: 'admin', label: 'Admin' },
@@ -448,6 +449,36 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     deleteOfficerMutation.mutate(officer.id)
   }
 
+  const handleBulkDelete = async () => {
+    if (selectedOfficers.length === 0) return
+    const confirmed = await confirm({
+      title: '⚠️ Bulk Delete Muti-Select',
+      message: `You are about to permanently delete ${selectedOfficers.length} officers. This action cannot be undone — all histories and assignments will be destroyed.`,
+      confirmText: 'Yes, Delete Selected',
+      cancelText: 'Cancel',
+      variant: 'destructive',
+      requireInput: 'DELETE'
+    })
+    if (!confirmed) return
+
+    const officersToDelete = filteredOfficers.filter((o: Officer) =>
+      selectedOfficers.includes(o.id) && o.role !== 'dev_admin' && o.id !== currentUser?.id
+    )
+
+    if (officersToDelete.length === 0) {
+      toast.error('Selected officers cannot be deleted')
+      return
+    }
+
+    try {
+      await Promise.all(officersToDelete.map((o: Officer) => deleteOfficerMutation.mutateAsync(o.id)))
+      setSelectedOfficers([])
+      toast.success(`Batch deletion of ${officersToDelete.length} officers complete.`)
+    } catch (e: any) {
+      toast.error('Bulk delete encountered an error: ' + e.message)
+    }
+  }
+
   const filteredOfficersForAssign = officers
     .slice()
     .sort((a: Officer, b: Officer) => Number(b.is_active) - Number(a.is_active))
@@ -604,14 +635,22 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
 
         {canManageOfficers && (
           <TabsContent value="manage" className="space-y-4">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
               <p className="text-sm text-muted-foreground">
                 Edit officer details and assign titles and duties across programs
               </p>
-              <Button onClick={() => setAssignFromDirectoryOpen(true)} className="gap-2">
-                <UserCheck className="h-4 w-4" />
-                <span>Assign Officer to Program</span>
-              </Button>
+              <div className="flex items-center gap-2">
+                {selectedOfficers.length > 0 && (
+                  <Button variant="destructive" onClick={handleBulkDelete} className="gap-2">
+                    <Trash2 className="h-4 w-4" />
+                    <span>Delete Selected ({selectedOfficers.length})</span>
+                  </Button>
+                )}
+                <Button onClick={() => setAssignFromDirectoryOpen(true)} className="gap-2">
+                  <UserCheck className="h-4 w-4" />
+                  <span>Assign to Program</span>
+                </Button>
+              </div>
             </div>
 
             <motion.div layout className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -629,6 +668,18 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                       <CardHeader>
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-3">
+                            <div className="pt-0.5">
+                              <input
+                                type="checkbox"
+                                checked={selectedOfficers.includes(officer.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) setSelectedOfficers(prev => [...prev, officer.id])
+                                  else setSelectedOfficers(prev => prev.filter(id => id !== officer.id))
+                                }}
+                                className="h-4 w-4 rounded border-input dark:border-white/20 bg-transparent text-primary focus:ring-primary cursor-pointer accent-primary"
+                                aria-label={`Select ${officer.full_name}`}
+                              />
+                            </div>
                             <Avatar>
                               {officer.photo_url ? <AvatarImage src={officer.photo_url} /> : <AvatarFallback className={getRoleBadgeColor(officer.role)}>{getInitials(officer.full_name || officer.email)}</AvatarFallback>}
                             </Avatar>
