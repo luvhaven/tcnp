@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { createClient } from "@/lib/supabase/client"
 import { useUnreadChatCount } from '@/hooks/useUnreadChatCount'
 import { useUnreadAssignments } from '@/hooks/useUnreadAssignments'
+import { ChangePasswordDialog } from '@/components/security/ChangePasswordDialog'
 import {
   LayoutDashboard,
   Users,
@@ -249,6 +250,9 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
       {/* Footer */}
       {!collapsed && (
         <div className="mt-auto border-t border-border/50 bg-background/50 p-4 backdrop-blur-sm">
+          <div className="mb-3">
+            <ChangePasswordDialog />
+          </div>
           <div className="flex flex-col gap-1 text-xs text-muted-foreground">
             <span>Version 1.0.1</span>
             <span>&copy; {new Date().getFullYear()} TCNP</span>
