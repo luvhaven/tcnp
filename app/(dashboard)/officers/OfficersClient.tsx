@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,7 +13,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { UserCircle, Plus, Edit, Trash2, UserCheck, UserX, Award, Search } from "lucide-react"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { UserCircle, Plus, Edit, Trash2, UserCheck, UserX, Award, Search, LayoutGrid, List, Download, Filter } from "lucide-react"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 
@@ -81,6 +82,19 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
   const [assignSearch, setAssignSearch] = useState("")
   const [globalSearch, setGlobalSearch] = useState("")
   const [selectedOfficers, setSelectedOfficers] = useState<string[]>([])
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
+  const [filterRole, setFilterRole] = useState('all')
+  const [filterStatus, setFilterStatus] = useState('all')
+
+  useEffect(() => {
+    const saved = localStorage.getItem('officersViewMode')
+    if (saved === 'table') setViewMode('table')
+  }, [])
+
+  const toggleViewMode = (mode: 'grid' | 'table') => {
+    setViewMode(mode)
+    localStorage.setItem('officersViewMode', mode)
+  }
 
   const roles = [
     { value: 'admin', label: 'Admin' },
@@ -175,15 +189,50 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     initialData: initialOfficers
   })
 
-  // Filter officers based on global search
+  // Filter officers based on global search & filters
   const filteredOfficers = officers.filter((officer: Officer) => {
+    if (filterStatus !== 'all') {
+      if (filterStatus === 'active' && !officer.is_active) return false
+      if (filterStatus === 'inactive' && officer.is_active) return false
+      if (filterStatus === 'pending' && officer.activation_status !== 'pending') return false
+    }
+    if (filterRole !== 'all' && officer.role !== filterRole) return false
+
     if (!globalSearch.trim()) return true
     const q = globalSearch.toLowerCase()
     return (
       (officer.full_name || "").toLowerCase().includes(q) ||
-      (officer.oscar || "").toLowerCase().includes(q)
+      (officer.oscar || "").toLowerCase().includes(q) ||
+      (officer.role || "").toLowerCase().includes(q) ||
+      (officer.email || "").toLowerCase().includes(q)
     )
   })
+
+  const exportToCSV = () => {
+    const headers = ['Full Name', 'Email', 'Phone', 'OSCAR', 'Role', 'Unit', 'Status']
+    const csvContent = [
+      headers.join(','),
+      ...filteredOfficers.map((o: Officer) => [
+        `"${o.full_name || ''}"`,
+        `"${o.email || ''}"`,
+        `"${o.phone || ''}"`,
+        `"${o.oscar || ''}"`,
+        `"${roles.find(r => r.value === o.role)?.label || o.role}"`,
+        `"${o.unit || ''}"`,
+        `"${o.activation_status === 'pending' ? 'Pending' : o.is_active ? 'Active' : 'Inactive'}"`
+      ].join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `tcnp_directory_${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
 
   const { data: titles = [] } = useQuery({
     queryKey: ['titles'],
@@ -649,7 +698,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       </motion.div>
 
       <Tabs defaultValue="directory" className="space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <TabsList>
             <TabsTrigger value="directory">Directory</TabsTrigger>
             {canManageOfficers && <TabsTrigger value="manage">Manage</TabsTrigger>}
@@ -662,17 +711,54 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
               )}
             </TabsTrigger>}
           </TabsList>
-          {canManageOfficers && (
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search name or oscar..."
-                className="pl-8 bg-background border-primary/20 focus-visible:ring-primary/50"
-                value={globalSearch}
-                onChange={(e) => setGlobalSearch(e.target.value)}
-              />
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+            {canManageOfficers && (
+              <Button variant="outline" size="sm" onClick={exportToCSV} title="Export to CSV" className="h-9 px-2">
+                <Download className="h-4 w-4" />
+              </Button>
+            )}
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-[120px] h-9">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterRole} onValueChange={setFilterRole}>
+              <SelectTrigger className="w-[160px] h-9">
+                <SelectValue placeholder="Role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Roles</SelectItem>
+                {roles.map(r => (
+                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex items-center rounded-md border p-0.5 bg-muted/50 h-9">
+              <Button variant={viewMode === 'grid' ? "secondary" : "ghost"} size="sm" className="h-full px-2 shadow-none" onClick={() => toggleViewMode('grid')}>
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button variant={viewMode === 'table' ? "secondary" : "ghost"} size="sm" className="h-full px-2 shadow-none" onClick={() => toggleViewMode('table')}>
+                <List className="h-4 w-4" />
+              </Button>
             </div>
-          )}
+            {canManageOfficers && (
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search name, oscar, email..."
+                  className="pl-8 h-9 bg-background border-primary/20 focus-visible:ring-primary/50 text-sm"
+                  value={globalSearch}
+                  onChange={(e) => setGlobalSearch(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
         </div>
 
         <TabsContent value="directory" className="space-y-4">
@@ -764,102 +850,192 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
               </div>
             </div>
 
-            {renderCategorizedOfficers(
-              filteredOfficers,
-              (officer: Officer) => (
-                <motion.div
-                  layout
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.2 }}
-                  key={officer.id}
-                >
-                  <Card className={`${!officer.is_active ? 'opacity-60' : ''} transition-all hover:-translate-y-0.5 hover:shadow-md h-full flex flex-col`}>
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="pt-0.5">
-                            <input
-                              type="checkbox"
-                              checked={selectedOfficers.includes(officer.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) setSelectedOfficers(prev => [...prev, officer.id])
-                                else setSelectedOfficers(prev => prev.filter(id => id !== officer.id))
-                              }}
-                              className="h-4 w-4 rounded border-input text-primary focus:ring-primary bg-background dark:bg-background/50 accent-primary/80"
-                            />
+            {filteredOfficers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center border rounded-lg bg-card">
+                <UserCircle className="h-12 w-12 text-muted-foreground/50" />
+                <p className="mt-4 text-sm font-medium">No officers match filters</p>
+              </div>
+            ) : viewMode === 'table' ? (
+              <div className="rounded-md border table-scroll-wrapper">
+                <Table>
+                  <TableHeader className="bg-muted/50">
+                    <TableRow>
+                      <TableHead className="w-[50px] text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedOfficers.length > 0 && selectedOfficers.length === filteredOfficers.length}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedOfficers(filteredOfficers.map(o => o.id))
+                            else setSelectedOfficers([])
+                          }}
+                          className="h-4 w-4 rounded border-input text-primary focus:ring-primary bg-background dark:bg-background/50 accent-primary/80"
+                        />
+                      </TableHead>
+                      <TableHead>Officer</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredOfficers.sort(sortOfficersByHierarchy).map((officer: Officer) => (
+                      <TableRow key={officer.id} className="hover:bg-accent/50 transition-colors">
+                        <TableCell className="text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedOfficers.includes(officer.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedOfficers(prev => [...prev, officer.id])
+                              else setSelectedOfficers(prev => prev.filter(id => id !== officer.id))
+                            }}
+                            className="h-4 w-4 rounded border-input text-primary focus:ring-primary bg-background dark:bg-background/50 accent-primary/80"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              {officer.photo_url ? <AvatarImage src={officer.photo_url} /> : <AvatarFallback className={getRoleBadgeColor(officer.role)}>{getInitials(officer.full_name || officer.email)}</AvatarFallback>}
+                            </Avatar>
+                            <div className="flex flex-col">
+                              <span className={`font-medium ${!officer.is_active ? 'opacity-60 text-muted-foreground' : ''}`}>{officer.full_name || 'No name'}</span>
+                              <span className="text-xs text-muted-foreground">{officer.email}</span>
+                            </div>
                           </div>
-                          <Avatar>
-                            {officer.photo_url ? <AvatarImage src={officer.photo_url} /> : <AvatarFallback className={getRoleBadgeColor(officer.role)}>{getInitials(officer.full_name || officer.email)}</AvatarFallback>}
-                          </Avatar>
-                          <div>
-                            <CardTitle className="text-base">{officer.full_name || 'No Name'}</CardTitle>
-                            <CardDescription className="text-xs">{officer.email}</CardDescription>
-                          </div>
-                        </div>
-                        <div className="flex gap-1 shrink-0">
+                        </TableCell>
+                        <TableCell>
                           {officer.is_active ? (
-                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                              Active
-                            </Badge>
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Active</Badge>
                           ) : (
-                            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                              Inactive
-                            </Badge>
+                            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Inactive</Badge>
                           )}
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-3 flex-1 flex flex-col justify-between">
-                      <div className="space-y-1 text-sm">
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Role:</span>
-                          <Badge className={getRoleBadgeColor(officer.role)}>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={`text-[10px] uppercase tracking-wide ${getRoleBadgeColor(officer.role)}`}>
                             {roles.find(r => r.value === officer.role)?.label || officer.role}
                           </Badge>
+                          {officer.oscar && <span className="ml-2 text-xs text-muted-foreground">{officer.oscar}</span>}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleEdit(officer)} title="Edit">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleAssignTitleClick(officer)} title="Assign Title">
+                              <Award className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="ghost" className={`h-8 w-8 p-0 ${officer.is_active ? 'text-orange-500' : 'text-green-600'}`} onClick={() => toggleActivationMutation.mutate(officer)} title={officer.is_active ? "Deactivate" : "Activate"}>
+                              {officer.is_active ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                            </Button>
+                            {officer.role !== 'dev_admin' && officer.id !== currentUser?.id && (
+                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={() => handleDelete(officer)} title="Delete">
+                                <Trash2 className="h-4 w-4 shrink-0 transition" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              renderCategorizedOfficers(
+                filteredOfficers,
+                (officer: Officer) => (
+                  <motion.div
+                    layout
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.2 }}
+                    key={officer.id}
+                  >
+                    <Card className={`${!officer.is_active ? 'opacity-60' : ''} transition-all hover:-translate-y-0.5 hover:shadow-md h-full flex flex-col`}>
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="pt-0.5">
+                              <input
+                                type="checkbox"
+                                checked={selectedOfficers.includes(officer.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) setSelectedOfficers(prev => [...prev, officer.id])
+                                  else setSelectedOfficers(prev => prev.filter(id => id !== officer.id))
+                                }}
+                                className="h-4 w-4 rounded border-input text-primary focus:ring-primary bg-background dark:bg-background/50 accent-primary/80"
+                              />
+                            </div>
+                            <Avatar>
+                              {officer.photo_url ? <AvatarImage src={officer.photo_url} /> : <AvatarFallback className={getRoleBadgeColor(officer.role)}>{getInitials(officer.full_name || officer.email)}</AvatarFallback>}
+                            </Avatar>
+                            <div>
+                              <CardTitle className="text-base">{officer.full_name || 'No Name'}</CardTitle>
+                              <CardDescription className="text-xs">{officer.email}</CardDescription>
+                            </div>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            {officer.is_active ? (
+                              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                Active
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                                Inactive
+                              </Badge>
+                            )}
+                          </div>
                         </div>
-                        {officer.phone && (
+                      </CardHeader>
+                      <CardContent className="space-y-3 flex-1 flex flex-col justify-between">
+                        <div className="space-y-1 text-sm">
                           <div className="flex items-center justify-between">
-                            <span className="text-muted-foreground">Phone:</span>
-                            <span className="font-medium">{officer.phone}</span>
+                            <span className="text-muted-foreground">Role:</span>
+                            <Badge className={getRoleBadgeColor(officer.role)}>
+                              {roles.find(r => r.value === officer.role)?.label || officer.role}
+                            </Badge>
                           </div>
-                        )}
-                        {officer.oscar && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-muted-foreground">OSCAR:</span>
-                            <Badge variant="outline">{officer.oscar}</Badge>
-                          </div>
-                        )}
-                        {officer.unit && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-muted-foreground">Unit:</span>
-                            <Badge variant="secondary">{officer.unit}</Badge>
-                          </div>
-                        )}
-                      </div>
+                          {officer.phone && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Phone:</span>
+                              <span className="font-medium">{officer.phone}</span>
+                            </div>
+                          )}
+                          {officer.oscar && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">OSCAR:</span>
+                              <Badge variant="outline">{officer.oscar}</Badge>
+                            </div>
+                          )}
+                          {officer.unit && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Unit:</span>
+                              <Badge variant="secondary">{officer.unit}</Badge>
+                            </div>
+                          )}
+                        </div>
 
-                      <div className="flex gap-2 pt-2 border-t mt-4">
-                        <Button size="sm" variant="outline" className="flex-1" onClick={() => handleEdit(officer)}>
-                          <Edit className="h-3 w-3 mr-1" />
-                          Edit
-                        </Button>
-                        <Button size="sm" variant="outline" className="flex-1" onClick={() => handleAssignTitleClick(officer)}>
-                          <Award className="h-3 w-3 mr-1" />
-                          Title
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => toggleActivationMutation.mutate(officer)}>
-                          {officer.is_active ? <UserX className="h-3 w-3" /> : <UserCheck className="h-3 w-3" />}
-                        </Button>
-                        {officer.role !== 'dev_admin' && officer.id !== currentUser?.id && (
-                          <Button size="sm" variant="outline" onClick={() => handleDelete(officer)}>
-                            <Trash2 className="h-3 w-3 text-red-600" />
+                        <div className="flex gap-2 pt-2 border-t mt-4">
+                          <Button size="sm" variant="outline" className="flex-1" onClick={() => handleEdit(officer)}>
+                            <Edit className="h-3 w-3 mr-1" />
+                            Edit
                           </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
+                          <Button size="sm" variant="outline" className="flex-1" onClick={() => handleAssignTitleClick(officer)}>
+                            <Award className="h-3 w-3 mr-1" />
+                            Title
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => toggleActivationMutation.mutate(officer)}>
+                            {officer.is_active ? <UserX className="h-3 w-3" /> : <UserCheck className="h-3 w-3" />}
+                          </Button>
+                          {officer.role !== 'dev_admin' && officer.id !== currentUser?.id && (
+                            <Button size="sm" variant="outline" onClick={() => handleDelete(officer)}>
+                              <Trash2 className="h-3 w-3 text-red-600" />
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                )
               )
             )}
           </TabsContent>

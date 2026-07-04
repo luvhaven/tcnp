@@ -21,8 +21,8 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       // Fonts: self + Google Fonts CDN
       "font-src 'self' https://fonts.gstatic.com",
-      // Images: self + Supabase storage + data URIs + OpenStreetMap + CartoDB (dark tiles) + Leaflet Icons
-      `img-src 'self' data: blob: https://${supabaseHost} https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://opensky-network.org https://cdnjs.cloudflare.com https://unpkg.com`,
+      // Images: Allow any image host because map tiles (TomTom, Carto, OSM, OpenSky) are highly dynamic and use many varying subdomains.
+      "img-src * data: blob: 'unsafe-inline'",
       // Connections: self + Supabase REST, Realtime (WSS)
       `connect-src 'self' https://${supabaseHost} wss://${supabaseHost} https://opensky-network.org`,
       // Workers: self + blob (Next.js SW, Leaflet workers)
