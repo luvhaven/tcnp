@@ -89,20 +89,59 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     { value: 'head_of_operations', label: 'Head of Operations' },
     { value: 'head_of_command', label: 'Head of Command' },
     { value: 'command', label: 'Command' },
-    { value: 'tango_oscar', label: 'Tango Oscar (TO)' },
     { value: 'head_tango_oscar', label: 'Head, Tango Oscar' },
-    { value: 'alpha_oscar', label: 'Alpha Oscar (AO)' },
+    { value: 'tango_oscar', label: 'Tango Oscar (TO)' },
     { value: 'head_alpha_oscar', label: 'Head, Alpha Oscar' },
-    { value: 'noscar_den', label: 'NOscar Theatre' },
+    { value: 'alpha_oscar', label: 'Alpha Oscar (AO)' },
     { value: 'head_noscar_den', label: 'Head, NOscar Theatre' },
-    { value: 'noscar_nest', label: 'NOscar Nest' },
+    { value: 'noscar_den', label: 'NOscar Theatre' },
     { value: 'head_noscar_nest', label: 'Head, NOscar Nest' },
-    { value: 'victor_oscar', label: 'Victor Oscar (VO)' },
+    { value: 'noscar_nest', label: 'NOscar Nest' },
+    { value: 'head_november_oscar', label: 'Head, November Oscar' },
+    { value: 'november_oscar', label: 'November Oscar (NO)' },
     { value: 'head_victor_oscar', label: 'Head, Victor Oscar' },
-    { value: 'echo_oscar', label: 'Echo Oscar (EO)' },
+    { value: 'victor_oscar', label: 'Victor Oscar (VO)' },
     { value: 'head_echo_oscar', label: 'Head, Echo Oscar' },
+    { value: 'echo_oscar', label: 'Echo Oscar (EO)' },
+    { value: 'head_delta_oscar', label: 'Head, Delta Oscar' },
+    { value: 'delta_oscar', label: 'Delta Oscar (DO)' },
+    { value: 'head_welfare', label: 'Head, Welfare' },
+    { value: 'welfare', label: 'Welfare' },
     { value: 'viewer', label: 'Viewer' }
   ]
+
+  const CATEGORIES = [
+    { id: 'leadership', label: 'Leadership', roles: ['captain', 'vice_captain'] },
+    { id: 'command', label: 'Command Centre', roles: ['head_of_command', 'command', 'head_of_operations'] },
+    { id: 'alpha', label: 'Alpha Oscar (AO)', roles: ['head_alpha_oscar', 'alpha_oscar'] },
+    { id: 'tango', label: 'Tango Oscar (TO)', roles: ['head_tango_oscar', 'tango_oscar'] },
+    { id: 'victor', label: 'Victor Oscar (VO)', roles: ['head_victor_oscar', 'victor_oscar'] },
+    { id: 'echo', label: 'Echo Oscar (EO)', roles: ['head_echo_oscar', 'echo_oscar'] },
+    { id: 'november', label: 'November Oscar (NO)', roles: ['head_november_oscar', 'november_oscar', 'head_noscar_den', 'noscar_den', 'head_noscar_nest', 'noscar_nest'] },
+    { id: 'delta', label: 'Delta Oscar (DO)', roles: ['head_delta_oscar', 'delta_oscar'] },
+    { id: 'welfare', label: 'Welfare Operations', roles: ['head_welfare', 'welfare'] },
+    { id: 'others', label: 'Administration & Viewers', roles: ['admin', 'dev_admin', 'viewer'] }
+  ]
+
+  const sortOfficersByHierarchy = (a: Officer, b: Officer) => {
+    // 1. Captains absolutely first
+    if (a.role === 'captain' && b.role !== 'captain') return -1;
+    if (b.role === 'captain' && a.role !== 'captain') return 1;
+
+    // 2. Vice Captains next
+    if (a.role === 'vice_captain' && b.role !== 'vice_captain') return -1;
+    if (b.role === 'vice_captain' && a.role !== 'vice_captain') return 1;
+
+    // 3. Heads next
+    const aIsHead = a.role.startsWith('head_');
+    const bIsHead = b.role.startsWith('head_');
+
+    if (aIsHead && !bIsHead) return -1;
+    if (bIsHead && !aIsHead) return 1;
+
+    // 4. Default to Alphabetical by name
+    return (a.full_name || a.email).localeCompare(b.full_name || b.email);
+  }
 
   const { data: currentUser } = useQuery({
     queryKey: ['currentUserProfile'],
@@ -493,6 +532,65 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       return name.includes(query) || email.includes(query) || oscar.includes(query) || role.includes(query)
     })
 
+  const renderCategorizedOfficers = (
+    officersList: Officer[],
+    renderCard: (officer: Officer) => React.ReactNode
+  ) => {
+    return (
+      <div className="space-y-8 pb-8">
+        {CATEGORIES.map(category => {
+          const categoryOfficers = officersList
+            .filter(o => category.roles.includes(o.role))
+            .sort(sortOfficersByHierarchy);
+
+          if (categoryOfficers.length === 0) return null;
+
+          return (
+            <div key={category.id} className="space-y-3">
+              <div className="flex items-center gap-2 pb-2 border-b border-border/50">
+                <h3 className="text-lg font-semibold tracking-tight">{category.label}</h3>
+                <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-xs font-normal bg-secondary/50">
+                  {categoryOfficers.length}
+                </Badge>
+              </div>
+              <motion.div layout className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <AnimatePresence>
+                  {categoryOfficers.map(renderCard)}
+                </AnimatePresence>
+              </motion.div>
+            </div>
+          )
+        })}
+
+        {/* Render Uncategorized at the bottom if any */}
+        {(() => {
+          const categorizedRoles = CATEGORIES.flatMap(c => c.roles);
+          const uncategorized = officersList
+            .filter(o => !categorizedRoles.includes(o.role))
+            .sort(sortOfficersByHierarchy);
+
+          if (uncategorized.length === 0) return null;
+
+          return (
+            <div key="uncategorized" className="space-y-3 pt-6 mt-8 border-t border-dashed border-border/50">
+              <div className="flex items-center gap-2 pb-2 border-b border-border/50">
+                <h3 className="text-lg font-semibold tracking-tight text-muted-foreground">Uncategorized / External</h3>
+                <Badge variant="outline" className="rounded-full px-2 py-0.5 text-xs font-normal">
+                  {uncategorized.length}
+                </Badge>
+              </div>
+              <motion.div layout className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <AnimatePresence>
+                  {uncategorized.map(renderCard)}
+                </AnimatePresence>
+              </motion.div>
+            </div>
+          )
+        })()}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between">
@@ -593,42 +691,39 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                   <p className="mt-4 text-sm font-medium">No officers yet</p>
                 </div>
               ) : (
-                <motion.div layout className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  <AnimatePresence>
-                    {filteredOfficers
-                      .filter((officer: Officer) => officer.activation_status !== 'pending')
-                      .map((officer: Officer) => (
-                        <motion.div
-                          layout
-                          initial={{ opacity: 0, scale: 0.95 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.95 }}
-                          transition={{ duration: 0.2 }}
-                          key={officer.id}
-                          className="flex items-center space-x-3 rounded-lg border p-4 transition-all hover:bg-accent hover:border-primary/30 hover:shadow-sm"
-                        >
-                          <Avatar>
-                            {officer.photo_url ? <AvatarImage src={officer.photo_url} /> : <AvatarFallback>{getInitials(officer.full_name || officer.email)}</AvatarFallback>}
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{officer.full_name || 'No name'}</p>
-                            <p className="text-xs text-muted-foreground truncate">{officer.email}</p>
-                            <div className="flex items-center space-x-2 mt-1">
-                              <Badge className={`text-[10px] uppercase tracking-wide ${getRoleBadgeColor(officer.role)}`}>
-                                {roles.find(r => r.value === officer.role)?.label || officer.role}
-                              </Badge>
-                              <div className="flex items-center space-x-1">
-                                <div className={`h-2 w-2 rounded-full ${officer.is_online ? 'bg-green-500' : 'bg-gray-400'}`} />
-                                <span className="text-xs text-muted-foreground">
-                                  {officer.is_online ? 'online' : 'offline'}
-                                </span>
-                              </div>
-                            </div>
+                renderCategorizedOfficers(
+                  filteredOfficers.filter((o: Officer) => o.activation_status !== 'pending'),
+                  (officer: Officer) => (
+                    <motion.div
+                      layout
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.2 }}
+                      key={officer.id}
+                      className="flex items-center space-x-3 rounded-lg border p-4 bg-card transition-all hover:bg-accent hover:border-primary/30 hover:shadow-sm"
+                    >
+                      <Avatar>
+                        {officer.photo_url ? <AvatarImage src={officer.photo_url} /> : <AvatarFallback className={getRoleBadgeColor(officer.role)}>{getInitials(officer.full_name || officer.email)}</AvatarFallback>}
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{officer.full_name || 'No name'}</p>
+                        <p className="text-xs text-muted-foreground truncate">{officer.email}</p>
+                        <div className="flex items-center justify-between mt-2">
+                          <Badge className={`text-[10px] uppercase tracking-wide ${getRoleBadgeColor(officer.role)}`}>
+                            {roles.find(r => r.value === officer.role)?.label || officer.role}
+                          </Badge>
+                          <div className="flex items-center space-x-1 shrink-0">
+                            <div className={`h-2 w-2 rounded-full ${officer.is_online ? 'bg-green-500' : 'bg-zinc-300 dark:bg-zinc-700'}`} />
+                            <span className="text-[10px] text-muted-foreground hidden sm:inline">
+                              {officer.is_online ? 'online' : 'offline'}
+                            </span>
                           </div>
-                        </motion.div>
-                      ))}
-                  </AnimatePresence>
-                </motion.div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )
+                )
               )}
             </CardContent>
           </Card>
@@ -669,106 +764,104 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
               </div>
             </div>
 
-            <motion.div layout className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <AnimatePresence>
-                {filteredOfficers.map((officer: Officer) => (
-                  <motion.div
-                    layout
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ duration: 0.2 }}
-                    key={officer.id}
-                  >
-                    <Card className={`${!officer.is_active ? 'opacity-60' : ''} transition-all hover:-translate-y-0.5 hover:shadow-md h-full flex flex-col`}>
-                      <CardHeader>
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="pt-0.5">
-                              <input
-                                type="checkbox"
-                                checked={selectedOfficers.includes(officer.id)}
-                                onChange={(e) => {
-                                  if (e.target.checked) setSelectedOfficers(prev => [...prev, officer.id])
-                                  else setSelectedOfficers(prev => prev.filter(id => id !== officer.id))
-                                }}
-                                className="h-4 w-4 rounded border-input dark:border-white/20 bg-transparent text-primary focus:ring-primary cursor-pointer accent-primary"
-                                aria-label={`Select ${officer.full_name}`}
-                              />
-                            </div>
-                            <Avatar>
-                              {officer.photo_url ? <AvatarImage src={officer.photo_url} /> : <AvatarFallback className={getRoleBadgeColor(officer.role)}>{getInitials(officer.full_name || officer.email)}</AvatarFallback>}
-                            </Avatar>
-                            <div>
-                              <CardTitle className="text-base">{officer.full_name || 'No Name'}</CardTitle>
-                              <CardDescription className="text-xs">{officer.email}</CardDescription>
-                            </div>
+            {renderCategorizedOfficers(
+              filteredOfficers,
+              (officer: Officer) => (
+                <motion.div
+                  layout
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                  key={officer.id}
+                >
+                  <Card className={`${!officer.is_active ? 'opacity-60' : ''} transition-all hover:-translate-y-0.5 hover:shadow-md h-full flex flex-col`}>
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="pt-0.5">
+                            <input
+                              type="checkbox"
+                              checked={selectedOfficers.includes(officer.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) setSelectedOfficers(prev => [...prev, officer.id])
+                                else setSelectedOfficers(prev => prev.filter(id => id !== officer.id))
+                              }}
+                              className="h-4 w-4 rounded border-input text-primary focus:ring-primary bg-background dark:bg-background/50 accent-primary/80"
+                            />
                           </div>
-                          <div className="flex gap-1 shrink-0">
-                            {officer.is_active ? (
-                              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                Active
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                                Inactive
-                              </Badge>
-                            )}
+                          <Avatar>
+                            {officer.photo_url ? <AvatarImage src={officer.photo_url} /> : <AvatarFallback className={getRoleBadgeColor(officer.role)}>{getInitials(officer.full_name || officer.email)}</AvatarFallback>}
+                          </Avatar>
+                          <div>
+                            <CardTitle className="text-base">{officer.full_name || 'No Name'}</CardTitle>
+                            <CardDescription className="text-xs">{officer.email}</CardDescription>
                           </div>
                         </div>
-                      </CardHeader>
-                      <CardContent className="space-y-3 flex-1 flex flex-col justify-between">
-                        <div className="space-y-1 text-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="text-muted-foreground">Role:</span>
-                            <Badge className={getRoleBadgeColor(officer.role)}>
-                              {roles.find(r => r.value === officer.role)?.label || officer.role}
+                        <div className="flex gap-1 shrink-0">
+                          {officer.is_active ? (
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              Active
                             </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                              Inactive
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3 flex-1 flex flex-col justify-between">
+                      <div className="space-y-1 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Role:</span>
+                          <Badge className={getRoleBadgeColor(officer.role)}>
+                            {roles.find(r => r.value === officer.role)?.label || officer.role}
+                          </Badge>
+                        </div>
+                        {officer.phone && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Phone:</span>
+                            <span className="font-medium">{officer.phone}</span>
                           </div>
-                          {officer.phone && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Phone:</span>
-                              <span className="font-medium">{officer.phone}</span>
-                            </div>
-                          )}
-                          {officer.oscar && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">OSCAR:</span>
-                              <Badge variant="outline">{officer.oscar}</Badge>
-                            </div>
-                          )}
-                          {officer.unit && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Unit:</span>
-                              <Badge variant="secondary">{officer.unit}</Badge>
-                            </div>
-                          )}
-                        </div>
+                        )}
+                        {officer.oscar && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">OSCAR:</span>
+                            <Badge variant="outline">{officer.oscar}</Badge>
+                          </div>
+                        )}
+                        {officer.unit && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Unit:</span>
+                            <Badge variant="secondary">{officer.unit}</Badge>
+                          </div>
+                        )}
+                      </div>
 
-                        <div className="flex gap-2 pt-2 border-t mt-4">
-                          <Button size="sm" variant="outline" className="flex-1" onClick={() => handleEdit(officer)}>
-                            <Edit className="h-3 w-3 mr-1" />
-                            Edit
+                      <div className="flex gap-2 pt-2 border-t mt-4">
+                        <Button size="sm" variant="outline" className="flex-1" onClick={() => handleEdit(officer)}>
+                          <Edit className="h-3 w-3 mr-1" />
+                          Edit
+                        </Button>
+                        <Button size="sm" variant="outline" className="flex-1" onClick={() => handleAssignTitleClick(officer)}>
+                          <Award className="h-3 w-3 mr-1" />
+                          Title
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => toggleActivationMutation.mutate(officer)}>
+                          {officer.is_active ? <UserX className="h-3 w-3" /> : <UserCheck className="h-3 w-3" />}
+                        </Button>
+                        {officer.role !== 'dev_admin' && officer.id !== currentUser?.id && (
+                          <Button size="sm" variant="outline" onClick={() => handleDelete(officer)}>
+                            <Trash2 className="h-3 w-3 text-red-600" />
                           </Button>
-                          <Button size="sm" variant="outline" className="flex-1" onClick={() => handleAssignTitleClick(officer)}>
-                            <Award className="h-3 w-3 mr-1" />
-                            Title
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => toggleActivationMutation.mutate(officer)}>
-                            {officer.is_active ? <UserX className="h-3 w-3" /> : <UserCheck className="h-3 w-3" />}
-                          </Button>
-                          {officer.role !== 'dev_admin' && officer.id !== currentUser?.id && (
-                            <Button size="sm" variant="outline" onClick={() => handleDelete(officer)}>
-                              <Trash2 className="h-3 w-3 text-red-600" />
-                            </Button>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </motion.div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )
+            )}
           </TabsContent>
         )}
 
