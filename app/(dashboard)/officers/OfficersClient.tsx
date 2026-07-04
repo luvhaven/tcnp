@@ -427,6 +427,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       toast.success(`Successfully assigned ${assignForm.officer_ids.length} officer(s) to program!`)
       setAssignFromDirectoryOpen(false)
       setAssignForm({ officer_ids: [], program_id: '' })
+      setSelectedOfficers([])
     } catch (error: any) {
       toast.error(error.message || 'Failed to batch assign officers')
     }
@@ -461,7 +462,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     })
     if (!confirmed) return
 
-    const officersToDelete = filteredOfficers.filter((o: Officer) =>
+    const officersToDelete = officers.filter((o: Officer) =>
       selectedOfficers.includes(o.id) && o.role !== 'dev_admin' && o.id !== currentUser?.id
     )
 
