@@ -96,6 +96,18 @@ export default function JourneyStatusTable() {
                 (payload) => {
                     if (!mounted) return
 
+                    // Journeys that just left the active set disappear instantly
+                    // (soft-delete, completion or cancellation) instead of waiting
+                    // for the 60s fallback poll
+                    if (
+                        payload.new?.is_deleted === true ||
+                        payload.new?.status === 'completed' ||
+                        payload.new?.status === 'cancelled'
+                    ) {
+                        setJourneys(prev => prev.filter(j => j.id !== payload.new?.id))
+                        return
+                    }
+
                     // DIRECT state update for instant UI change
                     setJourneys(prev => {
                         const updated = prev.map(journey => {
@@ -206,7 +218,7 @@ export default function JourneyStatusTable() {
 
             // Check if user can update call signs (DO or admin)
             const userRole = (userData as any)?.role as string | undefined
-            const canUpdate = userRole && ['super_admin', 'dev_admin', 'admin', 'delta_oscar', 'captain', 'head_of_command'].includes(userRole)
+            const canUpdate = userRole && ['super_admin', 'dev_admin', 'admin', 'delta_oscar', 'captain', 'vice_captain', 'command', 'head_of_command', 'head_of_operations'].includes(userRole)
             setCanUpdateCallSigns(Boolean(canUpdate))
         } catch (error) {
             console.error('Error loading current user:', error)
@@ -229,6 +241,8 @@ export default function JourneyStatusTable() {
                     assigned_do:assigned_duty_officer_id(full_name, oscar)
                 `)
                 .not('status', 'in', '(completed,cancelled)')
+                // Soft-deleted journeys must never appear on the Ops Monitor
+                .or('is_deleted.is.null,is_deleted.eq.false')
                 .order('created_at', { ascending: false })
 
             if (error) {

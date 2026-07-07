@@ -12,14 +12,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { MapPin, Plus, Edit, Trash2, Users, Scan, ChevronDown } from "lucide-react"
+import { MapPin, Plus, Edit, Trash2, Users, Scan, ChevronDown, Armchair } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import VIPManagementPanel from "@/components/theatre/VIPManagementPanel"
+import SeatArrangements from "@/components/theatre/SeatArrangements"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { motion, AnimatePresence } from "framer-motion"
-import { canManageVenues } from "@/lib/utils"
+import { canManageVenues, canManageSeatArrangements } from "@/lib/utils"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
 
 export default function TheatresClient({
   initialTheatres,
@@ -72,6 +74,8 @@ export default function TheatresClient({
   }, [theatres, selectedTheatreId])
 
   const canManage = userRole ? canManageVenues(userRole) : false
+  const { data: currentUser } = useCurrentUser()
+  const canEditSeats = canManageSeatArrangements(currentUser?.role, currentUser?.oscar)
 
   const saveMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -181,7 +185,7 @@ export default function TheatresClient({
         className="flex items-center justify-between"
       >
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Theatres</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Victor</h1>
           <p className="text-sm text-muted-foreground max-w-xl">Manage event venues and locations</p>
         </div>
         {canManage && (
@@ -262,9 +266,13 @@ export default function TheatresClient({
       <Tabs defaultValue="venues" className="space-y-4">
         <TabsList>
           <TabsTrigger value="venues">Venues Management</TabsTrigger>
+          <TabsTrigger value="seating">
+            <Armchair className="mr-2 h-4 w-4" />
+            Seat Arrangements
+          </TabsTrigger>
           <TabsTrigger value="vip-access">
             <Scan className="mr-2 h-4 w-4" />
-            VIP Access
+            Senior Ministers&apos; Access
           </TabsTrigger>
         </TabsList>
 
@@ -335,10 +343,14 @@ export default function TheatresClient({
           </Card>
         </TabsContent>
 
+        <TabsContent value="seating">
+          <SeatArrangements canEdit={canEditSeats} currentUserId={currentUser?.id ?? null} />
+        </TabsContent>
+
         <TabsContent value="vip-access">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold tracking-tight">VIP Management</h2>
+              <h2 className="text-2xl font-bold tracking-tight">Senior Ministers&apos; Access</h2>
               <div className="w-[300px]">
                 <Select value={selectedTheatreId} onValueChange={setSelectedTheatreId}>
                   <SelectTrigger>

@@ -17,7 +17,6 @@ import {
   Car,
   Plane,
   Hotel,
-  MapPin,
   AlertTriangle,
   Settings,
   FileText,
@@ -27,44 +26,100 @@ import {
   MessageCircle,
   ChevronLeft,
   ChevronRight,
-  Activity,
-  Route,
   Landmark,
-  Volume2,
   BookOpen,
   Phone,
   ClipboardList,
   KeyRound,
+  Camera,
+  Shirt,
+  UtensilsCrossed,
+  Compass,
+  Banknote,
+  GraduationCap,
+  Radar,
 } from "lucide-react"
 
 
-const ALL_NAV = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "My Operations", href: "/my-operations", icon: Navigation },
-  { name: "Ops Monitor", href: "/operations-monitor", icon: Activity },
-  { name: "Programs", href: "/programs", icon: Calendar },
-  { name: "Journeys", href: "/journeys", icon: Route },
-  { name: "Papas", href: "/papas", icon: Users },
-  { name: "Cheetahs", href: "/cheetahs", icon: Car },
-  { name: "Echo", href: "/echo", icon: Volume2 },
-  { name: "Eagle Operations", href: "/eagles", icon: Plane },
-  { name: "Live Tracking", href: "/tracking/live", icon: MapPin },
-  { name: "Team Chat", href: "/chat", icon: MessageCircle },
-  { name: "Officers", href: "/officers", icon: UserCircle },
-  { name: "NOscar", href: "/nests", icon: Hotel },
-  { name: "Theatres", href: "/theatres", icon: Landmark },
-  { name: "Incidents", href: "/incidents", icon: AlertTriangle },
-  { name: "Audit Log", href: "/audit-logs", icon: FileText },
-  { name: "Contacts", href: "/contacts", icon: Phone },
-  { name: "Guide", href: "/guide", icon: BookOpen },
-  { name: "SOP Manual", href: "/sop", icon: FileText },
-  { name: "After-Op Reports", href: "/after-op-reports", icon: ClipboardList },
-  { name: "Settings", href: "/settings", icon: Settings },
-  { name: "Change Password", href: "/change-password", icon: KeyRound },
+type NavItem = { name: string; href: string; icon: React.ComponentType<{ className?: string }> }
+type NavSection = { label: string; items: NavItem[] }
+
+const NAV_SECTIONS: NavSection[] = [
+  {
+    label: "Overview",
+    items: [
+      { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+      { name: "My Operations", href: "/my-operations", icon: Navigation },
+      { name: "Command", href: "/command", icon: Radar },
+    ],
+  },
+  {
+    label: "Planning",
+    items: [
+      { name: "Programs", href: "/programs", icon: Calendar },
+      { name: "Papas", href: "/papas", icon: Users },
+    ],
+  },
+  {
+    label: "Units",
+    items: [
+      { name: "Alpha", href: "/alpha", icon: Plane },
+      { name: "Tango", href: "/tango", icon: Car },
+      { name: "Victor", href: "/victor", icon: Landmark },
+      { name: "NOscar", href: "/nests", icon: Hotel },
+      { name: "Sierra", href: "/sierra", icon: Camera },
+      { name: "Compliance", href: "/compliance", icon: Shirt },
+      { name: "Welfare", href: "/welfare", icon: UtensilsCrossed },
+      { name: "Hospitality", href: "/hospitality", icon: Compass },
+    ],
+  },
+  {
+    label: "Live Ops",
+    items: [
+      { name: "Team Chat", href: "/chat", icon: MessageCircle },
+      { name: "Incidents", href: "/incidents", icon: AlertTriangle },
+    ],
+  },
+  {
+    label: "People",
+    items: [
+      { name: "Officers", href: "/officers", icon: UserCircle },
+      { name: "Contacts", href: "/contacts", icon: Phone },
+    ],
+  },
+  {
+    label: "Knowledge",
+    items: [
+      { name: "Training", href: "/training", icon: GraduationCap },
+      { name: "Guide", href: "/guide", icon: BookOpen },
+    ],
+  },
+  {
+    label: "Governance",
+    items: [
+      { name: "Finance", href: "/finance", icon: Banknote },
+      { name: "Audit Log", href: "/audit-logs", icon: FileText },
+      { name: "After-Op Reports", href: "/after-op-reports", icon: ClipboardList },
+    ],
+  },
+  {
+    label: "Account",
+    items: [
+      { name: "My Profile", href: "/profile", icon: UserCircle },
+      { name: "Settings", href: "/settings", icon: Settings },
+      { name: "Change Password", href: "/change-password", icon: KeyRound },
+    ],
+  },
 ]
 
+const ALL_NAV = NAV_SECTIONS.flatMap(s => s.items)
+
 /** Pages every authenticated user always sees */
-const BASE_HREFS = ["/dashboard", "/my-operations", "/chat", "/programs", "/guide", "/sop", "/contacts", "/change-password"]
+const BASE_HREFS = [
+  "/dashboard", "/my-operations", "/chat", "/programs", "/guide",
+  "/training", "/compliance", "/welfare", "/hospitality",
+  "/contacts", "/profile", "/change-password",
+]
 
 /**
  * Role-scoped extra pages (beyond BASE_HREFS).
@@ -72,24 +127,33 @@ const BASE_HREFS = ["/dashboard", "/my-operations", "/chat", "/programs", "/guid
  */
 const ROLE_EXTRA: Record<string, string[]> = {
   delta_oscar: [],
-  alpha_oscar: ["/eagles"],
-  head_alpha_oscar: ["/eagles"],
-  tango_oscar: ["/journeys", "/cheetahs", "/tracking/live"],
-  head_tango_oscar: ["/journeys", "/cheetahs", "/tracking/live"],
-  victor_oscar: ["/theatres"],
-  head_victor_oscar: ["/theatres"],
+  alpha_oscar: ["/alpha"],
+  head_alpha_oscar: ["/alpha"],
+  tango_oscar: ["/command", "/tango"],
+  head_tango_oscar: ["/command", "/tango"],
+  victor_oscar: ["/victor"],
+  head_victor_oscar: ["/victor"],
   november_oscar: ["/nests"],
   head_noscar_den: ["/nests"],
   head_noscar_nest: ["/nests"],
   noscar_den: ["/nests"],
   noscar_nest: ["/nests"],
-  echo_oscar: ["/echo"],
-  head_echo_oscar: ["/echo"],
+  sierra_oscar: ["/sierra"],
+  head_sierra_oscar: ["/sierra"],
+  compliance_oscar: ["/compliance"],
+  head_compliance_oscar: ["/compliance"],
+  welfare_oscar: ["/welfare"],
+  head_welfare_oscar: ["/welfare"],
+  hospitality_oscar: ["/hospitality"],
+  head_hospitality_oscar: ["/hospitality"],
+  // Echo is no longer a standalone unit — legacy echo officers keep base access only
+  echo_oscar: [],
+  head_echo_oscar: [],
 }
 
 const ADMIN_ROLES = new Set([
   "super_admin", "dev_admin", "admin",
-  "captain", "head_of_command", "head_of_operations", "command",
+  "captain", "vice_captain", "head_of_command", "head_of_operations", "command",
   "hod", "hop",
 ])
 
@@ -155,7 +219,12 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
     void loadUser()
   }, [supabase])
 
-  const visibleNavigation = useMemo(() => getVisibleNav(userRole, userOscar), [userRole, userOscar])
+  const visibleSections = useMemo(() => {
+    const allowed = new Set(getVisibleNav(userRole, userOscar).map(i => i.href))
+    return NAV_SECTIONS
+      .map(section => ({ ...section, items: section.items.filter(i => allowed.has(i.href)) }))
+      .filter(section => section.items.length > 0)
+  }, [userRole, userOscar])
 
   return (
     <div
@@ -199,8 +268,19 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 overflow-y-auto p-2">
-        {visibleNavigation.map((item, index) => {
+      <nav className="flex-1 overflow-y-auto p-2">
+        {visibleSections.map((section, sectionIndex) => (
+          <div key={section.label} className={cn(sectionIndex > 0 && "mt-3")}>
+            {/* Section label — divider line when collapsed */}
+            {collapsed && !isMobile ? (
+              sectionIndex > 0 && <div className="mx-3 mb-2 border-t border-border/60" />
+            ) : (
+              <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 select-none">
+                {section.label}
+              </p>
+            )}
+            <div className="space-y-1">
+              {section.items.map((item, index) => {
           const isActive = pathname === item.href
           const isChat = item.name === "Team Chat"
           const isOps = item.name === "My Operations"
@@ -209,20 +289,29 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
               key={item.href}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.04, duration: 0.2, ease: "easeOut" }}
+              transition={{ delay: (sectionIndex * 2 + index) * 0.03, duration: 0.2, ease: "easeOut" }}
             >
               <Link
                 href={item.href}
                 onClick={isMobile ? onClose : undefined}
                 className={cn(
-                  "relative flex items-center justify-start px-3 py-2 text-sm font-medium rounded-r-lg rounded-l-none gap-3 mr-1 transition-all duration-150 border-l-[3px]",
+                  "relative flex items-center justify-start px-3 py-2 text-sm font-medium rounded-r-lg rounded-l-none gap-3 mr-1 transition-colors duration-150 border-l-[3px] border-transparent",
                   isActive
-                    ? "text-primary border-primary bg-primary/10 shadow-sm"
-                    : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/60 hover:border-muted-foreground/20"
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
                 )}
                 title={collapsed ? item.name : undefined}
               >
-                <div className="relative flex-shrink-0">
+                {/* Active pill glides between items via shared layout animation */}
+                {isActive && (
+                  <motion.span
+                    layoutId={isMobile ? "sidebar-active-mobile" : "sidebar-active"}
+                    className="absolute inset-0 -left-[3px] rounded-r-lg border-l-[3px] border-primary bg-primary/10 shadow-sm"
+                    transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                    aria-hidden
+                  />
+                )}
+                <div className="relative z-10 flex-shrink-0">
                   <item.icon className="h-5 w-5" />
                   {/* Collapsed badge dots */}
                   {isChat && unreadChat > 0 && collapsed && (
@@ -233,7 +322,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
                   )}
                 </div>
                 <span className={cn(
-                  "flex items-center justify-between w-full transition-all duration-300 overflow-hidden whitespace-nowrap",
+                  "relative z-10 flex items-center justify-between w-full transition-all duration-300 overflow-hidden whitespace-nowrap",
                   collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
                 )}>
                   <span>{item.name}</span>
@@ -253,7 +342,10 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
               </Link>
             </motion.div>
           )
-        })}
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* Footer */}

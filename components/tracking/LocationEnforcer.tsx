@@ -25,11 +25,18 @@ const SKIPPABLE_ROLES = [
   'head_of_operations', 'tango_oscar', 'head_tango_oscar',
 ]
 
+function detectIOS(): boolean {
+  if (typeof navigator === 'undefined') return false
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+}
+
 export function LocationEnforcer() {
   const [show, setShow] = useState(false)
   const [role, setRole] = useState<string | null>(null)
   const [requesting, setRequesting] = useState(false)
-  const [locationMode, setLocationMode] = useState<'gps' | 'ip' | 'unavailable' | null>(null)
+  const [locationMode, setLocationMode] = useState<'gps' | 'ip' | 'unavailable' | 'denied' | null>(null)
+  const isIOS = typeof navigator !== 'undefined' && detectIOS()
 
   useEffect(() => {
     const check = async () => {
@@ -57,19 +64,30 @@ export function LocationEnforcer() {
             const result = await nav.permissions.query({ name: 'geolocation' })
             if (result.state === 'granted') return  // Already tracking — hide enforcer
 
+            if (result.state === 'denied') setLocationMode('denied')
             setShow(true)
 
             result.addEventListener('change', () => {
               if (result.state === 'granted') setShow(false)
             })
           } catch {
-            // Permissions API not available (e.g. Firefox private mode) — try a quick probe
-            nav.geolocation.getCurrentPosition(
-              () => setShow(false),
-              () => setShow(true),
-              { timeout: 3000, maximumAge: 60000 }
-            )
+            // Permissions API threw (e.g. Firefox private mode).
+            // On iOS never fire a silent probe — getCurrentPosition without a
+            // user gesture triggers an ill-timed native prompt. Show the banner
+            // instead; the Enable button provides the gesture.
+            if (detectIOS()) {
+              setShow(true)
+            } else {
+              nav.geolocation.getCurrentPosition(
+                () => setShow(false),
+                () => setShow(true),
+                { timeout: 3000, maximumAge: 60000 }
+              )
+            }
           }
+        } else if (detectIOS()) {
+          // Old iOS without Permissions API — banner + gesture-driven request
+          setShow(true)
         } else {
           nav.geolocation.getCurrentPosition(
             () => setShow(false),
@@ -122,6 +140,8 @@ export function LocationEnforcer() {
       return
     } catch (gpsErr: any) {
       console.warn('Hardware GPS unavailable:', gpsErr?.message)
+      // code 1 = PERMISSION_DENIED — user (or OS) has blocked it; surface recovery steps
+      if (gpsErr?.code === 1) setLocationMode('denied')
     }
 
     // ── Step 2: IP-based network fallback (via local proxy) ───────────────
@@ -218,6 +238,26 @@ export function LocationEnforcer() {
                 ? ' You can dismiss this prompt and continue working.'
                 : ' Please enable location in your OS settings or browser address bar, then refresh.'}
             </span>
+          </div>
+        )}
+
+        {locationMode === 'denied' && (
+          <div className="rounded-lg bg-muted border border-border p-3 text-xs text-muted-foreground space-y-1.5">
+            <p className="font-medium text-foreground">Location is blocked for this app. To re-enable:</p>
+            {isIOS ? (
+              <ol className="list-decimal pl-4 space-y-0.5">
+                <li>Open <strong>Settings → Privacy &amp; Security → Location Services</strong></li>
+                <li>Ensure Location Services is <strong>On</strong></li>
+                <li>Find <strong>Safari Websites</strong> (or this app if installed) and choose <strong>While Using the App</strong></li>
+                <li>Return here and tap Enable again</li>
+              </ol>
+            ) : (
+              <ol className="list-decimal pl-4 space-y-0.5">
+                <li>Tap the <strong>padlock / tune icon</strong> in the address bar</li>
+                <li>Set <strong>Location</strong> to <strong>Allow</strong></li>
+                <li>Reload the page and tap Enable again</li>
+              </ol>
+            )}
           </div>
         )}
 

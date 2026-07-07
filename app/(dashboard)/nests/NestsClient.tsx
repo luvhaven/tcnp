@@ -19,9 +19,12 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Hotel, Plus, Edit, Trash2, Home, Building, Users, UserPlus, UserCheck, UserX, ChevronDown } from "lucide-react"
 import { toast } from "sonner"
-import { canManageNests } from "@/lib/utils"
+import { canManageNests, canManageWelfare } from "@/lib/utils"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { motion, AnimatePresence } from "framer-motion"
+import LoungeMenus from "@/components/nests/LoungeMenus"
+import PapaAccommodations from "@/components/nests/PapaAccommodations"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
 
 type Program = {
   id: string
@@ -151,6 +154,9 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
   })
 
   const canManage = userRole ? canManageNests(userRole) : false
+  const { data: currentUser } = useCurrentUser()
+  const canEditMenus = canManageWelfare(currentUser?.role, currentUser?.oscar)
+  const canEditAccommodations = canManage
 
   const saveNestMutation = useMutation({
     mutationFn: async (payload: { isEdit: boolean, data: any }) => {
@@ -390,24 +396,30 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
         <TabsList>
           <TabsTrigger value="den">
             <Home className="mr-2 h-4 w-4" />
-            NOscar Theatre
+            Lounge
           </TabsTrigger>
           <TabsTrigger value="nest">
             <Building className="mr-2 h-4 w-4" />
-            NOscar Nest
+            Nest
           </TabsTrigger>
         </TabsList>
 
         {['den', 'nest'].map((type) => (
-          <TabsContent key={type} value={type}>
+          <TabsContent key={type} value={type} className="space-y-6">
+            {/* Lounge tab leads with menus; Nest tab leads with Papa accommodations */}
+            {type === 'den' ? (
+              <LoungeMenus canEdit={canEditMenus} selectedProgram={selectedProgram} currentUserId={currentUser?.id ?? null} />
+            ) : (
+              <PapaAccommodations canEdit={canEditAccommodations} selectedProgram={selectedProgram} currentUserId={currentUser?.id ?? null} />
+            )}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   {type === 'den' ? <Home className="h-5 w-5" /> : <Building className="h-5 w-5" />}
-                  <span>{type === 'den' ? 'NOscar Theatres' : 'NOscar Nests'}</span>
+                  <span>{type === 'den' ? 'Lounge Locations' : 'Nest Locations'}</span>
                 </CardTitle>
                 <CardDescription>
-                  {type === 'den' ? 'Private residences and secure theatre locations' : 'Hotels and public accommodation'}
+                  {type === 'den' ? 'The Den and secure lounge locations' : 'Hotels and public accommodation'}
                 </CardDescription>
               </CardHeader>
               <CardContent>

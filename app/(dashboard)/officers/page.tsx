@@ -31,7 +31,9 @@ export default async function OfficersPage() {
       created_at,
       current_title_id,
       activation_status,
-      photo_url
+      photo_url,
+      team,
+      is_team_head
     `)
     .order('full_name')
 

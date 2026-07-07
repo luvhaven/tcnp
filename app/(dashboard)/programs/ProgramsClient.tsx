@@ -17,6 +17,7 @@ import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import ProgramExport from "@/components/programs/ProgramExport"
 import ProgramSchedule from "@/components/programs/ProgramSchedule"
+import { RequestAvailabilityButton, AvailabilityRosterButton } from "@/components/missions/MissionAvailability"
 
 type Program = {
   id: string
@@ -349,6 +350,13 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                         programName={program.name}
                         status={program.status}
                       />
+
+                      {['planning', 'active'].includes(program.status) && (
+                        <>
+                          <RequestAvailabilityButton programId={program.id} programName={program.name} />
+                          <AvailabilityRosterButton programId={program.id} programName={program.name} />
+                        </>
+                      )}
 
                       {program.status === 'planning' && (
                         <Button

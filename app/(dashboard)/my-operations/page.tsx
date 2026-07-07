@@ -183,6 +183,8 @@ export default function MyOperationsPage() {
           eagle_squares:eagle_squares!assigned_eagle_square_id(name, code)
         `)
         .not('status', 'in', '(completed,cancelled)')
+        // Soft-deleted journeys must never reach a DO's queue (null = legacy rows)
+        .or('is_deleted.is.null,is_deleted.eq.false')
         .order('etd', { ascending: true, nullsFirst: false })
 
       if (!isAdmin) {

@@ -17,6 +17,7 @@ export default function LoginPage() {
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState("viewer");
   const [oscar, setOscar] = useState("");
+  const [team, setTeam] = useState("");
   const [quoteIndex, setQuoteIndex] = useState(0);
   const [isFading, setIsFading] = useState(false);
   const [displayText, setDisplayText] = useState("Excellence is not an act, but a habit.");
@@ -59,7 +60,7 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, full_name: fullName, phone, role, oscar: oscar.trim() || undefined })
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password, full_name: fullName.trim(), phone: phone.trim() || undefined, role, oscar: oscar.trim() || undefined, team: team || undefined })
       });
 
       let data = {};
@@ -91,7 +92,7 @@ export default function LoginPage() {
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: email.trim().toLowerCase(),
         password,
       });
 
@@ -154,9 +155,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950 relative overflow-hidden selection:bg-orange-500/30">
 
-      {/* Background cinematic action music mapping */}
-      <audio src="/cinematic-action.mp3" autoPlay loop className="hidden" />
-
       {/* 1. Cinematic Wide Shot Background */}
       <div className="absolute inset-0 z-0">
         <Image
@@ -208,6 +206,7 @@ export default function LoginPage() {
                 </label>
                 <input
                   id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
+                  autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} inputMode="email"
                   className="w-full px-5 py-4 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-white/30 transition-all duration-300 shadow-inner"
                   placeholder="Enter email"
                 />
@@ -220,6 +219,7 @@ export default function LoginPage() {
                 <div className="relative">
                   <input
                     id="password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required
+                    autoComplete="current-password"
                     className="w-full px-5 py-4 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-white/30 transition-all duration-300 shadow-inner pr-12"
                     placeholder="••••••••"
                   />
@@ -243,16 +243,20 @@ export default function LoginPage() {
             <form onSubmit={handleSignup} className="space-y-4 relative z-10 animate-in fade-in zoom-in-95 duration-500">
               <div className="group">
                 <label className="block text-xs font-medium text-gray-300 mb-1 uppercase tracking-wide">Official Name</label>
-                <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="John Doe" className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner" />
+                <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="John Doe" autoComplete="name" className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner" />
               </div>
               <div className="group">
                 <label className="block text-xs font-medium text-gray-300 mb-1 uppercase tracking-wide">Clearance Email</label>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="Enter email" className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner" />
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="Enter email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} inputMode="email" className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner" />
+              </div>
+              <div className="group">
+                <label className="block text-xs font-medium text-gray-300 mb-1 uppercase tracking-wide">Phone Number</label>
+                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+234 800 000 0000" autoComplete="tel" inputMode="tel" className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner" />
               </div>
               <div className="group">
                 <label className="block text-xs font-medium text-gray-300 mb-1 uppercase tracking-wide">Security Key (Password)</label>
                 <div className="relative">
-                  <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner pr-12" />
+                  <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" autoComplete="new-password" className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner pr-12" />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none z-10">
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
@@ -267,11 +271,33 @@ export default function LoginPage() {
                     className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner appearance-none cursor-pointer"
                   >
                     <option value="" className="bg-gray-900 text-gray-400">Select an Oscar Callsign...</option>
-                    <option value="Alpha Oscar" className="bg-gray-900 text-white">Alpha Oscar</option>
-                    <option value="Echo Oscar" className="bg-gray-900 text-white">Echo Oscar</option>
-                    <option value="November Oscar" className="bg-gray-900 text-white">November Oscar</option>
-                    <option value="Tango Oscar" className="bg-gray-900 text-white">Tango Oscar</option>
-                    <option value="Victor Oscar" className="bg-gray-900 text-white">Victor Oscar</option>
+                    <option value="Alpha Oscar" className="bg-gray-900 text-white">Alpha Oscar — Eagle Square</option>
+                    <option value="Compliance Oscar" className="bg-gray-900 text-white">Compliance Oscar — Grooming &amp; Dress Code</option>
+                    <option value="Hospitality Oscar" className="bg-gray-900 text-white">Hospitality Oscar — Papa Experiences</option>
+                    <option value="November Oscar" className="bg-gray-900 text-white">November Oscar — Nests &amp; Lounge</option>
+                    <option value="Sierra Oscar" className="bg-gray-900 text-white">Sierra Oscar — Social Media</option>
+                    <option value="Tango Oscar" className="bg-gray-900 text-white">Tango Oscar — Transport</option>
+                    <option value="Victor Oscar" className="bg-gray-900 text-white">Victor Oscar — Theatre</option>
+                    <option value="Welfare Oscar" className="bg-gray-900 text-white">Welfare Oscar — Meals &amp; Welfare</option>
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
+                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
+                  </div>
+                </div>
+              </div>
+              <div className="group">
+                <label className="block text-xs font-medium text-gray-300 mb-1 uppercase tracking-wide">Protocol Team</label>
+                <div className="relative">
+                  <select
+                    value={team}
+                    onChange={(e) => setTeam(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner appearance-none cursor-pointer"
+                  >
+                    <option value="" className="bg-gray-900 text-gray-400">Select your Team...</option>
+                    <option value="strength" className="bg-gray-900 text-white">Team Strength</option>
+                    <option value="wisdom" className="bg-gray-900 text-white">Team Wisdom</option>
+                    <option value="swift" className="bg-gray-900 text-white">Team Swift</option>
                   </select>
                   <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
                     <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>

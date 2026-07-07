@@ -3,7 +3,10 @@
 import { useEffect, useState, Suspense } from 'react'
 import { Card } from '@/components/ui/card'
 import ChatSystem from '@/components/chat/ChatSystem'
+import TeamChatRoom from '@/components/chat/TeamChatRoom'
 import { AdminChatControls } from '@/components/chat/AdminChatControls'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { MessagesSquare, Radio } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSearchParams } from 'next/navigation'
 
@@ -235,23 +238,36 @@ function ChatContent() {
         )}
       </div>
 
-      <Card className="shadow-lg border-0 bg-transparent sm:bg-card">
-        {loading ? (
-          <div className="h-[320px] w-full rounded-lg skeleton" />
-        ) : programs.length === 0 ? (
-          <div className="p-6 text-sm text-muted-foreground">
-            {role && !['super_admin', 'dev_admin', 'admin'].includes(role)
-              ? 'You have no program assignments yet. Once you are added to a program, you will be able to chat with that program team here.'
-              : 'No programs found. Create a program first, then use this page to chat with the program team.'}
-          </div>
-        ) : (
-          <ChatSystem
-            programId={program?.id}
-            papaId={papaId || undefined}
-            initialMessage={initialMessage}
-          />
-        )}
-      </Card>
+      <Tabs defaultValue="program" className="space-y-3">
+        <TabsList>
+          <TabsTrigger value="program"><Radio className="mr-2 h-4 w-4" />Program Chat</TabsTrigger>
+          <TabsTrigger value="team"><MessagesSquare className="mr-2 h-4 w-4" />My Team</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="program">
+          <Card className="shadow-lg border-0 bg-transparent sm:bg-card">
+            {loading ? (
+              <div className="h-[320px] w-full rounded-lg skeleton" />
+            ) : programs.length === 0 ? (
+              <div className="p-6 text-sm text-muted-foreground">
+                {role && !['super_admin', 'dev_admin', 'admin'].includes(role)
+                  ? 'You have no program assignments yet. Once you are added to a program, you will be able to chat with that program team here.'
+                  : 'No programs found. Create a program first, then use this page to chat with the program team.'}
+              </div>
+            ) : (
+              <ChatSystem
+                programId={program?.id}
+                papaId={papaId || undefined}
+                initialMessage={initialMessage}
+              />
+            )}
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="team">
+          <TeamChatRoom />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

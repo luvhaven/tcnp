@@ -34,6 +34,7 @@ import { toast } from "sonner"
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/lib/constants/tncpCallSigns"
 import { DateTimePicker } from "@/components/ui/date-time-picker"
 import { usePagination } from "@/hooks/usePagination"
+import OperationalReadiness from "@/components/journeys/OperationalReadiness"
 
 const FALLBACK_STATUS_LABELS: Record<string, string> = {
   planned: "Planned",
@@ -706,6 +707,17 @@ export default function JourneysClient({
           </Button>
         )}
       </div>
+
+      {/* Registry readiness — journeys compose unit-owned registries, never create them */}
+      {canCreateJourney && (
+        <OperationalReadiness
+          programs={programs.length}
+          papas={papas.length}
+          cheetahs={cheetahs.length}
+          nests={nests.length}
+          eagleSquares={eagleSquares.length}
+        />
+      )}
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">

@@ -31,6 +31,8 @@ type Officer = {
   is_online?: boolean
   activation_status: string
   photo_url?: string | null
+  team?: string | null
+  is_team_head?: boolean | null
   created_at: string
 }
 
@@ -66,7 +68,9 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     full_name: '',
     phone: '',
     role: '',
-    photo_url: ''
+    photo_url: '',
+    team: '',
+    is_team_head: false
   })
 
   const [titleFormData, setTitleFormData] = useState({
@@ -85,6 +89,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
   const [filterRole, setFilterRole] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [filterTeam, setFilterTeam] = useState('all')
 
   useEffect(() => {
     const saved = localStorage.getItem('officersViewMode')
@@ -115,12 +120,15 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     { value: 'november_oscar', label: 'November Oscar (NO)' },
     { value: 'head_victor_oscar', label: 'Head, Victor Oscar' },
     { value: 'victor_oscar', label: 'Victor Oscar (VO)' },
-    { value: 'head_echo_oscar', label: 'Head, Echo Oscar' },
-    { value: 'echo_oscar', label: 'Echo Oscar (EO)' },
-    { value: 'head_delta_oscar', label: 'Head, Delta Oscar' },
     { value: 'delta_oscar', label: 'Delta Oscar (DO)' },
-    { value: 'head_welfare', label: 'Head, Welfare' },
-    { value: 'welfare', label: 'Welfare' },
+    { value: 'head_sierra_oscar', label: 'Head, Sierra Oscar' },
+    { value: 'sierra_oscar', label: 'Sierra Oscar (SO)' },
+    { value: 'head_compliance_oscar', label: 'Head, Compliance Oscar' },
+    { value: 'compliance_oscar', label: 'Compliance Oscar (CO)' },
+    { value: 'head_welfare_oscar', label: 'Head, Welfare Oscar' },
+    { value: 'welfare_oscar', label: 'Welfare Oscar (WO)' },
+    { value: 'head_hospitality_oscar', label: 'Head, Hospitality Oscar' },
+    { value: 'hospitality_oscar', label: 'Hospitality Oscar (HO)' },
     { value: 'viewer', label: 'Viewer' }
   ]
 
@@ -130,10 +138,13 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     { id: 'alpha', label: 'Alpha Oscar (AO)', roles: ['head_alpha_oscar', 'alpha_oscar'] },
     { id: 'tango', label: 'Tango Oscar (TO)', roles: ['head_tango_oscar', 'tango_oscar'] },
     { id: 'victor', label: 'Victor Oscar (VO)', roles: ['head_victor_oscar', 'victor_oscar'] },
-    { id: 'echo', label: 'Echo Oscar (EO)', roles: ['head_echo_oscar', 'echo_oscar'] },
-    { id: 'november', label: 'November Oscar (NO)', roles: ['head_november_oscar', 'november_oscar', 'head_noscar_den', 'noscar_den', 'head_noscar_nest', 'noscar_nest'] },
-    { id: 'delta', label: 'Delta Oscar (DO)', roles: ['head_delta_oscar', 'delta_oscar'] },
-    { id: 'welfare', label: 'Welfare Operations', roles: ['head_welfare', 'welfare'] },
+    { id: 'november', label: 'November Oscar (NO)', roles: ['november_oscar', 'head_noscar_den', 'noscar_den', 'head_noscar_nest', 'noscar_nest'] },
+    { id: 'delta', label: 'Delta Oscar (DO)', roles: ['delta_oscar'] },
+    { id: 'sierra', label: 'Sierra Oscar (SO)', roles: ['head_sierra_oscar', 'sierra_oscar'] },
+    { id: 'compliance', label: 'Compliance Oscar (CO)', roles: ['head_compliance_oscar', 'compliance_oscar'] },
+    { id: 'welfare', label: 'Welfare Oscar (WO)', roles: ['head_welfare_oscar', 'welfare_oscar'] },
+    { id: 'hospitality', label: 'Hospitality Oscar (HO)', roles: ['head_hospitality_oscar', 'hospitality_oscar'] },
+    { id: 'legacy_echo', label: 'Echo (Legacy)', roles: ['head_echo_oscar', 'echo_oscar'] },
     { id: 'others', label: 'Administration & Viewers', roles: ['admin', 'dev_admin', 'viewer'] }
   ]
 
@@ -197,6 +208,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       if (filterStatus === 'pending' && officer.activation_status !== 'pending') return false
     }
     if (filterRole !== 'all' && officer.role !== filterRole) return false
+    if (filterTeam !== 'all' && officer.team !== filterTeam) return false
 
     if (!globalSearch.trim()) return true
     const q = globalSearch.toLowerCase()
@@ -405,7 +417,9 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       full_name: '',
       phone: '',
       role: 'delta_oscar',
-      photo_url: ''
+      photo_url: '',
+      team: '',
+      is_team_head: false
     })
     setEditing(null)
   }
@@ -451,7 +465,9 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       full_name: officer.full_name || '',
       phone: officer.phone || '',
       role: officer.role,
-      photo_url: officer.photo_url || ''
+      photo_url: officer.photo_url || '',
+      team: officer.team || '',
+      is_team_head: officer.is_team_head === true
     })
     setDialogOpen(true)
   }
@@ -739,6 +755,17 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                 ))}
               </SelectContent>
             </Select>
+            <Select value={filterTeam} onValueChange={setFilterTeam}>
+              <SelectTrigger className="w-[140px] h-9">
+                <SelectValue placeholder="Team" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Teams</SelectItem>
+                <SelectItem value="strength">Team Strength</SelectItem>
+                <SelectItem value="wisdom">Team Wisdom</SelectItem>
+                <SelectItem value="swift">Team Swift</SelectItem>
+              </SelectContent>
+            </Select>
             <div className="flex items-center rounded-md border p-0.5 bg-muted/50 h-9">
               <Button variant={viewMode === 'grid' ? "secondary" : "ghost"} size="sm" className="h-full px-2 shadow-none" onClick={() => toggleViewMode('grid')}>
                 <LayoutGrid className="h-4 w-4" />
@@ -796,9 +823,16 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                         <p className="font-medium truncate">{officer.full_name || 'No name'}</p>
                         <p className="text-xs text-muted-foreground truncate">{officer.email}</p>
                         <div className="flex items-center justify-between mt-2">
-                          <Badge className={`text-[10px] uppercase tracking-wide ${getRoleBadgeColor(officer.role)}`}>
-                            {roles.find(r => r.value === officer.role)?.label || officer.role}
-                          </Badge>
+                          <div className="flex items-center gap-1 flex-wrap min-w-0">
+                            <Badge className={`text-[10px] uppercase tracking-wide ${getRoleBadgeColor(officer.role)}`}>
+                              {roles.find(r => r.value === officer.role)?.label || officer.role}
+                            </Badge>
+                            {officer.team && (
+                              <Badge variant="outline" className="text-[10px] uppercase tracking-wide border-primary/40 text-primary">
+                                {officer.is_team_head ? '★ ' : ''}{officer.team}
+                              </Badge>
+                            )}
+                          </div>
                           <div className="flex items-center space-x-1 shrink-0">
                             <div className={`h-2 w-2 rounded-full ${officer.is_online ? 'bg-green-500' : 'bg-zinc-300 dark:bg-zinc-700'}`} />
                             <span className="text-[10px] text-muted-foreground hidden sm:inline">
@@ -1163,6 +1197,36 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                   {roles.map((role) => <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="team">Protocol Team</Label>
+                <Select value={formData.team || 'none'} onValueChange={(value) => setFormData({ ...formData, team: value === 'none' ? '' : value, is_team_head: value === 'none' ? false : formData.is_team_head })}>
+                  <SelectTrigger id="team">
+                    <SelectValue placeholder="Select team..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No team</SelectItem>
+                    <SelectItem value="strength">Team Strength</SelectItem>
+                    <SelectItem value="wisdom">Team Wisdom</SelectItem>
+                    <SelectItem value="swift">Team Swift</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="is_team_head">Team Head</Label>
+                <div className="flex items-center h-10 gap-2">
+                  <input
+                    id="is_team_head"
+                    type="checkbox"
+                    className="h-4 w-4 accent-orange-500"
+                    disabled={!formData.team}
+                    checked={formData.is_team_head}
+                    onChange={(e) => setFormData({ ...formData, is_team_head: e.target.checked })}
+                  />
+                  <span className="text-sm text-muted-foreground">Moderates team chat</span>
+                </div>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="photo">Officer Photo (Optional)</Label>

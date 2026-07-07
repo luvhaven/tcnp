@@ -15,10 +15,15 @@ export async function POST(request: Request) {
         const db = adminClient as any
 
         const body = await request.json()
-        const { email, password, full_name, phone, role, oscar: custom_oscar } = body
+        const { email, password, full_name, phone, role, oscar: custom_oscar, team } = body
 
         if (!email || !password || !full_name || !role) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+        }
+
+        const VALID_TEAMS = ['strength', 'wisdom', 'swift']
+        if (team && !VALID_TEAMS.includes(team)) {
+            return NextResponse.json({ error: 'Invalid team selection' }, { status: 400 })
         }
 
         // Create user via Supabase Admin API
@@ -59,6 +64,7 @@ export async function POST(request: Request) {
             phone: phone || null,
             oscar,
             role,
+            team: team || null,
             activation_status: 'pending', // Pending Admin Approval
             is_active: false,
             created_by: authData.user.id
