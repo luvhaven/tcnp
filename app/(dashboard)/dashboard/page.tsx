@@ -27,6 +27,7 @@ import { usePWAInstall } from "@/hooks/usePWAInstall"
 import { PWAInstallModal } from "@/components/pwa/PWAInstallModal"
 import { MissionRequestPrompt } from "@/components/missions/MissionAvailability"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
+import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { CountUp } from "@/components/ui/count-up"
 
 const DashboardCharts = dynamic(
@@ -422,15 +423,12 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Analytics Charts - DISABLED on iOS due to Recharts hydration issues */}
-      {pwaplatform !== 'ios' && <DashboardCharts />}
-      {pwaplatform === 'ios' && (
-        <Card className="border-dashed border-muted-foreground/30">
-          <CardContent className="py-8 text-center text-muted-foreground">
-            <p className="text-sm">Charts available on desktop version</p>
-          </CardContent>
-        </Card>
-      )}
+      {/* Analytics Charts — enabled on every platform. Recharts renders plain SVG
+          and the component is already client-only (ssr:false), so the old iOS
+          hydration concern no longer applies. ErrorBoundary keeps iOS safe. */}
+      <ErrorBoundary>
+        <DashboardCharts />
+      </ErrorBoundary>
 
       {/* Recent Journeys */}
       <Card>
@@ -591,7 +589,7 @@ export default function DashboardPage() {
           >
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
-                <XCircle className="h-5 w-5 rotate-45 text-primary" />
+                <Download className="h-5 w-5 text-primary" />
                 <span>Download App</span>
               </CardTitle>
               <CardDescription>Install TCNP Journey on this device for faster access</CardDescription>

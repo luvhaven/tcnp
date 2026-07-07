@@ -42,6 +42,19 @@ const GENDERS = [
   { value: "prefer_not_to_say", label: "Prefer not to say" },
 ]
 
+// Canonical Oscar unit names — same vocabulary as signup (oscarToRole parses these)
+const OSCAR_UNITS = [
+  "Alpha Oscar",
+  "Compliance Oscar",
+  "Delta Oscar",
+  "Hospitality Oscar",
+  "November Oscar",
+  "Sierra Oscar",
+  "Tango Oscar",
+  "Victor Oscar",
+  "Welfare Oscar",
+]
+
 export default function ProfilePage() {
   const { data: currentUser, isLoading } = useCurrentUser()
   const queryClient = useQueryClient()
@@ -58,7 +71,7 @@ export default function ProfilePage() {
     setForm({
       full_name: currentUser.full_name,
       phone: currentUser.phone,
-      job_title: currentUser.job_title,
+      oscar: currentUser.oscar,
       team: currentUser.team,
       date_of_birth: currentUser.date_of_birth,
       gender: currentUser.gender,
@@ -118,7 +131,8 @@ export default function ProfilePage() {
       const payload: any = {
         full_name: form.full_name?.trim() || null,
         phone: form.phone?.trim() || null,
-        job_title: form.job_title?.trim() || null,
+        // Officers may re-home themselves when leadership moves them to a new unit
+        oscar: form.oscar || null,
         date_of_birth: form.date_of_birth || null,
         gender: form.gender || null,
         city: form.city?.trim() || null,
@@ -231,8 +245,17 @@ export default function ProfilePage() {
             <Field label="Full name" icon={User} required>
               <Input value={form.full_name ?? ""} onChange={e => set("full_name", e.target.value)} placeholder="John Doe" />
             </Field>
-            <Field label="Title / rank" icon={Briefcase}>
-              <Input value={form.job_title ?? ""} onChange={e => set("job_title", e.target.value)} placeholder="e.g. Senior Protocol Officer" />
+            <Field label="Oscar unit" icon={Briefcase} required>
+              <Select value={form.oscar ?? ""} onValueChange={v => set("oscar", v)}>
+                <SelectTrigger><SelectValue placeholder="Select your Oscar…" /></SelectTrigger>
+                <SelectContent>
+                  {OSCAR_UNITS.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                  {/* Preserve a legacy/custom value so the select doesn't blank it */}
+                  {form.oscar && !OSCAR_UNITS.includes(form.oscar) && (
+                    <SelectItem value={form.oscar}>{form.oscar}</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
             </Field>
             <Field label="Phone" icon={Phone} required>
               <Input type="tel" inputMode="tel" autoComplete="tel" value={form.phone ?? ""} onChange={e => set("phone", e.target.value)} placeholder="+234 800 000 0000" />

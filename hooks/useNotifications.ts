@@ -15,9 +15,22 @@ export interface AppNotification {
   created_at: string
   journey_id?: string | null
   related_url?: string | null
+  metadata?: { kind?: string; [key: string]: unknown } | null
 }
 
-const NOTIFICATION_PAGE_SIZE = 20
+// The bell shows the last 10 notifications
+const NOTIFICATION_PAGE_SIZE = 10
+
+/**
+ * Sound identity comes from the event kind first (food_ready, mission_request,
+ * mention), then falls back to the notification type — so the Welfare dinner
+ * bell never sounds like a Broken Arrow.
+ */
+function resolveChimeKey(n: AppNotification): string {
+  const kind = n.metadata?.kind
+  if (kind === 'food_ready' || kind === 'mission_request' || kind === 'mention') return kind
+  return n.type
+}
 
 
 function vibrateDevice(type: NotificationType = 'info') {
@@ -93,7 +106,7 @@ export function useNotifications() {
               setUnreadCount((c) => c + 1)
 
               // Teams-quality alerts — route through AudioManager (BrokenArrowAlert owns broken_arrow audio)
-              audioManager.playChime(incoming.type)
+              audioManager.playChime(resolveChimeKey(incoming))
               vibrateDevice(incoming.type)
 
               // Toast

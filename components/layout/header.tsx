@@ -132,14 +132,16 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
         {/* Notifications — always visible */}
         <NotificationCenter />
 
-        {/* Avatar + email — desktop only */}
+        {/* Avatar + email — desktop only; avatar opens the profile */}
         <div className="hidden md:flex items-center gap-2">
-          <Avatar className="h-9 w-9">
-            <AvatarImage src={profile?.photo_url} />
-            <AvatarFallback className="text-xs font-semibold">
-              {getInitials(profile?.full_name, user?.email)}
-            </AvatarFallback>
-          </Avatar>
+          <Link href="/profile" aria-label="Open my profile" className="rounded-full transition-transform hover:scale-105">
+            <Avatar className="h-9 w-9 ring-2 ring-transparent transition-shadow hover:ring-primary/40">
+              <AvatarImage src={profile?.photo_url} />
+              <AvatarFallback className="text-xs font-semibold">
+                {getInitials(profile?.full_name, user?.email)}
+              </AvatarFallback>
+            </Avatar>
+          </Link>
           <div className="flex flex-col leading-none">
             <p className="text-sm font-medium truncate max-w-[150px]">{user?.email}</p>
             {profile?.role && (
@@ -163,12 +165,14 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
 
         {/* Mobile: avatar + "more" dropdown collapsing secondary actions */}
         <div className="flex items-center gap-1 md:hidden">
-          <Avatar className="h-8 w-8">
-            <AvatarImage src={profile?.photo_url} />
-            <AvatarFallback className="text-xs font-semibold">
-              {getInitials(profile?.full_name, user?.email)}
-            </AvatarFallback>
-          </Avatar>
+          <Link href="/profile" aria-label="Open my profile">
+            <Avatar className="h-8 w-8">
+              <AvatarImage src={profile?.photo_url} />
+              <AvatarFallback className="text-xs font-semibold">
+                {getInitials(profile?.full_name, user?.email)}
+              </AvatarFallback>
+            </Avatar>
+          </Link>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

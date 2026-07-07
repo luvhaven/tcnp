@@ -801,8 +801,8 @@ export default function JourneysClient({
                         }}
                       >
                         {/* Header Row: Status & Time */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-3">
                             <Badge
                               variant="secondary"
                               className={cn(
@@ -819,7 +819,7 @@ export default function JourneysClient({
                           </div>
 
                           <div className="flex items-center gap-3">
-                            <div className="text-xs text-muted-foreground">
+                            <div className="hidden text-xs text-muted-foreground sm:block">
                               Updated {formatDistanceToNow(new Date(journey.updated_at ?? journey.created_at), { addSuffix: true })}
                             </div>
                             <Button
