@@ -69,6 +69,11 @@ const PasswordEnforcer = dynamic(
   { ssr: false }
 )
 
+const ProfileCompletionEnforcer = dynamic(
+  () => import("@/components/security/ProfileCompletionEnforcer").then((m) => m.ProfileCompletionEnforcer),
+  { ssr: false }
+)
+
 /**
  * iOS-Safe Dashboard Layout - NUCLEAR OPTION
  * 
@@ -144,8 +149,10 @@ export default function DashboardLayout({
           </ErrorBoundary>
         )}
 
-        {/* Location enforcer — prompts users who haven't granted permission */}
-        {canMountExtras && !isIOS && (
+        {/* Location enforcer — prompts users who haven't granted permission.
+            Mounted on ALL devices (incl. iOS): its Enable button provides the
+            user gesture iOS requires for the native geolocation prompt. */}
+        {canMountTracker && (
           <ErrorBoundary>
             <LocationEnforcer />
           </ErrorBoundary>
@@ -211,7 +218,23 @@ export default function DashboardLayout({
           </main>
         </div>
 
-        {/* Floating UI elements - DISABLED on iOS */}
+        {/* Floating UI safe on every platform (install prompt is how iOS users
+            learn about Add to Home Screen; password enforcer is plain UI) */}
+        {canMountTracker && (
+          <>
+            <ErrorBoundary>
+              <PWAInstallPrompt />
+            </ErrorBoundary>
+            <ErrorBoundary>
+              <PasswordEnforcer />
+            </ErrorBoundary>
+            <ErrorBoundary>
+              <ProfileCompletionEnforcer />
+            </ErrorBoundary>
+          </>
+        )}
+
+        {/* Floating UI still disabled on iOS (Notification API / IndexedDB limits) */}
         {canMountExtras && !isIOS && (
           <>
             <ErrorBoundary>
@@ -222,12 +245,6 @@ export default function DashboardLayout({
             </ErrorBoundary>
             <ErrorBoundary>
               <SyncStatusBadge />
-            </ErrorBoundary>
-            <ErrorBoundary>
-              <PWAInstallPrompt />
-            </ErrorBoundary>
-            <ErrorBoundary>
-              <PasswordEnforcer />
             </ErrorBoundary>
           </>
         )}

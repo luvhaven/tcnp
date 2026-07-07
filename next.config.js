@@ -83,6 +83,15 @@ const withPWA = require("@ducanh2912/next-pwa").default({
   sw: "sw.js",
   // iOS specific settings
   extendDefaultHandler: false,
+  // Cache pages navigated to on the client so they work offline later
+  cacheOnFrontEndNav: true,
+  aggressiveFrontEndNavCaching: true,
+  // Reload the app when connectivity returns instead of leaving stale offline UI
+  reloadOnOnline: true,
+  // Serve the branded offline page when a navigation misses cache while offline
+  fallbacks: {
+    document: "/offline.html",
+  },
   workboxOptions: {
     disableDevLogs: true,
   }

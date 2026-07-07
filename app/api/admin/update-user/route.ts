@@ -23,16 +23,20 @@ export async function POST(request: Request) {
 
         const currentRole = (currentUser as { role?: string } | null)?.role
 
-        if (!currentRole || !['admin', 'dev_admin'].includes(currentRole)) {
+        if (!currentRole || !['admin', 'dev_admin', 'super_admin', 'captain', 'vice_captain', 'command', 'head_of_command', 'head_of_operations'].includes(currentRole)) {
             return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
         }
 
         // Get request body
         const body = await request.json()
-        const { id, email, password, full_name, phone, role, photo_url } = body
+        const { id, email, password, full_name, phone, role, photo_url, team, is_team_head } = body
 
         if (!id) {
             return NextResponse.json({ error: 'Missing user ID' }, { status: 400 })
+        }
+
+        if (team !== undefined && team !== null && team !== '' && !['strength', 'wisdom', 'swift'].includes(team)) {
+            return NextResponse.json({ error: 'Invalid team' }, { status: 400 })
         }
 
         // Prepare auth updates
@@ -71,6 +75,11 @@ export async function POST(request: Request) {
 
         if (photo_url !== undefined) {
             userUpdates.photo_url = photo_url
+        }
+
+        if (team !== undefined) {
+            userUpdates.team = team || null
+            userUpdates.is_team_head = team ? is_team_head === true : false
         }
 
         const { error: userError } = await db

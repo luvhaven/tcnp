@@ -113,6 +113,7 @@ export function useJourneyStatus(journeyId: string) {
           // NOTE: actual_departure / actual_arrival do NOT exist — do NOT include them.
           const updates: Record<string, any> = {
             status: callSign,                   // journey_status enum (underscores ✓)
+            status_updated_at: new Date().toISOString(),  // Ops Monitor "last update" clock
             updated_at: new Date().toISOString(),
           }
 
@@ -203,11 +204,16 @@ export function useJourneyStatus(journeyId: string) {
   const completeMutation = useMutation({
     mutationFn: async () => {
       // NOTE: actual_arrival does NOT exist in the journeys schema — omitted.
+      const { data: { user } } = await supabase.auth.getUser()
+      const now = new Date().toISOString()
       const { error } = await (supabase as any)
         .from('journeys')
         .update({
           status: 'completed',
-          updated_at: new Date().toISOString(),
+          status_updated_at: now,
+          completed_at: now,               // after-op reporting relies on this
+          completed_by: user?.id ?? null,
+          updated_at: now,
         })
         .eq('id', journeyId)
 

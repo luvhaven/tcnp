@@ -210,8 +210,9 @@ export function LocationTracker() {
 
         const handleChange = () => {
           console.log('📍 Permission status changed to:', permissionStatus.state)
-          if (permissionStatus.state === 'granted' && hasEverTracked) {
-            // Only restart if we've been tracking before
+          if (permissionStatus.state === 'granted') {
+            // (Re)start tracking — covers both recovery AND a first-time grant
+            // coming from the LocationEnforcer's gesture-driven prompt
             setPermissionRequested(false)
           } else if (permissionStatus.state === 'denied') {
             setIsTracking(false)
@@ -243,6 +244,25 @@ export function LocationTracker() {
         const supabase = createClient()
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
+
+        // iOS: never auto-fire the native prompt without a user gesture.
+        // If permission hasn't been decided yet, wait — the LocationEnforcer
+        // banner provides the gesture, and the permission-change listener
+        // above restarts this effect once granted.
+        const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+        if (isIOSDevice && 'permissions' in navigator) {
+          try {
+            const status = await (navigator as any).permissions.query({ name: 'geolocation' })
+            if (status.state === 'prompt') {
+              console.log('📍 iOS: deferring geolocation prompt to LocationEnforcer gesture')
+              return
+            }
+            if (status.state === 'denied') return
+          } catch {
+            // Permissions API unavailable — proceed; worst case iOS shows the prompt
+          }
+        }
 
         // Function to update location in database
         const updateLocation = async (position: GeolocationPosition) => {

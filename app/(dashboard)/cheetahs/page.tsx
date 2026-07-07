@@ -1,33 +1,6 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
-import CheetahsClient from './CheetahsClient'
+import { redirect } from 'next/navigation'
 
-export default async function CheetahsPage() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    }
-  )
-
-  const { data: initialCheetahs } = await supabase
-    .from('cheetahs')
-    .select(`
-      *,
-      current_location:cheetah_locations(latitude, longitude, heading, speed, recorded_at)
-    `)
-    .order('registration_number')
-    .limit(100)
-
-  return (
-    <CheetahsClient 
-      initialCheetahs={initialCheetahs || []} 
-    />
-  )
+// Cheetahs was renamed to Tango (Tango Oscar — transport operations)
+export default function CheetahsRedirect() {
+  redirect('/tango')
 }

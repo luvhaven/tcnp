@@ -16,7 +16,7 @@ export async function GET() {
     // Fetch all officers via admin client (bypasses RLS)
     const { data: officers, error } = await adminClient
       .from('users')
-      .select('id, full_name, email, phone, role, oscar, activation_status, unit, current_title_id, last_seen, created_at')
+      .select('id, full_name, email, phone, role, oscar, activation_status, unit, current_title_id, last_seen, created_at, photo_url, team, is_team_head')
       .order('full_name')
 
     if (error) {

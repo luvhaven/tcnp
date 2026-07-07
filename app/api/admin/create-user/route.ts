@@ -24,16 +24,20 @@ export async function POST(request: Request) {
 
     const currentRole = (currentUser as { role?: string } | null)?.role
 
-    if (!currentRole || !['admin', 'dev_admin'].includes(currentRole)) {
+    if (!currentRole || !['admin', 'dev_admin', 'super_admin', 'captain', 'vice_captain', 'command', 'head_of_command', 'head_of_operations'].includes(currentRole)) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
     }
 
     // Get request body
     const body = await request.json()
-    const { email, password, full_name, phone, role, photo_url } = body
+    const { email, password, full_name, phone, role, photo_url, team, is_team_head } = body
 
     if (!email || !password || !full_name || !role) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    if (team && !['strength', 'wisdom', 'swift'].includes(team)) {
+      return NextResponse.json({ error: 'Invalid team' }, { status: 400 })
     }
 
     // Create user via Supabase Admin API (bypasses email confirmation)
@@ -83,6 +87,11 @@ export async function POST(request: Request) {
     // Only add photo_url if provided (for backwards compatibility)
     if (photo_url) {
       insertData.photo_url = photo_url
+    }
+
+    if (team) {
+      insertData.team = team
+      insertData.is_team_head = is_team_head === true
     }
 
     const { error: userError } = await db

@@ -1,6 +1,6 @@
 "use client"
 
-import { Bell, LogOut, Menu, User, MoreVertical, KeyRound, MonitorSmartphone } from "lucide-react"
+import { Bell, LogOut, Menu, User, MoreVertical, KeyRound, Sun, Moon, Laptop } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -11,11 +11,37 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
+import { useTheme, type AppTheme } from "@/components/theme/ThemeProvider"
 import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import InstallButton from "@/components/pwa/InstallButton"
 import NotificationCenter from "@/components/notifications/NotificationCenter"
 import Link from "next/link"
+
+const THEME_CYCLE: { value: AppTheme; icon: typeof Sun; label: string }[] = [
+  { value: "light", icon: Sun, label: "Light theme" },
+  { value: "dark", icon: Moon, label: "Dark theme" },
+  { value: "auto", icon: Laptop, label: "System theme" },
+]
+
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme()
+  const current = THEME_CYCLE.find(t => t.value === theme) ?? THEME_CYCLE[0]
+  const next = THEME_CYCLE[(THEME_CYCLE.findIndex(t => t.value === theme) + 1) % THEME_CYCLE.length]
+  const Icon = current.icon
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => setTheme(next.value)}
+      aria-label={`Switch to ${next.label.toLowerCase()}`}
+      title={`${current.label} — click for ${next.label.toLowerCase()}`}
+      className="h-9 w-9"
+    >
+      <Icon className="h-4 w-4" aria-hidden="true" />
+    </Button>
+  )
+}
 
 export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
   const router = useRouter()
@@ -72,7 +98,7 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
   }
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-background/80 backdrop-blur-md px-4 md:px-6 shadow-sm transition-all duration-200">
+    <header className="app-header sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-background/80 backdrop-blur-md px-4 md:px-6 shadow-sm transition-all duration-200">
       {/* Left: hamburger + greeting */}
       <div className="flex items-center gap-3 min-w-0">
         <button
@@ -97,10 +123,11 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
 
       {/* Right: action cluster */}
       <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
-        {/* Install Button — desktop only */}
-        <div className="hidden md:block">
-          <InstallButton />
-        </div>
+        {/* Install — adaptive (label on desktop, icon on mobile), hides when installed */}
+        <InstallButton />
+
+        {/* Theme toggle — always visible */}
+        <ThemeToggle />
 
         {/* Notifications — always visible */}
         <NotificationCenter />
@@ -156,16 +183,16 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
                 <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
               </div>
               <DropdownMenuItem asChild>
+                <Link href="/profile" className="flex items-center gap-2 cursor-pointer">
+                  <User className="h-4 w-4" />
+                  My Profile
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
                 <Link href="/change-password" className="flex items-center gap-2 cursor-pointer">
                   <KeyRound className="h-4 w-4" />
                   Change Password
                 </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <div className="flex items-center gap-2">
-                  <MonitorSmartphone className="h-4 w-4" />
-                  <InstallButton />
-                </div>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

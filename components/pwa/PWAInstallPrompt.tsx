@@ -14,9 +14,14 @@ export function PWAInstallPrompt() {
   const { isInstalled, install, platform } = usePWAInstall()
   const [dismissed, setDismissed] = useState(() => {
     if (typeof window === 'undefined') return false
-    const ts = localStorage.getItem('pwa-prompt-dismissed')
-    if (!ts) return false
-    return (Date.now() - Number(ts)) / 86_400_000 < 7
+    try {
+      const ts = localStorage.getItem('pwa-prompt-dismissed')
+      if (!ts) return false
+      return (Date.now() - Number(ts)) / 86_400_000 < 7
+    } catch {
+      // iOS private mode can throw on localStorage access
+      return false
+    }
   })
   const [showModal, setShowModal] = useState(false)
 
@@ -28,7 +33,7 @@ export function PWAInstallPrompt() {
   }
 
   const handleDismiss = () => {
-    localStorage.setItem('pwa-prompt-dismissed', Date.now().toString())
+    try { localStorage.setItem('pwa-prompt-dismissed', Date.now().toString()) } catch { }
     setDismissed(true)
   }
 

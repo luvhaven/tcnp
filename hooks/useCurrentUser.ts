@@ -9,6 +9,19 @@ export type CurrentUser = {
     oscar: string | null
     photo_url: string | null
     is_active: boolean
+    team: string | null
+    is_team_head: boolean
+    // Profile fields (drive completion indicator + enforcer)
+    phone: string | null
+    job_title: string | null
+    bio: string | null
+    date_of_birth: string | null
+    gender: string | null
+    address: string | null
+    city: string | null
+    emergency_contact_name: string | null
+    emergency_contact_phone: string | null
+    profile_completed_at: string | null
 }
 
 /**
@@ -28,20 +41,33 @@ export function useCurrentUser() {
 
             const { data: profile, error } = await supabase
                 .from('users')
-                .select('id, full_name, role, oscar, photo_url, is_active')
+                .select('id, full_name, role, oscar, photo_url, is_active, team, is_team_head, phone, job_title, bio, date_of_birth, gender, address, city, emergency_contact_name, emergency_contact_phone, profile_completed_at')
                 .eq('id', user.id)
                 .single()
 
             if (error || !profile) return null
 
+            const p = profile as any
             return {
                 id: user.id,
                 email: user.email ?? null,
-                full_name: profile.full_name ?? null,
-                role: profile.role ?? null,
-                oscar: profile.oscar ?? null,
-                photo_url: profile.photo_url ?? null,
-                is_active: profile.is_active ?? true,
+                full_name: p.full_name ?? null,
+                role: p.role ?? null,
+                oscar: p.oscar ?? null,
+                photo_url: p.photo_url ?? null,
+                is_active: p.is_active ?? true,
+                team: p.team ?? null,
+                is_team_head: p.is_team_head === true,
+                phone: p.phone ?? null,
+                job_title: p.job_title ?? null,
+                bio: p.bio ?? null,
+                date_of_birth: p.date_of_birth ?? null,
+                gender: p.gender ?? null,
+                address: p.address ?? null,
+                city: p.city ?? null,
+                emergency_contact_name: p.emergency_contact_name ?? null,
+                emergency_contact_phone: p.emergency_contact_phone ?? null,
+                profile_completed_at: p.profile_completed_at ?? null,
             }
         },
         staleTime: 5 * 60 * 1000,   // 5 minutes — profile changes are not realtime-critical
