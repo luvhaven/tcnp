@@ -7,7 +7,7 @@ export type ProfileFields = {
   full_name?: string | null
   photo_url?: string | null
   phone?: string | null
-  job_title?: string | null
+  oscar?: string | null
   team?: string | null
   date_of_birth?: string | null
   gender?: string | null
@@ -31,7 +31,7 @@ export const PROFILE_FIELD_SPECS: ProfileFieldSpec[] = [
   { key: 'photo_url', label: 'Professional headshot', weight: 3, required: true, group: 'identity' },
   { key: 'full_name', label: 'Full name', weight: 2, required: true, group: 'identity' },
   { key: 'phone', label: 'Phone number', weight: 2, required: true, group: 'identity' },
-  { key: 'job_title', label: 'Title / rank', weight: 1, required: false, group: 'identity' },
+  { key: 'oscar', label: 'Oscar unit', weight: 2, required: true, group: 'identity' },
   { key: 'team', label: 'Protocol team', weight: 2, required: true, group: 'identity' },
   { key: 'date_of_birth', label: 'Date of birth', weight: 1, required: false, group: 'personal' },
   { key: 'gender', label: 'Gender', weight: 1, required: false, group: 'personal' },

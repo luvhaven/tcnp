@@ -324,9 +324,9 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                     exit={{ opacity: 0, height: 0, scale: 0.95 }}
                     transition={{ duration: 0.2 }}
                     key={program.id}
-                    className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:-translate-y-0.5 hover:shadow-md hover:border-primary/30"
+                    className="flex flex-col gap-3 rounded-lg border p-4 transition-all hover:bg-accent hover:-translate-y-0.5 hover:shadow-md hover:border-primary/30 lg:flex-row lg:items-center lg:justify-between"
                   >
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center space-x-3">
                         <div className={`h-3 w-3 rounded-full ${getStatusColor(program.status)}`} />
                         <div>
@@ -340,7 +340,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="secondary">
                         {getStatusLabel(program.status)}
                       </Badge>

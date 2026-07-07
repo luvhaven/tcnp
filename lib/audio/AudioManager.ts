@@ -28,7 +28,27 @@ class AudioManager {
 
   private constructor() {
     if (typeof window !== 'undefined') {
-      this._muted = localStorage.getItem(STORAGE_KEY) === 'true'
+      try {
+        this._muted = localStorage.getItem(STORAGE_KEY) === 'true'
+      } catch {
+        // iOS private mode
+      }
+
+      // iOS/Safari: the AudioContext can only start from a user gesture.
+      // Unlock once on the first interaction so later realtime chimes
+      // (which arrive with no gesture) are audible.
+      const unlock = () => {
+        try {
+          const c = this.ctx
+          if (c.state === 'suspended') void c.resume()
+        } catch { /* audio unavailable */ }
+        window.removeEventListener('pointerdown', unlock)
+        window.removeEventListener('touchend', unlock)
+        window.removeEventListener('keydown', unlock)
+      }
+      window.addEventListener('pointerdown', unlock, { passive: true })
+      window.addEventListener('touchend', unlock, { passive: true })
+      window.addEventListener('keydown', unlock)
     }
   }
 
@@ -140,6 +160,28 @@ class AudioManager {
         // Soft two-note pop
         this.scheduleTone(880, 0, 0.10, 'sine', 0.18)
         this.scheduleTone(1100, 0.12, 0.12, 'sine', 0.18)
+        break
+
+      case 'mention':
+        // Insistent triple ping — someone needs YOU specifically
+        this.scheduleTone(1175, 0, 0.09, 'triangle', 0.3)
+        this.scheduleTone(1175, 0.13, 0.09, 'triangle', 0.3)
+        this.scheduleTone(1568, 0.26, 0.18, 'triangle', 0.32)
+        break
+
+      case 'food_ready':
+        // Warm dinner-bell arpeggio (C5–E5–G5–C6) — unmistakably the Welfare call
+        this.scheduleTone(523, 0.00, 0.20, 'sine', 0.30)
+        this.scheduleTone(659, 0.18, 0.20, 'sine', 0.30)
+        this.scheduleTone(784, 0.36, 0.20, 'sine', 0.30)
+        this.scheduleTone(1047, 0.54, 0.34, 'sine', 0.32)
+        break
+
+      case 'mission_request':
+        // Bugle-style call to duty — rising fourth, held top note
+        this.scheduleTone(392, 0.00, 0.16, 'triangle', 0.32)
+        this.scheduleTone(523, 0.18, 0.16, 'triangle', 0.32)
+        this.scheduleTone(659, 0.36, 0.40, 'triangle', 0.34)
         break
 
       default:
