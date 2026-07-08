@@ -28,7 +28,6 @@ import {
   ChevronRight,
   Landmark,
   BookOpen,
-  Phone,
   ClipboardList,
   KeyRound,
   Camera,
@@ -84,7 +83,6 @@ const NAV_SECTIONS: NavSection[] = [
     label: "People",
     items: [
       { name: "Officers", href: "/officers", icon: UserCircle },
-      { name: "Contacts", href: "/contacts", icon: Phone },
     ],
   },
   {
@@ -118,7 +116,7 @@ const ALL_NAV = NAV_SECTIONS.flatMap(s => s.items)
 const BASE_HREFS = [
   "/dashboard", "/my-operations", "/chat", "/programs", "/guide",
   "/training", "/compliance", "/welfare", "/hospitality",
-  "/contacts", "/profile", "/change-password",
+  "/profile", "/change-password",
 ]
 
 /**

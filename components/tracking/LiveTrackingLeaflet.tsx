@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { Layers, Locate, Maximize, Minimize, WifiOff } from 'lucide-react'
 
 export type LiveTrackingLeafletLocation = {
   user_id: string
@@ -89,6 +90,35 @@ const buildPopupContent = (
 // Distinct trail colours for up to 8 simultaneous tracked users
 const TRAIL_COLORS = ['#2563EB', '#16A34A', '#D97706', '#9333EA', '#DB2777', '#0891B2', '#DC2626', '#65A30D']
 
+type BasemapId = 'auto' | 'streets' | 'dark' | 'satellite'
+
+const BASEMAPS: Record<Exclude<BasemapId, 'auto'>, { url: string; attribution: string; subdomains?: string; maxZoom: number; label: string }> = {
+  streets: {
+    // CARTO Voyager — production-friendly, no API key, matches the dark tileset already in use
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attribution: '© OpenStreetMap contributors © CARTO',
+    subdomains: 'abcd',
+    maxZoom: 20,
+    label: 'Streets',
+  },
+  dark: {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '© OpenStreetMap contributors © CARTO',
+    subdomains: 'abcd',
+    maxZoom: 20,
+    label: 'Dark',
+  },
+  satellite: {
+    // Esri World Imagery — free, no API key required
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Esri, Maxar, Earthstar Geographics',
+    maxZoom: 19,
+    label: 'Satellite',
+  },
+}
+
+const BASEMAP_STORAGE_KEY = 'tcnp-map-basemap'
+
 export default function LiveTrackingLeaflet({
   center,
   locations,
@@ -102,14 +132,70 @@ export default function LiveTrackingLeaflet({
   const markersRef = useRef<Record<string, L.Marker>>({})
   const polylinesRef = useRef<Record<string, L.Polyline>>({})
   const trafficRef = useRef<L.TileLayer | null>(null)
+  const baseLayerRef = useRef<L.TileLayer | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const hasFitBoundsRef = useRef(false)
+  const tileErrorCountRef = useRef(0)
+
+  const [basemap, setBasemap] = useState<BasemapId>(() => {
+    if (typeof window === 'undefined') return 'auto'
+    try {
+      return (localStorage.getItem(BASEMAP_STORAGE_KEY) as BasemapId) || 'auto'
+    } catch {
+      return 'auto'
+    }
+  })
+  const [layerMenuOpen, setLayerMenuOpen] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [tilesFailing, setTilesFailing] = useState(false)
+
+  const resolveActiveStyle = (mode: BasemapId): Exclude<BasemapId, 'auto'> => {
+    if (mode !== 'auto') return mode
+    return document.documentElement.classList.contains('dark') ? 'dark' : 'streets'
+  }
+
+  const applyBasemap = (map: L.Map, mode: BasemapId) => {
+    const style = BASEMAPS[resolveActiveStyle(mode)]
+    if (baseLayerRef.current) {
+      baseLayerRef.current.remove()
+    }
+    tileErrorCountRef.current = 0
+    setTilesFailing(false)
+    const layer = L.tileLayer(style.url, {
+      attribution: style.attribution,
+      subdomains: style.subdomains ?? 'abc',
+      maxZoom: style.maxZoom,
+      // Transparent 1x1 gif — avoids the broken-image glyph on failed tiles
+      errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7',
+    })
+    layer.on('tileerror', () => {
+      tileErrorCountRef.current += 1
+      // Only surface the banner once a meaningful number of tiles have failed —
+      // a handful of edge tiles failing at low zoom is normal
+      if (tileErrorCountRef.current > 6) setTilesFailing(true)
+    })
+    layer.on('tileload', () => {
+      // Recovering — clear the warning once tiles resume loading
+      if (tileErrorCountRef.current > 0) tileErrorCountRef.current = Math.max(0, tileErrorCountRef.current - 1)
+      if (tileErrorCountRef.current <= 2) setTilesFailing(false)
+    })
+    layer.addTo(map)
+    baseLayerRef.current = layer
+  }
 
   // ── Init map ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
 
-    const map = L.map(containerRef.current, { center, zoom: 12, preferCanvas: true })
+    const map = L.map(containerRef.current, {
+      center,
+      zoom: 12,
+      preferCanvas: true,
+      zoomControl: false, // custom-positioned below
+    })
+
+    L.control.zoom({ position: 'bottomright' }).addTo(map)
+    L.control.scale({ position: 'bottomleft', imperial: false }).addTo(map)
 
     const style = document.createElement('style')
     style.innerHTML = `
@@ -120,39 +206,51 @@ export default function LiveTrackingLeaflet({
       }`
     document.head.appendChild(style)
 
-    const isDark = document.documentElement.classList.contains('dark')
-
-    const getTile = (dark: boolean) =>
-      dark
-        ? L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-          attribution: '© OpenStreetMap contributors © CARTO',
-          subdomains: 'abcd',
-          maxZoom: 19,
-        })
-        : L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap contributors',
-          maxZoom: 19,
-        })
-
-    getTile(isDark).addTo(map)
-
-    // Observe theme changes and swap tile layers on-the-fly
-    const observer = new MutationObserver(() => {
-      const nowDark = document.documentElement.classList.contains('dark')
-      map.eachLayer((layer) => {
-        if ((layer as any)._url?.includes('tile.openstreetmap') || (layer as any)._url?.includes('cartocdn')) {
-          map.removeLayer(layer)
-        }
-      })
-      getTile(nowDark).addTo(map)
-    })
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    applyBasemap(map, basemap)
 
     mapRef.current = map
 
-    return () => observer.disconnect()
-  }, [center])
+    // Guard against the classic "grey map" bug: if the container's height
+    // wasn't finalized (CSS transition/animation, tab switch) at init time,
+    // Leaflet caches a stale size. Re-measure shortly after mount and again
+    // after the page-enter animation settles.
+    const t1 = setTimeout(() => map.invalidateSize(), 150)
+    const t2 = setTimeout(() => map.invalidateSize(), 500)
 
+    return () => {
+      clearTimeout(t1)
+      clearTimeout(t2)
+      style.remove()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Cleanup map instance only on unmount
+  useEffect(() => {
+    return () => {
+      mapRef.current?.remove()
+      mapRef.current = null
+    }
+  }, [])
+
+  // ── Basemap switching (manual selection + auto theme-follow) ─────────────
+  useEffect(() => {
+    try { localStorage.setItem(BASEMAP_STORAGE_KEY, basemap) } catch { /* ignore */ }
+    const map = mapRef.current
+    if (!map) return
+    applyBasemap(map, basemap)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [basemap])
+
+  useEffect(() => {
+    if (basemap !== 'auto') return
+    const map = mapRef.current
+    if (!map) return
+    const observer = new MutationObserver(() => applyBasemap(map, 'auto'))
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    return () => observer.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [basemap])
 
   // ── Traffic overlay (TomTom flow tiles) ──────────────────────────────────
   // Standard traffic colours shown by TomTom:
@@ -186,6 +284,45 @@ export default function LiveTrackingLeaflet({
     ro.observe(containerRef.current)
     return () => ro.disconnect()
   }, [])
+
+  // ── Fullscreen toggle ──────────────────────────────────────────────────────
+  useEffect(() => {
+    const handler = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+      setTimeout(() => mapRef.current?.invalidateSize(), 100)
+    }
+    document.addEventListener('fullscreenchange', handler)
+    return () => document.removeEventListener('fullscreenchange', handler)
+  }, [])
+
+  const toggleFullscreen = () => {
+    const el = containerRef.current?.parentElement
+    if (!el) return
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {})
+    } else {
+      el.requestFullscreen?.().catch(() => {})
+    }
+  }
+
+  const locateMe = () => {
+    const map = mapRef.current
+    if (!map || !('geolocation' in navigator)) return
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        map.setView([pos.coords.latitude, pos.coords.longitude], Math.max(map.getZoom(), 14), { animate: true })
+      },
+      () => { /* silent — user may have denied, banner elsewhere already covers this */ },
+      { enableHighAccuracy: true, timeout: 8000 }
+    )
+  }
+
+  const fitAllMarkers = () => {
+    const map = mapRef.current
+    if (!map || locations.length === 0) return
+    const bounds = L.latLngBounds(locations.map((l) => [l.latitude, l.longitude] as L.LatLngExpression))
+    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 })
+  }
 
   // ── Route trails (polylines) ──────────────────────────────────────────────
   useEffect(() => {
@@ -285,19 +422,84 @@ export default function LiveTrackingLeaflet({
     }
   }, [locations, getUserStatus])
 
-  // ── Cleanup ───────────────────────────────────────────────────────────────
-  useEffect(() => {
-    return () => {
-      Object.values(markersRef.current).forEach((m) => m.remove())
-      markersRef.current = {}
-      Object.values(polylinesRef.current).forEach((l) => l.remove())
-      polylinesRef.current = {}
-      trafficRef.current?.remove()
-      trafficRef.current = null
-      mapRef.current?.remove()
-      mapRef.current = null
-    }
-  }, [])
+  return (
+    <div className="relative h-full w-full">
+      <div ref={containerRef} style={{ height: '100%', width: '100%' }} />
 
-  return <div ref={containerRef} style={{ height: '100%', width: '100%' }} />
+      {/* Tile-load failure banner — replaces silent grey with an honest message */}
+      {tilesFailing && (
+        <div className="pointer-events-none absolute inset-x-0 top-2 z-[500] flex justify-center px-3">
+          <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/95 px-3 py-1.5 text-xs font-medium text-white shadow-lg">
+            <WifiOff className="h-3.5 w-3.5" />
+            Map tiles are having trouble loading — check your connection
+          </div>
+        </div>
+      )}
+
+      {/* Top-right control cluster: layers, locate, fit-all, fullscreen */}
+      <div className="absolute right-2.5 top-2.5 z-[500] flex flex-col items-end gap-1.5">
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setLayerMenuOpen((v) => !v)}
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-black/10 bg-white text-slate-700 shadow-md transition-colors hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            aria-label="Change map style"
+            title="Map style"
+          >
+            <Layers className="h-4 w-4" />
+          </button>
+          {layerMenuOpen && (
+            <div className="absolute right-0 top-11 w-36 overflow-hidden rounded-md border border-black/10 bg-white shadow-lg dark:border-white/10 dark:bg-slate-900">
+              {([
+                { id: 'auto' as BasemapId, label: 'Auto (theme)' },
+                { id: 'streets' as BasemapId, label: 'Streets' },
+                { id: 'dark' as BasemapId, label: 'Dark' },
+                { id: 'satellite' as BasemapId, label: 'Satellite' },
+              ]).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => { setBasemap(opt.id); setLayerMenuOpen(false) }}
+                  className={`block w-full px-3 py-2 text-left text-xs transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 ${basemap === opt.id ? 'bg-primary/10 font-semibold text-primary' : 'text-slate-700 dark:text-slate-200'
+                    }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={locateMe}
+          className="flex h-9 w-9 items-center justify-center rounded-md border border-black/10 bg-white text-slate-700 shadow-md transition-colors hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          aria-label="Center on my location"
+          title="Locate me"
+        >
+          <Locate className="h-4 w-4" />
+        </button>
+
+        <button
+          type="button"
+          onClick={fitAllMarkers}
+          disabled={locations.length === 0}
+          className="flex h-9 items-center justify-center rounded-md border border-black/10 bg-white px-2 text-[10px] font-semibold text-slate-700 shadow-md transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          title="Fit all markers in view"
+        >
+          FIT ALL
+        </button>
+
+        <button
+          type="button"
+          onClick={toggleFullscreen}
+          className="flex h-9 w-9 items-center justify-center rounded-md border border-black/10 bg-white text-slate-700 shadow-md transition-colors hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+        >
+          {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+        </button>
+      </div>
+    </div>
+  )
 }
