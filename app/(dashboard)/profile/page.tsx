@@ -271,7 +271,10 @@ export default function ProfilePage() {
               <Input value={form.full_name ?? ""} onChange={e => set("full_name", e.target.value)} placeholder="John Doe" />
             </Field>
             <Field label="Oscar unit" icon={Briefcase} required>
-              <Select value={form.oscar ?? ""} onValueChange={v => set("oscar", v)}>
+              {/* Radix's hidden native-select mirror fires a spurious onValueChange("")
+                  on mount before it has synced with our controlled value — none of our
+                  real options are ever empty, so guard against clearing on that no-op. */}
+              <Select value={form.oscar ?? ""} onValueChange={v => { if (v) set("oscar", v) }}>
                 <SelectTrigger><SelectValue placeholder="Select your Oscar…" /></SelectTrigger>
                 <SelectContent>
                   {OSCAR_UNITS.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
@@ -289,7 +292,7 @@ export default function ProfilePage() {
               <Input value={currentUser.email ?? ""} disabled className="opacity-70" />
             </Field>
             <Field label="Protocol team" icon={ShieldCheck} required>
-              <Select value={form.team ?? ""} onValueChange={v => set("team", v)}>
+              <Select value={form.team ?? ""} onValueChange={v => { if (v) set("team", v) }}>
                 <SelectTrigger><SelectValue placeholder="Select your team" /></SelectTrigger>
                 <SelectContent>
                   {TEAMS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
@@ -313,7 +316,7 @@ export default function ProfilePage() {
               <Input type="date" value={form.date_of_birth ?? ""} onChange={e => set("date_of_birth", e.target.value)} />
             </Field>
             <Field label="Gender" icon={User}>
-              <Select value={form.gender ?? ""} onValueChange={v => set("gender", v)}>
+              <Select value={form.gender ?? ""} onValueChange={v => { if (v) set("gender", v) }}>
                 <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                 <SelectContent>
                   {GENDERS.map(g => <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>)}
