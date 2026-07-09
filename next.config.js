@@ -92,9 +92,35 @@ const withPWA = require("@ducanh2912/next-pwa").default({
   fallbacks: {
     document: "/offline.html",
   },
+  // Map tiles need their own rule ahead of the default catch-all: the
+  // library's built-in "cross-origin" route caps ALL cross-origin GET
+  // requests (shared with every other CDN asset on the page) at just 32
+  // cache entries and funnels errors through a document-fallback handler
+  // meant for page navigations, not tile images — a single map view can
+  // request 30-40+ unique tile URLs, so this thrashes/breaks in production
+  // (where the service worker is active) even though it works locally
+  // (where next-pwa is disabled in development and never intercepts these
+  // requests at all).
+  extendDefaultRuntimeCaching: true,
   workboxOptions: {
     disableDevLogs: true,
-  }
+    runtimeCaching: [
+      {
+        urlPattern: /^https:\/\/([a-d]\.basemaps\.cartocdn\.com|[a-c]\.tile\.openstreetmap\.org|cartodb-basemaps-[a-d]\.global\.ssl\.fastly\.net|server\.arcgisonline\.com|api\.tomtom\.com)\//i,
+        handler: "CacheFirst",
+        options: {
+          cacheName: "map-tiles",
+          expiration: {
+            maxEntries: 1000,
+            maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days — tile imagery rarely changes
+          },
+          cacheableResponse: {
+            statuses: [0, 200],
+          },
+        },
+      },
+    ],
+  },
 });
 
 module.exports = withPWA(nextConfig);
