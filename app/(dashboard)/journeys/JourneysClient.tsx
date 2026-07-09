@@ -313,7 +313,7 @@ export default function JourneysClient({
   const loadLookups = async () => {
     try {
       const [papasRes, cheetahsRes, programsRes, officersResult] = await Promise.all([
-        supabase.from('papas').select('*').order('full_name'),
+        supabase.from('papas_basic').select('*').order('full_name'),
         supabase.from('cheetahs').select('*').order('registration_number'),
         supabase.from('programs').select('*').order('name'),
         supabase.from('users').select('id, full_name, role').eq('role', 'delta_oscar').order('full_name')

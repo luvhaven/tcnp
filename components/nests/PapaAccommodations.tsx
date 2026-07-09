@@ -69,7 +69,7 @@ export default function PapaAccommodations({ canEdit, selectedProgram, currentUs
   const { data: papas = [] } = useQuery({
     queryKey: ["papas-lite"],
     queryFn: async () => {
-      const { data } = await supabase.from("papas").select("id, full_name, title, program_id").eq("is_deleted", false).order("full_name")
+      const { data } = await supabase.from("papas_basic").select("id, full_name, title, program_id").order("full_name")
       return data ?? []
     },
   })

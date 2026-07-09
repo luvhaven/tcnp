@@ -10,6 +10,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { cn } from "@/lib/utils"
 import { computeProfileCompletion, type ProfileFields } from "@/lib/profile-completion"
 import { CompletionRing } from "@/components/profile/CompletionRing"
+import { HeadshotCropDialog } from "@/components/profile/HeadshotCropDialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -45,6 +46,7 @@ const GENDERS = [
 // Canonical Oscar unit names — same vocabulary as signup (oscarToRole parses these)
 const OSCAR_UNITS = [
   "Alpha Oscar",
+  "Command",
   "Compliance Oscar",
   "Delta Oscar",
   "Hospitality Oscar",
@@ -53,6 +55,12 @@ const OSCAR_UNITS = [
   "Tango Oscar",
   "Victor Oscar",
   "Welfare Oscar",
+]
+
+const TEAMS = [
+  { value: "strength", label: "Team Strength" },
+  { value: "wisdom", label: "Team Wisdom" },
+  { value: "swift", label: "Team Swift" },
 ]
 
 export default function ProfilePage() {
@@ -64,6 +72,8 @@ export default function ProfilePage() {
   const [uploading, setUploading] = useState(false)
   const [form, setForm] = useState<ProfileFields>({})
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [cropOpen, setCropOpen] = useState(false)
 
   // Seed form once the cached profile arrives
   useEffect(() => {
@@ -93,18 +103,27 @@ export default function ProfilePage() {
   const set = <K extends keyof ProfileFields>(key: K, value: ProfileFields[K]) =>
     setForm(prev => ({ ...prev, [key]: value }))
 
-  const handleHeadshot = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file || !currentUser) return
+    // Reset the input so choosing the same file again still fires onChange
+    e.target.value = ""
+    if (!file) return
     if (!file.type.startsWith("image/")) { toast.error("Please choose an image file"); return }
-    if (file.size > 5 * 1024 * 1024) { toast.error("Image must be under 5MB"); return }
+    if (file.size > 15 * 1024 * 1024) { toast.error("Image must be under 15MB"); return }
+    // Full-length or group photos are common here — open the cropper so the
+    // officer can isolate just the headshot before it's uploaded.
+    setPendingFile(file)
+    setCropOpen(true)
+  }
 
+  const handleCroppedUpload = async (blob: Blob) => {
+    if (!currentUser) return
+    setCropOpen(false)
     setUploading(true)
     try {
-      const ext = file.name.split(".").pop() || "jpg"
-      const path = `${currentUser.id}/headshot-${Date.now()}.${ext}`
-      const { error: upErr } = await supabase.storage.from("avatars").upload(path, file, {
-        contentType: file.type,
+      const path = `${currentUser.id}/headshot-${Date.now()}.jpg`
+      const { error: upErr } = await supabase.storage.from("avatars").upload(path, blob, {
+        contentType: "image/jpeg",
         upsert: true,
       })
       if (upErr) throw upErr
@@ -119,6 +138,7 @@ export default function ProfilePage() {
       toast.error(err.message || "Upload failed")
     } finally {
       setUploading(false)
+      setPendingFile(null)
     }
   }
 
@@ -143,8 +163,13 @@ export default function ProfilePage() {
         profile_completed_at: result.isComplete ? new Date().toISOString() : null,
         updated_at: new Date().toISOString(),
       }
-      // Team can only be self-set if not yet assigned; admins manage it afterwards
-      if (!currentUser.team && form.team) payload.team = form.team
+      // Officers can move between teams at any time. Switching away from the
+      // team you currently head hands over head-of-team status — you can't
+      // moderate a team chat you're no longer a member of.
+      if (form.team && form.team !== currentUser.team) {
+        payload.team = form.team
+        if (currentUser.is_team_head) payload.is_team_head = false
+      }
 
       const { error } = await supabase.from("users").update(payload).eq("id", currentUser.id)
       if (error) throw error
@@ -185,7 +210,7 @@ export default function ProfilePage() {
               >
                 {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
               </button>
-              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleHeadshot} />
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelected} />
             </div>
             <div className="text-center sm:text-left">
               <h1 className="text-2xl font-bold tracking-tight">{currentUser.full_name || "Your Name"}</h1>
@@ -264,17 +289,16 @@ export default function ProfilePage() {
               <Input value={currentUser.email ?? ""} disabled className="opacity-70" />
             </Field>
             <Field label="Protocol team" icon={ShieldCheck} required>
-              {currentUser.team ? (
-                <Input value={`${currentUser.is_team_head ? "★ " : ""}Team ${currentUser.team}`} disabled className="capitalize opacity-70" />
-              ) : (
-                <Select value={form.team ?? ""} onValueChange={v => set("team", v)}>
-                  <SelectTrigger><SelectValue placeholder="Select your team" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="strength">Team Strength</SelectItem>
-                    <SelectItem value="wisdom">Team Wisdom</SelectItem>
-                    <SelectItem value="swift">Team Swift</SelectItem>
-                  </SelectContent>
-                </Select>
+              <Select value={form.team ?? ""} onValueChange={v => set("team", v)}>
+                <SelectTrigger><SelectValue placeholder="Select your team" /></SelectTrigger>
+                <SelectContent>
+                  {TEAMS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {currentUser.is_team_head && form.team === currentUser.team && (
+                <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                  ★ You are head of this team. Switching teams will hand over your head-of-team status.
+                </p>
               )}
             </Field>
           </CardContent>
@@ -335,6 +359,13 @@ export default function ProfilePage() {
           </Button>
         </div>
       </form>
+
+      <HeadshotCropDialog
+        file={pendingFile}
+        open={cropOpen}
+        onClose={() => { setCropOpen(false); setPendingFile(null) }}
+        onCropped={handleCroppedUpload}
+      />
     </div>
   )
 }

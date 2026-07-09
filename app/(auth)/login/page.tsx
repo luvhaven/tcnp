@@ -271,6 +271,7 @@ export default function LoginPage() {
                     className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner appearance-none cursor-pointer"
                   >
                     <option value="" className="bg-gray-900 text-gray-400">Select an Oscar Callsign...</option>
+                    <option value="Command" className="bg-gray-900 text-white">Command — HQ &amp; Leadership</option>
                     <option value="Alpha Oscar" className="bg-gray-900 text-white">Alpha Oscar — Eagle Square</option>
                     <option value="Compliance Oscar" className="bg-gray-900 text-white">Compliance Oscar — Grooming &amp; Dress Code</option>
                     <option value="Hospitality Oscar" className="bg-gray-900 text-white">Hospitality Oscar — Papa Experiences</option>

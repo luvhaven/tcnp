@@ -92,32 +92,67 @@ const TRAIL_COLORS = ['#2563EB', '#16A34A', '#D97706', '#9333EA', '#DB2777', '#0
 
 type BasemapId = 'auto' | 'streets' | 'dark' | 'satellite'
 
-const BASEMAPS: Record<Exclude<BasemapId, 'auto'>, { url: string; attribution: string; subdomains?: string; maxZoom: number; label: string }> = {
+type TileSource = { url: string; attribution: string; subdomains?: string; maxZoom: number }
+
+// Each style lists PRIMARY first, then fallback providers tried in order if
+// the primary produces zero loaded tiles within TILE_TIMEOUT_MS. Different
+// infrastructure per tier — if one CDN is unreachable on a given network,
+// the next is a genuinely independent path, not just a mirrored subdomain.
+const BASEMAPS: Record<Exclude<BasemapId, 'auto'>, { label: string; layers: TileSource[] }> = {
   streets: {
-    // CARTO Voyager — production-friendly, no API key, matches the dark tileset already in use
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    attribution: '© OpenStreetMap contributors © CARTO',
-    subdomains: 'abcd',
-    maxZoom: 20,
     label: 'Streets',
+    layers: [
+      {
+        // CARTO Voyager — production-friendly, no API key
+        url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+        attribution: '© OpenStreetMap contributors © CARTO',
+        subdomains: 'abcd',
+        maxZoom: 20,
+      },
+      {
+        // Fallback: raw OSM tiles — independent infrastructure from CARTO
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attribution: '© OpenStreetMap contributors',
+        subdomains: 'abc',
+        maxZoom: 19,
+      },
+    ],
   },
   dark: {
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attribution: '© OpenStreetMap contributors © CARTO',
-    subdomains: 'abcd',
-    maxZoom: 20,
     label: 'Dark',
+    layers: [
+      {
+        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+        attribution: '© OpenStreetMap contributors © CARTO',
+        subdomains: 'abcd',
+        maxZoom: 20,
+      },
+      {
+        // Fallback: CARTO dark via the direct (non-lettered) host
+        url: 'https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/{z}/{x}/{y}{r}.png',
+        attribution: '© OpenStreetMap contributors © CARTO',
+        maxZoom: 20,
+      },
+    ],
   },
   satellite: {
-    // Esri World Imagery — free, no API key required
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Esri, Maxar, Earthstar Geographics',
-    maxZoom: 19,
     label: 'Satellite',
+    layers: [
+      {
+        // Esri World Imagery — free, no API key required
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        attribution: 'Esri, Maxar, Earthstar Geographics',
+        maxZoom: 19,
+      },
+    ],
   },
 }
 
 const BASEMAP_STORAGE_KEY = 'tcnp-map-basemap'
+// If a tile provider hasn't successfully loaded a single tile within this
+// window, treat it as unreachable (covers hung/silently-dropped requests
+// that never fire a `tileerror` event) and try the next one in the chain.
+const TILE_TIMEOUT_MS = 7000
 
 export default function LiveTrackingLeaflet({
   center,
@@ -148,39 +183,84 @@ export default function LiveTrackingLeaflet({
   const [layerMenuOpen, setLayerMenuOpen] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [tilesFailing, setTilesFailing] = useState(false)
+  const [activeStyleLabel, setActiveStyleLabel] = useState<string | null>(null)
+  const tileTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const loadedTileCountRef = useRef(0)
+  const currentModeRef = useRef<BasemapId>(basemap)
 
   const resolveActiveStyle = (mode: BasemapId): Exclude<BasemapId, 'auto'> => {
     if (mode !== 'auto') return mode
     return document.documentElement.classList.contains('dark') ? 'dark' : 'streets'
   }
 
-  const applyBasemap = (map: L.Map, mode: BasemapId) => {
+  /**
+   * Attaches the tile source at `layerIndex` in the style's fallback chain.
+   * If zero tiles load within TILE_TIMEOUT_MS, automatically advances to the
+   * next source — this is what catches hung/silently-dropped requests that
+   * never fire a `tileerror` event (the classic "grey map, no error" case).
+   */
+  const attachTileSource = (map: L.Map, mode: BasemapId, layerIndex: number) => {
     const style = BASEMAPS[resolveActiveStyle(mode)]
-    if (baseLayerRef.current) {
-      baseLayerRef.current.remove()
+    const source = style.layers[layerIndex]
+    if (!source) {
+      // Exhausted every provider in the chain — nothing left to try
+      setTilesFailing(true)
+      return
     }
+
+    if (tileTimeoutRef.current) clearTimeout(tileTimeoutRef.current)
+    if (baseLayerRef.current) baseLayerRef.current.remove()
+
     tileErrorCountRef.current = 0
-    setTilesFailing(false)
-    const layer = L.tileLayer(style.url, {
-      attribution: style.attribution,
-      subdomains: style.subdomains ?? 'abc',
-      maxZoom: style.maxZoom,
+    loadedTileCountRef.current = 0
+    setActiveStyleLabel(style.label)
+
+    const layer = L.tileLayer(source.url, {
+      attribution: source.attribution,
+      subdomains: source.subdomains ?? 'abc',
+      maxZoom: source.maxZoom,
       // Transparent 1x1 gif — avoids the broken-image glyph on failed tiles
       errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7',
     })
+
     layer.on('tileerror', () => {
       tileErrorCountRef.current += 1
-      // Only surface the banner once a meaningful number of tiles have failed —
-      // a handful of edge tiles failing at low zoom is normal
-      if (tileErrorCountRef.current > 6) setTilesFailing(true)
+      // A flood of explicit errors (not just silence) — advance immediately
+      // rather than waiting out the full timeout
+      if (tileErrorCountRef.current > 6 && loadedTileCountRef.current === 0) {
+        attachTileSource(map, mode, layerIndex + 1)
+      }
     })
     layer.on('tileload', () => {
-      // Recovering — clear the warning once tiles resume loading
-      if (tileErrorCountRef.current > 0) tileErrorCountRef.current = Math.max(0, tileErrorCountRef.current - 1)
-      if (tileErrorCountRef.current <= 2) setTilesFailing(false)
+      loadedTileCountRef.current += 1
+      setTilesFailing(false)
+      if (tileTimeoutRef.current) {
+        clearTimeout(tileTimeoutRef.current)
+        tileTimeoutRef.current = null
+      }
     })
     layer.addTo(map)
     baseLayerRef.current = layer
+
+    // Silence guard: hung/dropped requests fire neither tileload nor tileerror
+    tileTimeoutRef.current = setTimeout(() => {
+      if (loadedTileCountRef.current === 0) {
+        attachTileSource(map, mode, layerIndex + 1)
+      }
+    }, TILE_TIMEOUT_MS)
+  }
+
+  const applyBasemap = (map: L.Map, mode: BasemapId) => {
+    currentModeRef.current = mode
+    setTilesFailing(false)
+    attachTileSource(map, mode, 0)
+  }
+
+  /** Manual retry — restarts the fallback chain from the primary provider */
+  const retryTiles = () => {
+    const map = mapRef.current
+    if (!map) return
+    applyBasemap(map, currentModeRef.current)
   }
 
   // ── Init map ─────────────────────────────────────────────────────────────
@@ -228,6 +308,7 @@ export default function LiveTrackingLeaflet({
   // Cleanup map instance only on unmount
   useEffect(() => {
     return () => {
+      if (tileTimeoutRef.current) clearTimeout(tileTimeoutRef.current)
       mapRef.current?.remove()
       mapRef.current = null
     }
@@ -426,12 +507,21 @@ export default function LiveTrackingLeaflet({
     <div className="relative h-full w-full">
       <div ref={containerRef} style={{ height: '100%', width: '100%' }} />
 
-      {/* Tile-load failure banner — replaces silent grey with an honest message */}
+      {/* Tile-load failure banner — replaces silent grey with an honest message.
+          Fires on explicit tile errors AND on silent/hung requests that never
+          fire an event at all (the classic "blank map, no warning" case). */}
       {tilesFailing && (
         <div className="pointer-events-none absolute inset-x-0 top-2 z-[500] flex justify-center px-3">
           <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/95 px-3 py-1.5 text-xs font-medium text-white shadow-lg">
-            <WifiOff className="h-3.5 w-3.5" />
-            Map tiles are having trouble loading — check your connection
+            <WifiOff className="h-3.5 w-3.5 shrink-0" />
+            <span>Map tiles couldn&apos;t load — check your internet or firewall</span>
+            <button
+              type="button"
+              onClick={retryTiles}
+              className="ml-1 shrink-0 rounded-full bg-white/20 px-2 py-0.5 font-semibold hover:bg-white/30"
+            >
+              Retry
+            </button>
           </div>
         </div>
       )}
@@ -444,7 +534,7 @@ export default function LiveTrackingLeaflet({
             onClick={() => setLayerMenuOpen((v) => !v)}
             className="flex h-9 w-9 items-center justify-center rounded-md border border-black/10 bg-white text-slate-700 shadow-md transition-colors hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
             aria-label="Change map style"
-            title="Map style"
+            title={activeStyleLabel ? `Map style: ${activeStyleLabel}` : 'Map style'}
           >
             <Layers className="h-4 w-4" />
           </button>
