@@ -198,8 +198,11 @@ export function HeadshotCropDialog({
                 alt="Crop preview"
                 onLoad={handleImageLoad}
                 draggable={false}
-                className="pointer-events-none absolute left-1/2 top-1/2"
+                className="pointer-events-none absolute left-1/2 top-1/2 max-w-none"
                 style={{
+                  width: naturalSize?.w,
+                  height: naturalSize?.h,
+                  maxWidth: "none",
                   transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px) scale(${effectiveScale})`,
                   transformOrigin: "center center",
                 }}
