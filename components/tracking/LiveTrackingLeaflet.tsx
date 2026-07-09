@@ -301,17 +301,16 @@ export default function LiveTrackingLeaflet({
       clearTimeout(t1)
       clearTimeout(t2)
       style.remove()
+
+      // Ensure the map cleans up its DOM event listeners and state
+      // so it can safely re-initialize immediately if Strict Mode remounts it.
+      if (mapRef.current) {
+        if (tileTimeoutRef.current) clearTimeout(tileTimeoutRef.current)
+        mapRef.current.remove()
+        mapRef.current = null
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Cleanup map instance only on unmount
-  useEffect(() => {
-    return () => {
-      if (tileTimeoutRef.current) clearTimeout(tileTimeoutRef.current)
-      mapRef.current?.remove()
-      mapRef.current = null
-    }
   }, [])
 
   // ── Basemap switching (manual selection + auto theme-follow) ─────────────
@@ -380,9 +379,9 @@ export default function LiveTrackingLeaflet({
     const el = containerRef.current?.parentElement
     if (!el) return
     if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {})
+      document.exitFullscreen().catch(() => { })
     } else {
-      el.requestFullscreen?.().catch(() => {})
+      el.requestFullscreen?.().catch(() => { })
     }
   }
 

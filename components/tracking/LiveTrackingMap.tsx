@@ -548,12 +548,12 @@ export default function LiveTrackingMap() {
             sidebarOpen ? 'lg:flex-[0.76] flex-1' : 'flex-1'
           )}
         >
-          <Card className="h-full overflow-hidden shadow-lg border border-border/80">
-            <CardHeader className="px-4 py-2 sm:px-5 sm:py-3">
+          <Card className="flex flex-col h-full overflow-hidden shadow-lg border border-border/80">
+            <CardHeader className="shrink-0 px-4 py-2 sm:px-5 sm:py-3">
               <CardTitle className="text-sm font-medium">Live Map</CardTitle>
             </CardHeader>
-            <CardContent className="h-full p-0">
-              <div className="h-full w-full min-h-[360px]">
+            <CardContent className="flex-1 p-0 relative min-h-[360px]">
+              <div className="absolute inset-0">
                 {isClient && (
                   <LiveTrackingLeaflet
                     center={mapCenter}
@@ -567,7 +567,7 @@ export default function LiveTrackingMap() {
                 )}
               </div>
               {filteredLocations.length === 0 && (
-                <div className="px-4 py-3 border-t text-xs text-muted-foreground bg-muted/40">
+                <div className="absolute top-0 inset-x-0 px-4 py-3 border-b text-xs text-muted-foreground bg-muted/90 backdrop-blur z-[1000]">
                   No active locations yet. Ask your team to enable location services on their devices to appear on the map.
                 </div>
               )}
