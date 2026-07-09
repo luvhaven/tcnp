@@ -5,11 +5,12 @@ import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
-import { canManageWelfare } from "@/lib/utils"
+import { canManageWelfare, canAccessWelfareDirectory } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
@@ -17,7 +18,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import LoungeMenus from "@/components/nests/LoungeMenus"
-import { UtensilsCrossed, BellRing, Loader2, HeartHandshake } from "lucide-react"
+import WelfareOfficerDirectory from "@/components/welfare/WelfareOfficerDirectory"
+import { UtensilsCrossed, BellRing, Loader2, HeartHandshake, Users } from "lucide-react"
 
 // ─── Singleton client ───
 const supabase = createClient()
@@ -25,6 +27,7 @@ const supabase = createClient()
 export default function WelfarePage() {
   const { data: currentUser } = useCurrentUser()
   const canEdit = canManageWelfare(currentUser?.role, currentUser?.oscar)
+  const canSeeDirectory = canAccessWelfareDirectory(currentUser?.role, currentUser?.oscar)
 
   const [alarmOpen, setAlarmOpen] = useState(false)
   const [sending, setSending] = useState(false)
@@ -86,20 +89,49 @@ export default function WelfarePage() {
         </div>
       </div>
 
-      {/* Program filter */}
-      <div className="flex items-center gap-3">
-        <Label className="text-sm text-muted-foreground">Program:</Label>
-        <Select value={filterProgram} onValueChange={setFilterProgram}>
-          <SelectTrigger className="w-[220px] h-9"><SelectValue placeholder="All Programs" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Programs</SelectItem>
-            {programs.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+      {canSeeDirectory ? (
+        <Tabs defaultValue="menus" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="menus"><UtensilsCrossed className="mr-2 h-4 w-4" />Menus</TabsTrigger>
+            <TabsTrigger value="directory"><Users className="mr-2 h-4 w-4" />Officer Directory</TabsTrigger>
+          </TabsList>
 
-      {/* Menus (shared with NOscar Lounge) */}
-      <LoungeMenus canEdit={canEdit} selectedProgram={filterProgram} currentUserId={currentUser?.id ?? null} />
+          <TabsContent value="menus" className="space-y-4">
+            <div className="flex items-center gap-3">
+              <Label className="text-sm text-muted-foreground">Program:</Label>
+              <Select value={filterProgram} onValueChange={setFilterProgram}>
+                <SelectTrigger className="w-[220px] h-9"><SelectValue placeholder="All Programs" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Programs</SelectItem>
+                  {programs.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <LoungeMenus canEdit={canEdit} selectedProgram={filterProgram} currentUserId={currentUser?.id ?? null} />
+          </TabsContent>
+
+          <TabsContent value="directory">
+            <WelfareOfficerDirectory />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <>
+          {/* Program filter */}
+          <div className="flex items-center gap-3">
+            <Label className="text-sm text-muted-foreground">Program:</Label>
+            <Select value={filterProgram} onValueChange={setFilterProgram}>
+              <SelectTrigger className="w-[220px] h-9"><SelectValue placeholder="All Programs" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Programs</SelectItem>
+                {programs.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Menus (shared with NOscar Lounge) */}
+          <LoungeMenus canEdit={canEdit} selectedProgram={filterProgram} currentUserId={currentUser?.id ?? null} />
+        </>
+      )}
 
       {/* Food alarm dialog */}
       <Dialog open={alarmOpen} onOpenChange={setAlarmOpen}>

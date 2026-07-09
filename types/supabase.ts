@@ -174,6 +174,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "chat_messages_papa_id_fkey"
+            columns: ["papa_id"]
+            isOneToOne: false
+            referencedRelation: "papas_basic"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "chat_messages_program_id_fkey"
             columns: ["program_id"]
             isOneToOne: false
@@ -915,6 +922,13 @@ export type Database = {
             referencedRelation: "papas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "flight_tracking_papa_id_fkey"
+            columns: ["papa_id"]
+            isOneToOne: false
+            referencedRelation: "papas_basic"
+            referencedColumns: ["id"]
+          },
         ]
       }
       hospitality_places: {
@@ -1285,6 +1299,13 @@ export type Database = {
             referencedRelation: "papas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "journey_papas_papa_id_fkey"
+            columns: ["papa_id"]
+            isOneToOne: false
+            referencedRelation: "papas_basic"
+            referencedColumns: ["id"]
+          },
         ]
       }
       journey_status_updates: {
@@ -1528,6 +1549,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "journeys_papa_id_fkey"
+            columns: ["papa_id"]
+            isOneToOne: false
+            referencedRelation: "papas_basic"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "journeys_program_id_fkey"
             columns: ["program_id"]
             isOneToOne: false
@@ -1591,6 +1619,13 @@ export type Database = {
             columns: ["papa_id"]
             isOneToOne: false
             referencedRelation: "papas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_assets_papa_id_fkey"
+            columns: ["papa_id"]
+            isOneToOne: false
+            referencedRelation: "papas_basic"
             referencedColumns: ["id"]
           },
           {
@@ -2198,6 +2233,13 @@ export type Database = {
             columns: ["papa_id"]
             isOneToOne: false
             referencedRelation: "papas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "papa_accommodations_papa_id_fkey"
+            columns: ["papa_id"]
+            isOneToOne: false
+            referencedRelation: "papas_basic"
             referencedColumns: ["id"]
           },
           {
@@ -2840,6 +2882,13 @@ export type Database = {
             columns: ["papa_id"]
             isOneToOne: false
             referencedRelation: "papas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_speakers_papa_id_fkey"
+            columns: ["papa_id"]
+            isOneToOne: false
+            referencedRelation: "papas_basic"
             referencedColumns: ["id"]
           },
           {
@@ -3734,6 +3783,38 @@ export type Database = {
         }
         Relationships: []
       }
+      papas_basic: {
+        Row: {
+          full_name: string | null
+          id: string | null
+          profile_photo_url: string | null
+          program_id: string | null
+          title: string | null
+        }
+        Insert: {
+          full_name?: string | null
+          id?: string | null
+          profile_photo_url?: string | null
+          program_id?: string | null
+          title?: string | null
+        }
+        Update: {
+          full_name?: string | null
+          id?: string | null
+          profile_photo_url?: string | null
+          program_id?: string | null
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "papas_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vw_audit_logs: {
         Row: {
           action: string | null
@@ -4161,6 +4242,24 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      get_welfare_directory: {
+        Args: never
+        Returns: {
+          birth_day: number
+          birth_month: number
+          email: string
+          emergency_contact_name: string
+          emergency_contact_phone: string
+          full_name: string
+          id: string
+          is_active: boolean
+          oscar: string
+          phone: string
+          photo_url: string
+          role: Database["public"]["Enums"]["user_role"]
+          team: string
+        }[]
+      }
       gettransactionid: { Args: never; Returns: unknown }
       has_any_claim_role:
         | {
@@ -4228,8 +4327,10 @@ export type Database = {
       is_admin_user: { Args: never; Returns: boolean }
       is_alpha_oscar: { Args: never; Returns: boolean }
       is_delta_oscar: { Args: never; Returns: boolean }
+      is_november_oscar: { Args: never; Returns: boolean }
       is_tango_oscar: { Args: never; Returns: boolean }
       is_valid_user_role: { Args: { p_role: string }; Returns: boolean }
+      is_victor_oscar: { Args: never; Returns: boolean }
       longtransactionsenabled: { Args: never; Returns: boolean }
       mark_message_read: {
         Args: { message_uuid: string; user_uuid: string }
@@ -4239,6 +4340,14 @@ export type Database = {
         Args: { p_program_id: string; p_user_id: string }
         Returns: undefined
       }
+      oscar_unit_matches: { Args: { unit_pattern: string }; Returns: boolean }
+      papa_has_nest: { Args: { target_papa_id: string }; Returns: boolean }
+      papa_has_theatre: { Args: { target_papa_id: string }; Returns: boolean }
+      papa_used_eagle_square: {
+        Args: { target_papa_id: string }
+        Returns: boolean
+      }
+      papa_uses_cheetah: { Args: { target_papa_id: string }; Returns: boolean }
       populate_geometry_columns:
         | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }
         | { Args: { use_typmod?: boolean }; Returns: string }

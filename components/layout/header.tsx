@@ -12,8 +12,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
 import { useTheme, type AppTheme } from "@/components/theme/ThemeProvider"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
 import InstallButton from "@/components/pwa/InstallButton"
 import NotificationCenter from "@/components/notifications/NotificationCenter"
 import Link from "next/link"
@@ -46,35 +46,12 @@ function ThemeToggle() {
 export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
   const router = useRouter()
   const supabase = createClient()
-  const [user, setUser] = useState<any>(null)
-  const [profile, setProfile] = useState<any>(null)
-
-  useEffect(() => {
-    const getUser = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser()
-        setUser(user)
-
-        if (user) {
-          const { data: profile, error } = await supabase
-            .from('users')
-            .select('id, full_name, role, photo_url, oscar')
-            .eq('id', user.id)
-            .single()
-
-          if (error) {
-            console.warn('Error loading user profile (non-fatal):', error)
-          }
-
-          setProfile(profile)
-        }
-      } catch (error) {
-        console.warn('User fetch failed (non-fatal):', error)
-      }
-    }
-
-    getUser()
-  }, [])
+  // Shared React Query cache — the profile page invalidates ['currentUser']
+  // after a headshot upload/save, so the header picks it up immediately
+  // instead of showing stale data from its own one-time fetch.
+  const { data: currentUser } = useCurrentUser()
+  const user = currentUser ? { email: currentUser.email } : null
+  const profile = currentUser
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -136,9 +113,9 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
         <div className="hidden md:flex items-center gap-2">
           <Link href="/profile" aria-label="Open my profile" className="rounded-full transition-transform hover:scale-105">
             <Avatar className="h-9 w-9 ring-2 ring-transparent transition-shadow hover:ring-primary/40">
-              <AvatarImage src={profile?.photo_url} />
+              <AvatarImage src={profile?.photo_url ?? undefined} />
               <AvatarFallback className="text-xs font-semibold">
-                {getInitials(profile?.full_name, user?.email)}
+                {getInitials(profile?.full_name ?? undefined, user?.email ?? undefined)}
               </AvatarFallback>
             </Avatar>
           </Link>
@@ -167,9 +144,9 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
         <div className="flex items-center gap-1 md:hidden">
           <Link href="/profile" aria-label="Open my profile">
             <Avatar className="h-8 w-8">
-              <AvatarImage src={profile?.photo_url} />
+              <AvatarImage src={profile?.photo_url ?? undefined} />
               <AvatarFallback className="text-xs font-semibold">
-                {getInitials(profile?.full_name, user?.email)}
+                {getInitials(profile?.full_name ?? undefined, user?.email ?? undefined)}
               </AvatarFallback>
             </Avatar>
           </Link>

@@ -123,7 +123,7 @@ function ChatContent() {
 
       try {
         const { data, error } = await supabase
-          .from('papas')
+          .from('papas_basic')
           .select('id, full_name, title, program_id')
           .eq('program_id', program.id)
           .order('full_name')

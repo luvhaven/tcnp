@@ -44,6 +44,8 @@ export function oscarToRole(oscar: string | null | undefined): string | null {
   if (['wo', 'welfare', 'welfare_oscar', 'welfare oscar'].includes(norm)) return 'welfare_oscar'
   // Hospitality Oscar — Papa experiences
   if (['ho', 'hospitality', 'hospitality_oscar', 'hospitality oscar'].includes(norm)) return 'hospitality_oscar'
+  // Command — HQ/leadership staff (not a phonetic Oscar, but selectable at signup/profile)
+  if (['command', 'command centre', 'command center'].includes(norm)) return 'command'
 
   // Fallback: if the oscar string already looks like a role key, return as-is
   if (norm.includes('_oscar') || norm.includes('_admin') || norm.includes('captain')) return norm
@@ -87,12 +89,14 @@ export function canManageJourney(role: string | null | undefined, isAssignedDO: 
 
 /**
  * Check if a user can manage Papas (guest ministers).
+ * Command Centre owns the Papa roster (create/edit/delete) — other units
+ * only need read access to the Papas they work with at their own stage
+ * (enforced via RLS: Alpha sees flight-linked Papas, Tango sees Papas with
+ * an assigned cheetah, November sees Papas with a nest, Victor sees Papas
+ * with a theatre, Delta sees Papas assigned to them).
  */
-export function canManagePapas(role: string | null | undefined, oscar?: string | null): boolean {
-  if (!role) return false
-  if (isAdmin(role)) return true
-  const effective = effectiveOscarRole(role, oscar)
-  return ['head_tango_oscar'].includes(effective ?? '')
+export function canManagePapas(role: string | null | undefined): boolean {
+  return isAdmin(role)
 }
 
 /**
@@ -142,13 +146,15 @@ export function canManageFleet(role: string | null | undefined, oscar?: string |
 }
 
 /**
- * Check if a user can manage Eagles (tracking/operations).
+ * Check if a user can manage Eagles (aircraft/airport operations).
+ * Per SOP TCNP.01.06, Eagle Square/airport operations are Alpha Oscar's
+ * domain — Tango Oscar owns vehicles (Cheetahs), a separate domain.
  */
 export function canManageEagles(role: string | null | undefined, oscar?: string | null): boolean {
   if (!role) return false
   if (isAdmin(role)) return true
   const effective = effectiveOscarRole(role, oscar)
-  return ['alpha_oscar', 'head_alpha_oscar', 'delta_oscar', 'tango_oscar', 'head_tango_oscar'].includes(effective ?? '')
+  return ['alpha_oscar', 'head_alpha_oscar', 'delta_oscar'].includes(effective ?? '')
 }
 
 /**
@@ -186,6 +192,19 @@ export function canManageWelfare(role: string | null | undefined, oscar?: string
   if (isAdmin(role)) return true
   const effective = effectiveOscarRole(role, oscar)
   return ['welfare_oscar', 'head_welfare_oscar', 'november_oscar', 'noscar_den', 'head_noscar_den'].includes(effective ?? '')
+}
+
+/**
+ * Officer welfare directory (names, contacts, birthdays, emergency contacts
+ * for every officer) is a Head-of-Welfare responsibility specifically — NOT
+ * extended to rank-and-file Welfare Oscars, per the "sufficient, not more"
+ * access principle. Admins/command already see this via the users table.
+ */
+export function canAccessWelfareDirectory(role: string | null | undefined, oscar?: string | null): boolean {
+  if (!role) return false
+  if (isAdmin(role)) return true
+  const effective = effectiveOscarRole(role, oscar)
+  return effective === 'head_welfare_oscar'
 }
 
 /**
