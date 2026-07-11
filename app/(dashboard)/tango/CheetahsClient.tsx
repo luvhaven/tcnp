@@ -113,7 +113,11 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
   })
 
   const { data: programs = [] } = useQuery({
-    queryKey: ['programs'],
+    // Distinct key: this is filtered to planning/active only, so sharing a
+    // cache slot with an unfiltered query elsewhere would intermittently
+    // hide completed/archived programs (or vice versa) depending on fetch
+    // order — see ProgramsClient.tsx for the full explanation.
+    queryKey: ['programs', 'active-full'],
     queryFn: async () => {
       const { data, error } = await supabase.from('programs').select('*').in('status', ['planning', 'active']).order('name')
       if (error) throw error

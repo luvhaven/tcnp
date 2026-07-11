@@ -82,8 +82,17 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
   }
 
   // React Query: Fetch Programs
+  // NOTE: several other pages (Papas, Cheetahs, Officers, Nests) also query
+  // `programs` under the plain `['programs']` key but with different
+  // `select()` shapes (some omitting `status`/`theatres` entirely). Since
+  // React Query treats the key as one shared cache slot, whichever query
+  // resolved LAST used to overwrite this page's data with its own narrower
+  // shape — causing the flicker and "Unknown" status you'd see here. Each
+  // page now uses a shape-specific key (`['programs', 'full']` here) so they
+  // no longer collide; `invalidateQueries({queryKey:['programs']})` below
+  // still refreshes all of them via React Query's key-prefix matching.
   const { data: programs = [] } = useQuery({
-    queryKey: ['programs'],
+    queryKey: ['programs', 'full'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('programs')
@@ -137,15 +146,15 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
     },
     // Optimistic UI update
     onMutate: async (deletedId) => {
-      await queryClient.cancelQueries({ queryKey: ['programs'] })
-      const previousPrograms = queryClient.getQueryData<Program[]>(['programs'])
+      await queryClient.cancelQueries({ queryKey: ['programs', 'full'] })
+      const previousPrograms = queryClient.getQueryData<Program[]>(['programs', 'full'])
       if (previousPrograms) {
-        queryClient.setQueryData<Program[]>(['programs'], old => old?.filter(p => p.id !== deletedId))
+        queryClient.setQueryData<Program[]>(['programs', 'full'], old => old?.filter(p => p.id !== deletedId))
       }
       return { previousPrograms }
     },
     onError: (err, newTodo, context) => {
-      queryClient.setQueryData(['programs'], context?.previousPrograms)
+      queryClient.setQueryData(['programs', 'full'], context?.previousPrograms)
       toast.error('Failed to delete program')
     },
     onSettled: () => {
@@ -161,17 +170,17 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
       return { id, status }
     },
     onMutate: async ({ id, status }) => {
-      await queryClient.cancelQueries({ queryKey: ['programs'] })
-      const previousPrograms = queryClient.getQueryData<Program[]>(['programs'])
+      await queryClient.cancelQueries({ queryKey: ['programs', 'full'] })
+      const previousPrograms = queryClient.getQueryData<Program[]>(['programs', 'full'])
       if (previousPrograms) {
-        queryClient.setQueryData<Program[]>(['programs'], old =>
+        queryClient.setQueryData<Program[]>(['programs', 'full'], old =>
           old?.map(p => p.id === id ? { ...p, status } : p)
         )
       }
       return { previousPrograms }
     },
     onError: (err, variables, context) => {
-      queryClient.setQueryData(['programs'], context?.previousPrograms)
+      queryClient.setQueryData(['programs', 'full'], context?.previousPrograms)
       toast.error('Failed to update status')
     },
     onSettled: () => {

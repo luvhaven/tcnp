@@ -119,7 +119,10 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
   })
 
   const { data: programs = [] } = useQuery({
-    queryKey: ['programs'],
+    // Same shape (id, name, status) as OfficersClient's programs query, so
+    // it's safe to share this key — see ProgramsClient.tsx for why pages
+    // with DIFFERENT select() shapes must not share the bare ['programs'] key.
+    queryKey: ['programs', 'lite-status'],
     queryFn: async () => {
       const { data, error } = await supabase.from('programs').select('id, name, status').order('name')
       if (error) throw error

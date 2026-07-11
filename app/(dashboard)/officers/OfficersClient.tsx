@@ -257,7 +257,10 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
   })
 
   const { data: programs = [] } = useQuery({
-    queryKey: ['programs'],
+    // Distinct key — see ProgramsClient.tsx for why sharing the bare
+    // ['programs'] key across pages with different select() shapes caused
+    // flicker and missing fields.
+    queryKey: ['programs', 'lite-status'],
     queryFn: async () => {
       const { data, error } = await supabase.from('programs').select('id, name, status').order('created_at', { ascending: false })
       if (error) throw error
