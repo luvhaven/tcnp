@@ -92,32 +92,24 @@ const withPWA = require("@ducanh2912/next-pwa").default({
   fallbacks: {
     document: "/offline.html",
   },
-  // Map tiles need their own rule ahead of the default catch-all: the
-  // library's built-in "cross-origin" route caps ALL cross-origin GET
-  // requests (shared with every other CDN asset on the page) at just 32
-  // cache entries and funnels errors through a document-fallback handler
-  // meant for page navigations, not tile images — a single map view can
-  // request 30-40+ unique tile URLs, so this thrashes/breaks in production
-  // (where the service worker is active) even though it works locally
-  // (where next-pwa is disabled in development and never intercepts these
-  // requests at all).
+  // Map tiles MUST bypass the service worker entirely (NetworkOnly). The map
+  // works on localhost and for logged-out visitors because no service worker
+  // is intercepting requests there (next-pwa is disabled in dev, and the SW is
+  // only registered after login). For a logged-in user the SW is active, and
+  // next-pwa's default "cross-origin" route (NetworkFirst, a 32-entry cache
+  // shared with every CDN asset, a 10s timeout, and a document-fallback error
+  // handler) chokes on the 30-40+ simultaneous tile requests a single map view
+  // fires — producing the blank/white map. Registering a NetworkOnly route for
+  // the tile hosts ahead of that catch-all makes the SW pass tile requests
+  // straight to the network, exactly as if no SW existed — matching the
+  // known-good localhost behavior.
   extendDefaultRuntimeCaching: true,
   workboxOptions: {
     disableDevLogs: true,
     runtimeCaching: [
       {
         urlPattern: /^https:\/\/([a-d]\.basemaps\.cartocdn\.com|[a-c]\.tile\.openstreetmap\.org|cartodb-basemaps-[a-d]\.global\.ssl\.fastly\.net|server\.arcgisonline\.com|api\.tomtom\.com)\//i,
-        handler: "CacheFirst",
-        options: {
-          cacheName: "map-tiles",
-          expiration: {
-            maxEntries: 1000,
-            maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days — tile imagery rarely changes
-          },
-          cacheableResponse: {
-            statuses: [0, 200],
-          },
-        },
+        handler: "NetworkOnly",
       },
     ],
   },

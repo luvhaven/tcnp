@@ -129,6 +129,14 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // Exclude Next internals AND all public/PWA static assets from auth handling.
+    // Previously the auth middleware caught /sw.js, /manifest.json, /workbox-*.js,
+    // etc. and — for any request without a session cookie (including the browser's
+    // own background manifest/SW checks) — redirected them to /login, returning
+    // HTML instead of the real file. That silently broke service-worker
+    // registration and made the manifest unreadable, so the browser never offered
+    // the PWA "install" icon in the address bar. Serving these files directly,
+    // regardless of auth state, is both correct and required for installability.
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json|manifest.webmanifest|sw.js|sw.js.map|workbox-|worker-|fallback-|swe-worker|robots.txt|sitemap.xml|offline.html|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|js|css|json|webmanifest|woff|woff2|ttf|eot|mp3|wav|ogg)$).*)',
   ],
 };
