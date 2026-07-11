@@ -145,13 +145,13 @@ export default function JourneysClient({
   const [timelinePapaName, setTimelinePapaName] = useState<string>('')
 
   // Multi-DO state
-  const [allOfficers, setAllOfficers] = useState<any[]>([])
+  const [programOfficers, setProgramOfficers] = useState<any[]>([])
   const [loadingOfficers, setLoadingOfficers] = useState(false)
   const [doSearch, setDoSearch] = useState('')
   const searchParams = useSearchParams()
   const [pulsingJourneyId, setPulsingJourneyId] = useState<string | null>(null)
 
-  const filteredDOOfficers = allOfficers
+  const filteredDOOfficers = programOfficers
     .filter(officer => !['captain', 'head_of_operations'].includes(officer.role))
     .filter(officer => {
       if (!doSearch.trim()) return true
@@ -181,44 +181,45 @@ export default function JourneysClient({
 
   const canCreateJourney = currentRole ? isAdmin(currentRole) : false
 
-  // Fetch every Protocol Officer once — Admin/Command can assign ANY officer
-  // as DO to a journey, not just those with a title assignment in the
-  // selected program (that program-scoped picker was the reason this
-  // feature felt "missing": an admin picking a program with no title
-  // assignments yet just saw an empty list).
+  // Fetch officers eligible for the SELECTED program only — eligible means
+  // formally title-assigned to it, or having responded "available" to a
+  // mission-availability request tied to it. Not "any officer in the
+  // system": a DO must actually be working/available for this specific
+  // program.
   useEffect(() => {
+    if (!formData.program_id) {
+      setProgramOfficers([])
+      return
+    }
     const fetchOfficers = async () => {
       setLoadingOfficers(true)
       try {
-        const res = await fetch('/api/officers/list')
+        const res = await fetch(`/api/officers/by-program?program_id=${formData.program_id}`)
         if (!res.ok) {
           const errText = await res.text()
-          console.error('officers/list error response:', errText)
-          toast.error('Could not load officers')
-          setAllOfficers([])
+          console.error('by-program error response:', errText)
+          toast.error('Could not load officers for this program')
+          setProgramOfficers([])
           return
         }
         const json = await res.json()
         if (json.error) {
-          console.error('officers/list API error:', json.error)
+          console.error('by-program API error:', json.error)
           toast.error('Could not load officers: ' + json.error)
-          setAllOfficers([])
+          setProgramOfficers([])
         } else {
-          const officers = (json.officers || [])
-            .filter((o: any) => o.activation_status === 'active')
-            .sort((a: any, b: any) => (a.full_name ?? '').localeCompare(b.full_name ?? ''))
-          setAllOfficers(officers)
+          setProgramOfficers(json.officers || [])
         }
       } catch (err) {
-        console.error('Error fetching officers:', err)
-        toast.error('Failed to load officers')
-        setAllOfficers([])
+        console.error('Error fetching program officers:', err)
+        toast.error('Failed to load officers for this program')
+        setProgramOfficers([])
       } finally {
         setLoadingOfficers(false)
       }
     }
     void fetchOfficers()
-  }, [])
+  }, [formData.program_id])
 
   // Deep link from a notification (e.g. "/journeys?highlight=<id>") — scroll
   // the referenced journey into view and pulse it so it's unmistakable which
@@ -1056,9 +1057,13 @@ export default function JourneysClient({
 
               <div className="space-y-2 md:col-span-2">
                 <Label>Duty Officer(s) — DO Team</Label>
-                <p className="text-[11px] text-muted-foreground">Any Protocol Officer can be assigned — they'll be notified and must accept before starting the journey.</p>
-                {loadingOfficers ? (
-                  <p className="text-xs text-muted-foreground animate-pulse">Loading officers…</p>
+                <p className="text-[11px] text-muted-foreground">Only officers working or available for the selected Program are eligible. They'll be notified and must accept before starting the journey.</p>
+                {!formData.program_id ? (
+                  <p className="text-xs text-muted-foreground bg-muted rounded-md px-3 py-2">Select a Program above to load eligible officers.</p>
+                ) : loadingOfficers ? (
+                  <p className="text-xs text-muted-foreground animate-pulse">Loading officers for this program…</p>
+                ) : filteredDOOfficers.length === 0 ? (
+                  <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-md px-3 py-2">No officers are working or available for this program yet. Send a mission availability request, or assign officers in the Officers page.</p>
                 ) : (
                   <>
                     <Input
@@ -1068,9 +1073,7 @@ export default function JourneysClient({
                       className="h-8 text-sm"
                     />
                     <div className="border rounded-md divide-y max-h-52 overflow-y-auto">
-                      {filteredDOOfficers.length === 0 ? (
-                        <p className="px-3 py-4 text-center text-xs text-muted-foreground">No officers match "{doSearch}"</p>
-                      ) : filteredDOOfficers.map(officer => {
+                      {filteredDOOfficers.map(officer => {
                         const isSelected = selectedDOs.includes(officer.id)
                         const isLead = teamLeadId === officer.id
                         return (
@@ -1084,7 +1087,10 @@ export default function JourneysClient({
                             />
                             <label htmlFor={`do-${officer.id}`} className="flex-1 cursor-pointer">
                               <span className="font-medium text-sm">{officer.full_name}</span>
-                              <span className="ml-2 text-xs text-muted-foreground">{officer.oscar || officer.role}</span>
+                              <span className="ml-2 text-xs text-muted-foreground">{officer.title_name || officer.oscar || officer.role}</span>
+                              {officer.is_available_only && (
+                                <span className="ml-2 text-[10px] uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Available</span>
+                              )}
                             </label>
                             {isSelected && selectedDOs.length > 1 && (
                               <button
@@ -1409,8 +1415,12 @@ export default function JourneysClient({
 
               <div className="space-y-2">
                 <Label>Duty Officer(s) — DO Team</Label>
-                {loadingOfficers ? (
+                {!formData.program_id ? (
+                  <p className="text-xs text-muted-foreground bg-muted rounded-md px-3 py-2">Select a Program to load eligible officers.</p>
+                ) : loadingOfficers ? (
                   <p className="text-xs text-muted-foreground animate-pulse">Loading officers…</p>
+                ) : filteredDOOfficers.length === 0 ? (
+                  <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-md px-3 py-2">No officers are working or available for this program yet.</p>
                 ) : (
                   <>
                     <Input
@@ -1420,9 +1430,7 @@ export default function JourneysClient({
                       className="h-8 text-sm"
                     />
                     <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
-                      {filteredDOOfficers.length === 0 ? (
-                        <p className="px-3 py-4 text-center text-xs text-muted-foreground">No officers match "{doSearch}"</p>
-                      ) : filteredDOOfficers.map(officer => {
+                      {filteredDOOfficers.map(officer => {
                         const isSelected = selectedDOs.includes(officer.id)
                         const isLead = teamLeadId === officer.id
                         return (
@@ -1430,7 +1438,10 @@ export default function JourneysClient({
                             <input type="checkbox" id={`edit-do-${officer.id}`} checked={isSelected} onChange={() => toggleDO(officer.id)} className="h-4 w-4 rounded border-input" />
                             <label htmlFor={`edit-do-${officer.id}`} className="flex-1 cursor-pointer">
                               <span className="font-medium text-sm">{officer.full_name}</span>
-                              <span className="ml-2 text-xs text-muted-foreground">{officer.oscar || officer.role}</span>
+                              <span className="ml-2 text-xs text-muted-foreground">{officer.title_name || officer.oscar || officer.role}</span>
+                              {officer.is_available_only && (
+                                <span className="ml-2 text-[10px] uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Available</span>
+                              )}
                             </label>
                             {isSelected && selectedDOs.length > 1 && (
                               <button type="button" onClick={() => setTeamLeadId(officer.id)}

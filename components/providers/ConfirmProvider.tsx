@@ -1,7 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, useCallback, ReactNode } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { motion, AnimatePresence } from "framer-motion"
 
@@ -124,7 +124,10 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
               <motion.div key="confirm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <DialogHeader>
                   <DialogTitle>{options?.title || "Confirm Action"}</DialogTitle>
-                  <DialogDescription className="py-4 text-base space-y-4">
+                  {/* Plain div, not DialogDescription — DialogDescription renders a <p>,
+                      and this content includes <div>/<p> children, which is invalid
+                      HTML nesting (React hydration error). Same visual styling. */}
+                  <div className="py-4 text-base space-y-4 text-sm text-muted-foreground">
                     <div>{options?.message}</div>
                     {options?.requireInput && (
                       <div className="space-y-2 mt-4">
@@ -143,7 +146,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                         />
                       </div>
                     )}
-                  </DialogDescription>
+                  </div>
                 </DialogHeader>
                 <DialogFooter className="mt-4 gap-2 sm:gap-0">
                   <Button variant="outline" onClick={() => handleClose(false)}>
