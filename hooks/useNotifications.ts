@@ -14,8 +14,24 @@ export interface AppNotification {
   is_read: boolean
   created_at: string
   journey_id?: string | null
-  related_url?: string | null
-  metadata?: { kind?: string; [key: string]: unknown } | null
+  metadata?: { kind?: string; program_id?: string; request_id?: string; [key: string]: unknown } | null
+}
+
+/**
+ * Where clicking a notification should take the user. Kept alongside
+ * resolveChimeKey since both classify a notification by kind/type — the
+ * single source of truth for "what is this notification about".
+ */
+export function resolveNotificationRoute(n: AppNotification): string | null {
+  const kind = n.metadata?.kind
+  if (kind === 'food_ready') return '/welfare'
+  if (kind === 'mission_request') return '/dashboard'
+  if (kind === 'mention') return '/chat'
+  if (n.journey_id) return `/journeys?highlight=${n.journey_id}`
+  if (n.type === 'chat') return '/chat'
+  if (n.type === 'broken_arrow') return '/incidents'
+  if (n.type === 'call_sign') return '/operations-monitor'
+  return null
 }
 
 // The bell shows the last 10 notifications
@@ -199,7 +215,8 @@ export function useNotifications() {
 
   const deleteNotification = useCallback(async (id: string) => {
     try {
-      await (supabase.from('notifications') as any).delete().eq('id', id)
+      const { error } = await (supabase.from('notifications') as any).delete().eq('id', id)
+      if (error) throw error
       setNotifications((prev) => prev.filter((n) => n.id !== id))
       setUnreadCount((prev) => {
         const wasUnread = notifications.find((n) => n.id === id && !n.is_read)
@@ -207,6 +224,7 @@ export function useNotifications() {
       })
     } catch (err) {
       console.error('[useNotifications] delete failed:', err)
+      toast.error('Failed to delete notification')
     }
   }, [supabase, notifications])
 

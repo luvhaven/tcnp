@@ -10,6 +10,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { cn } from "@/lib/utils"
 import { computeProfileCompletion, type ProfileFields } from "@/lib/profile-completion"
 import { CompletionRing } from "@/components/profile/CompletionRing"
+import { useCelebrate } from "@/components/providers/CelebrateProvider"
 import { HeadshotCropDialog } from "@/components/profile/HeadshotCropDialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -66,6 +67,7 @@ const TEAMS = [
 export default function ProfilePage() {
   const { data: currentUser, isLoading } = useCurrentUser()
   const queryClient = useQueryClient()
+  const celebrate = useCelebrate()
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [saving, setSaving] = useState(false)
@@ -175,7 +177,12 @@ export default function ProfilePage() {
       if (error) throw error
 
       queryClient.invalidateQueries({ queryKey: ["currentUser"] })
-      toast.success(result.isComplete ? "Profile complete — thank you! 🎉" : "Profile saved")
+      const justCompleted = result.isComplete && !currentUser.profile_completed_at
+      if (justCompleted) {
+        celebrate("Profile complete — thank you!")
+      } else {
+        toast.success("Profile saved")
+      }
     } catch (err: any) {
       toast.error(err.message || "Failed to save profile")
     } finally {

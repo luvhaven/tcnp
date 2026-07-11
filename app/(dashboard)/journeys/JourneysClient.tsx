@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -144,8 +145,19 @@ export default function JourneysClient({
   const [timelinePapaName, setTimelinePapaName] = useState<string>('')
 
   // Multi-DO state
-  const [programOfficers, setProgramOfficers] = useState<any[]>([])
+  const [allOfficers, setAllOfficers] = useState<any[]>([])
   const [loadingOfficers, setLoadingOfficers] = useState(false)
+  const [doSearch, setDoSearch] = useState('')
+  const searchParams = useSearchParams()
+  const [pulsingJourneyId, setPulsingJourneyId] = useState<string | null>(null)
+
+  const filteredDOOfficers = allOfficers
+    .filter(officer => !['captain', 'head_of_operations'].includes(officer.role))
+    .filter(officer => {
+      if (!doSearch.trim()) return true
+      const q = doSearch.trim().toLowerCase()
+      return (officer.full_name ?? '').toLowerCase().includes(q) || (officer.oscar ?? '').toLowerCase().includes(q)
+    })
   const [selectedDOs, setSelectedDOs] = useState<string[]>([])
   const [teamLeadId, setTeamLeadId] = useState<string>('')
 
@@ -169,43 +181,62 @@ export default function JourneysClient({
 
   const canCreateJourney = currentRole ? isAdmin(currentRole) : false
 
-  // Fetch officers for selected program
+  // Fetch every Protocol Officer once — Admin/Command can assign ANY officer
+  // as DO to a journey, not just those with a title assignment in the
+  // selected program (that program-scoped picker was the reason this
+  // feature felt "missing": an admin picking a program with no title
+  // assignments yet just saw an empty list).
   useEffect(() => {
-    if (!formData.program_id) {
-      setProgramOfficers([])
-      setSelectedDOs([])
-      setTeamLeadId('')
-      return
-    }
     const fetchOfficers = async () => {
       setLoadingOfficers(true)
       try {
-        const res = await fetch(`/api/officers/by-program?program_id=${formData.program_id}`)
+        const res = await fetch('/api/officers/list')
         if (!res.ok) {
           const errText = await res.text()
-          console.error('by-program error response:', errText)
-          toast.error('Could not load officers for this program')
-          setProgramOfficers([])
+          console.error('officers/list error response:', errText)
+          toast.error('Could not load officers')
+          setAllOfficers([])
           return
         }
         const json = await res.json()
         if (json.error) {
-          console.error('by-program API error:', json.error)
+          console.error('officers/list API error:', json.error)
           toast.error('Could not load officers: ' + json.error)
-          setProgramOfficers([])
+          setAllOfficers([])
         } else {
-          setProgramOfficers(json.officers || [])
+          const officers = (json.officers || [])
+            .filter((o: any) => o.activation_status === 'active')
+            .sort((a: any, b: any) => (a.full_name ?? '').localeCompare(b.full_name ?? ''))
+          setAllOfficers(officers)
         }
       } catch (err) {
-        console.error('Error fetching program officers:', err)
-        toast.error('Failed to load officers for this program')
-        setProgramOfficers([])
+        console.error('Error fetching officers:', err)
+        toast.error('Failed to load officers')
+        setAllOfficers([])
       } finally {
         setLoadingOfficers(false)
       }
     }
     void fetchOfficers()
-  }, [formData.program_id])
+  }, [])
+
+  // Deep link from a notification (e.g. "/journeys?highlight=<id>") — scroll
+  // the referenced journey into view and pulse it so it's unmistakable which
+  // row the notification was about.
+  useEffect(() => {
+    const highlightId = searchParams.get('highlight')
+    if (!highlightId || journeys.length === 0) return
+    const match = journeys.find(j => j.id === highlightId)
+    if (!match) return
+    const t = setTimeout(() => {
+      const el = document.getElementById(`journey-${highlightId}`)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setPulsingJourneyId(highlightId)
+      setTimeout(() => setPulsingJourneyId(null), 2600)
+    }, 250)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [journeys, searchParams])
 
   const toggleDO = (userId: string) => {
     setSelectedDOs(prev => {
@@ -221,7 +252,6 @@ export default function JourneysClient({
   const resetDOState = () => {
     setSelectedDOs([])
     setTeamLeadId('')
-    setProgramOfficers([])
   }
 
   useEffect(() => {
@@ -794,7 +824,11 @@ export default function JourneysClient({
                     .map((journey) => (
                       <div
                         key={journey.id}
-                        className="flex flex-col gap-4 rounded-lg border p-4 transition-all hover:bg-accent/50 hover:shadow-md cursor-pointer animate-slide-up"
+                        id={`journey-${journey.id}`}
+                        className={cn(
+                          "flex flex-col gap-4 rounded-lg border p-4 transition-all hover:bg-accent/50 hover:shadow-md cursor-pointer animate-slide-up",
+                          pulsingJourneyId === journey.id && "ring-2 ring-primary animate-pulse-highlight"
+                        )}
                         onClick={() => {
                           setSelectedJourney(journey)
                           setCallSignDialogOpen(true)
@@ -935,7 +969,11 @@ export default function JourneysClient({
                   .map((journey) => (
                     <div
                       key={journey.id}
-                      className="flex items-center justify-between rounded-lg border p-4 opacity-75 hover:opacity-100 transition-all"
+                      id={`journey-${journey.id}`}
+                      className={cn(
+                        "flex items-center justify-between rounded-lg border p-4 opacity-75 hover:opacity-100 transition-all",
+                        pulsingJourneyId === journey.id && "ring-2 ring-primary animate-pulse-highlight opacity-100"
+                      )}
                     >
                       <div className="flex items-center space-x-4">
                         <div className={cn('h-3 w-3 rounded-full', getStatusIndicatorClass(journey.status))} />
@@ -1018,17 +1056,21 @@ export default function JourneysClient({
 
               <div className="space-y-2 md:col-span-2">
                 <Label>Duty Officer(s) — DO Team</Label>
-                {!formData.program_id ? (
-                  <p className="text-xs text-muted-foreground bg-muted rounded-md px-3 py-2">Select a Program above to load available officers.</p>
-                ) : loadingOfficers ? (
-                  <p className="text-xs text-muted-foreground animate-pulse">Loading officers for this program…</p>
-                ) : programOfficers.length === 0 ? (
-                  <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-md px-3 py-2">No officers are assigned to this program yet. Assign officers in the Officers page first.</p>
+                <p className="text-[11px] text-muted-foreground">Any Protocol Officer can be assigned — they'll be notified and must accept before starting the journey.</p>
+                {loadingOfficers ? (
+                  <p className="text-xs text-muted-foreground animate-pulse">Loading officers…</p>
                 ) : (
-                  <div className="border rounded-md divide-y max-h-52 overflow-y-auto">
-                    {programOfficers
-                      .filter(officer => !['captain', 'head_of_operations'].includes(officer.role))
-                      .map(officer => {
+                  <>
+                    <Input
+                      value={doSearch}
+                      onChange={(e) => setDoSearch(e.target.value)}
+                      placeholder="Search officers by name or Oscar unit…"
+                      className="h-8 text-sm"
+                    />
+                    <div className="border rounded-md divide-y max-h-52 overflow-y-auto">
+                      {filteredDOOfficers.length === 0 ? (
+                        <p className="px-3 py-4 text-center text-xs text-muted-foreground">No officers match "{doSearch}"</p>
+                      ) : filteredDOOfficers.map(officer => {
                         const isSelected = selectedDOs.includes(officer.id)
                         const isLead = teamLeadId === officer.id
                         return (
@@ -1042,7 +1084,7 @@ export default function JourneysClient({
                             />
                             <label htmlFor={`do-${officer.id}`} className="flex-1 cursor-pointer">
                               <span className="font-medium text-sm">{officer.full_name}</span>
-                              <span className="ml-2 text-xs text-muted-foreground">{officer.title_name || officer.role}</span>
+                              <span className="ml-2 text-xs text-muted-foreground">{officer.oscar || officer.role}</span>
                             </label>
                             {isSelected && selectedDOs.length > 1 && (
                               <button
@@ -1062,7 +1104,8 @@ export default function JourneysClient({
                           </div>
                         )
                       })}
-                  </div>
+                    </div>
+                  </>
                 )}
                 {selectedDOs.length > 0 && (
                   <p className="text-xs text-muted-foreground">{selectedDOs.length} DO{selectedDOs.length > 1 ? 's' : ''} selected. {selectedDOs.length > 1 ? 'Team lead marked with ⭐.' : 'Auto-designated as Team Lead.'}</p>
@@ -1366,36 +1409,42 @@ export default function JourneysClient({
 
               <div className="space-y-2">
                 <Label>Duty Officer(s) — DO Team</Label>
-                {!formData.program_id ? (
-                  <p className="text-xs text-muted-foreground bg-muted rounded-md px-3 py-2">Select a Program to load available officers.</p>
-                ) : loadingOfficers ? (
+                {loadingOfficers ? (
                   <p className="text-xs text-muted-foreground animate-pulse">Loading officers…</p>
-                ) : programOfficers.length === 0 ? (
-                  <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-md px-3 py-2">No officers assigned to this program.</p>
                 ) : (
-                  <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
-                    {programOfficers.map(officer => {
-                      const isSelected = selectedDOs.includes(officer.id)
-                      const isLead = teamLeadId === officer.id
-                      return (
-                        <div key={officer.id} className={`flex items-center gap-3 px-3 py-2 transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/50'}`}>
-                          <input type="checkbox" id={`edit-do-${officer.id}`} checked={isSelected} onChange={() => toggleDO(officer.id)} className="h-4 w-4 rounded border-input" />
-                          <label htmlFor={`edit-do-${officer.id}`} className="flex-1 cursor-pointer">
-                            <span className="font-medium text-sm">{officer.full_name}</span>
-                            <span className="ml-2 text-xs text-muted-foreground">{officer.title_name || officer.role}</span>
-                          </label>
-                          {isSelected && selectedDOs.length > 1 && (
-                            <button type="button" onClick={() => setTeamLeadId(officer.id)}
-                              className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${isLead ? 'bg-yellow-400 text-yellow-900 border-yellow-500 font-bold' : 'bg-muted text-muted-foreground border-border hover:border-yellow-400'
-                                }`}>{isLead ? '⭐ Lead' : 'Set Lead'}</button>
-                          )}
-                          {isSelected && selectedDOs.length === 1 && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-400 text-yellow-900 font-bold">⭐ Lead</span>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
+                  <>
+                    <Input
+                      value={doSearch}
+                      onChange={(e) => setDoSearch(e.target.value)}
+                      placeholder="Search officers by name or Oscar unit…"
+                      className="h-8 text-sm"
+                    />
+                    <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
+                      {filteredDOOfficers.length === 0 ? (
+                        <p className="px-3 py-4 text-center text-xs text-muted-foreground">No officers match "{doSearch}"</p>
+                      ) : filteredDOOfficers.map(officer => {
+                        const isSelected = selectedDOs.includes(officer.id)
+                        const isLead = teamLeadId === officer.id
+                        return (
+                          <div key={officer.id} className={`flex items-center gap-3 px-3 py-2 transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/50'}`}>
+                            <input type="checkbox" id={`edit-do-${officer.id}`} checked={isSelected} onChange={() => toggleDO(officer.id)} className="h-4 w-4 rounded border-input" />
+                            <label htmlFor={`edit-do-${officer.id}`} className="flex-1 cursor-pointer">
+                              <span className="font-medium text-sm">{officer.full_name}</span>
+                              <span className="ml-2 text-xs text-muted-foreground">{officer.oscar || officer.role}</span>
+                            </label>
+                            {isSelected && selectedDOs.length > 1 && (
+                              <button type="button" onClick={() => setTeamLeadId(officer.id)}
+                                className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${isLead ? 'bg-yellow-400 text-yellow-900 border-yellow-500 font-bold' : 'bg-muted text-muted-foreground border-border hover:border-yellow-400'
+                                  }`}>{isLead ? '⭐ Lead' : 'Set Lead'}</button>
+                            )}
+                            {isSelected && selectedDOs.length === 1 && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-400 text-yellow-900 font-bold">⭐ Lead</span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
                 )}
               </div>
             </div>

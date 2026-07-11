@@ -50,6 +50,34 @@ export async function POST(req: NextRequest) {
         .insert(rows)
 
       if (insertError) throw insertError
+
+      // Notify each newly-assigned officer (other than the assigner themself,
+      // who is auto-acknowledged above) — surfaces in their bell alongside the
+      // MissionNotificationHandler accept/reject card, and routes straight
+      // back to this journey when clicked.
+      const { data: journeyMeta } = await (adminClient as any)
+        .from('journeys')
+        .select('origin, destination, papas(full_name, title)')
+        .eq('id', journey_id)
+        .single()
+      const papaName = journeyMeta?.papas ? `${journeyMeta.papas.title ?? ''} ${journeyMeta.papas.full_name ?? ''}`.trim() : null
+      const routeLabel = journeyMeta ? `${journeyMeta.origin ?? '?'} → ${journeyMeta.destination ?? '?'}` : 'a journey'
+
+      const notifyRows = officers
+        .filter(o => o.user_id !== user.id)
+        .map(o => ({
+          user_id: o.user_id,
+          title: o.is_lead ? 'New DO assignment — Team Lead' : 'New DO assignment',
+          message: papaName
+            ? `You've been assigned as Duty Officer for ${papaName} (${routeLabel}). Please accept in My Operations.`
+            : `You've been assigned as Duty Officer for ${routeLabel}. Please accept in My Operations.`,
+          type: 'call_sign',
+          journey_id,
+          metadata: { kind: 'do_assignment' },
+        }))
+      if (notifyRows.length > 0) {
+        await (adminClient as any).from('notifications').insert(notifyRows)
+      }
     }
 
     // Mirror team lead to journeys.assigned_duty_officer_id for backwards compat

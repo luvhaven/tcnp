@@ -14,6 +14,7 @@ import { Loader2, Radio, MapPin, Car, User, Calendar, Clock, Crown, Shield } fro
 import { format, formatDistanceToNow } from 'date-fns'
 import { notificationService } from '@/lib/services/notificationService'
 import { toast } from 'sonner'
+import { useCelebrate } from '@/components/providers/CelebrateProvider'
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from '@/lib/constants/tncpCallSigns'
 import { cn } from '@/lib/utils'
 import { oscarToRole } from '@/lib/utils'
@@ -485,6 +486,7 @@ function JourneyOperationsPanel({
   isAdmin: boolean
 }) {
   const supabase = createClient()
+  const celebrate = useCelebrate()
   const myDORecord = journey.duty_officers?.find(d => d.user_id === currentUserId)
   const isAssignedDO = !!(myDORecord || journey.assigned_duty_officer_id === currentUserId)
   const isLead = !!(myDORecord?.is_lead || journey.assigned_duty_officer_id === currentUserId)
@@ -504,7 +506,7 @@ function JourneyOperationsPanel({
         .eq('user_id', currentUserId)
 
       if (error) throw error
-      toast.success('Assignment acknowledged: Shift handoff complete')
+      celebrate('Assignment accepted — shift handoff complete')
     } catch (err: any) {
       console.error('Acknowledgment error:', err)
       toast.error('Failed to acknowledge assignment (Check network or permissions)')

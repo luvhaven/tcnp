@@ -619,6 +619,25 @@ nav a {
   animation: pulse-once 1.5s ease-out;
 }
 
+/* One-shot pulse for a row deep-linked from a notification (routine, not an alarm) */
+@keyframes pulse-highlight {
+  0% {
+    background-color: hsl(var(--primary) / 0.18);
+  }
+
+  60% {
+    background-color: hsl(var(--primary) / 0.1);
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
+
+.animate-pulse-highlight {
+  animation: pulse-highlight 1.3s ease-out 2;
+}
+
 /* Notification panel scroll snap */
 .notification-scroll {
   scroll-snap-type: y proximity;
