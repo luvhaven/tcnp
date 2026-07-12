@@ -194,11 +194,8 @@ export default function ChatSystem({
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const channelRef = useRef<RealtimeChannel | null>(null)
-  const presenceChannelRef = useRef<RealtimeChannel | null>(null)
-  const presenceIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const markedMessagesRef = useRef<Set<string>>(new Set())
   const missingUsersRef = useRef<Set<string>>(new Set())
-  const onlineUserIdsRef = useRef<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [hasMoreMessages, setHasMoreMessages] = useState(false)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
@@ -476,7 +473,6 @@ export default function ChatSystem({
       if (error) throw error
 
       const participants = (data ?? []) as (ChatParticipant & { is_online: boolean | null })[]
-      const presenceIds = onlineUserIdsRef.current
 
       setUsers((prev: User[]) => {
         const merged = new Map<string, User>()
@@ -484,10 +480,10 @@ export default function ChatSystem({
 
         participants.forEach((participant) => {
           const existing = merged.get(participant.id)
-          // Online = DB flag OR recent last_seen
-          const isOnline =
-            !!participant.is_online ||
-            isRecentlySeen(participant.last_seen ?? null)
+          // The `is_online` DB flag is set true on mount/focus but only cleared via
+          // `beforeunload`, which doesn't reliably fire (mobile backgrounding, force-quit,
+          // dropped connection) — it gets stuck true for days. Trust last_seen recency only.
+          const isOnline = isRecentlySeen(participant.last_seen ?? null)
 
           merged.set(participant.id, {
             id: participant.id,

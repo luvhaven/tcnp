@@ -41,9 +41,18 @@ export default async function OfficersPage() {
     console.error('Officers fetch error:', error)
   }
 
+  // Compute is_online from last_seen freshness so the first paint (before the
+  // client re-fetches via /api/officers/list) already shows correct counts —
+  // this column isn't selected/derived above, so it was always undefined here.
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+  const enrichedInitialOfficers = (initialOfficers || []).map((officer: any) => ({
+    ...officer,
+    is_online: officer.last_seen != null && officer.last_seen >= fiveMinutesAgo,
+  }))
+
   return (
-    <OfficersClient 
-      initialOfficers={(initialOfficers as any) || []} 
+    <OfficersClient
+      initialOfficers={enrichedInitialOfficers}
     />
   )
 }

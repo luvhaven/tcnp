@@ -142,6 +142,10 @@ export default function TeamChatRoom() {
       })) as TeamMember[]
     },
     enabled: !!team,
+    // is_online is a snapshot of last_seen freshness at fetch time — without a
+    // periodic refetch, a member who goes offline stays "online" in the UI for
+    // as long as the chat stays open with no refocus/invalidation to re-check it.
+    refetchInterval: 60 * 1000,
   })
 
   // Realtime: new/updated team messages
