@@ -9,6 +9,7 @@ import {
     Play, Pause, RotateCcw, ClipboardList, PhoneCall
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { SITREP_CODES } from '@/lib/constants/call-signs'
 import Link from 'next/link'
 
 // ─── SITREP Timer ────────────────────────────────────────────────────────────
@@ -198,22 +199,35 @@ export default function DOHelpPanel() {
                     <ScriptViewer title="Farewell / Departure Script" sections={DEPARTURE_SCRIPT} color="blue" />
                 </div>
 
-                {/* SITREP Codes quick ref */}
+                {/* SITREP Codes quick ref — complete glossary per SOP TCNP.01.05 */}
                 <div className="rounded-xl border border-border/40 p-3 space-y-2">
-                    <div className="flex items-center gap-2">
-                        <PhoneCall className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-xs font-semibold">SITREP Call Signs</span>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <PhoneCall className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs font-semibold">SITREP Call Signs</span>
+                        </div>
+                        <Badge variant="outline" className="text-[9px] font-mono">SOP TCNP.01.05</Badge>
                     </div>
+                    <p className="text-[10px] text-muted-foreground">Report to Command every 15 minutes in transit.</p>
                     <div className="grid grid-cols-2 gap-1.5">
-                        {[
-                            { code: 'First Course', meaning: 'Journey started / en route' },
-                            { code: 'Cocktail', meaning: 'Journey paused / brief stop' },
-                            { code: 'Dessert', meaning: 'Arrived at destination' },
-                            { code: 'Settled', meaning: 'Principal checked in / comfortable' },
-                            { code: 'Broken Arrow', meaning: '⚠ Emergency — call Command' },
-                        ].map(({ code, meaning }) => (
-                            <div key={code} className="flex flex-col bg-muted/30 rounded-lg px-2 py-1.5 border border-border/30">
-                                <span className="text-[10px] font-mono font-bold text-primary">{code}</span>
+                        {SITREP_CODES.map(({ code, meaning, kind }) => (
+                            <div
+                                key={code}
+                                className={cn(
+                                    'flex flex-col rounded-lg px-2 py-1.5 border',
+                                    kind === 'emergency'
+                                        ? 'bg-destructive/10 border-destructive/40'
+                                        : kind === 'broadcast'
+                                            ? 'bg-sky-500/10 border-sky-500/30'
+                                            : 'bg-muted/30 border-border/30'
+                                )}
+                            >
+                                <span className={cn(
+                                    'text-[10px] font-mono font-bold',
+                                    kind === 'emergency' ? 'text-destructive' : kind === 'broadcast' ? 'text-sky-600 dark:text-sky-400' : 'text-primary'
+                                )}>
+                                    {kind === 'emergency' ? '⚠ ' : ''}{code}
+                                </span>
                                 <span className="text-[9px] text-muted-foreground leading-snug">{meaning}</span>
                             </div>
                         ))}

@@ -24,10 +24,25 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { formatDistanceToNow } from 'date-fns'
-import { Search, Radio, Clock, Loader2, ChevronDown, Download } from 'lucide-react'
-import { CALL_SIGNS, getCallSignLabel, getCallSignColor, type CallSignKey } from '@/lib/constants/call-signs'
+import { Search, Radio, Clock, Loader2, ChevronDown, Download, Waves, AlertTriangle } from 'lucide-react'
+import { CALL_SIGNS, getCallSignLabel, getCallSignColor, SITREP_CODES, CALL_SIGN_KEY_TO_DB_ENUM, type CallSignKey } from '@/lib/constants/call-signs'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+
+// Latest live SITREP broadcast (traffic / route / emergency) per journey — these
+// come from journey_events, not journeys.status, so they'd otherwise be invisible
+// on this monitor. Keyed by journey_id.
+interface LiveBroadcast {
+    code: string       // Title-case call sign, e.g. "Red Cocktail"
+    meaning: string
+    kind: 'status' | 'broadcast' | 'emergency'
+    at: string
+    notes: string | null
+}
+// SITREP_CODES.code is the same Title-case value stored in journey_events.event_type
+const SITREP_BY_DB_CODE: Record<string, (typeof SITREP_CODES)[number]> = Object.fromEntries(
+    SITREP_CODES.map(s => [s.code, s])
+)
 
 interface DutyOfficerRow {
     user_id: string
@@ -56,6 +71,7 @@ interface Journey {
 export default function JourneyStatusTable() {
     const supabase = createClient()
     const [journeys, setJourneys] = useState<Journey[]>([])
+    const [broadcasts, setBroadcasts] = useState<Record<string, LiveBroadcast>>({})
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -179,6 +195,46 @@ export default function JourneyStatusTable() {
                     setJourneys(prev => prev.filter(j => j.id !== (payload.old as any)?.id))
                 }
             )
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'journey_events'
+                },
+                (payload) => {
+                    if (!mounted) return
+                    // Live SITREP broadcasts (traffic / route / emergency) only ever
+                    // land here — journeys.status doesn't change for them — so this
+                    // is the relay that makes them visible on the monitor.
+                    const row = payload.new as any
+                    const meta = SITREP_BY_DB_CODE[row?.event_type]
+                    if (!row?.journey_id || !meta) return
+                    setBroadcasts(prev => ({
+                        ...prev,
+                        [row.journey_id]: {
+                            code: meta.code,
+                            meaning: meta.meaning,
+                            kind: meta.kind,
+                            at: row.triggered_at || row.created_at || new Date().toISOString(),
+                            notes: row.description ?? null,
+                        }
+                    }))
+                    // Flash the affected row + audible cue for traffic / emergency
+                    const el = document.querySelector(`[data-journey-id="${row.journey_id}"]`)
+                    if (el) {
+                        el.classList.add('animate-pulse', 'bg-primary/10')
+                        setTimeout(() => el.classList.remove('animate-pulse', 'bg-primary/10'), 2000)
+                    }
+                    if (meta.kind === 'emergency') {
+                        try { audioManager.playChime('broken_arrow') } catch { /* ignore */ }
+                        toast.error(`🚨 ${meta.code} — ${meta.meaning}`)
+                    } else if (meta.kind === 'broadcast') {
+                        try { audioManager.playChime('info') } catch { /* ignore */ }
+                        toast.info(`📡 ${meta.code} — ${meta.meaning}`)
+                    }
+                }
+            )
             .subscribe((status, err) => {
                 if (status === 'SUBSCRIBED') {
                     if (mounted) setRealtimeStatus('connected')
@@ -267,6 +323,30 @@ export default function JourneyStatusTable() {
             }
 
             setJourneys(rawJourneys.map(j => ({ ...j, duty_officers: doMap[j.id] || [] })))
+
+            // Seed the latest live broadcast (traffic / route / emergency) per journey
+            // so a monitor opened mid-operation shows the last SITREP, not a blank.
+            if (ids.length > 0) {
+                const { data: evData } = await (supabase as any)
+                    .from('journey_events')
+                    .select('journey_id, event_type, description, triggered_at, created_at')
+                    .in('journey_id', ids)
+                    .order('triggered_at', { ascending: false, nullsFirst: false })
+                const seeded: Record<string, LiveBroadcast> = {}
+                for (const row of evData || []) {
+                    if (seeded[row.journey_id]) continue // rows are newest-first — keep the first
+                    const meta = SITREP_BY_DB_CODE[row.event_type]
+                    if (!meta) continue
+                    seeded[row.journey_id] = {
+                        code: meta.code,
+                        meaning: meta.meaning,
+                        kind: meta.kind,
+                        at: row.triggered_at || row.created_at || new Date().toISOString(),
+                        notes: row.description ?? null,
+                    }
+                }
+                setBroadcasts(seeded)
+            }
         } catch (error) {
             console.error('Error loading journeys:', JSON.stringify(error, null, 2))
             toast.error('Failed to load active journeys')
@@ -326,24 +406,42 @@ export default function JourneyStatusTable() {
     const handleUpdateCallSign = async (newCallSign: string) => {
         if (!selectedJourney) return
 
+        // Traffic / route-change signs are live broadcasts — they must NOT overwrite
+        // the journey's movement status, only emit a journey_events row (same rule the
+        // DO's My Operations panel follows), so the two surfaces stay consistent.
+        const isEventOnly = ['blue_cocktail', 'red_cocktail', 're_order'].includes(newCallSign)
         try {
-            // Direct update — journey_status enum accepts underscored keys (e.g. 'first_course') ✓
-            // We intentionally skip the update_journey_call_sign RPC because it writes to
-            // current_call_sign which is a call_sign enum (Title Case) and would reject
-            // the underscore values we send.
-            const { error } = await (supabase as any)
-                .from('journeys')
-                .update({
-                    status: newCallSign,
-                    status_updated_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                })
-                .eq('id', selectedJourney.id)
+            const { data: { user } } = await supabase.auth.getUser()
+            const now = new Date().toISOString()
 
-            if (error) throw error
+            if (!isEventOnly) {
+                // journey_status enum accepts underscored keys (e.g. 'first_course') ✓
+                const { error } = await (supabase as any)
+                    .from('journeys')
+                    .update({ status: newCallSign, status_updated_at: now, updated_at: now })
+                    .eq('id', selectedJourney.id)
+                if (error) throw error
+            }
+
+            // Log the SITREP event (Title-case call_sign enum). For event-only signs
+            // this is the whole signal, so its error must surface.
+            const eventEnum = CALL_SIGN_KEY_TO_DB_ENUM[newCallSign as CallSignKey]
+            if (eventEnum) {
+                const { error: evErr } = await (supabase as any).from('journey_events').insert({
+                    journey_id: selectedJourney.id,
+                    event_type: eventEnum,
+                    triggered_by: user?.id ?? null,
+                    triggered_at: now,
+                })
+                if (evErr && isEventOnly) throw evErr
+            }
 
             playCallSignChime()
-            toast.success(`Call sign updated to ${getCallSignLabel(newCallSign)}`)
+            toast.success(
+                isEventOnly
+                    ? `📡 ${getCallSignLabel(newCallSign)} broadcast sent`
+                    : `Call sign updated to ${getCallSignLabel(newCallSign)}`
+            )
             setCallSignDialogOpen(false)
             setSelectedJourney(null)
             loadActiveJourneys()
@@ -589,6 +687,7 @@ export default function JourneyStatusTable() {
                                 const callSignColor = getCallSignBadgeColor(callSign)
                                 const canClick = !!(journey.duty_officers?.some(d => d.user_id === currentUser?.id) || currentUser?.id === journey.assigned_duty_officer_id || currentUser?.id === (journey as any).assigned_do_id)
                                 const isBroken = callSign === 'broken_arrow'
+                                const broadcast = broadcasts[journey.id]
                                 const leadDO = journey.duty_officers?.find(d => d.is_lead) ?? null
                                 const allDOs = journey.duty_officers ?? []
 
@@ -644,6 +743,26 @@ export default function JourneyStatusTable() {
                                                 {callSignLabel}
                                                 {canClick && <ChevronDown className="h-3 w-3 ml-auto" />}
                                             </button>
+                                            {/* Latest live SITREP broadcast (traffic / route / emergency) */}
+                                            {broadcast && broadcast.kind !== 'status' && (
+                                                <div
+                                                    className={cn(
+                                                        "mt-1.5 flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium",
+                                                        broadcast.kind === 'emergency'
+                                                            ? "bg-destructive/10 text-destructive"
+                                                            : "bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                                                    )}
+                                                    title={broadcast.notes || broadcast.meaning}
+                                                >
+                                                    {broadcast.kind === 'emergency'
+                                                        ? <AlertTriangle className="h-3 w-3 shrink-0" />
+                                                        : <Waves className="h-3 w-3 shrink-0" />}
+                                                    <span className="truncate">{broadcast.code}</span>
+                                                    <span className="opacity-70 ml-auto whitespace-nowrap">
+                                                        {formatDistanceToNow(new Date(broadcast.at), { addSuffix: true })}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </TableCell>
                                         <TableCell>
                                             {journey.eta ? (

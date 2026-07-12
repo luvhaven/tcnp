@@ -16,6 +16,7 @@ import { notificationService } from '@/lib/services/notificationService'
 import { toast } from 'sonner'
 import { useCelebrate } from '@/components/providers/CelebrateProvider'
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from '@/lib/constants/tncpCallSigns'
+import { CALL_SIGN_KEY_TO_DB_ENUM, type CallSignKey } from '@/lib/constants/call-signs'
 import { cn } from '@/lib/utils'
 import { oscarToRole } from '@/lib/utils'
 
@@ -518,16 +519,23 @@ function JourneyOperationsPanel({
   const statusKey = resolveCallSignKey(journey.status)
   const statusColor = statusKey ? TNCP_CALL_SIGN_COLORS[statusKey] : 'bg-gray-500 text-white'
 
-  // Determine first active call sign based on journey type / destination
-  const getFirstCallSign = (): string => {
+  // First movement call sign when the journey starts, per SOP TCNP.01.05:
+  //   First Course = departure from Nest to Theatre
+  //   Dessert      = departure from Theatre to Nest
+  //   Cocktail     = principal in-transit (generic movement)
+  // Never returns a traffic/route broadcast (blue_cocktail etc.) — those are
+  // event-only SITREPs, not a valid opening movement status.
+  const getFirstCallSign = (): CallSignKey => {
     const dest = (journey.destination ?? '').toLowerCase()
     const origin = (journey.origin ?? '').toLowerCase()
-    if (dest.includes('eagle') || dest.includes('airport')) return 'first_course'
-    if (dest.includes('theatre') || dest.includes('venue')) return 'cocktail'
-    if (dest.includes('nest')) return 'blue_cocktail'
-    // Fallback: if origin is nest/airport, try to infer
-    if (origin.includes('eagle') || origin.includes('airport')) return 'first_course'
-    return 'first_course' // safest default — admin can override
+    // Theatre / venue bound → First Course
+    if (dest.includes('theatre') || dest.includes('venue') || dest.includes('church') || dest.includes('covenant')) return 'first_course'
+    // Returning to the Nest / hotel → Dessert
+    if (dest.includes('nest') || dest.includes('hotel')) return 'dessert'
+    // Leaving the Nest for anywhere else → First Course
+    if (origin.includes('nest') || origin.includes('hotel')) return 'first_course'
+    // Everything else (airport runs, transfers) → generic in-transit
+    return 'cocktail'
   }
 
   const handleStartJourney = async () => {
@@ -537,6 +545,7 @@ function JourneyOperationsPanel({
       const firstCallSign = getFirstCallSign()
 
       // ── Direct update: journey_status enum uses underscores — safe ────────
+      const { data: { user } } = await supabase.auth.getUser()
       const { error: updateError } = await (supabase as any)
         .from('journeys')
         .update({
@@ -548,15 +557,22 @@ function JourneyOperationsPanel({
 
       if (updateError) throw updateError
 
-      // ── Log the event ────────────────────────────────────────────────────
-      await (supabase as any).from('journey_events').insert({
-        journey_id: journey.id,
-        event_type: firstCallSign,
-        description: 'Journey started',
-        triggered_at: new Date().toISOString(),
-      })
+      // ── Log the event (non-fatal) ────────────────────────────────────────
+      // journey_events.event_type is the `call_sign` enum (Title Case). Sending
+      // the underscored key here silently fails the enum check, so map it first.
+      const eventEnum = CALL_SIGN_KEY_TO_DB_ENUM[firstCallSign as CallSignKey]
+      if (eventEnum) {
+        const { error: eventError } = await (supabase as any).from('journey_events').insert({
+          journey_id: journey.id,
+          event_type: eventEnum,
+          description: 'Journey started',
+          triggered_by: user?.id ?? null,
+          triggered_at: new Date().toISOString(),
+        })
+        if (eventError) console.warn('journey_events log failed (non-critical):', eventError)
+      }
 
-      toast.success('Journey started! Call sign updated.')
+      toast.success(`Journey started — ${getCallSignLabel(firstCallSign)} relayed to Ops Monitor`)
     } catch (err: any) {
       toast.error(err.message || 'Failed to start journey')
     } finally {
