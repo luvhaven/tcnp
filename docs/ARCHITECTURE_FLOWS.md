@@ -71,8 +71,8 @@ hatch**.
 |---|---|---|
 | Social media assets | Sierra Oscar | `/sierra` |
 | Outfits & grooming | Compliance Oscar | `/compliance` |
-| Menus / menu of the day | Welfare + NOscar Lounge | `/welfare`, `/nests` |
-| Papa accommodations | NOscar Nest | `/nests` (DOs see only their Papa's) |
+| Menus / menu of the day | Welfare + November (Den) | `/welfare`, `/den` |
+| Papa accommodations | November (Nest) | `/nests` (DOs see only their Papa's) |
 | Seat arrangements | Head of Victor | `/victor` |
 | Places for Papas | Hospitality Oscar | `/hospitality` |
 | Financial documents | Leadership only | `/finance` |

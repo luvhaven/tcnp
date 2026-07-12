@@ -19,7 +19,11 @@ export function oscarToRole(oscar: string | null | undefined): string | null {
   if (norm.includes('head_tango') || norm.includes('head tango')) return 'head_tango_oscar'
   if (norm.includes('head_echo') || norm.includes('head echo')) return 'head_echo_oscar'
   if (norm.includes('head_victor') || norm.includes('head victor')) return 'head_victor_oscar'
-  if (norm.includes('head_november') || norm.includes('head november') || norm.includes('head_noscar')) return 'november_oscar'
+  if (norm.includes('head_november') || norm.includes('head november') || norm.includes('head_noscar') || norm.includes('head noscar')) {
+    if (norm.includes('den')) return 'head_noscar_den'
+    if (norm.includes('nest')) return 'head_noscar_nest'
+    return 'november_oscar' // legacy umbrella head, sub-unit not specified
+  }
   if (norm.includes('head_alpha') || norm.includes('head alpha')) return 'head_alpha_oscar'
   if (norm.includes('head_sierra') || norm.includes('head sierra')) return 'head_sierra_oscar'
   if (norm.includes('head_compliance') || norm.includes('head compliance')) return 'head_compliance_oscar'
@@ -32,7 +36,9 @@ export function oscarToRole(oscar: string | null | undefined): string | null {
   if (['eo', 'echo', 'echo_oscar', 'echo oscar'].includes(norm)) return 'echo_oscar'
   // Victor Oscar — Venue / Theatre
   if (['vo', 'victor', 'victor_oscar', 'victor oscar'].includes(norm)) return 'victor_oscar'
-  // November Oscar — Nests / Hotels
+  // November Oscar — split into Den (private lounge / menus) and Nest (hotels) sub-units
+  if (norm.includes('november') && norm.includes('den')) return 'noscar_den'
+  if (norm.includes('november') && norm.includes('nest')) return 'noscar_nest'
   if (['no', 'november', 'november_oscar', 'november oscar'].includes(norm)) return 'november_oscar'
   // Alpha Oscar — Eagle Squares / Airports
   if (['ao', 'alpha', 'alpha_oscar', 'alpha oscar'].includes(norm)) return 'alpha_oscar'
@@ -111,13 +117,38 @@ export function canManageCheetahs(role: string | null | undefined, oscar?: strin
 }
 
 /**
- * Check if a user can manage NOscar (hotels/nests).
+ * Check if a user can manage NOscar (hotels/nests) in general — either
+ * sub-unit (Den or Nest), or a legacy officer still on the umbrella role.
  */
 export function canManageNOscar(role: string | null | undefined, oscar?: string | null): boolean {
   if (!role) return false
   if (isAdmin(role)) return true
   const effective = effectiveOscarRole(role, oscar)
-  return ['november_oscar'].includes(effective ?? '')
+  return ['november_oscar', 'noscar_den', 'head_noscar_den', 'noscar_nest', 'head_noscar_nest'].includes(effective ?? '')
+}
+
+/**
+ * Check if a user can manage the November (Nest) page — hotel locations
+ * and Papa accommodations. Legacy `november_oscar` officers (not yet split
+ * into a specific sub-unit) retain access to both Den and Nest.
+ */
+export function canManageNoscarNest(role: string | null | undefined, oscar?: string | null): boolean {
+  if (!role) return false
+  if (isAdmin(role)) return true
+  const effective = effectiveOscarRole(role, oscar)
+  return ['november_oscar', 'noscar_nest', 'head_noscar_nest'].includes(effective ?? '')
+}
+
+/**
+ * Check if a user can manage the November (Den) page — private lounge
+ * locations and Lounge/Den menus. Legacy `november_oscar` officers (not yet
+ * split into a specific sub-unit) retain access to both Den and Nest.
+ */
+export function canManageNoscarDen(role: string | null | undefined, oscar?: string | null): boolean {
+  if (!role) return false
+  if (isAdmin(role)) return true
+  const effective = effectiveOscarRole(role, oscar)
+  return ['november_oscar', 'noscar_den', 'head_noscar_den'].includes(effective ?? '')
 }
 
 /**
@@ -132,10 +163,10 @@ export function canManageVenues(role: string | null | undefined, oscar?: string 
 }
 
 /**
- * Alias for canManageNOscar for compatibility.
+ * Alias for canManageNoscarNest for compatibility.
  */
 export function canManageNests(role: string | null | undefined, oscar?: string | null): boolean {
-  return canManageNOscar(role, oscar)
+  return canManageNoscarNest(role, oscar)
 }
 
 /**

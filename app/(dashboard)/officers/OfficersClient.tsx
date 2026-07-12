@@ -116,8 +116,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     { value: 'noscar_den', label: 'NOscar Theatre' },
     { value: 'head_noscar_nest', label: 'Head, NOscar Nest' },
     { value: 'noscar_nest', label: 'NOscar Nest' },
-    { value: 'head_november_oscar', label: 'Head, November Oscar' },
-    { value: 'november_oscar', label: 'November Oscar (NO)' },
+    { value: 'november_oscar', label: 'November Oscar (Legacy)' },
     { value: 'head_victor_oscar', label: 'Head, Victor Oscar' },
     { value: 'victor_oscar', label: 'Victor Oscar (VO)' },
     { value: 'delta_oscar', label: 'Delta Oscar (DO)' },
@@ -190,7 +189,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
   const canManageOfficers = currentUser && ADMIN_ROLES.includes(currentUser.role)
 
   const { data: officers = [] } = useQuery({
-    queryKey: ['officers'],
+    queryKey: ['officers', 'directory'],
     queryFn: async () => {
       const response = await fetch("/api/officers/list")
       if (!response.ok) throw new Error("Failed to load officers via API")
@@ -336,7 +335,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     },
     onSuccess: (updatedData, variables) => {
       // Optimistically update BOTH statuses instantly to avoid UI bounce-back
-      queryClient.setQueryData(['officers'], (oldData: Officer[] | undefined) => {
+      queryClient.setQueryData(['officers', 'directory'], (oldData: Officer[] | undefined) => {
         if (!oldData) return oldData
         return oldData.map(o => o.id === variables.id ? {
           ...o,

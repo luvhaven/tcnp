@@ -58,6 +58,10 @@ export async function POST(request: Request) {
             'delta_oscar': 'DELTA_OSCAR',
             'echo_oscar': 'ECHO_OSCAR',
             'november_oscar': 'NOVEMBER_OSCAR',
+            'noscar_den': 'NOVEMBER_OSCAR',
+            'head_noscar_den': 'HEAD_NOVEMBER_OSCAR',
+            'noscar_nest': 'NOVEMBER_OSCAR',
+            'head_noscar_nest': 'HEAD_NOVEMBER_OSCAR',
             'captain': 'CAPTAIN',
             'vice_captain': 'VICE_CAPTAIN'
         }

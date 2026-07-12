@@ -1,8 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import ComfortChecklist from "@/components/nests/ComfortChecklist"
-import { useNestETAReminder } from "@/hooks/useNestETAReminder"
 import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
 import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
@@ -17,11 +15,11 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Hotel, Plus, Edit, Trash2, Building, Users, UserPlus, UserCheck, ChevronDown } from "lucide-react"
+import { Home, Plus, Edit, Trash2, Users, UserPlus, UserCheck } from "lucide-react"
 import { toast } from "sonner"
-import { canManageNests } from "@/lib/utils"
+import { canManageNoscarDen, canManageWelfare } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
-import PapaAccommodations from "@/components/nests/PapaAccommodations"
+import DenMenus from "@/components/den/DenMenus"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 
 type Program = {
@@ -49,7 +47,7 @@ type NoscarAssignment = {
   user?: Officer
 }
 
-export default function NestsClient({ initialNests }: { initialNests: any[] }) {
+export default function DenClient({ initialDens }: { initialDens: any[] }) {
   const supabase = createClient()
   const confirm = useConfirm()
   const queryClient = useQueryClient()
@@ -57,9 +55,8 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [officerDialogOpen, setOfficerDialogOpen] = useState(false)
   const [editing, setEditing] = useState<any>(null)
-  const [selectedNest, setSelectedNest] = useState<any>(null)
+  const [selectedDen, setSelectedDen] = useState<any>(null)
   const [selectedProgram, setSelectedProgram] = useState<string>('all')
-  const [expandedComfort, setExpandedComfort] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     address: '',
@@ -68,12 +65,11 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
     email: '',
     rating: 5,
     amenities: '',
-    type: 'nest',
+    type: 'den',
     program_id: ''
   })
   const [officerFormData, setOfficerFormData] = useState({
     user_id: '',
-    assignment_type: 'nest' as 'theatre' | 'nest'
   })
 
   const { data: userRole } = useQuery({
@@ -86,35 +82,14 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
     }
   })
 
-  // Fetch this NO's assigned nest so the ETA reminder knows which nest to watch
-  const { data: myNestId } = useQuery({
-    queryKey: ['myNestId'],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return null
-      const { data } = await (supabase as any)
-        .from('noscar_assignments')
-        .select('nest_id')
-        .eq('user_id', user.id)
-        .eq('assignment_type', 'nest')
-        .eq('is_active', true)
-        .limit(1)
-        .single()
-      return data?.nest_id || null
-    }
-  })
-
-  // 30-min ETA reminder for this NO's assigned nest
-  useNestETAReminder(myNestId ?? null)
-
-  const { data: nests = [] } = useQuery({
+  const { data: dens = [] } = useQuery({
     queryKey: ['nests'],
     queryFn: async () => {
       const { data, error } = await supabase.from('nests').select(`*, programs(name)`).order('name')
       if (error) throw error
       return data
     },
-    initialData: initialNests
+    initialData: initialDens
   })
 
   const { data: programs = [] } = useQuery({
@@ -135,7 +110,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       const { data, error } = await supabase
         .from('users')
         .select('id, full_name, email, role, oscar')
-        .in('role', ['november_oscar', 'noscar_nest', 'head_noscar_nest', 'head_of_operations', 'admin', 'super_admin'])
+        .in('role', ['november_oscar', 'noscar_den', 'head_noscar_den', 'head_of_operations', 'admin', 'super_admin'])
         .eq('is_active', true)
         .order('full_name')
       if (error) throw error
@@ -149,18 +124,18 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       const { data, error } = await supabase
         .from('noscar_assignments')
         .select(`*, user:users!noscar_assignments_user_id_fkey(id, full_name, email, role, oscar)`)
-        .eq('assignment_type', 'nest')
+        .eq('assignment_type', 'theatre')
         .order('assigned_date', { ascending: false })
       if (error) throw error
       return data as any as NoscarAssignment[]
     }
   })
 
-  const canManage = userRole ? canManageNests(userRole) : false
+  const canManage = userRole ? canManageNoscarDen(userRole) : false
   const { data: currentUser } = useCurrentUser()
-  const canEditAccommodations = canManage
+  const canEditMenus = canManageWelfare(currentUser?.role, currentUser?.oscar)
 
-  const saveNestMutation = useMutation({
+  const saveDenMutation = useMutation({
     mutationFn: async (payload: { isEdit: boolean, data: any }) => {
       if (payload.isEdit) {
         const { error } = await supabase.from('nests').update(payload.data).eq('id', editing.id)
@@ -172,7 +147,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['nests'] })
-      toast.success(variables.isEdit ? 'Nest location updated!' : 'Nest location added!')
+      toast.success(variables.isEdit ? 'Den location updated!' : 'Den location added!')
       setDialogOpen(false)
       setEditing(null)
       resetForm()
@@ -182,7 +157,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
     }
   })
 
-  const deleteNestMutation = useMutation({
+  const deleteDenMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('nests').delete().eq('id', id)
       if (error) throw error
@@ -215,7 +190,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       queryClient.invalidateQueries({ queryKey: ['noscar_assignments'] })
       toast.success('Officer assigned!')
       setOfficerDialogOpen(false)
-      setOfficerFormData({ user_id: '', assignment_type: 'nest' })
+      setOfficerFormData({ user_id: '' })
     },
     onError: (error: any) => {
       toast.error(error.message || 'Failed to assign officer')
@@ -255,15 +230,15 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!canManage) {
-      toast.error('You are not authorized to manage hotels')
+      toast.error('You are not authorized to manage Den locations')
       return
     }
     const submitData = {
       ...formData,
-      type: 'nest',
+      type: 'den',
       program_id: formData.program_id || null
     }
-    saveNestMutation.mutate({ isEdit: !!editing, data: submitData })
+    saveDenMutation.mutate({ isEdit: !!editing, data: submitData })
   }
 
   const handleEdit = (item: any) => {
@@ -276,7 +251,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       email: item.email || '',
       rating: item.rating || 5,
       amenities: item.amenities || '',
-      type: 'nest',
+      type: 'den',
       program_id: item.program_id || ''
     })
     setDialogOpen(true)
@@ -288,7 +263,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       return
     }
     if (!await confirm({ message: 'Delete this location?', variant: 'destructive' })) return
-    deleteNestMutation.mutate(id)
+    deleteDenMutation.mutate(id)
   }
 
   const resetForm = () => {
@@ -300,22 +275,22 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       email: '',
       rating: 5,
       amenities: '',
-      type: 'nest',
+      type: 'den',
       program_id: ''
     })
   }
 
   const handleAssignOfficer = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!officerFormData.user_id || !selectedNest) {
+    if (!officerFormData.user_id || !selectedDen) {
       toast.error('Please select an officer')
       return
     }
     assignOfficerMutation.mutate({
       user_id: officerFormData.user_id,
-      nest_id: selectedNest.id,
-      assignment_type: 'nest',
-      program_id: selectedNest.program_id,
+      nest_id: selectedDen.id,
+      assignment_type: 'theatre',
+      program_id: selectedDen.program_id,
       is_active: true,
       assigned_date: new Date().toISOString().split('T')[0]
     })
@@ -330,8 +305,8 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
     removeAssignmentMutation.mutate(assignmentId)
   }
 
-  const getOfficersForNest = (nestId: string) => {
-    return assignments.filter(a => a.nest_id === nestId)
+  const getOfficersForDen = (denId: string) => {
+    return assignments.filter(a => a.nest_id === denId)
   }
 
   const getInitials = (name: string) => {
@@ -339,10 +314,10 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)
   }
 
-  const nestLocations = nests.filter((n: any) => n.type === 'nest' || !n.type)
-  const filteredNests = selectedProgram === 'all'
-    ? nestLocations
-    : nestLocations.filter((n: any) => n.program_id === selectedProgram)
+  const denLocations = dens.filter((n: any) => n.type === 'den')
+  const filteredDens = selectedProgram === 'all'
+    ? denLocations
+    : denLocations.filter((n: any) => n.program_id === selectedProgram)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -352,9 +327,9 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
         className="flex items-center justify-between"
       >
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">November (Nest)</h2>
+          <h2 className="text-3xl font-bold tracking-tight">November (Den)</h2>
           <p className="text-muted-foreground">
-            Hotel accommodation for Papas and the officers assigned to each Nest
+            The Den, secure lounge locations, and menu of the day
           </p>
         </div>
         <div className="flex gap-2">
@@ -365,7 +340,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
               setDialogOpen(true)
             }}>
               <Plus className="mr-2 h-4 w-4" />
-              Add Nest
+              Add Den
             </Button>
           )}
         </div>
@@ -396,28 +371,28 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
         </div>
       )}
 
-      <PapaAccommodations canEdit={canEditAccommodations} selectedProgram={selectedProgram} currentUserId={currentUser?.id ?? null} />
+      <DenMenus canEdit={canEditMenus} selectedProgram={selectedProgram} currentUserId={currentUser?.id ?? null} />
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
-            <Building className="h-5 w-5" />
-            <span>Nest Locations</span>
+            <Home className="h-5 w-5" />
+            <span>Den Locations</span>
           </CardTitle>
-          <CardDescription>Hotels and public accommodation</CardDescription>
+          <CardDescription>The Den and secure lounge locations</CardDescription>
         </CardHeader>
         <CardContent>
-          {filteredNests.length === 0 ? (
+          {filteredDens.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Hotel className="h-12 w-12 text-muted-foreground/50" />
-              <p className="mt-4 text-sm font-medium">No Nests found</p>
+              <Home className="h-12 w-12 text-muted-foreground/50" />
+              <p className="mt-4 text-sm font-medium">No Dens found</p>
             </div>
           ) : (
             <motion.div layout className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <AnimatePresence>
-                {filteredNests.map((nest: any) => {
-                  const nestOfficers = getOfficersForNest(nest.id)
-                  const programName = programs.find(p => p.id === nest.program_id)?.name
+                {filteredDens.map((den: any) => {
+                  const denOfficers = getOfficersForDen(den.id)
+                  const programName = programs.find(p => p.id === den.program_id)?.name
 
                   return (
                     <motion.div
@@ -426,13 +401,13 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
                       transition={{ duration: 0.2 }}
-                      key={nest.id}
+                      key={den.id}
                     >
                       <Card className="overflow-hidden hover:shadow-lg transition-shadow h-full flex flex-col">
                         <CardHeader className="pb-2">
                           <div className="flex justify-between items-start">
                             <div>
-                              <CardTitle className="text-lg">{nest.name}</CardTitle>
+                              <CardTitle className="text-lg">{den.name}</CardTitle>
                               {programName && (
                                 <Badge variant="outline" className="mt-1">{programName}</Badge>
                               )}
@@ -440,39 +415,39 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
                             {canManage && (
                               <div className="flex gap-1 shrink-0">
                                 <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={() => {
-                                  setSelectedNest(nest)
-                                  setOfficerFormData({ ...officerFormData, assignment_type: 'nest' })
+                                  setSelectedDen(den)
+                                  setOfficerFormData({ user_id: '' })
                                   setOfficerDialogOpen(true)
                                 }}>
                                   <UserPlus className="h-4 w-4" />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={() => handleEdit(nest)}>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={() => handleEdit(den)}>
                                   <Edit className="h-4 w-4" />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(nest.id)}>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(den.id)}>
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </div>
                             )}
                           </div>
-                          <CardDescription>{nest.city}</CardDescription>
+                          <CardDescription>{den.city}</CardDescription>
                         </CardHeader>
                         <CardContent className="flex-1 flex flex-col">
                           <div className="space-y-3 text-sm flex-1">
-                            <p className="text-muted-foreground">{nest.address}</p>
-                            {nest.phone && <p>📞 {nest.phone}</p>}
+                            <p className="text-muted-foreground">{den.address}</p>
+                            {den.phone && <p>📞 {den.phone}</p>}
 
                             {/* Officers Section */}
                             <div className="border-t pt-3 mt-3">
                               <div className="flex items-center gap-2 mb-2">
                                 <Users className="h-4 w-4 text-muted-foreground" />
-                                <span className="font-medium text-xs">Assigned Officers ({nestOfficers.length})</span>
+                                <span className="font-medium text-xs">Assigned Officers ({denOfficers.length})</span>
                               </div>
-                              {nestOfficers.length === 0 ? (
+                              {denOfficers.length === 0 ? (
                                 <p className="text-xs text-muted-foreground">No officers assigned</p>
                               ) : (
                                 <div className="space-y-2">
-                                  {nestOfficers.map(assignment => (
+                                  {denOfficers.map(assignment => (
                                     <div key={assignment.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50 transition-colors hover:bg-muted">
                                       <div className="flex items-center gap-2">
                                         <Avatar className="h-6 w-6">
@@ -509,25 +484,6 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
                             </div>
                           </div>
                         </CardContent>
-                        {/* Comfort Checklist Toggle */}
-                        <div className="border-t px-4 pb-3 pt-2">
-                          <button
-                            type="button"
-                            onClick={() => setExpandedComfort(expandedComfort === nest.id ? null : nest.id)}
-                            className="w-full flex items-center justify-between text-xs text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            <span className="flex items-center gap-1.5">
-                              <ChevronDown className={`h-3 w-3 transition-transform ${expandedComfort === nest.id ? 'rotate-180' : ''}`} />
-                              Comfort Checklist
-                            </span>
-                            <span className="text-[10px] font-mono text-pink-500">TCNP.01.07</span>
-                          </button>
-                          {expandedComfort === nest.id && (
-                            <div className="mt-2">
-                              <ComfortChecklist nestId={nest.id} nestName={nest.name} />
-                            </div>
-                          )}
-                        </div>
                       </Card>
                     </motion.div>
                   )
@@ -542,9 +498,9 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Nest Location' : 'Add Nest Location'}</DialogTitle>
+            <DialogTitle>{editing ? 'Edit Den Location' : 'Add Den Location'}</DialogTitle>
             <DialogDescription>
-              {editing ? 'Update location information' : 'Add a new hotel/Nest location'}
+              {editing ? 'Update location information' : 'Add a new private Den/lounge location'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-4">
@@ -554,7 +510,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
                 <Input
                   id="name"
                   required
-                  placeholder="e.g., Transcorp Hilton"
+                  placeholder="e.g., Main Church Den"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 />
@@ -617,7 +573,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="info@hotel.com"
+                  placeholder="info@den.com"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 />
@@ -639,7 +595,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
               <Label htmlFor="amenities">Amenities (comma separated)</Label>
               <Textarea
                 id="amenities"
-                placeholder="e.g., Pool, Gym, Spa, Restaurant..."
+                placeholder="e.g., Sound system, Seating, Refreshments..."
                 value={formData.amenities}
                 onChange={(e) => setFormData({ ...formData, amenities: e.target.value })}
               />
@@ -650,7 +606,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
                 Cancel
               </Button>
               <Button type="submit">
-                {editing ? 'Update' : 'Add'} Nest
+                {editing ? 'Update' : 'Add'} Den
               </Button>
             </div>
           </form>
@@ -661,15 +617,15 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       <Dialog open={officerDialogOpen} onOpenChange={setOfficerDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Assign Officer to {selectedNest?.name}</DialogTitle>
+            <DialogTitle>Assign Officer to {selectedDen?.name}</DialogTitle>
             <DialogDescription>
-              Select an officer to assign to this nest
+              Select an officer to assign to this Den
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAssignOfficer} className="space-y-4 mt-4">
             <div className="space-y-2">
               <Label>Select Officer</Label>
-              <Select value={officerFormData.user_id} onValueChange={(value) => setOfficerFormData({ ...officerFormData, user_id: value })}>
+              <Select value={officerFormData.user_id} onValueChange={(value) => setOfficerFormData({ user_id: value })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Choose an officer" />
                 </SelectTrigger>

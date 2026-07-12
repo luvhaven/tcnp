@@ -17,7 +17,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import LoungeMenus from "@/components/nests/LoungeMenus"
+import DenMenus from "@/components/den/DenMenus"
 import WelfareOfficerDirectory from "@/components/welfare/WelfareOfficerDirectory"
 import { UtensilsCrossed, BellRing, Loader2, HeartHandshake, Users } from "lucide-react"
 
@@ -107,7 +107,7 @@ export default function WelfarePage() {
                 </SelectContent>
               </Select>
             </div>
-            <LoungeMenus canEdit={canEdit} selectedProgram={filterProgram} currentUserId={currentUser?.id ?? null} />
+            <DenMenus canEdit={canEdit} selectedProgram={filterProgram} currentUserId={currentUser?.id ?? null} />
           </TabsContent>
 
           <TabsContent value="directory">
@@ -128,8 +128,8 @@ export default function WelfarePage() {
             </Select>
           </div>
 
-          {/* Menus (shared with NOscar Lounge) */}
-          <LoungeMenus canEdit={canEdit} selectedProgram={filterProgram} currentUserId={currentUser?.id ?? null} />
+          {/* Menus (shared with November (Den)) */}
+          <DenMenus canEdit={canEdit} selectedProgram={filterProgram} currentUserId={currentUser?.id ?? null} />
         </>
       )}
 

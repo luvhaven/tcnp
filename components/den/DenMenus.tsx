@@ -51,7 +51,7 @@ type Props = {
   currentUserId?: string | null
 }
 
-export default function LoungeMenus({ canEdit, selectedProgram, currentUserId }: Props) {
+export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Props) {
   const queryClient = useQueryClient()
   const confirm = useConfirm()
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -228,7 +228,7 @@ export default function LoungeMenus({ canEdit, selectedProgram, currentUserId }:
       <div className="flex items-center justify-between">
         <div>
           <h3 className="flex items-center gap-2 text-lg font-semibold">
-            <UtensilsCrossed className="h-5 w-5 text-primary" /> Lounge Menus
+            <UtensilsCrossed className="h-5 w-5 text-primary" /> Den Menus
           </h3>
           <p className="text-sm text-muted-foreground">Menu of the day and per-program meal plans, curated with Welfare.</p>
         </div>
@@ -273,7 +273,7 @@ export default function LoungeMenus({ canEdit, selectedProgram, currentUserId }:
             <div className="empty-state rounded-xl border">
               <UtensilsCrossed className="h-10 w-10" />
               <p className="font-medium">No menus published</p>
-              <p className="text-sm text-muted-foreground">Welfare and NOscar Lounge can publish the menu of the day here.</p>
+              <p className="text-sm text-muted-foreground">Welfare and November (Den) can publish the menu of the day here.</p>
             </div>
           )}
         </>
@@ -284,7 +284,7 @@ export default function LoungeMenus({ canEdit, selectedProgram, currentUserId }:
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Menu" : "Publish Menu"}</DialogTitle>
-            <DialogDescription>Officers see published menus instantly on the Lounge board.</DialogDescription>
+            <DialogDescription>Officers see published menus instantly on the Den board.</DialogDescription>
           </DialogHeader>
           <form
             onSubmit={(e) => { e.preventDefault(); saveMutation.mutate() }}
@@ -330,7 +330,7 @@ export default function LoungeMenus({ canEdit, selectedProgram, currentUserId }:
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
                 <p className="text-sm font-medium">Menu of the Day</p>
-                <p className="text-xs text-muted-foreground">Pins this menu to the top of the Lounge board.</p>
+                <p className="text-xs text-muted-foreground">Pins this menu to the top of the Den board.</p>
               </div>
               <Switch checked={form.is_menu_of_day} onCheckedChange={(v) => setForm({ ...form, is_menu_of_day: v })} />
             </div>

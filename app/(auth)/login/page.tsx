@@ -275,7 +275,8 @@ export default function LoginPage() {
                     <option value="Alpha Oscar" className="bg-gray-900 text-white">Alpha Oscar — Eagle Square</option>
                     <option value="Compliance Oscar" className="bg-gray-900 text-white">Compliance Oscar — Grooming &amp; Dress Code</option>
                     <option value="Hospitality Oscar" className="bg-gray-900 text-white">Hospitality Oscar — Papa Experiences</option>
-                    <option value="November Oscar" className="bg-gray-900 text-white">November Oscar — Nests &amp; Lounge</option>
+                    <option value="November Oscar (Den)" className="bg-gray-900 text-white">November Oscar (Den) — Lounge &amp; Menus</option>
+                    <option value="November Oscar (Nest)" className="bg-gray-900 text-white">November Oscar (Nest) — Hotels &amp; Accommodation</option>
                     <option value="Sierra Oscar" className="bg-gray-900 text-white">Sierra Oscar — Social Media</option>
                     <option value="Tango Oscar" className="bg-gray-900 text-white">Tango Oscar — Transport</option>
                     <option value="Victor Oscar" className="bg-gray-900 text-white">Victor Oscar — Theatre</option>

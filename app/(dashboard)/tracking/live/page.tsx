@@ -23,6 +23,10 @@ const ALLOWED_ROLES = [
   'head_tango_oscar',
   'alpha_oscar',
   'november_oscar',
+  'noscar_den',
+  'head_noscar_den',
+  'noscar_nest',
+  'head_noscar_nest',
 ]
 
 export default function LiveTrackingPage() {
