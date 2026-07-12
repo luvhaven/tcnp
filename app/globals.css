@@ -35,6 +35,25 @@
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
+
+    /* Semantic status tokens — used instead of raw Tailwind colors (bg-green-500
+       etc.) so status color has one source of truth and adapts correctly in dark mode */
+    --success: 142 71% 35%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 42%;
+    --warning-foreground: 0 0% 100%;
+    --info: 213 84% 48%;
+    --info-foreground: 0 0% 100%;
+
+    /* Elevation scale — soft, low-opacity, slightly warm-tinted shadows instead of
+       flat black, layered (ambient + direct) the way modern SaaS surfaces do it */
+    --shadow-color: 222 30% 20%;
+    --shadow-xs: 0 1px 2px hsl(var(--shadow-color) / 0.06);
+    --shadow-sm: 0 1px 3px hsl(var(--shadow-color) / 0.08), 0 1px 2px hsl(var(--shadow-color) / 0.04);
+    --shadow-md: 0 4px 12px hsl(var(--shadow-color) / 0.08), 0 2px 4px hsl(var(--shadow-color) / 0.05);
+    --shadow-lg: 0 12px 32px hsl(var(--shadow-color) / 0.12), 0 4px 8px hsl(var(--shadow-color) / 0.06);
+    --shadow-xl: 0 24px 56px hsl(var(--shadow-color) / 0.16), 0 8px 16px hsl(var(--shadow-color) / 0.08);
+    --shadow-glow-primary: 0 0 0 3px hsl(var(--primary) / 0.15);
   }
 
   .dark {
@@ -67,6 +86,22 @@
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+
+    --success: 142 64% 42%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 224 20% 6%;
+    --info: 213 90% 60%;
+    --info-foreground: 0 0% 100%;
+
+    /* Dark surfaces need deeper, more opaque shadows to read against a dark background */
+    --shadow-color: 0 0% 0%;
+    --shadow-xs: 0 1px 2px hsl(var(--shadow-color) / 0.3);
+    --shadow-sm: 0 1px 3px hsl(var(--shadow-color) / 0.4), 0 1px 2px hsl(var(--shadow-color) / 0.3);
+    --shadow-md: 0 4px 12px hsl(var(--shadow-color) / 0.4), 0 2px 4px hsl(var(--shadow-color) / 0.3);
+    --shadow-lg: 0 12px 32px hsl(var(--shadow-color) / 0.5), 0 4px 8px hsl(var(--shadow-color) / 0.35);
+    --shadow-xl: 0 24px 56px hsl(var(--shadow-color) / 0.6), 0 8px 16px hsl(var(--shadow-color) / 0.4);
+    --shadow-glow-primary: 0 0 0 3px hsl(var(--primary) / 0.25);
   }
 }
 
@@ -276,11 +311,38 @@
   letter-spacing: -0.02em;
 }
 
-/* Sharper heading rendering on HiDPI / Retina screens */
+/* Sharper heading rendering on HiDPI / Retina screens, tighter enterprise-grade tracking */
 h1,
 h2,
 h3 {
   text-rendering: geometricPrecision;
+  letter-spacing: -0.015em;
+}
+
+h1 {
+  letter-spacing: -0.025em;
+}
+
+/* ─── Elevation utilities ─────────────────────────────────────────────────── */
+/* Prefer these over Tailwind's shadow-sm/md/lg — tokenized, dark-mode aware */
+.shadow-elevation-xs {
+  box-shadow: var(--shadow-xs);
+}
+
+.shadow-elevation-sm {
+  box-shadow: var(--shadow-sm);
+}
+
+.shadow-elevation-md {
+  box-shadow: var(--shadow-md);
+}
+
+.shadow-elevation-lg {
+  box-shadow: var(--shadow-lg);
+}
+
+.shadow-elevation-xl {
+  box-shadow: var(--shadow-xl);
 }
 
 
@@ -374,7 +436,7 @@ a,
 
 .card-hover:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px -8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
 }
 
 /* Elevated card style for stat/summary cards */
@@ -385,7 +447,7 @@ a,
 
 .stat-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 12px 36px -8px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-xl);
   border-color: hsl(var(--primary) / 0.35);
 }
 
@@ -560,10 +622,11 @@ nav a {
   animation: fadeIn 0.15s ease;
 }
 
-/* Focus visible improvements */
+/* Focus visible improvements — soft two-layer glow instead of a hard outline */
 :focus-visible {
-  outline: 2px solid hsl(var(--primary));
+  outline: 2px solid transparent;
   outline-offset: 2px;
+  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring) / 0.6);
   border-radius: 4px;
 }
 
@@ -720,6 +783,56 @@ main,
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: var(--radius);
+}
+
+/* ─── Dialog enter animation ──────────────────────────────────────────────── */
+/* The hand-rolled Dialog (components/ui/dialog.tsx) isn't Radix, so it has no
+   data-state to key transitions off — these just play once on mount. */
+@keyframes dialogOverlayIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialogContentIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.dialog-overlay-in {
+  animation: dialogOverlayIn 180ms ease-out both;
+}
+
+.dialog-content-in {
+  animation: dialogContentIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ─── Premium button sheen ────────────────────────────────────────────────── */
+/* A faint top-edge highlight that gives filled buttons a subtle sense of depth,
+   the way Linear/Stripe/Vercel primary buttons read as "raised" rather than flat */
+.btn-sheen {
+  position: relative;
+  isolation: isolate;
+}
+
+.btn-sheen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, hsl(0 0% 100% / 0.16), transparent 60%);
+  pointer-events: none;
 }
 
 /* ─── Accessibility: Reduced Motion ──────────────────────────────────────── */
