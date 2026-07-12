@@ -391,9 +391,13 @@ export default function JourneysClient({
 
     try {
       const lead = teamLeadId || selectedDOs[0] || null
+      // secondary_papa_ids is client-only form state for the journey_papas
+      // junction table below — it has no matching column on `journeys`
+      // itself, so it must never be spread into this insert payload.
+      const { secondary_papa_ids: _secondaryPapaIds, ...formDataForJourneysTable } = formData
       // Convert empty-string UUID fields to null to avoid Postgres uuid parse errors
       const sanitized = {
-        ...formData,
+        ...formDataForJourneysTable,
         papa_id: formData.papa_id || null,
         assigned_cheetah_id: formData.assigned_cheetah_id || null,
         program_id: formData.program_id || null,
@@ -524,8 +528,11 @@ export default function JourneysClient({
 
     try {
       const lead = teamLeadId || selectedDOs[0] || formData.assigned_duty_officer_id || null
+      // secondary_papa_ids is client-only form state for the journey_papas
+      // junction table below — no matching column on `journeys` itself.
+      const { secondary_papa_ids: _secondaryPapaIds, ...formDataForJourneysTable } = formData
       const sanitized = {
-        ...formData,
+        ...formDataForJourneysTable,
         papa_id: formData.papa_id || null,
         assigned_cheetah_id: formData.assigned_cheetah_id || null,
         program_id: formData.program_id || null,
@@ -1174,8 +1181,6 @@ export default function JourneysClient({
                   ))}
                 </select>
               </div>
-
-
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -1197,50 +1202,6 @@ export default function JourneysClient({
                 </select>
               </div>
             </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="assigned_nest_id">Base Location (Nest - Optional)</Label>
-                <select
-                  id="assigned_nest_id"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={formData.assigned_nest_id || ''}
-                  onChange={(e) => {
-                    setFormData({ ...formData, assigned_nest_id: e.target.value, assigned_eagle_square_id: '' })
-                  }}
-                >
-                  <option value="">Select Nest</option>
-                  {nests.map((nest) => (
-                    <option key={nest.id} value={nest.id}>
-                      {nest.name}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[10px] text-muted-foreground">Select where the DO/Team is based</p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="assigned_eagle_square_id">Base Location (Eagle Square - Optional)</Label>
-                <select
-                  id="assigned_eagle_square_id"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={formData.assigned_eagle_square_id || ''}
-                  onChange={(e) => {
-                    setFormData({ ...formData, assigned_eagle_square_id: e.target.value, assigned_nest_id: '' })
-                  }}
-                >
-                  <option value="">Select Eagle Square</option>
-                  {eagleSquares.map((es) => (
-                    <option key={es.id} value={es.id}>
-                      {es.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-
-
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
@@ -1475,41 +1436,6 @@ export default function JourneysClient({
               </select>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="edit_assigned_nest_id">Base Location (Nest)</Label>
-                <select
-                  id="edit_assigned_nest_id"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  value={formData.assigned_nest_id || ''}
-                  onChange={(e) => setFormData({ ...formData, assigned_nest_id: e.target.value, assigned_eagle_square_id: '' })}
-                >
-                  <option value="">Select Nest</option>
-                  {nests.map((nest) => (
-                    <option key={nest.id} value={nest.id}>
-                      {nest.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit_assigned_eagle_square_id">Base Location (Eagle Square)</Label>
-                <select
-                  id="edit_assigned_eagle_square_id"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  value={formData.assigned_eagle_square_id || ''}
-                  onChange={(e) => setFormData({ ...formData, assigned_eagle_square_id: e.target.value, assigned_nest_id: '' })}
-                >
-                  <option value="">Select Eagle Square</option>
-                  {eagleSquares.map((es) => (
-                    <option key={es.id} value={es.id}>
-                      {es.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
             {/* Route Details */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
@@ -1534,7 +1460,6 @@ export default function JourneysClient({
                 />
               </div>
             </div>
-
 
             {/* Notes */}
             <div className="space-y-2">
