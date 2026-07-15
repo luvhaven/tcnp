@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { MessageCircle, Send, Users, AtSign, Lock, Loader2, ChevronDown, Trash2, CornerUpLeft, Pencil, X, Smile, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, formatDistanceToNow, isToday, isYesterday, isSameDay } from 'date-fns'
+import { MessageBubble } from './MessageBubble'
 import type {
   RealtimeChannel,
   RealtimePostgresChangesPayload,
@@ -139,6 +140,9 @@ type Message = {
   is_private: boolean
   created_at: string
   reply_to_id?: string | null
+  is_archived?: boolean
+  deleted_at?: string | null
+  deleted_by_admin?: boolean
   users: MessageUserMeta
 }
 
@@ -190,11 +194,8 @@ export default function ChatSystem({
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const channelRef = useRef<RealtimeChannel | null>(null)
-  const presenceChannelRef = useRef<RealtimeChannel | null>(null)
-  const presenceIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const markedMessagesRef = useRef<Set<string>>(new Set())
   const missingUsersRef = useRef<Set<string>>(new Set())
-  const onlineUserIdsRef = useRef<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [hasMoreMessages, setHasMoreMessages] = useState(false)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
@@ -382,6 +383,9 @@ export default function ChatSystem({
       mentions,
       read_by: readBy,
       is_private: Boolean(message.is_private),
+      is_archived: Boolean((message as any).is_archived),
+      deleted_at: (message as any).deleted_at ?? null,
+      deleted_by_admin: Boolean((message as any).deleted_by_admin),
       created_at: message.created_at ?? new Date().toISOString(),
       reply_to_id: (message as any).reply_to_id ?? null,
       users: userMeta
@@ -469,7 +473,6 @@ export default function ChatSystem({
       if (error) throw error
 
       const participants = (data ?? []) as (ChatParticipant & { is_online: boolean | null })[]
-      const presenceIds = onlineUserIdsRef.current
 
       setUsers((prev: User[]) => {
         const merged = new Map<string, User>()
@@ -477,10 +480,10 @@ export default function ChatSystem({
 
         participants.forEach((participant) => {
           const existing = merged.get(participant.id)
-          // Online = DB flag OR recent last_seen
-          const isOnline =
-            !!participant.is_online ||
-            isRecentlySeen(participant.last_seen ?? null)
+          // The `is_online` DB flag is set true on mount/focus but only cleared via
+          // `beforeunload`, which doesn't reliably fire (mobile backgrounding, force-quit,
+          // dropped connection) — it gets stuck true for days. Trust last_seen recency only.
+          const isOnline = isRecentlySeen(participant.last_seen ?? null)
 
           merged.set(participant.id, {
             id: participant.id,
@@ -579,12 +582,6 @@ export default function ChatSystem({
         return
       }
 
-      // UPDATE: if soft-deleted, remove from state immediately
-      if (payload.eventType === 'UPDATE' && (newRow as any).deleted_at) {
-        if (mounted) setMessages(prev => prev.filter(m => m.id !== newRow.id))
-        return
-      }
-
       // Context filtering
       if (papaId) {
         if (newRow.papa_id !== papaId) return
@@ -648,15 +645,17 @@ export default function ChatSystem({
       if (payload.eventType === 'UPDATE' && mounted) {
         setMessages(prev => {
           const idx = prev.findIndex(m => m.id === newRow.id)
-          if (idx !== -1) { 
+          if (idx !== -1) {
             const next = [...prev]
-            next[idx] = { 
-              ...next[idx], 
+            next[idx] = {
+              ...next[idx],
               content: newRow.content,
               read_by: (newRow.read_by as string[]) || [],
-              mentions: (newRow.mentions as string[]) || []
+              mentions: (newRow.mentions as string[]) || [],
+              deleted_at: (newRow as any).deleted_at ?? null,
+              deleted_by_admin: Boolean((newRow as any).deleted_by_admin)
             }
-            return next 
+            return next
           }
           return prev
         })
@@ -823,7 +822,6 @@ export default function ChatSystem({
                       *,
                       users:sender_id(full_name, oscar, role)
                       `)
-        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(50)
 
@@ -889,7 +887,6 @@ export default function ChatSystem({
       let query = supabase
         .from('chat_messages')
         .select(`*, users:sender_id(full_name, oscar, role)`)
-        .is('deleted_at', null)
         .lt('created_at', oldestTimestampRef.current)
         .order('created_at', { ascending: false })
         .limit(50)
@@ -939,12 +936,12 @@ export default function ChatSystem({
     const { data } = await (supabase as any).from('message_reactions').select('message_id,user_id,emoji').in('message_id', ids)
     if (!data) return
     const map: ReactionMap = {}
-    ;(data as { message_id: string; user_id: string; emoji: string }[]).forEach(r => {
-      if (!map[r.message_id]) map[r.message_id] = []
-      const ex = map[r.message_id].find(x => x.emoji === r.emoji)
-      if (ex) { ex.count++; ex.userIds.push(r.user_id) }
-      else map[r.message_id].push({ emoji: r.emoji, count: 1, userIds: [r.user_id] })
-    })
+      ; (data as { message_id: string; user_id: string; emoji: string }[]).forEach(r => {
+        if (!map[r.message_id]) map[r.message_id] = []
+        const ex = map[r.message_id].find(x => x.emoji === r.emoji)
+        if (ex) { ex.count++; ex.userIds.push(r.user_id) }
+        else map[r.message_id].push({ emoji: r.emoji, count: 1, userIds: [r.user_id] })
+      })
     setReactions(map)
   }, [supabase])
 
@@ -965,29 +962,48 @@ export default function ChatSystem({
     void loadReactions(messages.map(m => m.id))
   }, [supabase, currentUser, reactions, messages, loadReactions])
 
-  const handleDeleteMessage = useCallback(async (messageId: string) => {
+  const handleDeleteMessage = useCallback(async (messageId: string, hardDelete: boolean = false) => {
     if (!currentUser?.id) return
-    const { error } = await (supabase as any).from('chat_messages').update({ deleted_at: new Date().toISOString() }).eq('id', messageId).eq('sender_id', currentUser.id)
-    if (error) { 
-      console.error('Delete error:', error);
-      toast.error(`Could not delete message: ${error.message || 'Unknown error'}`); 
-      return 
-    }
-    setMessages(prev => prev.filter(m => m.id !== messageId))
-  }, [supabase, currentUser])
+    const isAdmin = ['super_admin', 'dev_admin', 'admin'].includes(currentUser.role)
 
-  const handleReply = (message: Message) => {
+    if (hardDelete && isAdmin) {
+      const { error } = await (supabase as any).from('chat_messages').delete().eq('id', messageId)
+      if (error) {
+        toast.error(`Could not delete message: ${error.message}`);
+        return
+      }
+      setMessages(prev => prev.filter(m => m.id !== messageId))
+      return
+    }
+
+    const deletedAt = new Date().toISOString()
+    const isOwner = messages.find(m => m.id === messageId)?.sender_id === currentUser.id
+
+    if (isAdmin && !isOwner) {
+      // Soft delete by Admin
+      const { error } = await (supabase as any).from('chat_messages').update({ deleted_at: deletedAt, deleted_by_admin: true }).eq('id', messageId)
+      if (error) { toast.error(error.message); return }
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, deleted_at: deletedAt, deleted_by_admin: true } : m))
+    } else {
+      // Soft delete by User
+      const { error } = await (supabase as any).from('chat_messages').update({ deleted_at: deletedAt }).eq('id', messageId).eq('sender_id', currentUser.id)
+      if (error) { toast.error(error.message); return }
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, deleted_at: deletedAt } : m))
+    }
+  }, [supabase, currentUser, messages])
+
+  const handleReply = useCallback((message: Message) => {
     setEditingMessage(null)
     setReplyTo(message)
     setTimeout(() => textareaRef.current?.focus(), 50)
-  }
+  }, [])
 
-  const handleEdit = (message: Message) => {
+  const handleEdit = useCallback((message: Message) => {
     setReplyTo(null)
     setEditingMessage(message)
     setNewMessage(message.content)
     setTimeout(() => textareaRef.current?.focus(), 50)
-  }
+  }, [])
 
   const cancelReply = () => {
     setReplyTo(null)
@@ -1102,7 +1118,7 @@ export default function ChatSystem({
         user_id: userId,
         title: 'New chat message',
         message,
-        type: 'chat_message',
+        type: 'chat',
         channel: 'push'
       }))
 
@@ -1240,6 +1256,7 @@ export default function ChatSystem({
   }
 
   const canViewMessage = (message: Message) => {
+    if (message.is_archived) return false
     if (!currentUser) return false
 
     // Admins can see all messages
@@ -1279,25 +1296,27 @@ export default function ChatSystem({
   const timeline = useMemo(() => buildTimeline(visibleMessages, firstUnreadId), [visibleMessages, firstUnreadId])
 
   return (
-    <div className="relative flex flex-col h-[calc(100dvh-9rem)] min-h-[520px] bg-card rounded-2xl border shadow-2xl overflow-hidden">
+    <div className="relative flex flex-col h-[calc(100dvh-7.8rem)] min-h-[520px] bg-zinc-50/50 dark:bg-zinc-950/50 rounded-xl border shadow-sm overflow-hidden">
+      {/* Background Texture Drop */}
+      <div className="absolute inset-0 z-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:16px_16px] opacity-60 pointer-events-none" />
 
       {/* Header */}
-      <div className="flex-none border-b bg-card/95 backdrop-blur-sm px-4 py-3 shadow-sm">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+      <div className="flex-none border-b border-border/40 bg-card/70 backdrop-blur-xl px-3 py-2 shadow-sm z-10">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
               <MessageCircle className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold leading-tight">Team Chat</h2>
-              <p className="text-[11px] text-muted-foreground">{users.filter(u => u.is_online).length} online · {visibleMessages.length} messages</p>
+              <h2 className="text-xs font-semibold leading-tight">Team Chat</h2>
+              <p className="text-[10px] text-muted-foreground">{users.filter(u => u.is_online).length} online · {visibleMessages.length} messages</p>
               {isReadOnlyProgramChat && <p className="text-[10px] text-amber-600 font-medium">Read-only: not assigned to this program</p>}
             </div>
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <input type="search" placeholder="Searchâ€¦" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              <input type="search" placeholder="Search..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                 className="h-8 w-36 pl-8 pr-3 text-xs rounded-lg border bg-background/80 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-all focus:w-48" />
             </div>
             <Button variant="outline" size="sm" onClick={() => setShowUserList(!showUserList)} className="gap-1.5 h-8 text-xs">
@@ -1310,7 +1329,7 @@ export default function ChatSystem({
       </div>
 
       {/* Messages */}
-      <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto scroll-smooth">
+      <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto scroll-smooth z-10 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border/40 hover:[&::-webkit-scrollbar-thumb]:bg-border/60 [&::-webkit-scrollbar-thumb]:rounded-full">
         <div className="px-4 py-3">
           {hasMoreMessages && !loadingMessages && (
             <div className="flex justify-center py-3">
@@ -1324,7 +1343,7 @@ export default function ChatSystem({
 
           {loadingMessages && (
             <div className="space-y-4 py-4">
-              {[1,2,3,4].map(i => (
+              {[1, 2, 3, 4].map(i => (
                 <div key={i} className={`flex items-end gap-3 ${i % 3 === 0 ? 'flex-row-reverse' : ''}`}>
                   <div className="h-8 w-8 rounded-full bg-muted animate-pulse flex-shrink-0" />
                   <div className="space-y-1.5"><div className="h-2.5 w-16 rounded bg-muted animate-pulse" /><div className="h-10 w-52 rounded-2xl bg-muted animate-pulse" /></div>
@@ -1364,76 +1383,28 @@ export default function ChatSystem({
             const msgReactions = reactions[msg.id] ?? []
 
             return (
-              <div key={item.id} id={`msg-${msg.id}`}
-                className={`flex items-end gap-2 group ${isOwn ? 'flex-row-reverse' : ''} ${isFirst ? 'mt-3' : 'mt-0.5'} ${highlightedMessageId === msg.id ? 'ring-2 ring-primary/40 rounded-xl bg-primary/5 px-1' : ''}`}
-              >
-                <div className="w-8 flex-shrink-0 self-end">
-                  {isLast ? (
-                    <Avatar className="h-8 w-8 border border-background shadow-sm">
-                      <AvatarFallback className={`text-[11px] font-bold ${isOwn ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>{getInitials(displayName)}</AvatarFallback>
-                    </Avatar>
-                  ) : null}
-                </div>
-
-                <div className={`flex flex-col max-w-[72%] ${isOwn ? 'items-end' : 'items-start'}`}>
-                  {isFirst && (
-                    <div className={`flex items-center gap-2 mb-1 px-0.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
-                      <span className="text-[11px] font-semibold">{displayName}</span>
-                      <span className="text-[10px] text-muted-foreground">{format(new Date(msg.created_at), 'HH:mm')}</span>
-                      {msg.is_private && <span className="flex items-center gap-0.5 text-[10px] text-amber-600 font-medium"><Lock className="h-2.5 w-2.5" />Private</span>}
-                    </div>
-                  )}
-
-                  {repliedMsg && (
-                    <div className={`text-[11px] text-muted-foreground mb-1 px-2.5 py-1.5 border-l-2 border-primary/50 bg-muted/40 rounded-r-lg max-w-full ${isOwn ? 'mr-0.5' : 'ml-0.5'}`}>
-                      <strong className="text-foreground/70">{getDisplayName(repliedMsg.users)}: </strong>
-                      <span className="line-clamp-1">{repliedMsg.content}</span>
-                    </div>
-                  )}
-
-                  <div className="relative group/msg">
-                    <div className={`rounded-2xl px-3.5 py-2.5 shadow-sm text-sm leading-relaxed whitespace-pre-wrap break-words
-                      ${isOwn ? 'bg-gradient-to-br from-primary to-primary/80 text-primary-foreground rounded-br-sm' : 'bg-muted/60 border border-border/50 rounded-bl-sm'}
-                      ${msg.is_private && !isOwn ? 'border-l-2 border-l-amber-400' : ''}`}>
-                      {renderContent(msg.content, searchQuery)}
-                      {(msg as any).edited_at && <span className={`text-[10px] italic ml-1 ${isOwn ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>(edited)</span>}
-                    </div>
-
-                    <div className={`absolute top-0 ${isOwn ? '-left-[6.5rem]' : '-right-[6.5rem]'} opacity-0 group-hover/msg:opacity-100 transition-opacity flex gap-0.5 bg-background/90 backdrop-blur-sm rounded-xl p-1 shadow-lg border z-10`}>
-                      <button onClick={() => setShowReactionPicker(showReactionPicker === msg.id ? null : msg.id)} title="React" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><Smile className="h-3.5 w-3.5" /></button>
-                      <button onClick={() => handleReply(msg)} title="Reply" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><CornerUpLeft className="h-3.5 w-3.5" /></button>
-                      {isEditable && <button onClick={() => handleEdit(msg)} title="Edit" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><Pencil className="h-3.5 w-3.5" /></button>}
-                      {isOwn && <button onClick={async (e) => { e.preventDefault(); e.stopPropagation(); if (await confirm({ message: 'Are you sure you want to delete this message?', variant: 'destructive' })) { void handleDeleteMessage(msg.id); } }} title="Delete" className="h-6 w-6 rounded-lg hover:bg-destructive/10 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>}
-                    </div>
-
-                    {showReactionPicker === msg.id && (
-                      <div className={`absolute bottom-full ${isOwn ? 'right-0' : 'left-0'} mb-1.5 flex gap-1 bg-background border rounded-2xl p-1.5 shadow-2xl z-20 animate-in slide-in-from-bottom-2 duration-150`}>
-                        {QUICK_REACTIONS.map(emoji => (
-                          <button key={emoji} onClick={() => { void toggleReaction(msg.id, emoji); setShowReactionPicker(null) }}
-                            className="h-8 w-8 rounded-xl hover:bg-muted flex items-center justify-center text-lg transition-all hover:scale-125 active:scale-95">
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {msgReactions.length > 0 && (
-                    <div className={`flex flex-wrap gap-1 mt-1.5 px-0.5 ${isOwn ? 'justify-end' : ''}`}>
-                      {msgReactions.map(r => (
-                        <button key={r.emoji} onClick={() => void toggleReaction(msg.id, r.emoji)}
-                          className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs border transition-all hover:scale-105 active:scale-95 ${r.userIds.includes(currentUser?.id ?? '') ? 'bg-primary/15 border-primary/40 text-primary font-semibold' : 'bg-background border-border text-muted-foreground hover:border-primary/30'}`}>
-                          {r.emoji}<span>{r.count}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {!isFirst && isLast && (
-                    <span className="text-[10px] text-muted-foreground/60 px-0.5 mt-0.5">{format(new Date(msg.created_at), 'HH:mm')}</span>
-                  )}
-                </div>
-              </div>
+              <MessageBubble
+                key={item.id}
+                msg={msg}
+                isFirst={isFirst}
+                isLast={isLast}
+                isOwn={isOwn}
+                displayName={displayName}
+                isEditable={isEditable}
+                repliedMsg={repliedMsg}
+                msgReactions={msgReactions}
+                highlightedMessageId={highlightedMessageId}
+                searchQuery={searchQuery}
+                showReactionPicker={showReactionPicker}
+                currentUserRole={currentUser?.role}
+                currentUserId={currentUser?.id}
+                setShowReactionPicker={setShowReactionPicker}
+                handleReply={handleReply}
+                handleEdit={handleEdit}
+                handleDeleteMessage={handleDeleteMessage}
+                toggleReaction={toggleReaction}
+                confirm={confirm}
+              />
             )
           })}
 
@@ -1501,7 +1472,7 @@ export default function ChatSystem({
       )}
 
       {/* Input area */}
-      <div className="flex-none border-t bg-card/95 px-4 pt-3 pb-4">
+      <div className="flex-none border-t border-border/50 bg-card/80 backdrop-blur-xl px-4 pt-3 pb-4 shadow-[0_-8px_30px_-15px_rgba(0,0,0,0.1)] z-10">
         {replyTo && (
           <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-xl px-3 py-2 mb-2 text-xs">
             <div className="flex items-center gap-2 text-primary min-w-0">
@@ -1537,12 +1508,9 @@ export default function ChatSystem({
               placeholder={isReadOnlyProgramChat ? 'Read-only: not assigned to this program' : editingMessage ? 'Edit message...' : 'Message the team...'}
               value={newMessage}
               onChange={handleMessageChange}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!showMentionSuggestions) void handleSendMessage() }
-              }}
               disabled={isReadOnlyProgramChat}
               rows={1}
-              className="w-full resize-none rounded-xl border bg-background/80 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all placeholder:text-muted-foreground/60 max-h-32 disabled:opacity-50"
+              className="block w-full resize-none rounded-xl border border-border/50 bg-background/50 shadow-inner px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-background transition-all placeholder:text-muted-foreground/60 max-h-32 disabled:opacity-50"
               style={{ minHeight: '40px', height: '40px', padding: '9px 14px', lineHeight: '22px', boxSizing: 'border-box' }}
             />
             {showMentionSuggestions && filteredUsers.length > 0 && (
@@ -1570,7 +1538,7 @@ export default function ChatSystem({
             <Send className="h-4 w-4" />
           </Button>
         </div>
-        <p className="text-[10px] text-muted-foreground/40 mt-1.5 text-right select-none">Enter to send · Shift+Enter for new line</p>
+        <p className="text-[10px] text-muted-foreground/40 mt-1.5 text-right select-none">Click send to post · Shift+Enter for new line</p>
       </div>
     </div>
   )

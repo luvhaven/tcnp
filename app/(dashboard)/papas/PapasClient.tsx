@@ -77,7 +77,11 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
   })
 
   const { data: programs = [] } = useQuery({
-    queryKey: ['programs'],
+    // Distinct from other pages' ['programs', ...] keys — this fetches only
+    // id/name, so sharing a cache slot with a fuller query elsewhere would
+    // have silently dropped fields like `status` for whichever page loses
+    // the fetch race (see ProgramsClient.tsx for the full explanation).
+    queryKey: ['programs', 'lite'],
     queryFn: async () => {
       const { data, error } = await supabase.from('programs').select('id, name').order('name')
       if (error) throw error

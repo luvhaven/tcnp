@@ -7,8 +7,9 @@ const STORE_NAME = 'pending_submissions'
 
 export interface QueuedSubmission {
     id: string
-    type: 'journey' | 'incident' | 'papa' | 'program' | 'chat_message'
+    type: 'journey' | 'incident' | 'papa' | 'program' | 'chat_message' | 'journey_update' | 'journey_event'
     data: any
+    isEmergency?: boolean
     timestamp: number
     retries: number
 }
@@ -78,10 +79,13 @@ class OfflineQueueManager {
         if (!this.db) await this.init()
         if (!this.db) return Promise.resolve('skipped')
 
+        const isEmergency = data?.isEmergency || data?.status === 'broken_arrow' || data?.type === 'BROKEN ARROW' || data?.updates?.status === 'broken_arrow';
+
         const submission: QueuedSubmission = {
             id: `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             type,
             data,
+            isEmergency,
             timestamp: Date.now(),
             retries: 0
         }

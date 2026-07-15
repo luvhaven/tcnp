@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { useNotifications, AppNotification, NotificationType } from "@/hooks/useNotifications"
+import { useNotifications, AppNotification, NotificationType, resolveNotificationRoute } from "@/hooks/useNotifications"
 import { Button } from "@/components/ui/button"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -87,7 +87,7 @@ function NotificationItem({
         className="min-w-0 flex-1 cursor-pointer"
         onClick={() => {
           if (!notification.is_read) onMarkRead(notification.id)
-          onNavigate(notification.related_url || (notification.journey_id ? `/journeys` : null))
+          onNavigate(resolveNotificationRoute(notification))
         }}
       >
         <div className="flex items-start justify-between gap-2">

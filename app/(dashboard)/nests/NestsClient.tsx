@@ -1,6 +1,8 @@
 "use client"
 
 import { useState } from "react"
+import ComfortChecklist from "@/components/nests/ComfortChecklist"
+import { useNestETAReminder } from "@/hooks/useNestETAReminder"
 import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
 import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
@@ -15,11 +17,12 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Hotel, Plus, Edit, Trash2, Home, Building, Users, UserPlus, UserCheck, UserX } from "lucide-react"
+import { Hotel, Plus, Edit, Trash2, Building, Users, UserPlus, UserCheck, ChevronDown } from "lucide-react"
 import { toast } from "sonner"
 import { canManageNests } from "@/lib/utils"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { motion, AnimatePresence } from "framer-motion"
+import PapaAccommodations from "@/components/nests/PapaAccommodations"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
 
 type Program = {
   id: string
@@ -56,6 +59,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
   const [editing, setEditing] = useState<any>(null)
   const [selectedNest, setSelectedNest] = useState<any>(null)
   const [selectedProgram, setSelectedProgram] = useState<string>('all')
+  const [expandedComfort, setExpandedComfort] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     address: '',
@@ -82,6 +86,27 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
     }
   })
 
+  // Fetch this NO's assigned nest so the ETA reminder knows which nest to watch
+  const { data: myNestId } = useQuery({
+    queryKey: ['myNestId'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return null
+      const { data } = await (supabase as any)
+        .from('noscar_assignments')
+        .select('nest_id')
+        .eq('user_id', user.id)
+        .eq('assignment_type', 'nest')
+        .eq('is_active', true)
+        .limit(1)
+        .single()
+      return data?.nest_id || null
+    }
+  })
+
+  // 30-min ETA reminder for this NO's assigned nest
+  useNestETAReminder(myNestId ?? null)
+
   const { data: nests = [] } = useQuery({
     queryKey: ['nests'],
     queryFn: async () => {
@@ -93,7 +118,10 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
   })
 
   const { data: programs = [] } = useQuery({
-    queryKey: ['programs'],
+    // Same shape (id, name, status) as OfficersClient's programs query, so
+    // it's safe to share this key — see ProgramsClient.tsx for why pages
+    // with DIFFERENT select() shapes must not share the bare ['programs'] key.
+    queryKey: ['programs', 'lite-status'],
     queryFn: async () => {
       const { data, error } = await supabase.from('programs').select('id, name, status').order('name')
       if (error) throw error
@@ -102,12 +130,12 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
   })
 
   const { data: officers = [] } = useQuery({
-    queryKey: ['officers'],
+    queryKey: ['officers', 'admin-roles'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('users')
         .select('id, full_name, email, role, oscar')
-        .in('role', ['november_oscar', 'head_of_operations', 'admin', 'super_admin'])
+        .in('role', ['november_oscar', 'noscar_nest', 'head_noscar_nest', 'head_of_operations', 'admin', 'super_admin'])
         .eq('is_active', true)
         .order('full_name')
       if (error) throw error
@@ -121,6 +149,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       const { data, error } = await supabase
         .from('noscar_assignments')
         .select(`*, user:users!noscar_assignments_user_id_fkey(id, full_name, email, role, oscar)`)
+        .eq('assignment_type', 'nest')
         .order('assigned_date', { ascending: false })
       if (error) throw error
       return data as any as NoscarAssignment[]
@@ -128,6 +157,8 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
   })
 
   const canManage = userRole ? canManageNests(userRole) : false
+  const { data: currentUser } = useCurrentUser()
+  const canEditAccommodations = canManage
 
   const saveNestMutation = useMutation({
     mutationFn: async (payload: { isEdit: boolean, data: any }) => {
@@ -141,7 +172,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['nests'] })
-      toast.success(variables.isEdit ? 'NOscar location updated!' : 'NOscar location added!')
+      toast.success(variables.isEdit ? 'Nest location updated!' : 'Nest location added!')
       setDialogOpen(false)
       setEditing(null)
       resetForm()
@@ -229,6 +260,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
     }
     const submitData = {
       ...formData,
+      type: 'nest',
       program_id: formData.program_id || null
     }
     saveNestMutation.mutate({ isEdit: !!editing, data: submitData })
@@ -244,7 +276,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       email: item.email || '',
       rating: item.rating || 5,
       amenities: item.amenities || '',
-      type: item.type || 'nest',
+      type: 'nest',
       program_id: item.program_id || ''
     })
     setDialogOpen(true)
@@ -282,7 +314,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
     assignOfficerMutation.mutate({
       user_id: officerFormData.user_id,
       nest_id: selectedNest.id,
-      assignment_type: officerFormData.assignment_type,
+      assignment_type: 'nest',
       program_id: selectedNest.program_id,
       is_active: true,
       assigned_date: new Date().toISOString().split('T')[0]
@@ -307,21 +339,22 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)
   }
 
+  const nestLocations = nests.filter((n: any) => n.type === 'nest' || !n.type)
   const filteredNests = selectedProgram === 'all'
-    ? nests
-    : nests.filter(n => n.program_id === selectedProgram)
+    ? nestLocations
+    : nestLocations.filter((n: any) => n.program_id === selectedProgram)
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }} 
-        animate={{ opacity: 1, y: 0 }} 
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
         className="flex items-center justify-between"
       >
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">NOscar Management</h2>
+          <h2 className="text-3xl font-bold tracking-tight">November (Nest)</h2>
           <p className="text-muted-foreground">
-            Manage NOscar Theatres, Nests, and Officers
+            Hotel accommodation for Papas and the officers assigned to each Nest
           </p>
         </div>
         <div className="flex gap-2">
@@ -332,7 +365,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
               setDialogOpen(true)
             }}>
               <Plus className="mr-2 h-4 w-4" />
-              Add Location
+              Add Nest
             </Button>
           )}
         </div>
@@ -363,155 +396,155 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
         </div>
       )}
 
-      <Tabs defaultValue="den" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="den">
-            <Home className="mr-2 h-4 w-4" />
-            NOscar Theatre
-          </TabsTrigger>
-          <TabsTrigger value="nest">
-            <Building className="mr-2 h-4 w-4" />
-            NOscar Nest
-          </TabsTrigger>
-        </TabsList>
+      <PapaAccommodations canEdit={canEditAccommodations} selectedProgram={selectedProgram} currentUserId={currentUser?.id ?? null} />
 
-        {['den', 'nest'].map((type) => (
-          <TabsContent key={type} value={type}>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  {type === 'den' ? <Home className="h-5 w-5" /> : <Building className="h-5 w-5" />}
-                  <span>{type === 'den' ? 'NOscar Theatres' : 'NOscar Nests'}</span>
-                </CardTitle>
-                <CardDescription>
-                  {type === 'den' ? 'Private residences and secure theatre locations' : 'Hotels and public accommodation'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {filteredNests.filter(n => n.type === type || (!n.type && type === 'nest')).length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <Hotel className="h-12 w-12 text-muted-foreground/50" />
-                    <p className="mt-4 text-sm font-medium">No {type === 'den' ? 'Theatres' : 'Nests'} found</p>
-                  </div>
-                ) : (
-                  <motion.div layout className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    <AnimatePresence>
-                      {filteredNests
-                        .filter(n => n.type === type || (!n.type && type === 'nest'))
-                        .map((nest) => {
-                          const nestOfficers = getOfficersForNest(nest.id)
-                          const programName = programs.find(p => p.id === nest.program_id)?.name
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Building className="h-5 w-5" />
+            <span>Nest Locations</span>
+          </CardTitle>
+          <CardDescription>Hotels and public accommodation</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {filteredNests.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Hotel className="h-12 w-12 text-muted-foreground/50" />
+              <p className="mt-4 text-sm font-medium">No Nests found</p>
+            </div>
+          ) : (
+            <motion.div layout className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <AnimatePresence>
+                {filteredNests.map((nest: any) => {
+                  const nestOfficers = getOfficersForNest(nest.id)
+                  const programName = programs.find(p => p.id === nest.program_id)?.name
 
-                          return (
-                            <motion.div
-                              layout
-                              initial={{ opacity: 0, scale: 0.95 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              exit={{ opacity: 0, scale: 0.95 }}
-                              transition={{ duration: 0.2 }}
-                              key={nest.id}
-                            >
-                              <Card className="overflow-hidden hover:shadow-lg transition-shadow h-full flex flex-col">
-                                <CardHeader className="pb-2">
-                                  <div className="flex justify-between items-start">
-                                    <div>
-                                      <CardTitle className="text-lg">{nest.name}</CardTitle>
-                                      {programName && (
-                                        <Badge variant="outline" className="mt-1">{programName}</Badge>
-                                      )}
-                                    </div>
-                                    {canManage && (
-                                      <div className="flex gap-1 shrink-0">
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={() => {
-                                          setSelectedNest(nest)
-                                          setOfficerFormData({ ...officerFormData, assignment_type: type as 'theatre' | 'nest' })
-                                          setOfficerDialogOpen(true)
-                                        }}>
-                                          <UserPlus className="h-4 w-4" />
-                                        </Button>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={() => handleEdit(nest)}>
-                                          <Edit className="h-4 w-4" />
-                                        </Button>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(nest.id)}>
-                                          <Trash2 className="h-4 w-4" />
-                                        </Button>
+                  return (
+                    <motion.div
+                      layout
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.2 }}
+                      key={nest.id}
+                    >
+                      <Card className="overflow-hidden hover:shadow-lg transition-shadow h-full flex flex-col">
+                        <CardHeader className="pb-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <CardTitle className="text-lg">{nest.name}</CardTitle>
+                              {programName && (
+                                <Badge variant="outline" className="mt-1">{programName}</Badge>
+                              )}
+                            </div>
+                            {canManage && (
+                              <div className="flex gap-1 shrink-0">
+                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={() => {
+                                  setSelectedNest(nest)
+                                  setOfficerFormData({ ...officerFormData, assignment_type: 'nest' })
+                                  setOfficerDialogOpen(true)
+                                }}>
+                                  <UserPlus className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={() => handleEdit(nest)}>
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(nest.id)}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                          <CardDescription>{nest.city}</CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex-1 flex flex-col">
+                          <div className="space-y-3 text-sm flex-1">
+                            <p className="text-muted-foreground">{nest.address}</p>
+                            {nest.phone && <p>📞 {nest.phone}</p>}
+
+                            {/* Officers Section */}
+                            <div className="border-t pt-3 mt-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Users className="h-4 w-4 text-muted-foreground" />
+                                <span className="font-medium text-xs">Assigned Officers ({nestOfficers.length})</span>
+                              </div>
+                              {nestOfficers.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">No officers assigned</p>
+                              ) : (
+                                <div className="space-y-2">
+                                  {nestOfficers.map(assignment => (
+                                    <div key={assignment.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50 transition-colors hover:bg-muted">
+                                      <div className="flex items-center gap-2">
+                                        <Avatar className="h-6 w-6">
+                                          <AvatarFallback className="text-xs">
+                                            {getInitials(assignment.user?.full_name || '')}
+                                          </AvatarFallback>
+                                        </Avatar>
+                                        <div>
+                                          <p className="text-xs font-medium">{assignment.user?.full_name}</p>
+                                          <p className="text-[10px] text-muted-foreground">{assignment.user?.oscar}</p>
+                                        </div>
                                       </div>
-                                    )}
-                                  </div>
-                                  <CardDescription>{nest.city}</CardDescription>
-                                </CardHeader>
-                                <CardContent className="flex-1 flex flex-col">
-                                  <div className="space-y-3 text-sm flex-1">
-                                    <p className="text-muted-foreground">{nest.address}</p>
-                                    {nest.phone && <p>📞 {nest.phone}</p>}
-
-                                    {/* Officers Section */}
-                                    <div className="border-t pt-3 mt-3">
-                                      <div className="flex items-center gap-2 mb-2">
-                                        <Users className="h-4 w-4 text-muted-foreground" />
-                                        <span className="font-medium text-xs">Assigned Officers ({nestOfficers.length})</span>
-                                      </div>
-                                      {nestOfficers.length === 0 ? (
-                                        <p className="text-xs text-muted-foreground">No officers assigned</p>
-                                      ) : (
-                                        <div className="space-y-2">
-                                          {nestOfficers.map(assignment => (
-                                            <div key={assignment.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50 transition-colors hover:bg-muted">
-                                              <div className="flex items-center gap-2">
-                                                <Avatar className="h-6 w-6">
-                                                  <AvatarFallback className="text-xs">
-                                                    {getInitials(assignment.user?.full_name || '')}
-                                                  </AvatarFallback>
-                                                </Avatar>
-                                                <div>
-                                                  <p className="text-xs font-medium">{assignment.user?.full_name}</p>
-                                                  <p className="text-[10px] text-muted-foreground">{assignment.user?.oscar}</p>
-                                                </div>
-                                              </div>
-                                              {canManage && (
-                                                <div className="flex items-center gap-2">
-                                                  <Switch
-                                                    checked={assignment.is_active}
-                                                    onCheckedChange={() => toggleOfficerActive(assignment)}
-                                                    className="scale-75"
-                                                  />
-                                                  <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-6 w-6"
-                                                    onClick={() => removeAssignment(assignment.id)}
-                                                  >
-                                                    <Trash2 className="h-3 w-3 text-destructive" />
-                                                  </Button>
-                                                </div>
-                                              )}
-                                            </div>
-                                          ))}
+                                      {canManage && (
+                                        <div className="flex items-center gap-2">
+                                          <Switch
+                                            checked={assignment.is_active}
+                                            onCheckedChange={() => toggleOfficerActive(assignment)}
+                                            className="scale-75"
+                                          />
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6"
+                                            onClick={() => removeAssignment(assignment.id)}
+                                          >
+                                            <Trash2 className="h-3 w-3 text-destructive" />
+                                          </Button>
                                         </div>
                                       )}
                                     </div>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            </motion.div>
-                          )
-                        })}
-                    </AnimatePresence>
-                  </motion.div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        ))}
-      </Tabs>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                        {/* Comfort Checklist Toggle */}
+                        <div className="border-t px-4 pb-3 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedComfort(expandedComfort === nest.id ? null : nest.id)}
+                            className="w-full flex items-center justify-between text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <ChevronDown className={`h-3 w-3 transition-transform ${expandedComfort === nest.id ? 'rotate-180' : ''}`} />
+                              Comfort Checklist
+                            </span>
+                            <span className="text-[10px] font-mono text-pink-500">TCNP.01.07</span>
+                          </button>
+                          {expandedComfort === nest.id && (
+                            <div className="mt-2">
+                              <ComfortChecklist nestId={nest.id} nestName={nest.name} />
+                            </div>
+                          )}
+                        </div>
+                      </Card>
+                    </motion.div>
+                  )
+                })}
+              </AnimatePresence>
+            </motion.div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Add/Edit Location Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editing ? 'Edit NOscar Location' : 'Add NOscar Location'}</DialogTitle>
+            <DialogTitle>{editing ? 'Edit Nest Location' : 'Add Nest Location'}</DialogTitle>
             <DialogDescription>
-              {editing ? 'Update location information' : 'Add a new NOscar location'}
+              {editing ? 'Update location information' : 'Add a new hotel/Nest location'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-4">
@@ -527,35 +560,22 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="type">Type *</Label>
-                <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+                <Label htmlFor="program_id">Program</Label>
+                <Select
+                  value={formData.program_id || 'unassigned'}
+                  onValueChange={(value) => setFormData({ ...formData, program_id: value === 'unassigned' ? '' : value })}
+                >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select type" />
+                    <SelectValue placeholder="Select a program (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="nest">NOscar Nest (Hotel)</SelectItem>
-                    <SelectItem value="den">NOscar Theatre (Private)</SelectItem>
+                    <SelectItem value="unassigned">No Program</SelectItem>
+                    {programs.map(program => (
+                      <SelectItem key={program.id} value={program.id}>{program.name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="program_id">Program</Label>
-              <Select
-                value={formData.program_id || 'unassigned'}
-                onValueChange={(value) => setFormData({ ...formData, program_id: value === 'unassigned' ? '' : value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a program (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="unassigned">No Program</SelectItem>
-                  {programs.map(program => (
-                    <SelectItem key={program.id} value={program.id}>{program.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -630,7 +650,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
                 Cancel
               </Button>
               <Button type="submit">
-                {editing ? 'Update' : 'Add'} Location
+                {editing ? 'Update' : 'Add'} Nest
               </Button>
             </div>
           </form>
@@ -643,7 +663,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
           <DialogHeader>
             <DialogTitle>Assign Officer to {selectedNest?.name}</DialogTitle>
             <DialogDescription>
-              Select an officer to assign to this {selectedNest?.type === 'den' ? 'theatre' : 'nest'}
+              Select an officer to assign to this nest
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAssignOfficer} className="space-y-4 mt-4">

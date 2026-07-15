@@ -4,10 +4,14 @@
 
 @layer base {
   :root {
+    /* Native controls, scrollbars, and form widgets follow the active theme */
+    color-scheme: light;
+
     /* TCNP Light Theme */
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
+    --card-elevated: 210 40% 98%;
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
@@ -31,37 +35,73 @@
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
+
+    /* Semantic status tokens — used instead of raw Tailwind colors (bg-green-500
+       etc.) so status color has one source of truth and adapts correctly in dark mode */
+    --success: 142 71% 35%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 42%;
+    --warning-foreground: 0 0% 100%;
+    --info: 213 84% 48%;
+    --info-foreground: 0 0% 100%;
+
+    /* Elevation scale — soft, low-opacity, slightly warm-tinted shadows instead of
+       flat black, layered (ambient + direct) the way modern SaaS surfaces do it */
+    --shadow-color: 222 30% 20%;
+    --shadow-xs: 0 1px 2px hsl(var(--shadow-color) / 0.06);
+    --shadow-sm: 0 1px 3px hsl(var(--shadow-color) / 0.08), 0 1px 2px hsl(var(--shadow-color) / 0.04);
+    --shadow-md: 0 4px 12px hsl(var(--shadow-color) / 0.08), 0 2px 4px hsl(var(--shadow-color) / 0.05);
+    --shadow-lg: 0 12px 32px hsl(var(--shadow-color) / 0.12), 0 4px 8px hsl(var(--shadow-color) / 0.06);
+    --shadow-xl: 0 24px 56px hsl(var(--shadow-color) / 0.16), 0 8px 16px hsl(var(--shadow-color) / 0.08);
+    --shadow-glow-primary: 0 0 0 3px hsl(var(--primary) / 0.15);
   }
 
   .dark {
-    /* TCNP Dark Theme - Navy/Slate with Orange Accents */
-    --background: 222.2 84% 4.9%;
-    /* Deep navy background */
+    color-scheme: dark;
+
+    /* TCNP Dark Theme - Warm Navy/Slate with Orange Accents (Elevated Depth) */
+    --background: 224 20% 6%;
     --foreground: 210 40% 98%;
-    --card: 217.2 32.6% 17.5%;
-    /* Slate card background */
+    --card: 224 18% 10%;
+    --card-elevated: 224 16% 13%;
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
+    --popover: 224 18% 10%;
     --popover-foreground: 210 40% 98%;
     /* TCNP Brand Orange for dark mode */
     --primary: 24 100% 50%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 217.2 32.6% 17.5%;
+    --secondary: 224 18% 10%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
+    --muted: 224 18% 10%;
     --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
+    --accent: 224 18% 10%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --border: 224 14% 16%;
+    --input: 224 14% 16%;
     --ring: 24 100% 50%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+
+    --success: 142 64% 42%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 224 20% 6%;
+    --info: 213 90% 60%;
+    --info-foreground: 0 0% 100%;
+
+    /* Dark surfaces need deeper, more opaque shadows to read against a dark background */
+    --shadow-color: 0 0% 0%;
+    --shadow-xs: 0 1px 2px hsl(var(--shadow-color) / 0.3);
+    --shadow-sm: 0 1px 3px hsl(var(--shadow-color) / 0.4), 0 1px 2px hsl(var(--shadow-color) / 0.3);
+    --shadow-md: 0 4px 12px hsl(var(--shadow-color) / 0.4), 0 2px 4px hsl(var(--shadow-color) / 0.3);
+    --shadow-lg: 0 12px 32px hsl(var(--shadow-color) / 0.5), 0 4px 8px hsl(var(--shadow-color) / 0.35);
+    --shadow-xl: 0 24px 56px hsl(var(--shadow-color) / 0.6), 0 8px 16px hsl(var(--shadow-color) / 0.4);
+    --shadow-glow-primary: 0 0 0 3px hsl(var(--primary) / 0.25);
   }
 }
 
@@ -76,6 +116,19 @@
 
   body {
     @apply min-h-full overflow-x-hidden bg-background text-foreground;
+    font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* Kill the grey tap flash on mobile — feels native, not web */
+    -webkit-tap-highlight-color: transparent;
+    /* No rubber-band overscroll in the installed app; vertical pull-to-refresh stays */
+    overscroll-behavior-x: none;
+  }
+
+  code,
+  .mono {
+    font-family: var(--font-mono), monospace;
   }
 }
 
@@ -142,7 +195,7 @@
 
 /* Premium Gradients */
 .gradient-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, hsl(var(--primary)) 0%, #ff8c00 100%);
 }
 
 .gradient-success {
@@ -218,6 +271,14 @@
     min-height: 44px;
     min-width: 44px;
   }
+
+  /* 16px form controls stop iOS Safari from auto-zooming on focus,
+     which lets us keep pinch-zoom enabled (WCAG 1.4.4) */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 /* Tablet optimizations */
@@ -244,6 +305,50 @@
     max-width: 1400px;
   }
 }
+
+/* ─── Stat Number Typography ─────────────────────────────────────────────── */
+
+/* Prevents layout shift when numbers change (e.g. 9 → 10 → 100) */
+.stat-figure {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  letter-spacing: -0.02em;
+}
+
+/* Sharper heading rendering on HiDPI / Retina screens, tighter enterprise-grade tracking */
+h1,
+h2,
+h3 {
+  text-rendering: geometricPrecision;
+  letter-spacing: -0.015em;
+}
+
+h1 {
+  letter-spacing: -0.025em;
+}
+
+/* ─── Elevation utilities ─────────────────────────────────────────────────── */
+/* Prefer these over Tailwind's shadow-sm/md/lg — tokenized, dark-mode aware */
+.shadow-elevation-xs {
+  box-shadow: var(--shadow-xs);
+}
+
+.shadow-elevation-sm {
+  box-shadow: var(--shadow-sm);
+}
+
+.shadow-elevation-md {
+  box-shadow: var(--shadow-md);
+}
+
+.shadow-elevation-lg {
+  box-shadow: var(--shadow-lg);
+}
+
+.shadow-elevation-xl {
+  box-shadow: var(--shadow-xl);
+}
+
 
 /* Print styles */
 @media print {
@@ -320,7 +425,9 @@
 /* ─── UX Elevation — Global ──────────────────────────────────────────────── */
 
 /* Smooth all interactive elements by default */
-button, a, [role="button"] {
+button,
+a,
+[role="button"] {
   transition-property: color, background-color, border-color, box-shadow, opacity, transform;
   transition-duration: 150ms;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
@@ -330,9 +437,10 @@ button, a, [role="button"] {
 .card-hover {
   transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
 }
+
 .card-hover:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px -8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
 }
 
 /* Elevated card style for stat/summary cards */
@@ -340,9 +448,10 @@ button, a, [role="button"] {
   transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
   border-radius: var(--radius);
 }
+
 .stat-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 12px 36px -8px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-xl);
   border-color: hsl(var(--primary) / 0.35);
 }
 
@@ -356,6 +465,7 @@ button, a, [role="button"] {
     opacity: 0;
     transform: translateY(8px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -363,15 +473,61 @@ button, a, [role="button"] {
 }
 
 /* Staggered children animation */
-.stagger-children > * {
+.stagger-children>* {
   animation: pageEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
-.stagger-children > *:nth-child(2) { animation-delay: 60ms; }
-.stagger-children > *:nth-child(3) { animation-delay: 120ms; }
-.stagger-children > *:nth-child(4) { animation-delay: 180ms; }
-.stagger-children > *:nth-child(5) { animation-delay: 240ms; }
-.stagger-children > *:nth-child(6) { animation-delay: 300ms; }
+
+.stagger-children>*:nth-child(1) {
+  animation-delay: 0ms;
+}
+
+.stagger-children>*:nth-child(2) {
+  animation-delay: 60ms;
+}
+
+.stagger-children>*:nth-child(3) {
+  animation-delay: 120ms;
+}
+
+.stagger-children>*:nth-child(4) {
+  animation-delay: 180ms;
+}
+
+.stagger-children>*:nth-child(5) {
+  animation-delay: 240ms;
+}
+
+.stagger-children>*:nth-child(6) {
+  animation-delay: 300ms;
+}
+
+.stagger-children>*:nth-child(7) {
+  animation-delay: 360ms;
+}
+
+.stagger-children>*:nth-child(8) {
+  animation-delay: 420ms;
+}
+
+.stagger-children>*:nth-child(9) {
+  animation-delay: 480ms;
+}
+
+.stagger-children>*:nth-child(10) {
+  animation-delay: 540ms;
+}
+
+.stagger-children>*:nth-child(11) {
+  animation-delay: 600ms;
+}
+
+.stagger-children>*:nth-child(12) {
+  animation-delay: 660ms;
+}
+
+.stagger-children>*:nth-child(n+13) {
+  animation-delay: 720ms;
+}
 
 /* Enhanced table row hover */
 tr {
@@ -379,7 +535,9 @@ tr {
 }
 
 /* Smooth input focus */
-input, textarea, select {
+input,
+textarea,
+select {
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
@@ -394,8 +552,15 @@ button:active:not(:disabled) {
 }
 
 @keyframes badgePop {
-  from { transform: scale(0.7); opacity: 0; }
-  to   { transform: scale(1);   opacity: 1; }
+  from {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* Realtime pulse dot */
@@ -410,9 +575,17 @@ button:active:not(:disabled) {
 }
 
 @keyframes pulseDot {
-  0%   { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.4); }
-  70%  { box-shadow: 0 0 0 8px hsl(var(--primary) / 0); }
-  100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0); }
+  0% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.4);
+  }
+
+  70% {
+    box-shadow: 0 0 0 8px hsl(var(--primary) / 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
+  }
 }
 
 /* Empty state illustration */
@@ -453,20 +626,20 @@ nav a {
   animation: fadeIn 0.15s ease;
 }
 
-/* Focus visible improvements */
+/* Focus visible improvements — soft two-layer glow instead of a hard outline */
 :focus-visible {
-  outline: 2px solid hsl(var(--primary));
+  outline: 2px solid transparent;
   outline-offset: 2px;
+  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring) / 0.6);
   border-radius: 4px;
 }
 
 /* Progress bar shimmer */
 .progress-shimmer {
   background: linear-gradient(90deg,
-    hsl(var(--primary)) 0%,
-    hsl(var(--primary) / 0.7) 50%,
-    hsl(var(--primary)) 100%
-  );
+      hsl(var(--primary)) 0%,
+      hsl(var(--primary) / 0.7) 50%,
+      hsl(var(--primary)) 100%);
   background-size: 200% 100%;
   animation: skeleton-loading 1.8s ease-in-out infinite;
 }
@@ -477,28 +650,67 @@ nav a {
 
 /* Slow ping for broken-arrow icon */
 @keyframes ping-slow {
-  0%, 100% { transform: scale(1);   opacity: 1;   }
-  50%       { transform: scale(1.4); opacity: 0.5; }
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.4);
+    opacity: 0.5;
+  }
 }
+
 .animate-ping-slow {
   animation: ping-slow 1s ease-in-out infinite;
 }
 
 /* One-shot pulse for new broken-arrow row */
 @keyframes pulse-once {
-  0%   { background-color: hsl(0 72% 92%); }
-  50%  { background-color: hsl(0 72% 88%); }
-  100% { background-color: transparent; }
+  0% {
+    background-color: hsl(0 72% 92%);
+  }
+
+  50% {
+    background-color: hsl(0 72% 88%);
+  }
+
+  100% {
+    background-color: transparent;
+  }
 }
+
 .animate-pulse-once {
   animation: pulse-once 1.5s ease-out;
+}
+
+/* One-shot pulse for a row deep-linked from a notification (routine, not an alarm) */
+@keyframes pulse-highlight {
+  0% {
+    background-color: hsl(var(--primary) / 0.18);
+  }
+
+  60% {
+    background-color: hsl(var(--primary) / 0.1);
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
+
+.animate-pulse-highlight {
+  animation: pulse-highlight 1.3s ease-out 2;
 }
 
 /* Notification panel scroll snap */
 .notification-scroll {
   scroll-snap-type: y proximity;
 }
-.notification-scroll > * {
+
+.notification-scroll>* {
   scroll-snap-align: start;
 }
 
@@ -515,12 +727,55 @@ body {
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
 }
 
+/* ─── Installed-app (standalone) native feel ─────────────────────────────── */
+
+@media (display-mode: standalone) {
+
+  /* The sticky app header extends under the notch / status bar */
+  .app-header {
+    padding-top: env(safe-area-inset-top);
+    height: calc(4rem + env(safe-area-inset-top));
+  }
+
+  /* No rubber-band page bounce inside the installed app — inner panes still scroll */
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
+}
+
+/* App chrome (header/nav) should never show text-selection or iOS long-press callouts */
+.app-header,
+nav,
+[role="menubar"] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Momentum scrolling for all scroll panes on iOS */
+main,
+.overflow-y-auto,
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
 /* ─── BrokenArrow Alert Extras ───────────────────────────────────────────── */
 
 @keyframes pulse-slow {
-  0%, 100% { opacity: 1; box-shadow: 0 0 40px rgba(239, 68, 68, 0.6); }
-  50%       { opacity: 0.9; box-shadow: 0 0 80px rgba(239, 68, 68, 0.9); }
+
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 40px rgba(239, 68, 68, 0.6);
+  }
+
+  50% {
+    opacity: 0.9;
+    box-shadow: 0 0 80px rgba(239, 68, 68, 0.9);
+  }
 }
+
 .animate-pulse-slow {
   animation: pulse-slow 2s ease-in-out infinite;
 }
@@ -532,4 +787,68 @@ body {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: var(--radius);
+}
+
+/* ─── Dialog enter animation ──────────────────────────────────────────────── */
+/* The hand-rolled Dialog (components/ui/dialog.tsx) isn't Radix, so it has no
+   data-state to key transitions off — these just play once on mount. */
+@keyframes dialogOverlayIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialogContentIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.dialog-overlay-in {
+  animation: dialogOverlayIn 180ms ease-out both;
+}
+
+.dialog-content-in {
+  animation: dialogContentIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ─── Premium button sheen ────────────────────────────────────────────────── */
+/* A faint top-edge highlight that gives filled buttons a subtle sense of depth,
+   the way Linear/Stripe/Vercel primary buttons read as "raised" rather than flat */
+.btn-sheen {
+  position: relative;
+  isolation: isolate;
+}
+
+.btn-sheen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, hsl(0 0% 100% / 0.16), transparent 60%);
+  pointer-events: none;
+}
+
+/* ─── Accessibility: Reduced Motion ──────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

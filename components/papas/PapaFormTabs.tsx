@@ -20,6 +20,8 @@ type PapaFormData = {
   phone: string
   flight_number: string
   airline: string
+  flight_departure_time: string
+  flight_arrival_time: string
   arrival_city: string
   arrival_country: string
   nationality: string
@@ -82,6 +84,8 @@ export default function PapaFormTabs({
     phone: initialData?.phone || '',
     flight_number: initialData?.flight_number || '',
     airline: initialData?.airline || '',
+    flight_departure_time: initialData?.flight_departure_time || '',
+    flight_arrival_time: initialData?.flight_arrival_time || '',
     arrival_city: initialData?.arrival_city || '',
     arrival_country: initialData?.arrival_country || '',
     nationality: initialData?.nationality || '',
@@ -246,10 +250,9 @@ export default function PapaFormTabs({
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Phone *</Label>
+                  <Label htmlFor="phone">Phone</Label>
                   <Input
                     id="phone"
-                    required
                     type="tel"
                     placeholder="+234 xxx xxx xxxx"
                     value={formData.phone}
@@ -276,6 +279,38 @@ export default function PapaFormTabs({
                     placeholder="e.g., British Airways"
                     value={formData.airline}
                     onChange={(e) => setFormData({ ...formData, airline: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="flight_departure_time">Departure Time (Local)</Label>
+                  <Input
+                    id="flight_departure_time"
+                    type="datetime-local"
+                    value={formData.flight_departure_time}
+                    onChange={(e) => {
+                      const newDeparture = e.target.value
+                      setFormData((prev) => {
+                        // Auto-clear arrival time if it now falls before the new departure time
+                        if (prev.flight_arrival_time && new Date(prev.flight_arrival_time) < new Date(newDeparture)) {
+                          return { ...prev, flight_departure_time: newDeparture, flight_arrival_time: '' }
+                        }
+                        return { ...prev, flight_departure_time: newDeparture }
+                      })
+                    }}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="flight_arrival_time">Arrival Time (Dest Local)</Label>
+                  <Input
+                    id="flight_arrival_time"
+                    type="datetime-local"
+                    min={formData.flight_departure_time || undefined}
+                    value={formData.flight_arrival_time}
+                    onChange={(e) => setFormData({ ...formData, flight_arrival_time: e.target.value })}
                   />
                 </div>
               </div>

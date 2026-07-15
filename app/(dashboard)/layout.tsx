@@ -1,12 +1,17 @@
 'use client'
 
-import { useState, Suspense, useEffect, useMemo } from "react"
+import { useState, Suspense, useEffect } from "react"
 import dynamic from "next/dynamic"
+import { AnimatePresence, motion } from "framer-motion"
 import { useIsClient } from "@/hooks/useIsClient"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { PresenceHeartbeat } from "@/components/utils/PresenceHeartbeat"
 import { BrokenArrowAlert } from "@/components/operations/BrokenArrowAlert"
 import { createClient } from "@/lib/supabase/client"
+
+// ─── Singleton client — always the same instance, safe to use in effects ───
+const supabase = createClient()
+
 import { useChatNotifications } from "@/hooks/useChatNotifications"
 
 // Core layout components - loaded normally but wrapped in error boundaries
@@ -34,6 +39,11 @@ const NotificationPermissionBanner = dynamic(
   { ssr: false }
 )
 
+const MissionNotificationHandler = dynamic(
+  () => import("@/components/missions/MissionNotificationHandler"),
+  { ssr: false }
+)
+
 const DevLoggerInit = dynamic(
   () => import("@/components/utils/DevLoggerInit").then((m) => m.DevLoggerInit),
   { ssr: false }
@@ -51,6 +61,16 @@ const SyncStatusBadge = dynamic(
 
 const PWAInstallPrompt = dynamic(
   () => import("@/components/pwa/PWAInstallPrompt").then((m) => m.PWAInstallPrompt),
+  { ssr: false }
+)
+
+const PasswordEnforcer = dynamic(
+  () => import("@/components/security/PasswordEnforcer").then((m) => m.PasswordEnforcer),
+  { ssr: false }
+)
+
+const ProfileCompletionEnforcer = dynamic(
+  () => import("@/components/security/ProfileCompletionEnforcer").then((m) => m.ProfileCompletionEnforcer),
   { ssr: false }
 )
 
@@ -76,9 +96,8 @@ export default function DashboardLayout({
   const [canMountExtras, setCanMountExtras] = useState(false)
   const [canMountTracker, setCanMountTracker] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const supabase = useMemo(() => createClient(), [])
 
-  // Mount global chat notification listener
+  // Mount global chat notification listener (supabase singleton defined at module level)
   useChatNotifications(currentUserId)
 
   // Detect iOS on client side only
@@ -103,12 +122,13 @@ export default function DashboardLayout({
     }
   }, [isClient])
 
-  // Load current user id for chat notifications
+  // Load current user id for chat notifications (supabase is a stable module singleton)
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       setCurrentUserId(user?.id ?? null)
     })
-  }, [supabase])
+  }, []) // empty deps — supabase singleton never changes
+
 
   return (
     <ErrorBoundary>
@@ -129,8 +149,10 @@ export default function DashboardLayout({
           </ErrorBoundary>
         )}
 
-        {/* Location enforcer — prompts users who haven't granted permission */}
-        {canMountExtras && !isIOS && (
+        {/* Location enforcer — prompts users who haven't granted permission.
+            Mounted on ALL devices (incl. iOS): its Enable button provides the
+            user gesture iOS requires for the native geolocation prompt. */}
+        {canMountTracker && (
           <ErrorBoundary>
             <LocationEnforcer />
           </ErrorBoundary>
@@ -153,27 +175,33 @@ export default function DashboardLayout({
         </div>
 
         {/* Mobile / tablet Sidebar Overlay (below lg) */}
-        <div
-          className={`fixed inset-0 z-40 flex lg:hidden transition-all duration-300 ${
-            mobileSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-          }`}
-        >
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setMobileSidebarOpen(false)}
-          />
-          <div
-            className={`relative z-50 h-full w-72 max-w-[80%] transition-transform duration-300 ${
-              mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-            }`}
-          >
-            <ErrorBoundary>
-              <Suspense fallback={<div className="w-72 h-full bg-background animate-pulse" />}>
-                <Sidebar isMobile onClose={() => setMobileSidebarOpen(false)} />
-              </Suspense>
-            </ErrorBoundary>
-          </div>
-        </div>
+        <AnimatePresence>
+          {mobileSidebarOpen && (
+            <div className="fixed inset-0 z-40 flex pointer-events-auto lg:hidden">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                onClick={() => setMobileSidebarOpen(false)}
+              />
+              <motion.div
+                initial={{ x: "-100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "-100%" }}
+                transition={{ type: "spring", damping: 28, stiffness: 300 }}
+                className="relative z-50 h-full w-72 max-w-[80%]"
+              >
+                <ErrorBoundary>
+                  <Suspense fallback={<div className="w-72 h-full bg-background animate-pulse" />}>
+                    <Sidebar isMobile onClose={() => setMobileSidebarOpen(false)} />
+                  </Suspense>
+                </ErrorBoundary>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         {/* Main Content Area */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -190,17 +218,33 @@ export default function DashboardLayout({
           </main>
         </div>
 
-        {/* Floating UI elements - DISABLED on iOS */}
+        {/* Floating UI safe on every platform (install prompt is how iOS users
+            learn about Add to Home Screen; password enforcer is plain UI) */}
+        {canMountTracker && (
+          <>
+            <ErrorBoundary>
+              <PWAInstallPrompt />
+            </ErrorBoundary>
+            <ErrorBoundary>
+              <PasswordEnforcer />
+            </ErrorBoundary>
+            <ErrorBoundary>
+              <ProfileCompletionEnforcer />
+            </ErrorBoundary>
+          </>
+        )}
+
+        {/* Floating UI still disabled on iOS (Notification API / IndexedDB limits) */}
         {canMountExtras && !isIOS && (
           <>
             <ErrorBoundary>
               <NotificationPermissionBanner />
             </ErrorBoundary>
             <ErrorBoundary>
-              <SyncStatusBadge />
+              <MissionNotificationHandler />
             </ErrorBoundary>
             <ErrorBoundary>
-              <PWAInstallPrompt />
+              <SyncStatusBadge />
             </ErrorBoundary>
           </>
         )}

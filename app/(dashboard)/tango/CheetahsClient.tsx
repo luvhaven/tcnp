@@ -1,6 +1,8 @@
 "use client"
 
 import { useState } from "react"
+import FlowerChecklist from "@/components/cheetahs/FlowerChecklist"
+import CheetahPrerequisites from "@/components/cheetahs/CheetahPrerequisites"
 import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import type { Database } from "@/types/supabase"
@@ -14,7 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { DatePicker } from "@/components/ui/date-picker"
-import { Car, Plus, Edit, Trash2 } from "lucide-react"
+import { Car, Plus, Edit, Trash2, ChevronDown, AlertTriangle, Gauge } from "lucide-react"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 
@@ -38,6 +40,9 @@ type Cheetah = {
   driver_phone: string
   created_at: string
   programs: { name: string } | null
+  mileage: number | null
+  last_service_mileage: number | null
+  last_service_date: string | null
 }
 
 type CheetahFormState = {
@@ -55,6 +60,7 @@ type CheetahFormState = {
   features: string
   last_maintenance: string
   next_maintenance: string
+  mileage: number
 }
 
 type CheetahUpdatePayload = Database['public']['Tables']['cheetahs']['Update']
@@ -66,7 +72,8 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingCheetah, setEditingCheetah] = useState<Cheetah | null>(null)
-  
+  const [expandedFlower, setExpandedFlower] = useState<string | null>(null)
+
   const [formData, setFormData] = useState<CheetahFormState>({
     registration_number: '',
     driver_name: '',
@@ -81,7 +88,8 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
     program_id: '',
     features: '',
     last_maintenance: '',
-    next_maintenance: ''
+    next_maintenance: '',
+    mileage: 0
   })
 
   const { data: userRole } = useQuery({
@@ -105,7 +113,11 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
   })
 
   const { data: programs = [] } = useQuery({
-    queryKey: ['programs'],
+    // Distinct key: this is filtered to planning/active only, so sharing a
+    // cache slot with an unfiltered query elsewhere would intermittently
+    // hide completed/archived programs (or vice versa) depending on fetch
+    // order — see ProgramsClient.tsx for the full explanation.
+    queryKey: ['programs', 'active-full'],
     queryFn: async () => {
       const { data, error } = await supabase.from('programs').select('*').in('status', ['planning', 'active']).order('name')
       if (error) throw error
@@ -214,7 +226,8 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
       program_id: cheetah.program_id || '',
       features: cheetah.features || '',
       last_maintenance: cheetah.last_maintenance || '',
-      next_maintenance: cheetah.next_maintenance || ''
+      next_maintenance: cheetah.next_maintenance || '',
+      mileage: cheetah.mileage || 0
     })
     setDialogOpen(true)
   }
@@ -240,7 +253,8 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
       program_id: '',
       features: '',
       last_maintenance: '',
-      next_maintenance: ''
+      next_maintenance: '',
+      mileage: 0
     })
   }
 
@@ -252,13 +266,13 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }} 
-        animate={{ opacity: 1, y: 0 }} 
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
         className="flex items-center justify-between"
       >
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Fleet (Cheetahs)</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Tango</h1>
           <p className="text-sm text-muted-foreground max-w-xl">Manage protocol vehicles</p>
         </div>
         {canManage && (
@@ -350,42 +364,75 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
             <motion.div layout className="space-y-3">
               <AnimatePresence>
                 {cheetahs.map((cheetah) => (
-                  <motion.div
-                    layout
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ duration: 0.2 }}
-                    key={cheetah.id}
-                    className="flex min-w-0 flex-col gap-3 overflow-hidden rounded-lg border p-4 transition-all hover:bg-accent hover:shadow-md hover:border-primary/30 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-lg">
-                        {cheetah.call_sign || 'N/A'}
-                      </p>
-                      <p className="truncate text-sm text-muted-foreground">
-                        {cheetah.make} {cheetah.model} ({cheetah.year}) • {cheetah.registration_number}
-                      </p>
-                      <p className="mt-1 truncate text-xs text-muted-foreground">
-                        {cheetah.color} • Capacity: {cheetah.capacity} passengers
-                      </p>
-                    </div>
-                    <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
-                      <Badge variant={cheetah.status === 'available' ? 'success' : cheetah.status === 'in_use' ? 'warning' : 'secondary'}>
-                        {cheetah.status}
-                      </Badge>
-                      {canManage && (
-                        <>
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(cheetah)} className="hover:bg-primary/10">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(cheetah.id)} className="hover:bg-destructive/10">
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </motion.div>
+                  <div key={cheetah.id}>
+                    <motion.div
+                      layout
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.2 }}
+                      className="flex min-w-0 flex-col gap-3 overflow-hidden rounded-lg border p-4 transition-all hover:bg-accent hover:shadow-md hover:border-primary/30 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium text-lg">
+                          {cheetah.call_sign || 'N/A'}
+                        </p>
+                        <p className="truncate text-sm text-muted-foreground">
+                          {cheetah.make} {cheetah.model} ({cheetah.year}) • {cheetah.registration_number}
+                        </p>
+                        <p className="mt-1 truncate text-xs text-muted-foreground">
+                          {cheetah.color} • Capacity: {cheetah.capacity} passengers
+                        </p>
+                        {/* Mileage display + SOP 35k warning */}
+                        {cheetah.mileage != null && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                            <Gauge className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">{cheetah.mileage.toLocaleString()} mi</span>
+                            {cheetah.mileage >= 35000 && (
+                              <Badge variant="destructive" className="text-[9px] gap-0.5 h-4 px-1.5">
+                                <AlertTriangle className="h-2.5 w-2.5" />Service Due
+                              </Badge>
+                            )}
+                            {cheetah.mileage >= 30000 && cheetah.mileage < 35000 && (
+                              <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[9px] gap-0.5 h-4 px-1.5">
+                                <AlertTriangle className="h-2.5 w-2.5" />Approaching Limit
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
+                        <Badge variant={cheetah.status === 'available' ? 'success' : cheetah.status === 'in_use' ? 'warning' : 'secondary'}>
+                          {cheetah.status}
+                        </Badge>
+                        {canManage && (
+                          <>
+                            <Button variant="ghost" size="icon" onClick={() => handleEdit(cheetah)} className="hover:bg-primary/10">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDelete(cheetah.id)} className="hover:bg-destructive/10">
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="hover:bg-teal-500/10"
+                          title="FLOWER Checklist"
+                          onClick={() => setExpandedFlower(expandedFlower === cheetah.id ? null : cheetah.id)}
+                        >
+                          <ChevronDown className={`h-4 w-4 text-teal-500 transition-transform ${expandedFlower === cheetah.id ? 'rotate-180' : ''}`} />
+                        </Button>
+                      </div>
+                    </motion.div>
+                    {expandedFlower === cheetah.id && (
+                      <div className="px-2 pb-3 space-y-2">
+                        <FlowerChecklist cheetahId={cheetah.id} cheetahCallSign={cheetah.call_sign || cheetah.registration_number} />
+                        <CheetahPrerequisites cheetahId={cheetah.id} cheetahCallSign={cheetah.call_sign || cheetah.registration_number} />
+                      </div>
+                    )}
+                  </div>
                 ))}
               </AnimatePresence>
             </motion.div>
@@ -487,6 +534,18 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
                   max={new Date().getFullYear() + 1}
                   value={formData.year}
                   onChange={(e) => setFormData({ ...formData, year: parseInt(e.target.value) })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="mileage">Mileage</Label>
+                <Input
+                  id="mileage"
+                  type="number"
+                  min="0"
+                  placeholder="e.g., 25000"
+                  value={formData.mileage}
+                  onChange={(e) => setFormData({ ...formData, mileage: parseInt(e.target.value) || 0 })}
                 />
               </div>
             </div>

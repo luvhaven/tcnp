@@ -64,8 +64,8 @@ export function useChatNotifications(currentUserId: string | null) {
             ? `${senderName} mentioned you`
             : senderName
 
-          // Play ping sound via global AudioManager (respects mute state)
-          audioManager.playChime('chat')
+          // Mentions get their own insistent ping; regular chat keeps the soft pop
+          audioManager.playChime(isMentioned ? 'mention' : 'chat')
 
           // Show Sonner toast with navigation action
           toast(toastTitle, {
@@ -90,7 +90,7 @@ export function useChatNotifications(currentUserId: string | null) {
             if (Notification.permission === 'granted') {
               const n = new Notification(`TCNP — ${toastTitle}`, {
                 body: preview,
-                icon: '/icons/icon-192x192.png',
+                icon: '/icon-192.png',
                 tag: `chat-${msg.id}`,
                 requireInteraction: isMentioned,
               })

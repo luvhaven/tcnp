@@ -3,36 +3,47 @@
 /**
  * LocationEnforcer
  *
- * Shows a persistent, non-dismissible overlay when the current user has not
- * granted browser location access. The overlay blocks navigation until the
- * user clicks "Enable Location" and the browser permission is either granted
- * or the user explicitly skips (allowed only for admin/command roles).
+ * Shows a soft, dismissible banner when the current user has not
+ * granted browser location access.
  *
- * Admins can dismiss the prompt; field officers (DO, etc.) cannot.
+ * - Admin / command roles: always skippable, auto-dismissed on any failure
+ * - Field officers (DO, Oscars): shown a persistent banner but never fully blocked
+ *
+ * Design principle: NEVER hard-block the app. Operational continuity > location precision.
  */
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { MapPin, AlertTriangle, X } from 'lucide-react'
+import { MapPin, AlertTriangle, X, WifiOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 
-const ADMIN_ROLES = ['dev_admin', 'admin', 'command', 'head_of_command', 'captain', 'vice_captain', 'viewer']
+// Roles that can always dismiss the prompt
+const SKIPPABLE_ROLES = [
+  'dev_admin', 'super_admin', 'admin', 'command', 'head_of_command',
+  'captain', 'vice_captain', 'viewer', 'hod', 'hop',
+  'head_of_operations', 'tango_oscar', 'head_tango_oscar',
+]
+
+function detectIOS(): boolean {
+  if (typeof navigator === 'undefined') return false
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+}
 
 export function LocationEnforcer() {
   const [show, setShow] = useState(false)
   const [role, setRole] = useState<string | null>(null)
   const [requesting, setRequesting] = useState(false)
-  const [dismissed, setDismissed] = useState(false)
+  const [locationMode, setLocationMode] = useState<'gps' | 'ip' | 'unavailable' | 'denied' | null>(null)
+  const isIOS = typeof navigator !== 'undefined' && detectIOS()
 
-  // Check permission status on mount
   useEffect(() => {
     const check = async () => {
       try {
         if (typeof navigator === 'undefined') return
         if (!('geolocation' in navigator)) return
 
-        // Get current user role
         const supabase = createClient()
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
@@ -46,54 +57,67 @@ export function LocationEnforcer() {
         const userRole = (data as any)?.role ?? null
         setRole(userRole)
 
-        // Query permission status
-        if ('permissions' in navigator) {
-          const result = await navigator.permissions.query({ name: 'geolocation' as PermissionName })
-          if (result.state === 'granted') return // Already good
-
-          // Show enforcer for all logged-in users
-          setShow(true)
-
-          // Re-check if user grants via browser UI
-          result.addEventListener('change', () => {
-            if (result.state === 'granted') setShow(false)
-          })
-        } else {
-          // Can't query Permissions API — try a quick getCurrentPosition
+        // Check permission via Permissions API where available
+        const nav = navigator as any
+        if ('permissions' in nav && nav.permissions) {
           try {
-            await new Promise<void>((resolve, reject) => {
-              navigator.geolocation.getCurrentPosition(
-                () => { setShow(false); resolve() },
-                () => { setShow(true); resolve() },
-                { timeout: 2000 }
-              )
+            const result = await nav.permissions.query({ name: 'geolocation' })
+            if (result.state === 'granted') return  // Already tracking — hide enforcer
+
+            if (result.state === 'denied') setLocationMode('denied')
+            setShow(true)
+
+            result.addEventListener('change', () => {
+              if (result.state === 'granted') setShow(false)
             })
           } catch {
-            setShow(true)
+            // Permissions API threw (e.g. Firefox private mode).
+            // On iOS never fire a silent probe — getCurrentPosition without a
+            // user gesture triggers an ill-timed native prompt. Show the banner
+            // instead; the Enable button provides the gesture.
+            if (detectIOS()) {
+              setShow(true)
+            } else {
+              nav.geolocation.getCurrentPosition(
+                () => setShow(false),
+                () => setShow(true),
+                { timeout: 3000, maximumAge: 60000 }
+              )
+            }
           }
+        } else if (detectIOS()) {
+          // Old iOS without Permissions API — banner + gesture-driven request
+          setShow(true)
+        } else {
+          nav.geolocation.getCurrentPosition(
+            () => setShow(false),
+            () => setShow(true),
+            { timeout: 3000, maximumAge: 60000 }
+          )
         }
       } catch {
-        // Non-fatal
+        // Non-fatal — never block the app
       }
     }
 
-    // Slight delay to avoid conflicting with LocationTracker mount
     const timer = setTimeout(check, 2000)
     return () => clearTimeout(timer)
   }, [])
 
   const handleEnable = useCallback(async () => {
     setRequesting(true)
+
+    // ── Step 1: Try hardware GPS ───────────────────────────────────────────
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 0
+        const nav = navigator as any
+        nav.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: false, // Lower bar on desktop — avoids instant denial
+          timeout: 10000,
+          maximumAge: 60000
         })
       })
 
-      // Log the position to DB
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
@@ -109,37 +133,84 @@ export function LocationEnforcer() {
         })
       }
 
+      setLocationMode('gps')
       toast.success('Location sharing enabled — you are now visible on the live map.')
       setShow(false)
-    } catch (err: any) {
-      if (err?.code === 1) {
-        toast.error('Location access denied. Please allow location in your browser settings.')
-      } else {
-        toast.error('Could not get location. Please try again.')
-      }
-    } finally {
       setRequesting(false)
+      return
+    } catch (gpsErr: any) {
+      console.warn('Hardware GPS unavailable:', gpsErr?.message)
+      // code 1 = PERMISSION_DENIED — user (or OS) has blocked it; surface recovery steps
+      if (gpsErr?.code === 1) setLocationMode('denied')
     }
-  }, [])
 
-  // Non-field roles can skip; DO/field officers cannot
-  const canSkip = role ? ADMIN_ROLES.includes(role) : true
+    // ── Step 2: IP-based network fallback (via local proxy) ───────────────
+    try {
+      const ipRes = await fetch('/api/geoip', { signal: AbortSignal.timeout(8000) })
+      if (ipRes.ok) {
+        const ipData = await ipRes.json()
+        if (ipData?.latitude && ipData?.longitude) {
+          const supabase = createClient()
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            await (supabase as any).rpc('upsert_user_location', {
+              p_user_id: user.id,
+              p_latitude: ipData.latitude,
+              p_longitude: ipData.longitude,
+              p_accuracy: 5000,
+              p_altitude: null,
+              p_heading: null,
+              p_speed: null,
+              p_battery_level: null
+            })
+          }
+          setLocationMode('ip')
+          toast.warning('Using approximate network location. Enable GPS for precision tracking.')
+          setShow(false)
+          setRequesting(false)
+          return
+        }
+      }
+    } catch (ipErr) {
+      console.warn('IP geolocation fallback failed:', ipErr)
+    }
 
-  if (!show || dismissed) return null
+    // ── Step 3: Both failed — handle gracefully by role ───────────────────
+    setLocationMode('unavailable')
+    const isSkippable = role ? SKIPPABLE_ROLES.includes(role) : true
+
+    if (isSkippable) {
+      // Admin/command: silently dismiss — don't block operational work
+      toast.info('Location unavailable on this device. You can enable it later in browser settings.', {
+        duration: 5000
+      })
+      setShow(false)
+    } else {
+      // Field officers: keep the banner visible but don't throw a scary error
+      toast.warning('Location access is required for field operations. Please check your browser settings.', {
+        duration: 8000
+      })
+    }
+    setRequesting(false)
+  }, [role])
+
+  // Skippable roles can always dismiss
+  const canSkip = role ? SKIPPABLE_ROLES.includes(role) : true
+
+  if (!show) return null
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in">
-      <div className="relative mx-4 max-w-md w-full rounded-2xl border border-border bg-background shadow-2xl p-6 space-y-4 animate-in slide-in-from-bottom-4">
-        {/* Skip for admins only */}
-        {canSkip && (
-          <button
-            onClick={() => setDismissed(true)}
-            className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Skip"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
+    <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in p-4">
+      <div className="relative w-full max-w-md rounded-2xl border border-border bg-background shadow-2xl p-6 space-y-4 animate-in slide-in-from-bottom-4">
+
+        {/* Dismiss — always shown (field officers see it too, just encouraged to enable) */}
+        <button
+          onClick={() => setShow(false)}
+          className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="Dismiss"
+        >
+          <X className="h-4 w-4" />
+        </button>
 
         <div className="flex items-center gap-3">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
@@ -157,6 +228,38 @@ export function LocationEnforcer() {
             All personnel must share their location for live coordination. Your position is only visible to administrators and command.
           </span>
         </div>
+
+        {locationMode === 'unavailable' && (
+          <div className="rounded-lg bg-muted border border-border p-3 flex gap-2.5 text-xs text-muted-foreground">
+            <WifiOff className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>
+              GPS and network location are both restricted on this device.
+              {canSkip
+                ? ' You can dismiss this prompt and continue working.'
+                : ' Please enable location in your OS settings or browser address bar, then refresh.'}
+            </span>
+          </div>
+        )}
+
+        {locationMode === 'denied' && (
+          <div className="rounded-lg bg-muted border border-border p-3 text-xs text-muted-foreground space-y-1.5">
+            <p className="font-medium text-foreground">Location is blocked for this app. To re-enable:</p>
+            {isIOS ? (
+              <ol className="list-decimal pl-4 space-y-0.5">
+                <li>Open <strong>Settings → Privacy &amp; Security → Location Services</strong></li>
+                <li>Ensure Location Services is <strong>On</strong></li>
+                <li>Find <strong>Safari Websites</strong> (or this app if installed) and choose <strong>While Using the App</strong></li>
+                <li>Return here and tap Enable again</li>
+              </ol>
+            ) : (
+              <ol className="list-decimal pl-4 space-y-0.5">
+                <li>Tap the <strong>padlock / tune icon</strong> in the address bar</li>
+                <li>Set <strong>Location</strong> to <strong>Allow</strong></li>
+                <li>Reload the page and tap Enable again</li>
+              </ol>
+            )}
+          </div>
+        )}
 
         <Button
           onClick={handleEnable}
@@ -178,8 +281,9 @@ export function LocationEnforcer() {
         </Button>
 
         <p className="text-center text-[11px] text-muted-foreground">
-          You can revoke this at any time via your browser settings.
-          {canSkip && ' As an admin you may skip this prompt.'}
+          {canSkip
+            ? 'You may close this prompt without enabling location.'
+            : 'You can revoke location access at any time via your browser settings.'}
         </p>
       </div>
     </div>

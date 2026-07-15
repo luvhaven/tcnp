@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { formatDistanceToNow } from 'date-fns'
+import 'leaflet/dist/leaflet.css'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -81,6 +82,10 @@ const ROLE_METADATA: Record<string, { label: string; color: string }> = {
   alpha_oscar: { label: 'Alpha Oscar', color: '#6D28D9' },
   victor_oscar: { label: 'Victor Oscar', color: '#D97706' },
   november_oscar: { label: 'November Oscar', color: '#4338CA' },
+  noscar_den: { label: 'November (Den)', color: '#4338CA' },
+  head_noscar_den: { label: 'Head, November (Den)', color: '#3730A3' },
+  noscar_nest: { label: 'November (Nest)', color: '#4F46E5' },
+  head_noscar_nest: { label: 'Head, November (Nest)', color: '#4338CA' },
   captain: { label: 'Captain', color: '#16A34A' },
   vice_captain: { label: 'Vice Captain', color: '#22C55E' },
   head_tango_oscar: { label: 'Head, Tango Oscar', color: '#0EA5E9' },
@@ -177,9 +182,7 @@ export default function LiveTrackingMap() {
         event: '*',
         schema: 'public',
         table: 'user_locations'
-      }, (payload) => {
-        console.log('📍 Location update received:', payload.eventType)
-        // Reload for both UPDATE and INSERT events
+      }, () => {
         loadUserLocations()
       })
       .subscribe()
@@ -192,7 +195,6 @@ export default function LiveTrackingMap() {
         schema: 'public',
         table: 'journeys'
       }, () => {
-        console.log('🚗 Journey update received')
         loadJourneys()
       })
       .subscribe()
@@ -272,8 +274,6 @@ export default function LiveTrackingMap() {
         }
       })
       setLocationTrails({ ...trails })
-
-      console.log('✅ Loaded user locations:', enrichedData.length, 'with', userToPapaMap.size, 'Papa assignments')
       setUserLocations(enrichedData)
     } catch (error) {
       console.error('❌ Error loading user locations (unexpected):', error)
@@ -294,7 +294,6 @@ export default function LiveTrackingMap() {
 
       if (error) throw error
 
-      console.log('✅ Loaded journeys:', data)
       const journeysData = (data ?? []) as Journey[]
       const normalizedJourneys: Journey[] = journeysData.map((journey) => {
         const callSignKey = journey.status as CallSignKey | null
@@ -553,12 +552,12 @@ export default function LiveTrackingMap() {
             sidebarOpen ? 'lg:flex-[0.76] flex-1' : 'flex-1'
           )}
         >
-          <Card className="h-full overflow-hidden shadow-lg border border-border/80">
-            <CardHeader className="px-4 py-2 sm:px-5 sm:py-3">
+          <Card className="flex flex-col h-full overflow-hidden shadow-lg border border-border/80">
+            <CardHeader className="shrink-0 px-4 py-2 sm:px-5 sm:py-3">
               <CardTitle className="text-sm font-medium">Live Map</CardTitle>
             </CardHeader>
-            <CardContent className="h-full p-0">
-              <div className="h-full w-full min-h-[360px]">
+            <CardContent className="flex-1 p-0 relative min-h-[360px]">
+              <div className="absolute inset-0">
                 {isClient && (
                   <LiveTrackingLeaflet
                     center={mapCenter}
@@ -572,7 +571,7 @@ export default function LiveTrackingMap() {
                 )}
               </div>
               {filteredLocations.length === 0 && (
-                <div className="px-4 py-3 border-t text-xs text-muted-foreground bg-muted/40">
+                <div className="absolute top-0 inset-x-0 px-4 py-3 border-b text-xs text-muted-foreground bg-muted/90 backdrop-blur z-[1000]">
                   No active locations yet. Ask your team to enable location services on their devices to appear on the map.
                 </div>
               )}
@@ -700,12 +699,12 @@ export default function LiveTrackingMap() {
               <CardContent>
                 <div className="grid gap-2">
                   {[
-                    { color: '#00b200', label: 'Free flow',     desc: 'Road clear, full speed' },
-                    { color: '#92b300', label: 'Mostly free',   desc: 'Minor slowdowns' },
-                    { color: '#ffd700', label: 'Moderate',      desc: 'Noticeable delay' },
-                    { color: '#ff8c00', label: 'Heavy',         desc: 'Significant congestion' },
-                    { color: '#cc0000', label: 'Very heavy',    desc: 'Severe slowdown / jam' },
-                    { color: '#4a0000', label: 'Standstill',    desc: 'Near-stationary traffic' },
+                    { color: '#00b200', label: 'Free flow', desc: 'Road clear, full speed' },
+                    { color: '#92b300', label: 'Mostly free', desc: 'Minor slowdowns' },
+                    { color: '#ffd700', label: 'Moderate', desc: 'Noticeable delay' },
+                    { color: '#ff8c00', label: 'Heavy', desc: 'Significant congestion' },
+                    { color: '#cc0000', label: 'Very heavy', desc: 'Severe slowdown / jam' },
+                    { color: '#4a0000', label: 'Standstill', desc: 'Near-stationary traffic' },
                   ].map(({ color, label, desc }) => (
                     <div key={label} className="flex items-center gap-2.5">
                       <div className="h-3.5 w-3.5 flex-shrink-0 rounded-sm" style={{ backgroundColor: color }} />

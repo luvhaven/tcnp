@@ -4,6 +4,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { AuthProvider } from "@/components/providers/AuthProvider"
 import { ThemeProvider } from "@/components/theme/ThemeProvider"
 import { ConfirmProvider } from "@/components/providers/ConfirmProvider"
+import { CelebrateProvider } from "@/components/providers/CelebrateProvider"
 import QueryProvider from "@/components/providers/QueryProvider"
 import { Toaster } from "sonner"
 import { useEffect, useState } from "react"
@@ -23,7 +24,9 @@ export function SafeProviders({ children }: { children: React.ReactNode }) {
                     <AuthProvider>
                         <QueryProvider>
                             <ConfirmProvider>
-                                {children}
+                                <CelebrateProvider>
+                                    {children}
+                                </CelebrateProvider>
                             </ConfirmProvider>
                         </QueryProvider>
                     </AuthProvider>

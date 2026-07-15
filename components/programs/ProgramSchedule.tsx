@@ -84,8 +84,8 @@ export default function ProgramSchedule({ programId }: { programId: string }) {
             const [daysRes, sessionsRes, speakersRes, papasRes] = await Promise.all([
                 (supabase as any).from('program_days').select('*').eq('program_id', programId).order('date'),
                 (supabase as any).from('program_sessions').select('*').order('start_time'),
-                (supabase as any).from('session_speakers').select('*, papas(full_name, title)').order('time_slot'),
-                (supabase as any).from('papas').select('id, full_name, title').order('full_name')
+                (supabase as any).from('session_speakers').select('*').order('time_slot'),
+                (supabase as any).from('papas_basic').select('id, full_name, title').order('full_name')
             ])
 
             if (daysRes.data) {
@@ -94,8 +94,14 @@ export default function ProgramSchedule({ programId }: { programId: string }) {
                     setSelectedDayId(daysRes.data[0].id)
                 }
             }
+            const papasById = new Map((papasRes.data ?? []).map((p: any) => [p.id, p]))
             if (sessionsRes.data) setSessions(sessionsRes.data as any)
-            if (speakersRes.data) setSpeakers(speakersRes.data as any)
+            if (speakersRes.data) {
+                setSpeakers(speakersRes.data.map((s: any) => ({
+                    ...s,
+                    papas: papasById.get(s.papa_id) ?? null,
+                })) as any)
+            }
             if (papasRes.data) setPapas(papasRes.data)
         } catch (error) {
             console.error('Error loading schedule:', error)

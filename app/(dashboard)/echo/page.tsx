@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
+import EOChecklist from "@/components/echo/EOChecklist"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -90,7 +91,7 @@ export default function EchoPage() {
     const [loading, setLoading] = useState(true)
     const [dialogOpen, setDialogOpen] = useState(false)
     const [editing, setEditing] = useState<Equipment | null>(null)
-const [canManage, setCanManage] = useState(false)
+    const [canManage, setCanManage] = useState(false)
     const [userRole, setUserRole] = useState('')
     const [searchQuery, setSearchQuery] = useState('')
     const [filterType, setFilterType] = useState('all')
@@ -351,9 +352,15 @@ const [canManage, setCanManage] = useState(false)
 
     return (
         <div className="space-y-6 animate-fade-in">
-            {/* ── Papa AV Briefings ── shown for Echo Oscar roles */}
+            {/* ── Papa AV Briefings + EO Pre-Op Checklist ── shown for Echo Oscar roles */}
             {userRole && ['echo_oscar', 'head_echo_oscar'].includes(userRole) && (
-                <PapaBriefingsSection role={userRole} />
+                <div className="grid gap-4 md:grid-cols-2">
+                    <PapaBriefingsSection role={userRole} />
+                    <EOChecklist
+                        programId={programs[0]?.id || ''}
+                        programName={programs[0]?.name || 'No program selected'}
+                    />
+                </div>
             )}
 
             {/* Header */}

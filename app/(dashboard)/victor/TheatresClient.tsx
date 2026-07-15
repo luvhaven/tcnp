@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
+import DenChecklist from "@/components/theatre/DenChecklist"
 import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,18 +12,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { MapPin, Plus, Edit, Trash2, Users, Scan } from "lucide-react"
+import { MapPin, Plus, Edit, Trash2, Users, Scan, ChevronDown, Armchair } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import VIPManagementPanel from "@/components/theatre/VIPManagementPanel"
+import SeatArrangements from "@/components/theatre/SeatArrangements"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { motion, AnimatePresence } from "framer-motion"
+import { canManageVenues, canManageSeatArrangements } from "@/lib/utils"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
 
-export default function TheatresClient({ 
-  initialTheatres, 
-  initialEagleSquares 
-}: { 
+export default function TheatresClient({
+  initialTheatres,
+  initialEagleSquares
+}: {
   initialTheatres: any[]
   initialEagleSquares: any[]
 }) {
@@ -41,6 +45,7 @@ export default function TheatresClient({
     facilities: ''
   })
   const [selectedTheatreId, setSelectedTheatreId] = useState<string>("")
+  const [expandedDen, setExpandedDen] = useState<string | null>(null)
 
   const { data: theatres = [] } = useQuery({
     queryKey: ['theatres'],
@@ -67,6 +72,10 @@ export default function TheatresClient({
       setSelectedTheatreId(theatres[0].id)
     }
   }, [theatres, selectedTheatreId])
+
+  const canManage = userRole ? canManageVenues(userRole) : false
+  const { data: currentUser } = useCurrentUser()
+  const canEditSeats = canManageSeatArrangements(currentUser?.role, currentUser?.oscar)
 
   const saveMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -156,19 +165,35 @@ export default function TheatresClient({
 
   return (
     <div className="space-y-6">
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }} 
-        animate={{ opacity: 1, y: 0 }} 
+      {/* Den Facility Checklist shown for VO roles */}
+      {userRole && ['victor_oscar', 'head_victor_oscar', 'super_admin', 'admin'].includes(userRole) && theatres.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold">Den Facility Checks</h3>
+            <Badge variant="secondary" className="text-[9px]">Run 4× per day</Badge>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {theatres.slice(0, 1).map((t: any) => (
+              <DenChecklist key={t.id} theatreId={t.id} theatreName={t.name} />
+            ))}
+          </div>
+        </div>
+      )}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
         className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
       >
         <div className="min-w-0">
-          <h1 className="text-3xl font-bold tracking-tight">Theatres</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Victor</h1>
           <p className="text-sm text-muted-foreground max-w-xl">Manage event venues and locations</p>
         </div>
-        <Button onClick={openDialog} className="shrink-0 self-start sm:self-auto">
-          <Plus className="mr-2 h-4 w-4" />
-          Add Venue
-        </Button>
+        {canManage && (
+          <Button onClick={openDialog} className="shrink-0 self-start sm:self-auto">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Venue
+          </Button>
+        )}
       </motion.div>
 
       {/* ── Papa Briefings for Victor Oscar roles ── */}
@@ -241,9 +266,13 @@ export default function TheatresClient({
       <Tabs defaultValue="venues" className="space-y-4">
         <TabsList>
           <TabsTrigger value="venues">Venues Management</TabsTrigger>
+          <TabsTrigger value="seating">
+            <Armchair className="mr-2 h-4 w-4" />
+            Seat Arrangements
+          </TabsTrigger>
           <TabsTrigger value="vip-access">
             <Scan className="mr-2 h-4 w-4" />
-            VIP Access
+            Senior Ministers&apos; Access
           </TabsTrigger>
         </TabsList>
 
@@ -261,10 +290,12 @@ export default function TheatresClient({
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <MapPin className="h-12 w-12 text-muted-foreground/50" />
                   <p className="mt-4 text-sm font-medium">No venues yet</p>
-                  <Button className="mt-4" onClick={openDialog}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Venue
-                  </Button>
+                  {canManage && (
+                    <Button className="mt-4" onClick={openDialog}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Venue
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <motion.div layout className="space-y-3">
@@ -293,14 +324,16 @@ export default function TheatresClient({
                             </span>
                           </div>
                         </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(theatre)} className="hover:bg-primary/10">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(theatre.id)} className="hover:bg-destructive/10">
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
+                        {canManage && (
+                          <div className="flex shrink-0 items-center gap-2">
+                            <Button variant="ghost" size="icon" onClick={() => handleEdit(theatre)} className="hover:bg-primary/10">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDelete(theatre.id)} className="hover:bg-destructive/10">
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        )}
                       </motion.div>
                     ))}
                   </AnimatePresence>
@@ -310,10 +343,14 @@ export default function TheatresClient({
           </Card>
         </TabsContent>
 
+        <TabsContent value="seating">
+          <SeatArrangements canEdit={canEditSeats} currentUserId={currentUser?.id ?? null} />
+        </TabsContent>
+
         <TabsContent value="vip-access">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold tracking-tight">VIP Management</h2>
+              <h2 className="text-2xl font-bold tracking-tight">Senior Ministers&apos; Access</h2>
               <div className="w-[300px]">
                 <Select value={selectedTheatreId} onValueChange={setSelectedTheatreId}>
                   <SelectTrigger>

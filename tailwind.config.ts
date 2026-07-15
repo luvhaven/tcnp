@@ -43,6 +43,18 @@ const config: Config = {
   				DEFAULT: 'hsl(var(--card))',
   				foreground: 'hsl(var(--card-foreground))'
   			},
+  			success: {
+  				DEFAULT: 'hsl(var(--success))',
+  				foreground: 'hsl(var(--success-foreground))'
+  			},
+  			warning: {
+  				DEFAULT: 'hsl(var(--warning))',
+  				foreground: 'hsl(var(--warning-foreground))'
+  			},
+  			info: {
+  				DEFAULT: 'hsl(var(--info))',
+  				foreground: 'hsl(var(--info-foreground))'
+  			},
   			chart: {
   				'1': 'hsl(var(--chart-1))',
   				'2': 'hsl(var(--chart-2))',
@@ -55,6 +67,14 @@ const config: Config = {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'
+  		},
+  		boxShadow: {
+  			xs: 'var(--shadow-xs)',
+  			elevation: 'var(--shadow-sm)',
+  			'elevation-md': 'var(--shadow-md)',
+  			'elevation-lg': 'var(--shadow-lg)',
+  			'elevation-xl': 'var(--shadow-xl)',
+  			glow: 'var(--shadow-glow-primary)'
   		},
   		keyframes: {
   			'accordion-down': {

@@ -30,6 +30,7 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
   const [error, setError] = useState<string | null>(null)
   const [permissionStatus, setPermissionStatus] = useState<PermissionState | null>(null)
   const [isTracking, setIsTracking] = useState(false)
+  const [ipFallbackCache, setIpFallbackCache] = useState<LocationData | null>(null)
   const watchIdRef = useRef<number | null>(null)
   const updateIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -117,6 +118,42 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
     devLog.warn('⚠️ Location issue:', errorMessage, err)
     setError(errorMessage)
   }, [])
+
+  // IP Fallback mechanism for devices without GPS mapping headers or restricted browser/OS
+  const executeIPFallback = useCallback(async () => {
+    if (ipFallbackCache) {
+      handlePosition({
+        coords: { ...ipFallbackCache, altitude: null, heading: null, speed: null, altitudeAccuracy: null },
+        timestamp: Date.now()
+      } as unknown as GeolocationPosition)
+      return true
+    }
+
+    try {
+      const ipRes = await fetch('/api/geoip')
+      const ipData = await ipRes.json()
+      if (ipData && ipData.latitude && ipData.longitude) {
+        const fallbackData = {
+          latitude: ipData.latitude,
+          longitude: ipData.longitude,
+          accuracy: 5000,
+          altitude: undefined,
+          heading: undefined,
+          speed: undefined
+        }
+        setIpFallbackCache(fallbackData)
+        handlePosition({
+          coords: { ...fallbackData, altitude: null, heading: null, speed: null, altitudeAccuracy: null },
+          timestamp: Date.now()
+        } as unknown as GeolocationPosition)
+        toast.warning('Hardware GPS restricted. Tracking via network approximation.', { id: 'ip-fallback-warn', duration: 4000 })
+        return true
+      }
+    } catch (e) {
+      console.warn('IP Fallback sequence failed', e)
+    }
+    return false
+  }, [ipFallbackCache, handlePosition])
 
   // Request permission
   const requestPermission = useCallback(async (): Promise<boolean> => {
@@ -206,6 +243,14 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
         handlePosition(position)
         return true
       } catch (error: any) {
+        if (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE) {
+          const fallbackSuccess = await executeIPFallback()
+          if (fallbackSuccess) {
+            setPermissionStatus('granted') // Mock success so the app keeps tracking
+            return true
+          }
+        }
+
         devLog.warn('⚠️ Geolocation permission/error:', error.message, error.code)
         if (error.code === error.PERMISSION_DENIED) {
           toast.error('Location access denied. Please allow location access in your browser address bar.')
@@ -222,7 +267,7 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
       console.error('❌ Error requesting permission:', err)
       return false
     }
-  }, [highAccuracy, handlePosition])
+  }, [highAccuracy, handlePosition, executeIPFallback])
 
   // Start tracking
   const startTracking = useCallback(async () => {
@@ -256,12 +301,18 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
     // Use watchPosition for continuous tracking
     const watchId = navigator.geolocation.watchPosition(
       handlePosition,
-      (error) => {
+      async (error) => {
         // On iOS, timeout errors often resolve on retry, so handle gracefully
         if (isIOS && error.code === error.TIMEOUT) {
           console.log('📍 iOS timeout - will retry automatically')
           return
         }
+
+        if (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE) {
+          await executeIPFallback()
+          return
+        }
+
         handleError(error)
       },
       {
@@ -279,9 +330,13 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
     updateIntervalRef.current = setInterval(() => {
       navigator.geolocation.getCurrentPosition(
         handlePosition,
-        (error) => {
+        async (error) => {
           if (error.code !== error.TIMEOUT) {
-            handleError(error)
+            if (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE) {
+              await executeIPFallback()
+            } else {
+              handleError(error)
+            }
           }
         },
         {

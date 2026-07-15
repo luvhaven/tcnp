@@ -5,7 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/providers/ConfirmProvider'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { CallSignKey } from '@/lib/constants/call-signs'
+import { offlineQueue } from '@/lib/offline-queue'
+import { CALL_SIGN_KEY_TO_DB_ENUM, getCallSignLabel, type CallSignKey } from '@/lib/constants/call-signs'
 
 export const STATUS_CALL_SIGNS: CallSignKey[] = [
   'first_course',
@@ -20,18 +21,9 @@ export const EVENT_CALL_SIGNS: CallSignKey[] = [
   're_order',
 ]
 
-// ── journey_events.event_type is the call_sign enum (Title Case + spaces) ────
-// Map from JS key → DB enum value.  Only keys present here will be logged.
-const CALL_SIGN_KEY_TO_DB: Partial<Record<CallSignKey, string>> = {
-  first_course:  'First Course',
-  cocktail:      'Cocktail',
-  chapman:       'Chapman',
-  dessert:       'Dessert',
-  blue_cocktail: 'Blue Cocktail',
-  red_cocktail:  'Red Cocktail',
-  re_order:      'Re-order',
-  broken_arrow:  'Broken Arrow',
-}
+// journey_events.event_type is the `call_sign` enum (Title Case + spaces).
+// Single source of truth lives in lib/constants/call-signs.ts.
+const CALL_SIGN_KEY_TO_DB = CALL_SIGN_KEY_TO_DB_ENUM
 
 async function logJourneyEvent(
   supabase: ReturnType<typeof createClient>,
@@ -41,16 +33,18 @@ async function logJourneyEvent(
 ) {
   const dbValue = CALL_SIGN_KEY_TO_DB[callSign]
   if (!dbValue) return // 'completed' and others are not call_sign enum values – skip
-  try {
-    await (supabase as any).from('journey_events').insert({
-      journey_id:   journeyId,
-      event_type:   dbValue,        // call_sign enum (Title Case) ✓
-      description:  notes ?? null,
-      triggered_at: new Date().toISOString(),
-    })
-  } catch (e) {
-    console.warn('journey_events log failed (non-critical):', e)
-  }
+  // Attribute the broadcast to the reporting officer so the Ops Monitor can show
+  // who sent it. This is the ONLY signal event-only call signs (traffic/route)
+  // emit — the journeys.status row doesn't change — so it must not be dropped.
+  const { data: { user } } = await supabase.auth.getUser()
+  const { error } = await (supabase as any).from('journey_events').insert({
+    journey_id: journeyId,
+    event_type: dbValue,        // call_sign enum (Title Case) ✓
+    description: notes ?? null,
+    triggered_by: user?.id ?? null,
+    triggered_at: new Date().toISOString(),
+  })
+  if (error) throw error   // surfaced by caller; event-only signs depend on this
 }
 
 export function useJourneyStatus(journeyId: string) {
@@ -106,24 +100,59 @@ export function useJourneyStatus(journeyId: string) {
     mutationFn: async ({ callSign, notes }: { callSign: CallSignKey, notes?: string }) => {
       const isEventOnly = EVENT_CALL_SIGNS.includes(callSign)
 
-      if (!isEventOnly) {
-        // Only update columns that actually exist in the journeys schema.
-        // NOTE: actual_departure / actual_arrival do NOT exist — do NOT include them.
-        const updates: Record<string, any> = {
-          status:     callSign,                   // journey_status enum (underscores ✓)
-          updated_at: new Date().toISOString(),
+      try {
+        if (!isEventOnly) {
+          // Only update columns that actually exist in the journeys schema.
+          // NOTE: actual_departure / actual_arrival do NOT exist — do NOT include them.
+          const updates: Record<string, any> = {
+            status: callSign,                   // journey_status enum (underscores ✓)
+            status_updated_at: new Date().toISOString(),  // Ops Monitor "last update" clock
+            updated_at: new Date().toISOString(),
+          }
+
+          const { error } = await (supabase as any)
+            .from('journeys')
+            .update(updates)
+            .eq('id', journeyId)
+
+          if (error) throw error
+
+          // Event log is secondary for status signs — the status row already
+          // changed and drives the UI, so a failed log here is non-fatal.
+          try {
+            await logJourneyEvent(supabase, journeyId, callSign, notes)
+          } catch (e) {
+            console.warn('journey_events log failed (non-critical):', e)
+          }
+        } else {
+          // For event-only broadcasts (traffic / route change) the journey_events
+          // row IS the whole signal — nothing else changes — so a failure here
+          // must surface to the officer, not be swallowed.
+          await logJourneyEvent(supabase, journeyId, callSign, notes)
         }
-
-        const { error } = await (supabase as any)
-          .from('journeys')
-          .update(updates)
-          .eq('id', journeyId)
-
-        if (error) throw error
+      } catch (err: any) {
+        if (!navigator.onLine || err.message?.includes('fetch failed') || err.message?.includes('Failed to fetch')) {
+          const now = new Date().toISOString()
+          if (!isEventOnly) {
+            await offlineQueue.addToQueue('journey_update', {
+              id: journeyId,
+              updates: { status: callSign, updated_at: now },
+              isEmergency: callSign === 'broken_arrow'
+            })
+          }
+          const dbValue = CALL_SIGN_KEY_TO_DB[callSign]
+          if (dbValue) {
+            await offlineQueue.addToQueue('journey_event', {
+              journey_id: journeyId,
+              event_type: dbValue,
+              description: notes ?? null,
+              triggered_at: now
+            })
+          }
+        } else {
+          throw err
+        }
       }
-
-      // Log the event — non-critical, errors are swallowed
-      await logJourneyEvent(supabase, journeyId, callSign, notes)
 
       // ── Auto-log Broken Arrow to incidents ─────────────────────────────────
       // Creates a CRITICAL incident record automatically so the Incidents page
@@ -132,13 +161,13 @@ export function useJourneyStatus(journeyId: string) {
         try {
           const { data: { user } } = await supabase.auth.getUser()
           await (supabase as any).from('incidents').insert({
-            journey_id:  journeyId,
-            type:        'BROKEN ARROW',
-            severity:    'critical',
+            journey_id: journeyId,
+            type: 'BROKEN ARROW',
+            severity: 'critical',
             description: `BROKEN ARROW automatically declared by duty officer. Major incident — Cheetah immobilized. Auto-logged at ${new Date().toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'medium' })}.`,
-            status:      'open',
+            status: 'open',
             reported_by: user?.id ?? null,
-            created_by:  user?.id ?? null,
+            created_by: user?.id ?? null,
           })
         } catch (e) {
           console.warn('Auto-incident log failed (non-critical):', e)
@@ -154,35 +183,47 @@ export function useJourneyStatus(journeyId: string) {
       // Optimistic Update
       await queryClient.cancelQueries({ queryKey: ['journeyStatus', journeyId] })
       const previousState = queryClient.getQueryData(['journeyStatus', journeyId])
-      
+
       queryClient.setQueryData(['journeyStatus', journeyId], {
         status: callSign,
         updated_at: new Date().toISOString()
       })
-      
+
       return { previousState }
     },
-    onError: (err, variables, context) => {
+    onError: (err: any, variables, context) => {
       if (context?.previousState) {
         queryClient.setQueryData(['journeyStatus', journeyId], context.previousState)
       }
       console.error('Call sign update failed:', err)
-      toast.error('Failed to update call sign')
+      const label = getCallSignLabel(variables.callSign)
+      toast.error(`${label} failed to send`, {
+        description: err?.message ? String(err.message).slice(0, 120) : 'Check your connection or permissions and retry.',
+      })
     },
     onSuccess: (result) => {
-      const label = result.callSign.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-      toast.success(`${label} – call sign executed`)
+      const label = getCallSignLabel(result.callSign)
+      if (result.isEventOnly) {
+        toast.success(`📡 ${label} broadcast — relayed to Ops Monitor`)
+      } else {
+        toast.success(`${label} — call sign relayed`)
+      }
     }
   })
 
   const completeMutation = useMutation({
     mutationFn: async () => {
       // NOTE: actual_arrival does NOT exist in the journeys schema — omitted.
+      const { data: { user } } = await supabase.auth.getUser()
+      const now = new Date().toISOString()
       const { error } = await (supabase as any)
         .from('journeys')
         .update({
-          status:     'completed',
-          updated_at: new Date().toISOString(),
+          status: 'completed',
+          status_updated_at: now,
+          completed_at: now,               // after-op reporting relies on this
+          completed_by: user?.id ?? null,
+          updated_at: now,
         })
         .eq('id', journeyId)
 
@@ -217,11 +258,11 @@ export function useJourneyStatus(journeyId: string) {
     completeMutation.mutate()
   }, [completeMutation, confirm])
 
-  return { 
-    status: data?.status || null, 
-    lastUpdated: data?.updated_at || null, 
-    loading: isLoading || updateMutation.isPending || completeMutation.isPending, 
-    updateStatus, 
-    completeJourney 
+  return {
+    status: data?.status || null,
+    lastUpdated: data?.updated_at || null,
+    loading: isLoading || updateMutation.isPending || completeMutation.isPending,
+    updateStatus,
+    completeJourney
   }
 }

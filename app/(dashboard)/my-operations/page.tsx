@@ -3,6 +3,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import CallSignPanel from '@/components/operations/CallSignPanel'
+import DOHelpPanel from '@/components/operations/DOHelpPanel'
+import DOFeedbackForm from '@/components/operations/DOFeedbackForm'
+import CheetahPrerequisites from '@/components/cheetahs/CheetahPrerequisites'
+import FlowerChecklist from '@/components/cheetahs/FlowerChecklist'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -10,14 +14,19 @@ import { Loader2, Radio, MapPin, Car, User, Calendar, Clock, Crown, Shield } fro
 import { format, formatDistanceToNow } from 'date-fns'
 import { notificationService } from '@/lib/services/notificationService'
 import { toast } from 'sonner'
+import { useCelebrate } from '@/components/providers/CelebrateProvider'
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from '@/lib/constants/tncpCallSigns'
+import { CALL_SIGN_KEY_TO_DB_ENUM, type CallSignKey } from '@/lib/constants/call-signs'
 import { cn } from '@/lib/utils'
+import { oscarToRole } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface DutyOfficer {
   user_id: string
   is_lead: boolean
+  status?: string
+  acknowledged_at?: string | null
   users: { full_name: string; role: string; oscar: string | null; photo_url: string | null } | null
 }
 
@@ -46,30 +55,42 @@ interface Journey {
 const ADMIN_ROLES = ['super_admin', 'dev_admin', 'admin', 'captain', 'head_of_command', 'head_of_operations', 'command', 'hod', 'hop']
 
 // ─── Role-based journey filter ─────────────────────────────────────────────
-function journeyMatchesRole(journey: Journey, role: string, userId: string): boolean {
+/**
+ * Returns true if the given journey is relevant to the user.
+ *
+ * Permissions are Oscar-based: the permanent `oscar` column governs which
+ * journey types the officer sees. `role=delta_oscar` just means they have an
+ * additional DO assignment for a specific journey — it does NOT strip their
+ * base Oscar access.
+ */
+function journeyMatchesRole(journey: Journey, role: string, userId: string, oscar?: string | null): boolean {
   if (ADMIN_ROLES.includes(role)) return true
 
-  if (role === 'delta_oscar') {
-    return !!(
-      journey.duty_officers?.some(d => d.user_id === userId) ||
-      journey.assigned_duty_officer_id === userId
-    )
-  }
-  if (role === 'alpha_oscar' || role === 'head_alpha_oscar') {
+  // Resolve the effective permanent Oscar even when the user is assigned as DO
+  const effectiveRole = (role !== 'delta_oscar' ? role : null) ?? oscarToRole(oscar) ?? role
+
+  // Anyone assigned as DO to this specific journey always sees it
+  const isAssignedToDO = !!(
+    journey.duty_officers?.some(d => d.user_id === userId) ||
+    journey.assigned_duty_officer_id === userId
+  )
+  if (isAssignedToDO) return true
+
+  // Base Oscar access — governs which journey types are in scope
+  if (effectiveRole === 'alpha_oscar' || effectiveRole === 'head_alpha_oscar') {
     return !!(journey.assigned_eagle_square_id ||
       journey.origin?.toLowerCase().includes('eagle') ||
       journey.destination?.toLowerCase().includes('eagle'))
   }
-  if (role === 'tango_oscar' || role === 'head_tango_oscar') {
+  if (effectiveRole === 'tango_oscar' || effectiveRole === 'head_tango_oscar') {
     return true // Transport overseer sees all active journeys
   }
-  if (role === 'victor_oscar' || role === 'head_victor_oscar') {
+  if (effectiveRole === 'victor_oscar' || effectiveRole === 'head_victor_oscar') {
     return !!(journey.assigned_theatre_id ||
       journey.destination?.toLowerCase().includes('theatre') ||
       journey.origin?.toLowerCase().includes('theatre'))
   }
-  if (['november_oscar', 'head_noscar_den', 'head_noscar_nest', 'noscar_den', 'noscar_nest'].includes(role)) {
-    // Nest AND Theatre legs
+  if (['november_oscar', 'head_noscar_den', 'head_noscar_nest', 'noscar_den', 'noscar_nest'].includes(effectiveRole)) {
     return !!(
       journey.assigned_nest_id ||
       journey.assigned_theatre_id ||
@@ -79,11 +100,9 @@ function journeyMatchesRole(journey: Journey, role: string, userId: string): boo
       journey.origin?.toLowerCase().includes('theatre')
     )
   }
-  // Default: show journeys user is directly assigned to (junction table OR legacy field)
-  return !!(
-    journey.duty_officers?.some(d => d.user_id === userId) ||
-    journey.assigned_duty_officer_id === userId
-  )
+
+  // Default: only journeys directly assigned
+  return false
 }
 
 const getStatusColor = (status: string) => {
@@ -105,6 +124,7 @@ export default function MyOperationsPage() {
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [userOscar, setUserOscar] = useState<string | null>(null)
   const [selectedJourneyId, setSelectedJourneyId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('assigned')
 
@@ -120,13 +140,15 @@ export default function MyOperationsPage() {
 
       const { data: userData } = await supabase
         .from('users')
-        .select('id, role')
+        .select('id, role, oscar')
         .eq('id', user.id)
         .single()
 
       const role = (userData as any)?.role ?? null
+      const oscar = (userData as any)?.oscar ?? null
       setUserId(user.id)
       setUserRole(role)
+      setUserOscar(oscar)
 
       const isAdmin = ADMIN_ROLES.includes(role)
 
@@ -163,6 +185,8 @@ export default function MyOperationsPage() {
           eagle_squares:eagle_squares!assigned_eagle_square_id(name, code)
         `)
         .not('status', 'in', '(completed,cancelled)')
+        // Soft-deleted journeys must never reach a DO's queue (null = legacy rows)
+        .or('is_deleted.is.null,is_deleted.eq.false')
         .order('etd', { ascending: true, nullsFirst: false })
 
       if (!isAdmin) {
@@ -185,7 +209,7 @@ export default function MyOperationsPage() {
       if (journeyIds.length > 0) {
         const { data: doData } = await (supabase as any)
           .from('journey_duty_officers')
-          .select('journey_id, user_id, is_lead, users:user_id(full_name, role, oscar, photo_url)')
+          .select('journey_id, user_id, is_lead, status, acknowledged_at, users:user_id(full_name, role, oscar, photo_url)')
           .in('journey_id', journeyIds)
 
         for (const row of doData || []) {
@@ -199,8 +223,8 @@ export default function MyOperationsPage() {
         duty_officers: dutyOfficersMap[j.id] || [],
       }))
 
-      // Filter by role
-      const filtered = incoming.filter(j => journeyMatchesRole(j, role, user.id))
+      // Filter by role (oscar-aware)
+      const filtered = incoming.filter(j => journeyMatchesRole(j, role, user.id, oscar))
 
       // Detect new assignments
       if (!isInitial && knownIds.current.size > 0) {
@@ -264,12 +288,12 @@ export default function MyOperationsPage() {
       if (j.scheduled_departure) {
         const mins = (new Date(j.scheduled_departure).getTime() - now) / 60000
         if (mins <= 15 && mins > 14) void fireReminder(`${j.id}:dep:15`, '⏰ Departing in 15 minutes', `${papa}: ${route}`)
-        if (mins <= 5  && mins > 4)  void fireReminder(`${j.id}:dep:5`,  '🚨 Departing in 5 minutes!',  `${papa}: ${route}`)
+        if (mins <= 5 && mins > 4) void fireReminder(`${j.id}:dep:5`, '🚨 Departing in 5 minutes!', `${papa}: ${route}`)
       }
       if (j.scheduled_arrival) {
         const mins = (new Date(j.scheduled_arrival).getTime() - now) / 60000
         if (mins <= 15 && mins > 14) void fireReminder(`${j.id}:arr:15`, '⏰ Arriving in 15 minutes', `${papa}: ${route}`)
-        if (mins <= 5  && mins > 4)  void fireReminder(`${j.id}:arr:5`,  '🚨 Arriving in 5 minutes!',  `${papa}: ${route}`)
+        if (mins <= 5 && mins > 4) void fireReminder(`${j.id}:arr:5`, '🚨 Arriving in 5 minutes!', `${papa}: ${route}`)
       }
     }
   }, [journeys, userId, userRole])
@@ -334,6 +358,11 @@ export default function MyOperationsPage() {
         </div>
       </div>
 
+      {/* DO Quick Reference Panel — shown for DOs and when user has DO assignments */}
+      {(userRole === 'delta_oscar' || myAssigned.length > 0) && (
+        <DOHelpPanel />
+      )}
+
       {journeys.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
@@ -367,6 +396,12 @@ export default function MyOperationsPage() {
               <TabsTrigger value="upcoming">
                 Upcoming
                 <Badge variant="outline" className="ml-1 h-5 px-1.5 text-xs">{upcoming.length}</Badge>
+              </TabsTrigger>
+            )}
+            {myAssigned.length > 0 && (
+              <TabsTrigger value="postop" className="flex items-center gap-1.5">
+                Post-Op Report
+                <Badge variant="outline" className="ml-1 h-5 px-1.5 text-xs text-amber-600 border-amber-500/40">{myAssigned.length}</Badge>
               </TabsTrigger>
             )}
           </TabsList>
@@ -414,6 +449,26 @@ export default function MyOperationsPage() {
               <JourneyFeedCard key={j.id} journey={j} showCountdown />
             ))}
           </TabsContent>
+
+          {/* ── Post-Op Reports (DO only) ────────────────────────── */}
+          <TabsContent value="postop" className="space-y-4">
+            <p className="text-xs text-muted-foreground">Submit your post-operation report after each journey is complete. Required per SOP TCNP.01.08.</p>
+            {myAssigned.length === 0 ? (
+              <Card>
+                <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                  No assigned journeys to report on.
+                </CardContent>
+              </Card>
+            ) : (
+              myAssigned.map(j => (
+                <DOFeedbackForm
+                  key={j.id}
+                  journeyId={j.id}
+                  papaNme={j.papas?.full_name ? `${j.papas.title || ''} ${j.papas.full_name}`.trim() : 'Unknown Papa'}
+                />
+              ))
+            )}
+          </TabsContent>
         </Tabs>
       )}
     </div>
@@ -432,29 +487,55 @@ function JourneyOperationsPanel({
   isAdmin: boolean
 }) {
   const supabase = createClient()
-  const isAssignedDO = !!(
-    journey.duty_officers?.some(d => d.user_id === currentUserId) ||
-    journey.assigned_duty_officer_id === currentUserId
-  )
-  const isLead = !!(journey.duty_officers?.find(d => d.user_id === currentUserId)?.is_lead ||
-    journey.assigned_duty_officer_id === currentUserId)
+  const celebrate = useCelebrate()
+  const myDORecord = journey.duty_officers?.find(d => d.user_id === currentUserId)
+  const isAssignedDO = !!(myDORecord || journey.assigned_duty_officer_id === currentUserId)
+  const isLead = !!(myDORecord?.is_lead || journey.assigned_duty_officer_id === currentUserId)
+  const isPendingAcknowledge = myDORecord?.status === 'pending'
   const canUpdate = isAssignedDO || isAdmin
   const isPlanned = journey.status === 'planned'
   const [starting, setStarting] = useState(false)
+  const [acknowledging, setAcknowledging] = useState(false)
+
+  const handleAcknowledge = async () => {
+    setAcknowledging(true)
+    try {
+      const { error } = await (supabase as any)
+        .from('journey_duty_officers')
+        .update({ status: 'acknowledged', acknowledged_at: new Date().toISOString() })
+        .eq('journey_id', journey.id)
+        .eq('user_id', currentUserId)
+
+      if (error) throw error
+      celebrate('Assignment accepted — shift handoff complete')
+    } catch (err: any) {
+      console.error('Acknowledgment error:', err)
+      toast.error('Failed to acknowledge assignment (Check network or permissions)')
+    } finally {
+      setAcknowledging(false)
+    }
+  }
 
   const statusKey = resolveCallSignKey(journey.status)
   const statusColor = statusKey ? TNCP_CALL_SIGN_COLORS[statusKey] : 'bg-gray-500 text-white'
 
-  // Determine first active call sign based on journey type / destination
-  const getFirstCallSign = (): string => {
+  // First movement call sign when the journey starts, per SOP TCNP.01.05:
+  //   First Course = departure from Nest to Theatre
+  //   Dessert      = departure from Theatre to Nest
+  //   Cocktail     = principal in-transit (generic movement)
+  // Never returns a traffic/route broadcast (blue_cocktail etc.) — those are
+  // event-only SITREPs, not a valid opening movement status.
+  const getFirstCallSign = (): CallSignKey => {
     const dest = (journey.destination ?? '').toLowerCase()
     const origin = (journey.origin ?? '').toLowerCase()
-    if (dest.includes('eagle') || dest.includes('airport')) return 'first_course'
-    if (dest.includes('theatre') || dest.includes('venue')) return 'cocktail'
-    if (dest.includes('nest')) return 'blue_cocktail'
-    // Fallback: if origin is nest/airport, try to infer
-    if (origin.includes('eagle') || origin.includes('airport')) return 'first_course'
-    return 'first_course' // safest default — admin can override
+    // Theatre / venue bound → First Course
+    if (dest.includes('theatre') || dest.includes('venue') || dest.includes('church') || dest.includes('covenant')) return 'first_course'
+    // Returning to the Nest / hotel → Dessert
+    if (dest.includes('nest') || dest.includes('hotel')) return 'dessert'
+    // Leaving the Nest for anywhere else → First Course
+    if (origin.includes('nest') || origin.includes('hotel')) return 'first_course'
+    // Everything else (airport runs, transfers) → generic in-transit
+    return 'cocktail'
   }
 
   const handleStartJourney = async () => {
@@ -464,6 +545,7 @@ function JourneyOperationsPanel({
       const firstCallSign = getFirstCallSign()
 
       // ── Direct update: journey_status enum uses underscores — safe ────────
+      const { data: { user } } = await supabase.auth.getUser()
       const { error: updateError } = await (supabase as any)
         .from('journeys')
         .update({
@@ -475,15 +557,22 @@ function JourneyOperationsPanel({
 
       if (updateError) throw updateError
 
-      // ── Log the event ────────────────────────────────────────────────────
-      await (supabase as any).from('journey_events').insert({
-        journey_id: journey.id,
-        event_type: firstCallSign,
-        description: 'Journey started',
-        triggered_at: new Date().toISOString(),
-      })
+      // ── Log the event (non-fatal) ────────────────────────────────────────
+      // journey_events.event_type is the `call_sign` enum (Title Case). Sending
+      // the underscored key here silently fails the enum check, so map it first.
+      const eventEnum = CALL_SIGN_KEY_TO_DB_ENUM[firstCallSign as CallSignKey]
+      if (eventEnum) {
+        const { error: eventError } = await (supabase as any).from('journey_events').insert({
+          journey_id: journey.id,
+          event_type: eventEnum,
+          description: 'Journey started',
+          triggered_by: user?.id ?? null,
+          triggered_at: new Date().toISOString(),
+        })
+        if (eventError) console.warn('journey_events log failed (non-critical):', eventError)
+      }
 
-      toast.success('Journey started! Call sign updated.')
+      toast.success(`Journey started — ${getCallSignLabel(firstCallSign)} relayed to Ops Monitor`)
     } catch (err: any) {
       toast.error(err.message || 'Failed to start journey')
     } finally {
@@ -569,8 +658,45 @@ function JourneyOperationsPanel({
         </CardContent>
       </Card>
 
+      {/* Pre-Op Checklists (shown when journey is planned) */}
+      {canUpdate && isPlanned && journey.cheetahs?.registration_number && (
+        <div className="grid md:grid-cols-2 gap-4 mt-4">
+          <CheetahPrerequisites
+            cheetahId={journey.cheetahs.registration_number} // fallback since cheetah object might just be partial
+            cheetahCallSign={journey.cheetahs.call_sign ?? journey.cheetahs.registration_number}
+          />
+          <FlowerChecklist
+            cheetahId={journey.cheetahs.registration_number}
+            cheetahCallSign={journey.cheetahs.call_sign ?? journey.cheetahs.registration_number}
+          />
+        </div>
+      )}
+
+      {/* ── Shift Handoff Acknowledgment ── */}
+      {isPendingAcknowledge && (
+        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-4 my-4 animate-in fade-in zoom-in duration-300">
+          <div className="flex items-start gap-3">
+            <Radio className="h-5 w-5 text-amber-600 dark:text-amber-500 mt-0.5 animate-pulse" />
+            <div className="flex-1">
+              <h4 className="font-semibold text-amber-900 dark:text-amber-400 text-sm">Shift Handoff Pending</h4>
+              <p className="text-xs text-amber-800 dark:text-amber-500/80 mt-1 mb-3">
+                You have been assigned to this journey. Please acknowledge to assume operational responsibility.
+              </p>
+              <button
+                onClick={handleAcknowledge}
+                disabled={acknowledging}
+                className="bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+              >
+                {acknowledging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
+                {acknowledging ? 'Confirming...' : 'Acknowledge Assignment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Start Journey ── prominent CTA when status is planned */}
-      {canUpdate && isPlanned && (
+      {canUpdate && isPlanned && !isPendingAcknowledge && (
         <button
           onClick={handleStartJourney}
           disabled={starting}
@@ -589,7 +715,7 @@ function JourneyOperationsPanel({
       )}
 
       {/* Call sign panel — shown once journey is active */}
-      {canUpdate && !isPlanned ? (
+      {canUpdate && !isPlanned && !isPendingAcknowledge ? (
         <CallSignPanel
           journeyId={journey.id}
           papaName={journey.papas ? `${journey.papas.title} ${journey.papas.full_name}` : undefined}
@@ -597,7 +723,7 @@ function JourneyOperationsPanel({
           origin={journey.origin}
           destination={journey.destination}
         />
-      ) : !canUpdate ? (
+      ) : isPendingAcknowledge ? null : !canUpdate ? (
         <Card>
           <CardContent className="py-6 text-center text-sm text-muted-foreground">
             <Radio className="h-8 w-8 mx-auto mb-3 opacity-40" />

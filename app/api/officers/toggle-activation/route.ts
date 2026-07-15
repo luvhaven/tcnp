@@ -1,56 +1,95 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
-import type { Database } from '@/types/supabase'
+import { createClient as createServerClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
+
+// Build the hardened service-role client right here to avoid any wrapper issues
+function buildAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) throw new Error('Supabase env vars are missing')
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false }
+  })
+}
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
-    const adminClient = createAdminClient()
+    // 1. Verify caller is authenticated and is an admin
+    const supabase = await createServerClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: currentUser } = await (supabase as any)
+    const { data: callerRow, error: callerError } = await supabase
       .from('users')
       .select('role')
       .eq('id', user.id)
       .single()
 
-    const role = (currentUser as { role?: string } | null)?.role
+    if (callerError || !callerRow) {
+      return NextResponse.json({ error: 'Could not verify caller role' }, { status: 403 })
+    }
 
-    if (!role || !['admin', 'dev_admin'].includes(role)) {
+    if (!['admin', 'dev_admin', 'command', 'head_of_command'].includes(callerRow.role)) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
     }
 
+    // 2. Parse body
     const body = await request.json()
     const { officerId, isActive } = body as { officerId?: string; isActive?: boolean }
 
     if (!officerId || typeof isActive !== 'boolean') {
-      return NextResponse.json({ error: 'Missing or invalid fields' }, { status: 400 })
+      return NextResponse.json({ error: 'Missing or invalid fields: officerId and isActive (boolean) required' }, { status: 400 })
     }
 
-    const newStatus = isActive ? 'deactivated' : 'active'
+    // 3. Perform update using service role to bypass RLS entirely
+    const adminClient = buildAdminClient()
+    const newIsActive = !isActive
+    const newStatus = newIsActive ? 'active' : 'inactive'
 
-    const { error } = await (adminClient as any)
+    const { data: updated, error: updateError } = await adminClient
       .from('users')
-      .update({
-        is_active: !isActive,
-        activation_status: newStatus,
-      } as Database['public']['Tables']['users']['Update'])
+      .update({ is_active: newIsActive, activation_status: newStatus })
       .eq('id', officerId)
+      .select('id, is_active, activation_status')
+      .single()
 
-    if (error) {
-      console.error('Error toggling officer activation:', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (updateError) {
+      console.error('[toggle-activation] DB update error:', updateError)
+      // If the column does not accept 'inactive', fall back to a status-only update
+      if (updateError.message?.includes('invalid input value') || updateError.code === '22P02') {
+        // Try without activation_status update
+        const { data: fallback, error: fallbackError } = await adminClient
+          .from('users')
+          .update({ is_active: newIsActive })
+          .eq('id', officerId)
+          .select('id, is_active, activation_status')
+          .single()
+
+        if (fallbackError) {
+          console.error('[toggle-activation] Fallback update error:', fallbackError)
+          return NextResponse.json({ error: fallbackError.message }, { status: 500 })
+        }
+
+        return NextResponse.json({
+          success: true,
+          is_active: fallback.is_active,
+          activation_status: fallback.activation_status ?? (newIsActive ? 'active' : 'pending'),
+        })
+      }
+
+      return NextResponse.json({ error: updateError.message }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true, activation_status: newStatus, is_active: !isActive })
+    return NextResponse.json({
+      success: true,
+      is_active: updated.is_active,
+      activation_status: updated.activation_status,
+    })
   } catch (error: any) {
-    console.error('Unexpected error in /api/officers/toggle-activation:', error)
+    console.error('[toggle-activation] Unexpected error:', error)
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 })
   }
 }

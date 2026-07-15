@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -24,14 +25,17 @@ import {
   Hotel,
   Plane,
   Calendar,
-  Pencil
+  Pencil,
+  History
 } from "lucide-react"
+import { JourneyTimelineDialog } from "@/components/journeys/JourneyTimelineDialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/lib/constants/tncpCallSigns"
 import { DateTimePicker } from "@/components/ui/date-time-picker"
 import { usePagination } from "@/hooks/usePagination"
+import OperationalReadiness from "@/components/journeys/OperationalReadiness"
 
 const FALLBACK_STATUS_LABELS: Record<string, string> = {
   planned: "Planned",
@@ -136,14 +140,30 @@ export default function JourneysClient({
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentRole, setCurrentRole] = useState<string | null>(null)
 
+  // Timeline UI State
+  const [timelineJourneyId, setTimelineJourneyId] = useState<string | null>(null)
+  const [timelinePapaName, setTimelinePapaName] = useState<string>('')
+
   // Multi-DO state
   const [programOfficers, setProgramOfficers] = useState<any[]>([])
   const [loadingOfficers, setLoadingOfficers] = useState(false)
+  const [doSearch, setDoSearch] = useState('')
+  const searchParams = useSearchParams()
+  const [pulsingJourneyId, setPulsingJourneyId] = useState<string | null>(null)
+
+  const filteredDOOfficers = programOfficers
+    .filter(officer => !['captain', 'head_of_operations'].includes(officer.role))
+    .filter(officer => {
+      if (!doSearch.trim()) return true
+      const q = doSearch.trim().toLowerCase()
+      return (officer.full_name ?? '').toLowerCase().includes(q) || (officer.oscar ?? '').toLowerCase().includes(q)
+    })
   const [selectedDOs, setSelectedDOs] = useState<string[]>([])
   const [teamLeadId, setTeamLeadId] = useState<string>('')
 
   const [formData, setFormData] = useState({
     papa_id: '',
+    secondary_papa_ids: [] as string[],
     assigned_cheetah_id: '',
     program_id: '',
     journey_type: 'airport_to_nest_to_theatre',
@@ -161,12 +181,14 @@ export default function JourneysClient({
 
   const canCreateJourney = currentRole ? isAdmin(currentRole) : false
 
-  // Fetch officers for selected program
+  // Fetch officers eligible for the SELECTED program only — eligible means
+  // formally title-assigned to it, or having responded "available" to a
+  // mission-availability request tied to it. Not "any officer in the
+  // system": a DO must actually be working/available for this specific
+  // program.
   useEffect(() => {
     if (!formData.program_id) {
       setProgramOfficers([])
-      setSelectedDOs([])
-      setTeamLeadId('')
       return
     }
     const fetchOfficers = async () => {
@@ -199,6 +221,24 @@ export default function JourneysClient({
     void fetchOfficers()
   }, [formData.program_id])
 
+  // Deep link from a notification (e.g. "/journeys?highlight=<id>") — scroll
+  // the referenced journey into view and pulse it so it's unmistakable which
+  // row the notification was about.
+  useEffect(() => {
+    const highlightId = searchParams.get('highlight')
+    if (!highlightId || journeys.length === 0) return
+    const match = journeys.find(j => j.id === highlightId)
+    if (!match) return
+    const t = setTimeout(() => {
+      const el = document.getElementById(`journey-${highlightId}`)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setPulsingJourneyId(highlightId)
+      setTimeout(() => setPulsingJourneyId(null), 2600)
+    }, 250)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [journeys, searchParams])
+
   const toggleDO = (userId: string) => {
     setSelectedDOs(prev => {
       const next = prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
@@ -213,7 +253,6 @@ export default function JourneysClient({
   const resetDOState = () => {
     setSelectedDOs([])
     setTeamLeadId('')
-    setProgramOfficers([])
   }
 
   useEffect(() => {
@@ -276,8 +315,8 @@ export default function JourneysClient({
         eagle_squares (name, code),
         programs (name, status)
       `)
-      .order('created_at', { ascending: false })
-      .range(rangeFrom, rangeTo)
+        .order('created_at', { ascending: false })
+        .range(rangeFrom, rangeTo)
 
       if (error) throw error
 
@@ -305,7 +344,7 @@ export default function JourneysClient({
   const loadLookups = async () => {
     try {
       const [papasRes, cheetahsRes, programsRes, officersResult] = await Promise.all([
-        supabase.from('papas').select('*').order('full_name'),
+        supabase.from('papas_basic').select('*').order('full_name'),
         supabase.from('cheetahs').select('*').order('registration_number'),
         supabase.from('programs').select('*').order('name'),
         supabase.from('users').select('id, full_name, role').eq('role', 'delta_oscar').order('full_name')
@@ -352,20 +391,24 @@ export default function JourneysClient({
 
     try {
       const lead = teamLeadId || selectedDOs[0] || null
+      // secondary_papa_ids is client-only form state for the journey_papas
+      // junction table below — it has no matching column on `journeys`
+      // itself, so it must never be spread into this insert payload.
+      const { secondary_papa_ids: _secondaryPapaIds, ...formDataForJourneysTable } = formData
       // Convert empty-string UUID fields to null to avoid Postgres uuid parse errors
       const sanitized = {
-        ...formData,
-        papa_id:                   formData.papa_id                   || null,
-        assigned_cheetah_id:       formData.assigned_cheetah_id       || null,
-        program_id:                formData.program_id                || null,
-        assigned_nest_id:          formData.assigned_nest_id          || null,
-        assigned_eagle_square_id:  formData.assigned_eagle_square_id  || null,
-        assigned_duty_officer_id:  lead,
-        assigned_do_id:            lead,
-        scheduled_departure:       formData.scheduled_departure       || null,
-        scheduled_arrival:         formData.scheduled_arrival         || null,
-        etd:                       formData.etd                       || null,
-        eta:                       formData.eta                       || null,
+        ...formDataForJourneysTable,
+        papa_id: formData.papa_id || null,
+        assigned_cheetah_id: formData.assigned_cheetah_id || null,
+        program_id: formData.program_id || null,
+        assigned_nest_id: formData.assigned_nest_id || null,
+        assigned_eagle_square_id: formData.assigned_eagle_square_id || null,
+        assigned_duty_officer_id: lead,
+        assigned_do_id: lead,
+        scheduled_departure: formData.scheduled_departure || null,
+        scheduled_arrival: formData.scheduled_arrival || null,
+        etd: formData.etd || null,
+        eta: formData.eta || null,
       }
       const { data: newJourney, error } = await (supabase as any)
         .from('journeys')
@@ -385,10 +428,20 @@ export default function JourneysClient({
         })
       }
 
+      // Save secondary papas if junction table migration is applied
+      if (formData.secondary_papa_ids.length > 0 && newJourney?.id) {
+        try {
+          const papaPayload = formData.secondary_papa_ids.map(pid => ({ journey_id: newJourney.id, papa_id: pid, is_primary: false }))
+          await (supabase as any).from('journey_papas').insert(papaPayload)
+        } catch (e) {
+          console.warn('Failed to save secondary papas (migration may be missing).', e)
+        }
+      }
+
       toast.success('Journey created successfully!')
       setCreateDialogOpen(false)
       setFormData({
-        papa_id: '', assigned_cheetah_id: '', program_id: '',
+        papa_id: '', secondary_papa_ids: [], assigned_cheetah_id: '', program_id: '',
         journey_type: 'airport_to_nest_to_theatre', assigned_duty_officer_id: '',
         assigned_nest_id: '', assigned_eagle_square_id: '', origin: '',
         destination: '', scheduled_departure: '', scheduled_arrival: '',
@@ -403,15 +456,54 @@ export default function JourneysClient({
     }
   }
 
-  const handleEditClick = (journey: Journey, e: React.MouseEvent) => {
+  const handleEditClick = async (journey: Journey, e: React.MouseEvent) => {
     e.stopPropagation() // Prevent card click
     setSelectedJourney(journey)
+
+    let initialDOs: string[] = []
+    let initialLead = journey.assigned_duty_officer_id || journey.assigned_do_id || ''
+    if (initialLead) {
+      initialDOs = [initialLead]
+    }
+
+    try {
+      const res = await fetch(`/api/journey-duty-officers?journey_id=${journey.id}`)
+      if (res.ok) {
+        const json = await res.json()
+        if (json.duty_officers && json.duty_officers.length > 0) {
+          initialDOs = json.duty_officers.map((d: any) => d.user_id)
+          const leadObj = json.duty_officers.find((d: any) => d.is_lead)
+          initialLead = leadObj ? leadObj.user_id : initialDOs[0]
+        }
+      }
+    } catch {
+      console.warn("Using legacy DO assignment scalar")
+    }
+
+    setSelectedDOs(initialDOs)
+    setTeamLeadId(initialLead)
+
+    let initialSecondaryPapas: string[] = []
+    try {
+      const { data } = await (supabase as any)
+        .from('journey_papas')
+        .select('papa_id')
+        .eq('journey_id', journey.id)
+        .eq('is_primary', false)
+      if (data) {
+        initialSecondaryPapas = data.map((row: any) => row.papa_id)
+      }
+    } catch (e) {
+      console.warn('Could not fetch secondary papas', e)
+    }
+
     setFormData({
       papa_id: journey.papa_id || '',
+      secondary_papa_ids: initialSecondaryPapas,
       assigned_cheetah_id: journey.assigned_cheetah_id || '',
       program_id: journey.program_id || '',
       journey_type: journey.journey_type || 'airport_to_nest_to_theatre',
-      assigned_duty_officer_id: journey.assigned_duty_officer_id || journey.assigned_do_id || '',
+      assigned_duty_officer_id: initialLead,
       assigned_nest_id: journey.assigned_nest_id || '',
       assigned_eagle_square_id: journey.assigned_eagle_square_id || '',
       origin: journey.origin || '',
@@ -436,20 +528,23 @@ export default function JourneysClient({
 
     try {
       const lead = teamLeadId || selectedDOs[0] || formData.assigned_duty_officer_id || null
+      // secondary_papa_ids is client-only form state for the journey_papas
+      // junction table below — no matching column on `journeys` itself.
+      const { secondary_papa_ids: _secondaryPapaIds, ...formDataForJourneysTable } = formData
       const sanitized = {
-        ...formData,
-        papa_id:                   formData.papa_id                   || null,
-        assigned_cheetah_id:       formData.assigned_cheetah_id       || null,
-        program_id:                formData.program_id                || null,
-        assigned_nest_id:          formData.assigned_nest_id          || null,
-        assigned_eagle_square_id:  formData.assigned_eagle_square_id  || null,
-        assigned_duty_officer_id:  lead,
-        assigned_do_id:            lead,
-        scheduled_departure:       formData.scheduled_departure       || null,
-        scheduled_arrival:         formData.scheduled_arrival         || null,
-        etd:                       formData.etd                       || null,
-        eta:                       formData.eta                       || null,
-        updated_at:                new Date().toISOString(),
+        ...formDataForJourneysTable,
+        papa_id: formData.papa_id || null,
+        assigned_cheetah_id: formData.assigned_cheetah_id || null,
+        program_id: formData.program_id || null,
+        assigned_nest_id: formData.assigned_nest_id || null,
+        assigned_eagle_square_id: formData.assigned_eagle_square_id || null,
+        assigned_duty_officer_id: lead,
+        assigned_do_id: lead,
+        scheduled_departure: formData.scheduled_departure || null,
+        scheduled_arrival: formData.scheduled_arrival || null,
+        etd: formData.etd || null,
+        eta: formData.eta || null,
+        updated_at: new Date().toISOString(),
       }
       const { error } = await (supabase as any)
         .from('journeys')
@@ -457,6 +552,17 @@ export default function JourneysClient({
         .eq('id', selectedJourney.id)
 
       if (error) throw error
+
+      // Update secondary papas
+      try {
+        await (supabase as any).from('journey_papas').delete().eq('journey_id', selectedJourney.id).eq('is_primary', false)
+        if (formData.secondary_papa_ids.length > 0) {
+          const papaPayload = formData.secondary_papa_ids.map(pid => ({ journey_id: selectedJourney.id, papa_id: pid, is_primary: false }))
+          await (supabase as any).from('journey_papas').insert(papaPayload)
+        }
+      } catch (e) {
+        console.warn('Failed to update secondary papas', e)
+      }
 
       // Sync DO assignments if any were selected
       if (selectedDOs.length > 0) {
@@ -524,17 +630,17 @@ export default function JourneysClient({
     const type = journeyType || 'airport_to_nest_to_theatre'
     const workflows: Record<string, Record<string, string[]>> = {
       airport_to_nest_to_theatre: {
-        planned:      ['cocktail', 'broken_arrow', 'cancelled'],
-        cocktail:     ['first_course', 'broken_arrow', 'cancelled'],
+        planned: ['cocktail', 'broken_arrow', 'cancelled'],
+        cocktail: ['first_course', 'broken_arrow', 'cancelled'],
         first_course: ['chapman', 'broken_arrow', 'cancelled'],
-        chapman:      ['dessert', 'broken_arrow', 'cancelled'],
-        dessert:      ['completed', 'broken_arrow', 'cancelled'],
+        chapman: ['dessert', 'broken_arrow', 'cancelled'],
+        dessert: ['completed', 'broken_arrow', 'cancelled'],
       },
       airport_to_theatre: {
-        planned:  ['cocktail', 'broken_arrow', 'cancelled'],
+        planned: ['cocktail', 'broken_arrow', 'cancelled'],
         cocktail: ['chapman', 'broken_arrow', 'cancelled'],
-        chapman:  ['dessert', 'broken_arrow', 'cancelled'],
-        dessert:  ['completed', 'broken_arrow', 'cancelled'],
+        chapman: ['dessert', 'broken_arrow', 'cancelled'],
+        dessert: ['completed', 'broken_arrow', 'cancelled'],
       },
       self_arrival: {
         planned: ['chapman', 'broken_arrow', 'cancelled'],
@@ -640,6 +746,17 @@ export default function JourneysClient({
         )}
       </div>
 
+      {/* Registry readiness — journeys compose unit-owned registries, never create them */}
+      {canCreateJourney && (
+        <OperationalReadiness
+          programs={programs.length}
+          papas={papas.length}
+          cheetahs={cheetahs.length}
+          nests={nests.length}
+          eagleSquares={eagleSquares.length}
+        />
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
@@ -715,7 +832,11 @@ export default function JourneysClient({
                     .map((journey) => (
                       <div
                         key={journey.id}
-                        className="flex flex-col gap-4 rounded-lg border p-4 transition-all hover:bg-accent/50 hover:shadow-md cursor-pointer animate-slide-up"
+                        id={`journey-${journey.id}`}
+                        className={cn(
+                          "flex flex-col gap-4 rounded-lg border p-4 transition-all hover:bg-accent/50 hover:shadow-md cursor-pointer animate-slide-up",
+                          pulsingJourneyId === journey.id && "ring-2 ring-primary animate-pulse-highlight"
+                        )}
                         onClick={() => {
                           setSelectedJourney(journey)
                           setCallSignDialogOpen(true)
@@ -740,9 +861,23 @@ export default function JourneysClient({
                           </div>
 
                           <div className="flex items-center gap-3">
-                            <div className="text-xs text-muted-foreground">
+                            <div className="hidden text-xs text-muted-foreground sm:block">
                               Updated {formatDistanceToNow(new Date(journey.updated_at ?? journey.created_at), { addSuffix: true })}
                             </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 hover:bg-muted text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setTimelineJourneyId(journey.id)
+                                setTimelinePapaName(`${journey.papas?.title || ''} ${journey.papas?.full_name || ''}`)
+                              }}
+                              title="View Audit Trail"
+                            >
+                              <History className="h-4 w-4" />
+                              <span className="sr-only">History</span>
+                            </Button>
                             {canCreateJourney && (
                               <Button
                                 variant="ghost"
@@ -842,7 +977,11 @@ export default function JourneysClient({
                   .map((journey) => (
                     <div
                       key={journey.id}
-                      className="flex min-w-0 flex-col gap-3 overflow-hidden rounded-lg border p-4 opacity-75 transition-all hover:opacity-100 sm:flex-row sm:items-center sm:justify-between"
+                      id={`journey-${journey.id}`}
+                      className={cn(
+                        "flex min-w-0 flex-col gap-3 overflow-hidden rounded-lg border p-4 opacity-75 transition-all hover:opacity-100 sm:flex-row sm:items-center sm:justify-between",
+                        pulsingJourneyId === journey.id && "ring-2 ring-primary animate-pulse-highlight opacity-100"
+                      )}
                     >
                       <div className="flex min-w-0 items-center gap-4">
                         <div className={cn('h-3 w-3 shrink-0 rounded-full', getStatusIndicatorClass(journey.status))} />
@@ -859,6 +998,19 @@ export default function JourneysClient({
                         <Badge variant="outline">
                           {getStatusLabel(journey.status)}
                         </Badge>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 hover:bg-muted text-blue-600"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setTimelineJourneyId(journey.id)
+                            setTimelinePapaName(`${journey.papas?.title || ''} ${journey.papas?.full_name || ''}`)
+                          }}
+                          title="View Audit Trail"
+                        >
+                          <History className="h-4 w-4" />
+                        </Button>
                         <span className="text-xs text-muted-foreground">
                           {new Date(journey.created_at).toLocaleDateString()}
                         </span>
@@ -912,50 +1064,61 @@ export default function JourneysClient({
 
               <div className="space-y-2 md:col-span-2">
                 <Label>Duty Officer(s) — DO Team</Label>
+                <p className="text-[11px] text-muted-foreground">Only officers working or available for the selected Program are eligible. They'll be notified and must accept before starting the journey.</p>
                 {!formData.program_id ? (
-                  <p className="text-xs text-muted-foreground bg-muted rounded-md px-3 py-2">Select a Program above to load available officers.</p>
+                  <p className="text-xs text-muted-foreground bg-muted rounded-md px-3 py-2">Select a Program above to load eligible officers.</p>
                 ) : loadingOfficers ? (
                   <p className="text-xs text-muted-foreground animate-pulse">Loading officers for this program…</p>
-                ) : programOfficers.length === 0 ? (
-                  <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-md px-3 py-2">No officers are assigned to this program yet. Assign officers in the Officers page first.</p>
+                ) : filteredDOOfficers.length === 0 ? (
+                  <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-md px-3 py-2">No officers are working or available for this program yet. Send a mission availability request, or assign officers in the Officers page.</p>
                 ) : (
-                  <div className="border rounded-md divide-y max-h-52 overflow-y-auto">
-                    {programOfficers.map(officer => {
-                      const isSelected = selectedDOs.includes(officer.id)
-                      const isLead = teamLeadId === officer.id
-                      return (
-                        <div key={officer.id} className={`flex items-center gap-3 px-3 py-2 transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/50'}`}>
-                          <input
-                            type="checkbox"
-                            id={`do-${officer.id}`}
-                            checked={isSelected}
-                            onChange={() => toggleDO(officer.id)}
-                            className="h-4 w-4 rounded border-input"
-                          />
-                          <label htmlFor={`do-${officer.id}`} className="flex-1 cursor-pointer">
-                            <span className="font-medium text-sm">{officer.full_name}</span>
-                            <span className="ml-2 text-xs text-muted-foreground">{officer.title_name || officer.role}</span>
-                          </label>
-                          {isSelected && selectedDOs.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => setTeamLeadId(officer.id)}
-                              className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
-                                isLead
+                  <>
+                    <Input
+                      value={doSearch}
+                      onChange={(e) => setDoSearch(e.target.value)}
+                      placeholder="Search officers by name or Oscar unit…"
+                      className="h-8 text-sm"
+                    />
+                    <div className="border rounded-md divide-y max-h-52 overflow-y-auto">
+                      {filteredDOOfficers.map(officer => {
+                        const isSelected = selectedDOs.includes(officer.id)
+                        const isLead = teamLeadId === officer.id
+                        return (
+                          <div key={officer.id} className={`flex items-center gap-3 px-3 py-2 transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/50'}`}>
+                            <input
+                              type="checkbox"
+                              id={`do-${officer.id}`}
+                              checked={isSelected}
+                              onChange={() => toggleDO(officer.id)}
+                              className="h-4 w-4 rounded border-input"
+                            />
+                            <label htmlFor={`do-${officer.id}`} className="flex-1 cursor-pointer">
+                              <span className="font-medium text-sm">{officer.full_name}</span>
+                              <span className="ml-2 text-xs text-muted-foreground">{officer.title_name || officer.oscar || officer.role}</span>
+                              {officer.is_available_only && (
+                                <span className="ml-2 text-[10px] uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Available</span>
+                              )}
+                            </label>
+                            {isSelected && selectedDOs.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setTeamLeadId(officer.id)}
+                                className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${isLead
                                   ? 'bg-yellow-400 text-yellow-900 border-yellow-500 font-bold'
                                   : 'bg-muted text-muted-foreground border-border hover:border-yellow-400'
-                              }`}
-                            >
-                              {isLead ? '⭐ Lead' : 'Set Lead'}
-                            </button>
-                          )}
-                          {isSelected && selectedDOs.length === 1 && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-400 text-yellow-900 font-bold">⭐ Lead</span>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
+                                  }`}
+                              >
+                                {isLead ? '⭐ Lead' : 'Set Lead'}
+                              </button>
+                            )}
+                            {isSelected && selectedDOs.length === 1 && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-400 text-yellow-900 font-bold">⭐ Lead</span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
                 )}
                 {selectedDOs.length > 0 && (
                   <p className="text-xs text-muted-foreground">{selectedDOs.length} DO{selectedDOs.length > 1 ? 's' : ''} selected. {selectedDOs.length > 1 ? 'Team lead marked with ⭐.' : 'Auto-designated as Team Lead.'}</p>
@@ -963,21 +1126,41 @@ export default function JourneysClient({
               </div>
             </div>
 
-            {/* Journey Type - drives the DO's call sign steps */}
-            <div className="space-y-2">
-              <Label htmlFor="journey_type">Journey Type *</Label>
-              <select
-                id="journey_type"
-                required
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                value={formData.journey_type}
-                onChange={(e) => setFormData({ ...formData, journey_type: e.target.value })}
-              >
-                <option value="airport_to_nest_to_theatre">Eagle Square → Nest → Theatre → Return</option>
-                <option value="airport_to_theatre">Eagle Square → Theatre (Direct) → Return</option>
-                <option value="self_arrival">Self-Arrival — Papa arrives own way to Theatre</option>
-              </select>
-              <p className="text-[10px] text-muted-foreground">Determines the DO's call sign steps. Cannot be changed once the journey is in progress.</p>
+            {/* Journey Route (FROM and TO) */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="origin">From (Origin) *</Label>
+                <select
+                  id="origin"
+                  required
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={formData.origin}
+                  onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
+                >
+                  <option value="">Select Origin...</option>
+                  <option value="Eagle Square">Eagle Square</option>
+                  <option value="Nest">Nest</option>
+                  <option value="Theatre">Theatre</option>
+                  <option value="Self-Driven">Self-Driven</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="destination">To (Destination) *</Label>
+                <select
+                  id="destination"
+                  required
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={formData.destination}
+                  onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                >
+                  <option value="">Select Destination...</option>
+                  <option value="Eagle Square">Eagle Square</option>
+                  <option value="Nest">Nest</option>
+                  <option value="Theatre">Theatre</option>
+                  <option value="Self-Driven">Self-Driven</option>
+                </select>
+              </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -998,7 +1181,9 @@ export default function JourneysClient({
                   ))}
                 </select>
               </div>
+            </div>
 
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="assigned_cheetah_id">Cheetah (Vehicle) *</Label>
                 <select
@@ -1020,76 +1205,18 @@ export default function JourneysClient({
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="assigned_nest_id">Base Location (Nest - Optional)</Label>
-                <select
-                  id="assigned_nest_id"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={formData.assigned_nest_id || ''}
-                  onChange={(e) => {
-                    setFormData({ ...formData, assigned_nest_id: e.target.value, assigned_eagle_square_id: '' })
-                  }}
-                >
-                  <option value="">Select Nest</option>
-                  {nests.map((nest) => (
-                    <option key={nest.id} value={nest.id}>
-                      {nest.name}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[10px] text-muted-foreground">Select where the DO/Team is based</p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="assigned_eagle_square_id">Base Location (Eagle Square - Optional)</Label>
-                <select
-                  id="assigned_eagle_square_id"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={formData.assigned_eagle_square_id || ''}
-                  onChange={(e) => {
-                    setFormData({ ...formData, assigned_eagle_square_id: e.target.value, assigned_nest_id: '' })
-                  }}
-                >
-                  <option value="">Select Eagle Square</option>
-                  {eagleSquares.map((es) => (
-                    <option key={es.id} value={es.id}>
-                      {es.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="origin">Origin *</Label>
-                <Input
-                  id="origin"
-                  required
-                  placeholder="e.g., Transcorp Hilton"
-                  value={formData.origin}
-                  onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="destination">Destination *</Label>
-                <Input
-                  id="destination"
-                  required
-                  placeholder="e.g., Aso Rock Villa"
-                  value={formData.destination}
-                  onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
-                />
-              </div>
-            </div>
-
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
                 <Label htmlFor="etd">ETD (Estimated Time of Departure)</Label>
                 <DateTimePicker
                   value={formData.etd}
-                  onChange={(value) => setFormData({ ...formData, etd: value })}
+                  onChange={(value) => {
+                    setFormData(prev => {
+                      const newData = { ...prev, etd: value }
+                      if (newData.eta && value && new Date(value) > new Date(newData.eta)) {
+                        newData.eta = value
+                      }
+                      return newData
+                    })
+                  }}
                   placeholder="Select estimated departure"
                 />
                 <p className="text-xs text-muted-foreground">When DO should depart</p>
@@ -1100,6 +1227,7 @@ export default function JourneysClient({
                 <DateTimePicker
                   value={formData.eta}
                   onChange={(value) => setFormData({ ...formData, eta: value })}
+                  minDate={formData.etd ? new Date(formData.etd) : undefined}
                   placeholder="Select estimated arrival"
                 />
                 <p className="text-xs text-muted-foreground">When DO should arrive</p>
@@ -1249,36 +1377,46 @@ export default function JourneysClient({
               <div className="space-y-2">
                 <Label>Duty Officer(s) — DO Team</Label>
                 {!formData.program_id ? (
-                  <p className="text-xs text-muted-foreground bg-muted rounded-md px-3 py-2">Select a Program to load available officers.</p>
+                  <p className="text-xs text-muted-foreground bg-muted rounded-md px-3 py-2">Select a Program to load eligible officers.</p>
                 ) : loadingOfficers ? (
                   <p className="text-xs text-muted-foreground animate-pulse">Loading officers…</p>
-                ) : programOfficers.length === 0 ? (
-                  <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-md px-3 py-2">No officers assigned to this program.</p>
+                ) : filteredDOOfficers.length === 0 ? (
+                  <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-md px-3 py-2">No officers are working or available for this program yet.</p>
                 ) : (
-                  <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
-                    {programOfficers.map(officer => {
-                      const isSelected = selectedDOs.includes(officer.id)
-                      const isLead = teamLeadId === officer.id
-                      return (
-                        <div key={officer.id} className={`flex items-center gap-3 px-3 py-2 transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/50'}`}>
-                          <input type="checkbox" id={`edit-do-${officer.id}`} checked={isSelected} onChange={() => toggleDO(officer.id)} className="h-4 w-4 rounded border-input" />
-                          <label htmlFor={`edit-do-${officer.id}`} className="flex-1 cursor-pointer">
-                            <span className="font-medium text-sm">{officer.full_name}</span>
-                            <span className="ml-2 text-xs text-muted-foreground">{officer.title_name || officer.role}</span>
-                          </label>
-                          {isSelected && selectedDOs.length > 1 && (
-                            <button type="button" onClick={() => setTeamLeadId(officer.id)}
-                              className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
-                                isLead ? 'bg-yellow-400 text-yellow-900 border-yellow-500 font-bold' : 'bg-muted text-muted-foreground border-border hover:border-yellow-400'
-                              }`}>{isLead ? '⭐ Lead' : 'Set Lead'}</button>
-                          )}
-                          {isSelected && selectedDOs.length === 1 && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-400 text-yellow-900 font-bold">⭐ Lead</span>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
+                  <>
+                    <Input
+                      value={doSearch}
+                      onChange={(e) => setDoSearch(e.target.value)}
+                      placeholder="Search officers by name or Oscar unit…"
+                      className="h-8 text-sm"
+                    />
+                    <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
+                      {filteredDOOfficers.map(officer => {
+                        const isSelected = selectedDOs.includes(officer.id)
+                        const isLead = teamLeadId === officer.id
+                        return (
+                          <div key={officer.id} className={`flex items-center gap-3 px-3 py-2 transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/50'}`}>
+                            <input type="checkbox" id={`edit-do-${officer.id}`} checked={isSelected} onChange={() => toggleDO(officer.id)} className="h-4 w-4 rounded border-input" />
+                            <label htmlFor={`edit-do-${officer.id}`} className="flex-1 cursor-pointer">
+                              <span className="font-medium text-sm">{officer.full_name}</span>
+                              <span className="ml-2 text-xs text-muted-foreground">{officer.title_name || officer.oscar || officer.role}</span>
+                              {officer.is_available_only && (
+                                <span className="ml-2 text-[10px] uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Available</span>
+                              )}
+                            </label>
+                            {isSelected && selectedDOs.length > 1 && (
+                              <button type="button" onClick={() => setTeamLeadId(officer.id)}
+                                className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${isLead ? 'bg-yellow-400 text-yellow-900 border-yellow-500 font-bold' : 'bg-muted text-muted-foreground border-border hover:border-yellow-400'
+                                  }`}>{isLead ? '⭐ Lead' : 'Set Lead'}</button>
+                            )}
+                            {isSelected && selectedDOs.length === 1 && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-400 text-yellow-900 font-bold">⭐ Lead</span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
                 )}
               </div>
             </div>
@@ -1296,41 +1434,6 @@ export default function JourneysClient({
                 <option value="airport_to_theatre">Eagle Square → Theatre (Direct) → Return</option>
                 <option value="self_arrival">Self-Arrival — Papa arrives own way to Theatre</option>
               </select>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="edit_assigned_nest_id">Base Location (Nest)</Label>
-                <select
-                  id="edit_assigned_nest_id"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  value={formData.assigned_nest_id || ''}
-                  onChange={(e) => setFormData({ ...formData, assigned_nest_id: e.target.value, assigned_eagle_square_id: '' })}
-                >
-                  <option value="">Select Nest</option>
-                  {nests.map((nest) => (
-                    <option key={nest.id} value={nest.id}>
-                      {nest.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit_assigned_eagle_square_id">Base Location (Eagle Square)</Label>
-                <select
-                  id="edit_assigned_eagle_square_id"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  value={formData.assigned_eagle_square_id || ''}
-                  onChange={(e) => setFormData({ ...formData, assigned_eagle_square_id: e.target.value, assigned_nest_id: '' })}
-                >
-                  <option value="">Select Eagle Square</option>
-                  {eagleSquares.map((es) => (
-                    <option key={es.id} value={es.id}>
-                      {es.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
             </div>
 
             {/* Route Details */}
@@ -1358,7 +1461,6 @@ export default function JourneysClient({
               </div>
             </div>
 
-
             {/* Notes */}
             <div className="space-y-2">
               <Label htmlFor="edit_notes">Operational Notes</Label>
@@ -1382,6 +1484,13 @@ export default function JourneysClient({
           </form>
         </DialogContent>
       </Dialog>
+      {/* Journey Timeline Dialog */}
+      <JourneyTimelineDialog
+        journeyId={timelineJourneyId}
+        papaName={timelinePapaName}
+        open={!!timelineJourneyId}
+        onOpenChange={(open) => !open && setTimelineJourneyId(null)}
+      />
     </div >
   )
 }

@@ -107,8 +107,12 @@ export type Database = {
           content: string
           created_at: string | null
           deleted_at: string | null
+          deleted_by_admin: boolean | null
           edited_at: string | null
+          flagged: boolean
+          flagged_by: string | null
           id: string
+          is_archived: boolean | null
           is_private: boolean | null
           mentions: Json | null
           papa_id: string | null
@@ -116,6 +120,7 @@ export type Database = {
           read_by: Json | null
           reply_to_id: string | null
           sender_id: string
+          team: string | null
           updated_at: string | null
         }
         Insert: {
@@ -123,8 +128,12 @@ export type Database = {
           content: string
           created_at?: string | null
           deleted_at?: string | null
+          deleted_by_admin?: boolean | null
           edited_at?: string | null
+          flagged?: boolean
+          flagged_by?: string | null
           id?: string
+          is_archived?: boolean | null
           is_private?: boolean | null
           mentions?: Json | null
           papa_id?: string | null
@@ -132,6 +141,7 @@ export type Database = {
           read_by?: Json | null
           reply_to_id?: string | null
           sender_id: string
+          team?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -139,8 +149,12 @@ export type Database = {
           content?: string
           created_at?: string | null
           deleted_at?: string | null
+          deleted_by_admin?: boolean | null
           edited_at?: string | null
+          flagged?: boolean
+          flagged_by?: string | null
           id?: string
+          is_archived?: boolean | null
           is_private?: boolean | null
           mentions?: Json | null
           papa_id?: string | null
@@ -148,6 +162,7 @@ export type Database = {
           read_by?: Json | null
           reply_to_id?: string | null
           sender_id?: string
+          team?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -156,6 +171,13 @@ export type Database = {
             columns: ["papa_id"]
             isOneToOne: false
             referencedRelation: "papas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_papa_id_fkey"
+            columns: ["papa_id"]
+            isOneToOne: false
+            referencedRelation: "papas_basic"
             referencedColumns: ["id"]
           },
           {
@@ -181,6 +203,51 @@ export type Database = {
           },
         ]
       }
+      cheetah_flower_logs: {
+        Row: {
+          all_passed: boolean
+          checks: Json
+          cheetah_id: string
+          id: string
+          performed_at: string
+          performed_by: string | null
+          performed_by_name: string | null
+        }
+        Insert: {
+          all_passed?: boolean
+          checks?: Json
+          cheetah_id: string
+          id?: string
+          performed_at?: string
+          performed_by?: string | null
+          performed_by_name?: string | null
+        }
+        Update: {
+          all_passed?: boolean
+          checks?: Json
+          cheetah_id?: string
+          id?: string
+          performed_at?: string
+          performed_by?: string | null
+          performed_by_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cheetah_flower_logs_cheetah_id_fkey"
+            columns: ["cheetah_id"]
+            isOneToOne: false
+            referencedRelation: "cheetahs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cheetah_flower_logs_performed_by_fkey"
+            columns: ["performed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cheetahs: {
         Row: {
           call_sign: string | null
@@ -197,7 +264,10 @@ export type Database = {
           last_location_update: string | null
           last_longitude: number | null
           last_maintenance: string | null
+          last_service_date: string | null
+          last_service_mileage: number | null
           make: string | null
+          mileage: number | null
           model: string | null
           name: string | null
           next_maintenance: string | null
@@ -227,7 +297,10 @@ export type Database = {
           last_location_update?: string | null
           last_longitude?: number | null
           last_maintenance?: string | null
+          last_service_date?: string | null
+          last_service_mileage?: number | null
           make?: string | null
+          mileage?: number | null
           model?: string | null
           name?: string | null
           next_maintenance?: string | null
@@ -257,7 +330,10 @@ export type Database = {
           last_location_update?: string | null
           last_longitude?: number | null
           last_maintenance?: string | null
+          last_service_date?: string | null
+          last_service_mileage?: number | null
           make?: string | null
+          mileage?: number | null
           model?: string | null
           name?: string | null
           next_maintenance?: string | null
@@ -278,6 +354,168 @@ export type Database = {
             columns: ["program_id"]
             isOneToOne: false
             referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      compliance_posts: {
+        Row: {
+          body: string | null
+          created_at: string
+          created_by: string | null
+          event_date: string | null
+          id: string
+          image_paths: Json
+          post_type: string
+          program_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          created_by?: string | null
+          event_date?: string | null
+          id?: string
+          image_paths?: Json
+          post_type?: string
+          program_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          created_by?: string | null
+          event_date?: string | null
+          id?: string
+          image_paths?: Json
+          post_type?: string
+          program_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compliance_posts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compliance_posts_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      den_checklist_logs: {
+        Row: {
+          all_passed: boolean
+          checks: Json
+          id: string
+          performed_at: string
+          performed_by: string | null
+          performed_by_name: string | null
+          session: string
+          theatre_id: string
+        }
+        Insert: {
+          all_passed?: boolean
+          checks?: Json
+          id?: string
+          performed_at?: string
+          performed_by?: string | null
+          performed_by_name?: string | null
+          session: string
+          theatre_id: string
+        }
+        Update: {
+          all_passed?: boolean
+          checks?: Json
+          id?: string
+          performed_at?: string
+          performed_by?: string | null
+          performed_by_name?: string | null
+          session?: string
+          theatre_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "den_checklist_logs_performed_by_fkey"
+            columns: ["performed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "den_checklist_logs_theatre_id_fkey"
+            columns: ["theatre_id"]
+            isOneToOne: false
+            referencedRelation: "theatres"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      do_feedback_forms: {
+        Row: {
+          accommodation_notes: string | null
+          id: string
+          improvements: string | null
+          incidents: string | null
+          journey_id: string
+          logistics_notes: string | null
+          monetary_gifts: string | null
+          overall_rating: number | null
+          principal_wellbeing: string
+          submitted_at: string
+          submitted_by: string | null
+          submitted_by_name: string | null
+        }
+        Insert: {
+          accommodation_notes?: string | null
+          id?: string
+          improvements?: string | null
+          incidents?: string | null
+          journey_id: string
+          logistics_notes?: string | null
+          monetary_gifts?: string | null
+          overall_rating?: number | null
+          principal_wellbeing: string
+          submitted_at?: string
+          submitted_by?: string | null
+          submitted_by_name?: string | null
+        }
+        Update: {
+          accommodation_notes?: string | null
+          id?: string
+          improvements?: string | null
+          incidents?: string | null
+          journey_id?: string
+          logistics_notes?: string | null
+          monetary_gifts?: string | null
+          overall_rating?: number | null
+          principal_wellbeing?: string
+          submitted_at?: string
+          submitted_by?: string | null
+          submitted_by_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "do_feedback_forms_journey_id_fkey"
+            columns: ["journey_id"]
+            isOneToOne: false
+            referencedRelation: "journeys"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "do_feedback_forms_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -326,6 +564,51 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      eo_checklist_logs: {
+        Row: {
+          all_passed: boolean
+          checks: Json
+          id: string
+          performed_at: string
+          performed_by: string | null
+          performed_by_name: string | null
+          program_id: string | null
+        }
+        Insert: {
+          all_passed?: boolean
+          checks?: Json
+          id?: string
+          performed_at?: string
+          performed_by?: string | null
+          performed_by_name?: string | null
+          program_id?: string | null
+        }
+        Update: {
+          all_passed?: boolean
+          checks?: Json
+          id?: string
+          performed_at?: string
+          performed_by?: string | null
+          performed_by_name?: string | null
+          program_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "eo_checklist_logs_performed_by_fkey"
+            columns: ["performed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "eo_checklist_logs_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       equipment: {
         Row: {
@@ -461,6 +744,63 @@ export type Database = {
           },
         ]
       }
+      finance_documents: {
+        Row: {
+          category: string
+          created_at: string
+          file_name: string
+          file_size: number | null
+          id: string
+          notes: string | null
+          period: string | null
+          program_id: string | null
+          storage_path: string
+          title: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          file_name: string
+          file_size?: number | null
+          id?: string
+          notes?: string | null
+          period?: string | null
+          program_id?: string | null
+          storage_path: string
+          title: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          file_name?: string
+          file_size?: number | null
+          id?: string
+          notes?: string | null
+          period?: string | null
+          program_id?: string | null
+          storage_path?: string
+          title?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_documents_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       flight_tracking: {
         Row: {
           actual_departure: string | null
@@ -582,6 +922,69 @@ export type Database = {
             referencedRelation: "papas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "flight_tracking_papa_id_fkey"
+            columns: ["papa_id"]
+            isOneToOne: false
+            referencedRelation: "papas_basic"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hospitality_places: {
+        Row: {
+          address: string | null
+          category: string
+          city: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          image_paths: Json
+          latitude: number | null
+          longitude: number | null
+          name: string
+          tips: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          category?: string
+          city?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          image_paths?: Json
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          tips?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          category?: string
+          city?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          image_paths?: Json
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          tips?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hospitality_places_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
         ]
       }
       incidents: {
@@ -671,6 +1074,99 @@ export type Database = {
           {
             foreignKeyName: "incidents_resolved_by_fkey"
             columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      journey_assignments: {
+        Row: {
+          accepted_at: string | null
+          assigned_at: string
+          id: string
+          is_lead: boolean
+          journey_id: string
+          notes: string | null
+          officer_id: string
+          status: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          assigned_at?: string
+          id?: string
+          is_lead?: boolean
+          journey_id: string
+          notes?: string | null
+          officer_id: string
+          status?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          assigned_at?: string
+          id?: string
+          is_lead?: boolean
+          journey_id?: string
+          notes?: string | null
+          officer_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journey_assignments_journey_id_fkey"
+            columns: ["journey_id"]
+            isOneToOne: false
+            referencedRelation: "journeys"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journey_assignments_officer_id_fkey"
+            columns: ["officer_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      journey_duty_officers: {
+        Row: {
+          acknowledged_at: string | null
+          created_at: string
+          id: string
+          is_lead: boolean
+          journey_id: string
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          created_at?: string
+          id?: string
+          is_lead?: boolean
+          journey_id: string
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          created_at?: string
+          id?: string
+          is_lead?: boolean
+          journey_id?: string
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journey_duty_officers_journey_id_fkey"
+            columns: ["journey_id"]
+            isOneToOne: false
+            referencedRelation: "journeys"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journey_duty_officers_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -769,6 +1265,49 @@ export type Database = {
           },
         ]
       }
+      journey_papas: {
+        Row: {
+          created_at: string | null
+          is_primary: boolean | null
+          journey_id: string
+          papa_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          is_primary?: boolean | null
+          journey_id: string
+          papa_id: string
+        }
+        Update: {
+          created_at?: string | null
+          is_primary?: boolean | null
+          journey_id?: string
+          papa_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journey_papas_journey_id_fkey"
+            columns: ["journey_id"]
+            isOneToOne: false
+            referencedRelation: "journeys"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journey_papas_papa_id_fkey"
+            columns: ["papa_id"]
+            isOneToOne: false
+            referencedRelation: "papas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journey_papas_papa_id_fkey"
+            columns: ["papa_id"]
+            isOneToOne: false
+            referencedRelation: "papas_basic"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       journey_status_updates: {
         Row: {
           created_at: string | null
@@ -820,12 +1359,15 @@ export type Database = {
           created_by: string | null
           current_call_sign: Database["public"]["Enums"]["call_sign"] | null
           current_status: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           description: string | null
           destination: string | null
           end_date: string | null
           eta: string | null
           etd: string | null
           id: string
+          is_deleted: boolean
           journey_type: string
           last_latitude: number | null
           last_location_update: string | null
@@ -859,12 +1401,15 @@ export type Database = {
           created_by?: string | null
           current_call_sign?: Database["public"]["Enums"]["call_sign"] | null
           current_status?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           description?: string | null
           destination?: string | null
           end_date?: string | null
           eta?: string | null
           etd?: string | null
           id?: string
+          is_deleted?: boolean
           journey_type?: string
           last_latitude?: number | null
           last_location_update?: string | null
@@ -898,12 +1443,15 @@ export type Database = {
           created_by?: string | null
           current_call_sign?: Database["public"]["Enums"]["call_sign"] | null
           current_status?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           description?: string | null
           destination?: string | null
           end_date?: string | null
           eta?: string | null
           etd?: string | null
           id?: string
+          is_deleted?: boolean
           journey_type?: string
           last_latitude?: number | null
           last_location_update?: string | null
@@ -987,6 +1535,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "journeys_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "journeys_papa_id_fkey"
             columns: ["papa_id"]
             isOneToOne: false
@@ -994,10 +1549,97 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "journeys_papa_id_fkey"
+            columns: ["papa_id"]
+            isOneToOne: false
+            referencedRelation: "papas_basic"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "journeys_program_id_fkey"
             columns: ["program_id"]
             isOneToOne: false
             referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_assets: {
+        Row: {
+          caption: string | null
+          category: string
+          created_at: string
+          id: string
+          instagram_url: string | null
+          media_type: string
+          papa_id: string | null
+          program_id: string | null
+          status: string
+          storage_path: string
+          taken_at: string | null
+          title: string | null
+          updated_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          caption?: string | null
+          category?: string
+          created_at?: string
+          id?: string
+          instagram_url?: string | null
+          media_type?: string
+          papa_id?: string | null
+          program_id?: string | null
+          status?: string
+          storage_path: string
+          taken_at?: string | null
+          title?: string | null
+          updated_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          caption?: string | null
+          category?: string
+          created_at?: string
+          id?: string
+          instagram_url?: string | null
+          media_type?: string
+          papa_id?: string | null
+          program_id?: string | null
+          status?: string
+          storage_path?: string
+          taken_at?: string | null
+          title?: string | null
+          updated_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_assets_papa_id_fkey"
+            columns: ["papa_id"]
+            isOneToOne: false
+            referencedRelation: "papas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_assets_papa_id_fkey"
+            columns: ["papa_id"]
+            isOneToOne: false
+            referencedRelation: "papas_basic"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_assets_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_assets_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -1041,6 +1683,96 @@ export type Database = {
           },
         ]
       }
+      mission_requests: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deadline: string
+          id: string
+          message: string | null
+          program_id: string
+          status: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deadline: string
+          id?: string
+          message?: string | null
+          program_id: string
+          status?: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deadline?: string
+          id?: string
+          message?: string | null
+          program_id?: string
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mission_requests_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mission_requests_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mission_responses: {
+        Row: {
+          id: string
+          note: string | null
+          request_id: string
+          responded_at: string
+          response: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          note?: string | null
+          request_id: string
+          responded_at?: string
+          response: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          note?: string | null
+          request_id?: string
+          responded_at?: string
+          response?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mission_responses_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "mission_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mission_responses_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nest_amenities: {
         Row: {
           amenity: string
@@ -1076,6 +1808,58 @@ export type Database = {
             columns: ["nest_id"]
             isOneToOne: false
             referencedRelation: "nests_with_amenities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nest_comfort_logs: {
+        Row: {
+          all_passed: boolean
+          checks: Json
+          id: string
+          nest_id: string
+          performed_at: string
+          performed_by: string | null
+          performed_by_name: string | null
+        }
+        Insert: {
+          all_passed?: boolean
+          checks?: Json
+          id?: string
+          nest_id: string
+          performed_at?: string
+          performed_by?: string | null
+          performed_by_name?: string | null
+        }
+        Update: {
+          all_passed?: boolean
+          checks?: Json
+          id?: string
+          nest_id?: string
+          performed_at?: string
+          performed_by?: string | null
+          performed_by_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nest_comfort_logs_nest_id_fkey"
+            columns: ["nest_id"]
+            isOneToOne: false
+            referencedRelation: "nests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nest_comfort_logs_nest_id_fkey"
+            columns: ["nest_id"]
+            isOneToOne: false
+            referencedRelation: "nests_with_amenities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nest_comfort_logs_performed_by_fkey"
+            columns: ["performed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -1370,6 +2154,103 @@ export type Database = {
         }
         Relationships: []
       }
+      papa_accommodations: {
+        Row: {
+          check_in: string | null
+          check_out: string | null
+          created_at: string
+          created_by: string | null
+          distance_km: number | null
+          hotel_name: string
+          id: string
+          location: string | null
+          nest_id: string | null
+          notes: string | null
+          papa_id: string
+          program_id: string | null
+          room_info: string | null
+          travel_duration_mins: number | null
+          updated_at: string
+        }
+        Insert: {
+          check_in?: string | null
+          check_out?: string | null
+          created_at?: string
+          created_by?: string | null
+          distance_km?: number | null
+          hotel_name: string
+          id?: string
+          location?: string | null
+          nest_id?: string | null
+          notes?: string | null
+          papa_id: string
+          program_id?: string | null
+          room_info?: string | null
+          travel_duration_mins?: number | null
+          updated_at?: string
+        }
+        Update: {
+          check_in?: string | null
+          check_out?: string | null
+          created_at?: string
+          created_by?: string | null
+          distance_km?: number | null
+          hotel_name?: string
+          id?: string
+          location?: string | null
+          nest_id?: string | null
+          notes?: string | null
+          papa_id?: string
+          program_id?: string | null
+          room_info?: string | null
+          travel_duration_mins?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "papa_accommodations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "papa_accommodations_nest_id_fkey"
+            columns: ["nest_id"]
+            isOneToOne: false
+            referencedRelation: "nests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "papa_accommodations_nest_id_fkey"
+            columns: ["nest_id"]
+            isOneToOne: false
+            referencedRelation: "nests_with_amenities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "papa_accommodations_papa_id_fkey"
+            columns: ["papa_id"]
+            isOneToOne: false
+            referencedRelation: "papas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "papa_accommodations_papa_id_fkey"
+            columns: ["papa_id"]
+            isOneToOne: false
+            referencedRelation: "papas_basic"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "papa_accommodations_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       papas: {
         Row: {
           accommodation_preferences: string | null
@@ -1382,6 +2263,8 @@ export type Database = {
           country: string | null
           created_at: string | null
           created_by: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           departure_date: string | null
           dietary_restrictions: string | null
           email: string | null
@@ -1395,6 +2278,7 @@ export type Database = {
           full_name: string
           has_slides: boolean | null
           id: string
+          is_deleted: boolean
           is_first_time: boolean | null
           mic_preference: string | null
           nationality: string | null
@@ -1432,6 +2316,8 @@ export type Database = {
           country?: string | null
           created_at?: string | null
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           departure_date?: string | null
           dietary_restrictions?: string | null
           email?: string | null
@@ -1445,6 +2331,7 @@ export type Database = {
           full_name: string
           has_slides?: boolean | null
           id?: string
+          is_deleted?: boolean
           is_first_time?: boolean | null
           mic_preference?: string | null
           nationality?: string | null
@@ -1482,6 +2369,8 @@ export type Database = {
           country?: string | null
           created_at?: string | null
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           departure_date?: string | null
           dietary_restrictions?: string | null
           email?: string | null
@@ -1495,6 +2384,7 @@ export type Database = {
           full_name?: string
           has_slides?: boolean | null
           id?: string
+          is_deleted?: boolean
           is_first_time?: boolean | null
           mic_preference?: string | null
           nationality?: string | null
@@ -1525,6 +2415,13 @@ export type Database = {
           {
             foreignKeyName: "papas_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "papas_deleted_by_fkey"
+            columns: ["deleted_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -1608,6 +2505,63 @@ export type Database = {
           },
           {
             foreignKeyName: "program_exports_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      program_menus: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_menu_of_day: boolean
+          items: Json
+          meal_type: string
+          menu_date: string
+          notes: string | null
+          program_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_menu_of_day?: boolean
+          items?: Json
+          meal_type?: string
+          menu_date?: string
+          notes?: string | null
+          program_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_menu_of_day?: boolean
+          items?: Json
+          meal_type?: string
+          menu_date?: string
+          notes?: string | null
+          program_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "program_menus_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "program_menus_program_id_fkey"
             columns: ["program_id"]
             isOneToOne: false
             referencedRelation: "programs"
@@ -1827,6 +2781,70 @@ export type Database = {
         }
         Relationships: []
       }
+      seat_arrangements: {
+        Row: {
+          arrangement_date: string
+          created_at: string
+          created_by: string | null
+          id: string
+          layout: Json
+          notes: string | null
+          program_id: string
+          session_name: string
+          session_order: number
+          theatre_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          arrangement_date?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          layout?: Json
+          notes?: string | null
+          program_id: string
+          session_name: string
+          session_order?: number
+          theatre_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          arrangement_date?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          layout?: Json
+          notes?: string | null
+          program_id?: string
+          session_name?: string
+          session_order?: number
+          theatre_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seat_arrangements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "seat_arrangements_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "seat_arrangements_theatre_id_fkey"
+            columns: ["theatre_id"]
+            isOneToOne: false
+            referencedRelation: "theatres"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       session_speakers: {
         Row: {
           created_at: string | null
@@ -1864,6 +2882,13 @@ export type Database = {
             columns: ["papa_id"]
             isOneToOne: false
             referencedRelation: "papas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_speakers_papa_id_fkey"
+            columns: ["papa_id"]
+            isOneToOne: false
+            referencedRelation: "papas_basic"
             referencedColumns: ["id"]
           },
           {
@@ -2297,6 +3322,59 @@ export type Database = {
           },
         ]
       }
+      training_schedules: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          end_time: string | null
+          id: string
+          location: string | null
+          resources: Json
+          session_date: string
+          speakers: Json
+          start_time: string | null
+          topic: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_time?: string | null
+          id?: string
+          location?: string | null
+          resources?: Json
+          session_date: string
+          speakers?: Json
+          start_time?: string | null
+          topic: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_time?: string | null
+          id?: string
+          location?: string | null
+          resources?: Json
+          session_date?: string
+          speakers?: Json
+          start_time?: string | null
+          topic?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_schedules_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_locations: {
         Row: {
           accuracy: number | null
@@ -2353,63 +3431,102 @@ export type Database = {
       users: {
         Row: {
           activation_status: string | null
+          address: string | null
           avatar_url: string | null
+          bio: string | null
+          city: string | null
           created_at: string | null
           created_by: string | null
           current_title_id: string | null
+          date_of_birth: string | null
           email: string
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
           full_name: string
+          gender: string | null
           id: string
           is_active: boolean | null
           is_online: boolean | null
+          is_team_head: boolean
+          job_title: string | null
           last_seen: string | null
           notification_preferences: Json | null
           oscar: string | null
+          password_last_changed: string | null
+          password_last_notified: string | null
           phone: string | null
           photo_url: string | null
+          profile_completed_at: string | null
           role: Database["public"]["Enums"]["user_role"]
+          team: string | null
           timezone: string | null
           unit: string | null
           updated_at: string | null
         }
         Insert: {
           activation_status?: string | null
+          address?: string | null
           avatar_url?: string | null
+          bio?: string | null
+          city?: string | null
           created_at?: string | null
           created_by?: string | null
           current_title_id?: string | null
+          date_of_birth?: string | null
           email: string
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
           full_name: string
+          gender?: string | null
           id: string
           is_active?: boolean | null
           is_online?: boolean | null
+          is_team_head?: boolean
+          job_title?: string | null
           last_seen?: string | null
           notification_preferences?: Json | null
           oscar?: string | null
+          password_last_changed?: string | null
+          password_last_notified?: string | null
           phone?: string | null
           photo_url?: string | null
+          profile_completed_at?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          team?: string | null
           timezone?: string | null
           unit?: string | null
           updated_at?: string | null
         }
         Update: {
           activation_status?: string | null
+          address?: string | null
           avatar_url?: string | null
+          bio?: string | null
+          city?: string | null
           created_at?: string | null
           created_by?: string | null
           current_title_id?: string | null
+          date_of_birth?: string | null
           email?: string
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
           full_name?: string
+          gender?: string | null
           id?: string
           is_active?: boolean | null
           is_online?: boolean | null
+          is_team_head?: boolean
+          job_title?: string | null
           last_seen?: string | null
           notification_preferences?: Json | null
           oscar?: string | null
+          password_last_changed?: string | null
+          password_last_notified?: string | null
           phone?: string | null
           photo_url?: string | null
+          profile_completed_at?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          team?: string | null
           timezone?: string | null
           unit?: string | null
           updated_at?: string | null
@@ -2665,6 +3782,38 @@ export type Database = {
           updated_at: string | null
         }
         Relationships: []
+      }
+      papas_basic: {
+        Row: {
+          full_name: string | null
+          id: string | null
+          profile_photo_url: string | null
+          program_id: string | null
+          title: string | null
+        }
+        Insert: {
+          full_name?: string | null
+          id?: string | null
+          profile_photo_url?: string | null
+          program_id?: string | null
+          title?: string | null
+        }
+        Update: {
+          full_name?: string | null
+          id?: string | null
+          profile_photo_url?: string | null
+          program_id?: string | null
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "papas_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       vw_audit_logs: {
         Row: {
@@ -3093,6 +4242,24 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      get_welfare_directory: {
+        Args: never
+        Returns: {
+          birth_day: number
+          birth_month: number
+          email: string
+          emergency_contact_name: string
+          emergency_contact_phone: string
+          full_name: string
+          id: string
+          is_active: boolean
+          oscar: string
+          phone: string
+          photo_url: string
+          role: Database["public"]["Enums"]["user_role"]
+          team: string
+        }[]
+      }
       gettransactionid: { Args: never; Returns: unknown }
       has_any_claim_role:
         | {
@@ -3160,8 +4327,10 @@ export type Database = {
       is_admin_user: { Args: never; Returns: boolean }
       is_alpha_oscar: { Args: never; Returns: boolean }
       is_delta_oscar: { Args: never; Returns: boolean }
+      is_november_oscar: { Args: never; Returns: boolean }
       is_tango_oscar: { Args: never; Returns: boolean }
       is_valid_user_role: { Args: { p_role: string }; Returns: boolean }
+      is_victor_oscar: { Args: never; Returns: boolean }
       longtransactionsenabled: { Args: never; Returns: boolean }
       mark_message_read: {
         Args: { message_uuid: string; user_uuid: string }
@@ -3171,6 +4340,14 @@ export type Database = {
         Args: { p_program_id: string; p_user_id: string }
         Returns: undefined
       }
+      oscar_unit_matches: { Args: { unit_pattern: string }; Returns: boolean }
+      papa_has_nest: { Args: { target_papa_id: string }; Returns: boolean }
+      papa_has_theatre: { Args: { target_papa_id: string }; Returns: boolean }
+      papa_used_eagle_square: {
+        Args: { target_papa_id: string }
+        Returns: boolean
+      }
+      papa_uses_cheetah: { Args: { target_papa_id: string }; Returns: boolean }
       populate_geometry_columns:
         | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }
         | { Args: { use_typmod?: boolean }; Returns: string }
@@ -3225,6 +4402,11 @@ export type Database = {
         Args: { is_user_online: boolean }
         Returns: undefined
       }
+      soft_delete_journey: {
+        Args: { p_journey_id: string }
+        Returns: undefined
+      }
+      soft_delete_papa: { Args: { p_papa_id: string }; Returns: undefined }
       st_3dclosestpoint: {
         Args: { geom1: unknown; geom2: unknown }
         Returns: unknown
@@ -3869,6 +5051,14 @@ export type Database = {
         | "distress"
         | "active"
         | "planning"
+        | "cocktail"
+        | "blue_cocktail"
+        | "red_cocktail"
+        | "re_order"
+        | "first_course"
+        | "chapman"
+        | "dessert"
+        | "broken_arrow"
       nest_type: "den" | "nest"
       notification_channel: "email" | "sms" | "push" | "whatsapp"
       notification_status: "pending" | "sent" | "failed" | "delivered"
@@ -3901,6 +5091,14 @@ export type Database = {
         | "head_noscar_nest"
         | "echo_oscar"
         | "dev_admin"
+        | "sierra_oscar"
+        | "head_sierra_oscar"
+        | "compliance_oscar"
+        | "head_compliance_oscar"
+        | "welfare_oscar"
+        | "head_welfare_oscar"
+        | "hospitality_oscar"
+        | "head_hospitality_oscar"
       vehicle_status:
         | "idle"
         | "on_mission"
@@ -4068,6 +5266,14 @@ export const Constants = {
         "distress",
         "active",
         "planning",
+        "cocktail",
+        "blue_cocktail",
+        "red_cocktail",
+        "re_order",
+        "first_course",
+        "chapman",
+        "dessert",
+        "broken_arrow",
       ],
       nest_type: ["den", "nest"],
       notification_channel: ["email", "sms", "push", "whatsapp"],
@@ -4101,6 +5307,14 @@ export const Constants = {
         "head_noscar_nest",
         "echo_oscar",
         "dev_admin",
+        "sierra_oscar",
+        "head_sierra_oscar",
+        "compliance_oscar",
+        "head_compliance_oscar",
+        "welfare_oscar",
+        "head_welfare_oscar",
+        "hospitality_oscar",
+        "head_hospitality_oscar",
       ],
       vehicle_status: [
         "idle",
@@ -4112,4 +5326,3 @@ export const Constants = {
     },
   },
 } as const
-

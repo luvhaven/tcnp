@@ -57,6 +57,11 @@ const INCIDENT_SEVERITY_LABELS: Record<string, string> = {
   critical: "Critical",
 };
 
+const formatRoleLabel = (role: string) =>
+  role
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
 const CHART_COLORS = {
   primary: "#F26522",
   primarySoft: "#FED7AA",
@@ -456,10 +461,21 @@ export function DashboardCharts() {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart key={animationKey} data={animatedRoleData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.3)" />
-                  <XAxis dataKey="role" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <XAxis
+                    dataKey="role"
+                    tickFormatter={(v) => formatRoleLabel(v)}
+                    tick={{ fontSize: 10 }}
+                    axisLine={false}
+                    tickLine={false}
+                    interval={0}
+                    angle={-30}
+                    textAnchor="end"
+                    height={50}
+                  />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                   <Tooltip
-                    formatter={(value: any) => [value, "Officers"]}
+                    formatter={(value: any, _name, ctx: any) => [value, "Officers"]}
+                    labelFormatter={(label) => formatRoleLabel(label)}
                     cursor={{ stroke: CHART_COLORS.primary, strokeWidth: 1 }}
                   />
                   <Line

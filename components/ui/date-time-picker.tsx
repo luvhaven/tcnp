@@ -19,6 +19,7 @@ interface DateTimePickerProps {
     onChange: (value: string) => void
     placeholder?: string
     disabled?: boolean
+    minDate?: Date
 }
 
 export function DateTimePicker({
@@ -26,6 +27,7 @@ export function DateTimePicker({
     onChange,
     placeholder = "Pick a date and time",
     disabled = false,
+    minDate,
 }: DateTimePickerProps) {
     const [date, setDate] = React.useState<Date | undefined>(
         value ? new Date(value) : undefined
@@ -88,6 +90,14 @@ export function DateTimePicker({
                         mode="single"
                         selected={date}
                         onSelect={handleDateSelect}
+                        disabled={(d) => {
+                            if (minDate) {
+                                const min = new Date(minDate)
+                                min.setHours(0, 0, 0, 0)
+                                return d < min
+                            }
+                            return false
+                        }}
                         initialFocus
                     />
                     <div className="p-3 border-t">
