@@ -59,29 +59,29 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
   }
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-background/80 backdrop-blur-md px-6 shadow-sm transition-all duration-200">
-      <div className="flex items-center space-x-3">
+    <header className="sticky top-0 z-40 flex h-16 min-w-0 items-center justify-between gap-2 border-b bg-background/80 backdrop-blur-md px-3 sm:px-6 shadow-sm transition-all duration-200">
+      <div className="flex min-w-0 items-center space-x-3">
         <button
           type="button"
           aria-label="Open navigation sidebar"
           onClick={onOpenSidebar}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full border bg-background text-foreground shadow-sm md:hidden"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border bg-background text-foreground shadow-sm lg:hidden"
         >
           <Menu className="h-5 w-5" aria-hidden="true" />
         </button>
       <div className="flex flex-col min-w-0">
-          <h1 className="text-sm font-semibold tracking-tight md:text-xl truncate max-w-[140px] sm:max-w-xs md:max-w-none">
+          <h1 className="text-sm font-semibold tracking-tight md:text-xl truncate max-w-[140px] sm:max-w-xs lg:max-w-none">
             Welcome, {profile?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'User'}
           </h1>
           {profile?.role && (
-            <span className="mt-0.5 inline-flex max-w-full items-center rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary md:mt-1 md:px-3 md:py-1 md:text-[11px]">
+            <span className="mt-0.5 inline-flex max-w-full items-center truncate rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary md:mt-1 md:px-3 md:py-1 md:text-[11px]">
               {formatRole(profile.role)}
             </span>
           )}
         </div>
       </div>
 
-      <div className="flex items-center space-x-1 md:space-x-3">
+      <div className="flex shrink-0 items-center space-x-1 md:space-x-3">
         {/* Install Button — desktop only */}
         <InstallButton />
 
