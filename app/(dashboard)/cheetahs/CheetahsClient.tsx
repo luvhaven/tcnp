@@ -270,8 +270,8 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
       </motion.div>
 
       {/* Stats */}
-      <motion.div layout className="grid gap-4 md:grid-cols-4">
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-primary/60 border-2">
+      <motion.div layout className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:border-primary/60 border-2">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">Total Fleet</CardTitle>
@@ -283,7 +283,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
             <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-primary group-hover:to-primary/70 transition-all duration-500">{cheetahs.length}</div>
           </CardContent>
         </Card>
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-green-500/60 border-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:border-green-500/60 border-2">
           <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">Available</CardTitle>
@@ -297,7 +297,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
             </div>
           </CardContent>
         </Card>
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-blue-500/60 border-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:border-blue-500/60 border-2">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">In Use</CardTitle>
@@ -311,7 +311,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
             </div>
           </CardContent>
         </Card>
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-orange-500/60 border-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:border-orange-500/60 border-2">
           <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">Maintenance</CardTitle>
@@ -352,25 +352,25 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
                 {cheetahs.map((cheetah) => (
                   <motion.div
                     layout
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0, scale: 0.95 }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.2 }}
                     key={cheetah.id}
-                    className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:-translate-y-0.5 hover:shadow-md hover:border-primary/30"
+                    className="flex min-w-0 flex-col gap-3 overflow-hidden rounded-lg border p-4 transition-all hover:bg-accent hover:shadow-md hover:border-primary/30 sm:flex-row sm:items-center sm:justify-between"
                   >
-                    <div className="flex-1">
-                      <p className="font-medium text-lg">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-lg">
                         {cheetah.call_sign || 'N/A'}
                       </p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="truncate text-sm text-muted-foreground">
                         {cheetah.make} {cheetah.model} ({cheetah.year}) • {cheetah.registration_number}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="mt-1 truncate text-xs text-muted-foreground">
                         {cheetah.color} • Capacity: {cheetah.capacity} passengers
                       </p>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
                       <Badge variant={cheetah.status === 'available' ? 'success' : cheetah.status === 'in_use' ? 'warning' : 'secondary'}>
                         {cheetah.status}
                       </Badge>
@@ -491,7 +491,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <div className="space-y-2">
                 <Label htmlFor="color">Color *</Label>
                 <Input

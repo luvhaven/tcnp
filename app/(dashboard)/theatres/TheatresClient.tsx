@@ -159,13 +159,13 @@ export default function TheatresClient({
       <motion.div 
         initial={{ opacity: 0, y: -20 }} 
         animate={{ opacity: 1, y: 0 }} 
-        className="flex items-center justify-between"
+        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
       >
-        <div>
+        <div className="min-w-0">
           <h1 className="text-3xl font-bold tracking-tight">Theatres</h1>
           <p className="text-sm text-muted-foreground max-w-xl">Manage event venues and locations</p>
         </div>
-        <Button onClick={openDialog}>
+        <Button onClick={openDialog} className="shrink-0 self-start sm:self-auto">
           <Plus className="mr-2 h-4 w-4" />
           Add Venue
         </Button>
@@ -179,8 +179,8 @@ export default function TheatresClient({
       )}
 
       {/* Stats Cards */}
-      <motion.div layout className="grid gap-4 md:grid-cols-3">
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-primary/60 border-2">
+      <motion.div layout className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:border-primary/60 border-2">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">Total Venues</CardTitle>
@@ -198,7 +198,7 @@ export default function TheatresClient({
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-emerald-500/60 border-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:border-emerald-500/60 border-2">
           <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">Total Capacity</CardTitle>
@@ -216,7 +216,7 @@ export default function TheatresClient({
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-purple-500/60 border-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:border-purple-500/60 border-2">
           <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">Average Capacity</CardTitle>
@@ -272,19 +272,19 @@ export default function TheatresClient({
                     {theatres.map((theatre) => (
                       <motion.div
                         layout
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0, scale: 0.95 }}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
                         transition={{ duration: 0.2 }}
                         key={theatre.id}
-                        className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:border-primary/30 hover:shadow-sm hover:-translate-y-0.5"
+                        className="flex min-w-0 flex-col gap-3 overflow-hidden rounded-lg border p-4 transition-all hover:bg-accent hover:border-primary/30 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
                       >
-                        <div className="flex-1">
-                          <p className="font-medium text-lg">{theatre.name}</p>
-                          <p className="text-sm text-muted-foreground">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium text-lg">{theatre.name}</p>
+                          <p className="truncate text-sm text-muted-foreground">
                             {theatre.address}, {theatre.city}
                           </p>
-                          <div className="flex items-center gap-3 mt-2">
+                          <div className="mt-2 flex min-w-0 flex-wrap items-center gap-3">
                             <Badge variant="secondary" className="text-xs">
                               {theatre.venue_type || 'Venue'}
                             </Badge>
@@ -293,7 +293,7 @@ export default function TheatresClient({
                             </span>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-2">
+                        <div className="flex shrink-0 items-center gap-2">
                           <Button variant="ghost" size="icon" onClick={() => handleEdit(theatre)} className="hover:bg-primary/10">
                             <Edit className="h-4 w-4" />
                           </Button>

@@ -627,13 +627,13 @@ export default function JourneysClient({
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-3xl font-bold">Journeys</h1>
           <p className="text-muted-foreground">Manage all Papa journeys and call-signs</p>
         </div>
         {canCreateJourney && (
-          <Button onClick={() => setCreateDialogOpen(true)}>
+          <Button onClick={() => setCreateDialogOpen(true)} className="shrink-0 self-start sm:self-auto">
             <Plus className="mr-2 h-4 w-4" />
             Create Journey
           </Button>
@@ -641,7 +641,7 @@ export default function JourneysClient({
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Journeys</CardTitle>
@@ -722,8 +722,8 @@ export default function JourneysClient({
                         }}
                       >
                         {/* Header Row: Status & Time */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
+                        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex min-w-0 flex-wrap items-center gap-3">
                             <Badge
                               variant="secondary"
                               className={cn(
@@ -842,20 +842,20 @@ export default function JourneysClient({
                   .map((journey) => (
                     <div
                       key={journey.id}
-                      className="flex items-center justify-between rounded-lg border p-4 opacity-75 hover:opacity-100 transition-all"
+                      className="flex min-w-0 flex-col gap-3 overflow-hidden rounded-lg border p-4 opacity-75 transition-all hover:opacity-100 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      <div className="flex items-center space-x-4">
-                        <div className={cn('h-3 w-3 rounded-full', getStatusIndicatorClass(journey.status))} />
-                        <div>
-                          <p className="font-medium">
+                      <div className="flex min-w-0 items-center gap-4">
+                        <div className={cn('h-3 w-3 shrink-0 rounded-full', getStatusIndicatorClass(journey.status))} />
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">
                             {journey.papas?.title} {journey.papas?.full_name}
                           </p>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="truncate text-sm text-muted-foreground">
                             {journey.origin} → {journey.destination}
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-4">
+                      <div className="flex shrink-0 flex-wrap items-center gap-2 sm:gap-4">
                         <Badge variant="outline">
                           {getStatusLabel(journey.status)}
                         </Badge>
