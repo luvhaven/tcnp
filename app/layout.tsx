@@ -23,11 +23,11 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "TCNP Journey Management",
+    default: "TCNP Central Application",
     template: "%s · TCNP",
   },
-  description: "Enterprise Journey Management System for The Covenant Nation Protocol",
-  applicationName: "TCNP Journey Management",
+  description: "Enterprise Central Application System for The Covenant Nation Protocol",
+  applicationName: "TCNP Central Application",
   manifest: "/manifest.json",
   icons: {
     icon: "/icon-192.png",
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "TCNP Journey",
+    title: "TCNP Central",
   },
   // Stop iOS from turning call-signs / IDs into phone links; explicit tel: links still work
   formatDetection: {

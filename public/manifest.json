@@ -1,15 +1,16 @@
 {
-  "name": "TCNP Journey Management",
-  "short_name": "TCNP Journey",
-  "description": "Enterprise Journey Management System for The Covenant Nation Protocol",
+  "name": "TCNP Central Application",
+  "short_name": "TCNP Central",
+  "description": "Enterprise Central Application System for The Covenant Nation Protocol",
   "id": "/",
   "start_url": "/",
   "scope": "/",
   "lang": "en",
   "dir": "ltr",
-  "display": "standalone",
+  "display": "minimal-ui",
   "display_override": [
     "window-controls-overlay",
+    "minimal-ui",
     "standalone"
   ],
   "launch_handler": {
