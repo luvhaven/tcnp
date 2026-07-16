@@ -269,40 +269,29 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
         </Button>
       </motion.div>
 
-      {/* Stats with Framer Motion layout animations */}
-      <motion.div layout className="grid gap-4 md:grid-cols-4">
+      {/* Stats */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { status: 'planning', label: 'Planning', icon: Calendar, color: 'blue' },
-          { status: 'active', label: 'Active', icon: CheckCircle, color: 'green' },
-          { status: 'completed', label: 'Completed', icon: CheckCircle, color: 'purple' },
-          { status: 'archived', label: 'Archived', icon: Archive, color: 'gray' },
-        ].map((stat, i) => {
-          const Icon = stat.icon
-          return (
-            <motion.div
-              key={stat.status}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: i * 0.1 }}
-            >
-              <Card className={`group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-${stat.color}-500/60 border-2`}>
-                <div className={`absolute inset-0 bg-gradient-to-br from-${stat.color}-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500`} />
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-                  <CardTitle className="text-sm font-medium">{stat.label}</CardTitle>
-                  <div className={`p-2 rounded-full bg-${stat.color}-500/10 group-hover:bg-${stat.color}-500/20 transition-colors`}>
-                    <Icon className={`h-4 w-4 text-${stat.color}-500 group-hover:scale-110 transition-transform`} />
-                  </div>
-                </CardHeader>
-                <CardContent className="relative z-10">
-                  <div className={`text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-${stat.color}-500 group-hover:to-${stat.color}-600 transition-all duration-500`}>
-                    {programs.filter(p => p.status === stat.status).length}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )
-        })}
-      </motion.div>
+          { status: 'planning', label: 'Planning', Icon: Calendar, color: 'text-sky-500', bg: 'bg-sky-500/10', ring: 'ring-sky-500/20' },
+          { status: 'active', label: 'Active', Icon: CheckCircle, color: 'text-[hsl(var(--success))]', bg: 'bg-[hsl(var(--success)/0.08)]', ring: 'ring-[hsl(var(--success)/0.2)]' },
+          { status: 'completed', label: 'Completed', Icon: CheckCircle, color: 'text-violet-500', bg: 'bg-violet-500/10', ring: 'ring-violet-500/20' },
+          { status: 'archived', label: 'Archived', Icon: Archive, color: 'text-muted-foreground', bg: 'bg-muted/60', ring: 'ring-border' },
+        ].map(({ status, label, Icon, color, bg, ring }) => (
+          <div key={status} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">{label}</p>
+                <p className={`stat-figure mt-2 text-3xl font-bold ${color}`}>
+                  {programs.filter(p => p.status === status).length}
+                </p>
+              </div>
+              <div className={`shrink-0 rounded-xl ${bg} p-2.5`}>
+                <Icon className={`h-4 w-4 ${color}`} aria-hidden="true" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
 
       <Card>
         <CardHeader>

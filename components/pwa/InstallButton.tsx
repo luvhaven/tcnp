@@ -12,7 +12,6 @@ import { PWAInstallModal } from './PWAInstallModal'
  * - Android / desktop Chromium: native install dialog
  * - iOS / macOS Safari / other browsers: platform-specific instructions modal
  * - Hidden entirely once the app is installed
- * Never a dead click.
  */
 export default function InstallButton() {
   const { isInstalled, install, platform } = usePWAInstall()
@@ -31,24 +30,15 @@ export default function InstallButton() {
 
   return (
     <>
-      {/* Adaptive: labelled button on md+, icon-only on mobile */}
       <Button
         onClick={handleClick}
         variant="outline"
         size="sm"
-        className="hidden md:inline-flex bg-primary/5 hover:bg-primary/10 border-primary/20 text-primary"
-      >
-        <Download className="mr-2 h-4 w-4" aria-hidden="true" />
-        Install App
-      </Button>
-      <Button
-        onClick={handleClick}
-        variant="ghost"
-        size="icon"
-        className="inline-flex md:hidden h-9 w-9 text-primary"
+        className="bg-primary/5 hover:bg-primary/10 border-primary/20 text-primary"
         aria-label="Install app"
       >
-        <Download className="h-4 w-4" aria-hidden="true" />
+        <Download className="h-4 w-4 sm:mr-2" aria-hidden="true" />
+        <span className="hidden sm:inline">Install App</span>
       </Button>
 
       {showModal && (

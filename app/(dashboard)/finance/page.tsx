@@ -182,20 +182,20 @@ export default function FinancePage() {
   return (
     <div className="space-y-6 page-enter">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-green-950 via-slate-900 to-slate-900 p-6 text-white">
-        <div className="absolute -right-10 -top-16 h-56 w-56 rounded-full bg-green-500/20 blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl border bg-card p-6">
+        <div className="absolute -right-10 -top-16 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <Banknote className="h-6 w-6 text-green-300" />
+              <Banknote className="h-6 w-6 text-primary" />
               <h1 className="text-2xl font-bold tracking-tight">Finance</h1>
-              <Badge className="border-0 bg-green-500/20 text-green-200 uppercase text-[10px] tracking-wider">Leadership Only</Badge>
+              <Badge variant="outline" className="text-primary uppercase text-[10px] tracking-wider border-primary/20 bg-primary/5">Leadership Only</Badge>
             </div>
-            <p className="mt-1 max-w-xl text-sm text-slate-300">
+            <p className="mt-1 max-w-xl text-sm text-muted-foreground">
               Financial reports, budgets and receipts — stored privately, downloads via time-limited signed links.
             </p>
           </div>
-          <Button onClick={() => setDialogOpen(true)} className="gap-2 bg-green-600 hover:bg-green-500">
+          <Button onClick={() => setDialogOpen(true)} className="gap-2">
             <Upload className="h-4 w-4" /> Upload Document
           </Button>
         </div>

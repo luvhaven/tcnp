@@ -19,8 +19,12 @@ import {
 } from "@/components/ui/dialog"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
 import {
-  GraduationCap, Plus, Pencil, Trash2, MapPin, Clock, Users, BookOpen, ArrowRight, CalendarDays,
+  GraduationCap, Plus, Pencil, Trash2, MapPin, Clock, Users, BookOpen, ArrowRight, CalendarDays, FileText, Shield
 } from "lucide-react"
+
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select"
 
 // ─── Singleton client ───
 const supabase = createClient()
@@ -36,6 +40,29 @@ type Training = {
   speakers: string[]
   created_at: string
 }
+
+type OscarDoc = {
+  id: string
+  oscar: string
+  doc_type: "sop" | "code_of_conduct"
+  title: string
+  content: string
+  created_at: string
+}
+
+const TARGET_OSCARS = [
+  { id: "alpha_oscar", name: "Alpha Oscar" },
+  { id: "compliance_oscar", name: "Compliance Oscar" },
+  { id: "delta_oscar", name: "Delta Oscar" },
+  { id: "echo_oscar", name: "Echo Oscar" },
+  { id: "hospitality_oscar", name: "Hospitality Oscar" },
+  { id: "november_oscar", name: "November Oscar" },
+  { id: "serial_oscar", name: "Serial Oscar" },
+  { id: "tango_oscar", name: "Tango Oscar" },
+  { id: "victor_oscar", name: "Victor Oscar" },
+  { id: "welfare_oscar", name: "Welfare Oscar" },
+  { id: "all", name: "All Units (Global)" }
+]
 
 function fmtTime(t: string | null) {
   if (!t) return null
@@ -60,6 +87,16 @@ export default function TrainingPage() {
     speakersText: "",
   })
 
+  // Oscar Doc states
+  const [docDialogOpen, setDocDialogOpen] = useState(false)
+  const [editingDoc, setEditingDoc] = useState<OscarDoc | null>(null)
+  const [docForm, setDocForm] = useState<{ oscar: string; doc_type: "sop" | "code_of_conduct"; title: string; content: string }>({
+    oscar: "all",
+    doc_type: "sop",
+    title: "",
+    content: ""
+  })
+
   const { data: sessions = [], isLoading } = useQuery({
     queryKey: ["training-schedules"],
     queryFn: async () => {
@@ -73,6 +110,19 @@ export default function TrainingPage() {
         speakers: Array.isArray(s.speakers) ? s.speakers : [],
       })) as Training[]
     },
+  })
+
+  const { data: documents = [], isLoading: docsLoading } = useQuery({
+    queryKey: ["oscar-documents"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("oscar_documents")
+        .select("*")
+        .order("created_at", { ascending: false })
+      if (error) throw error
+      return data as OscarDoc[]
+    },
+    enabled: canEdit, // Only load these on training page if they can edit (admins)
   })
 
   const today = new Date().toISOString().slice(0, 10)
@@ -141,6 +191,52 @@ export default function TrainingPage() {
     setDialogOpen(true)
   }
 
+  // Document Mutations & Handlers
+  const saveDocMutation = useMutation({
+    mutationFn: async () => {
+      if (!docForm.title.trim()) throw new Error("Title is required")
+      if (!docForm.content.trim()) throw new Error("Content is required")
+      const payload = { ...docForm }
+      if (editingDoc) {
+        const { error } = await supabase.from("oscar_documents").update(payload).eq("id", editingDoc.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from("oscar_documents").insert({ ...payload, created_by: currentUser?.id ?? null })
+        if (error) throw error
+      }
+    },
+    onSuccess: () => {
+      toast.success(editingDoc ? "Document updated" : "Document created")
+      setDocDialogOpen(false)
+      queryClient.invalidateQueries({ queryKey: ["oscar-documents"] })
+    },
+    onError: (err: any) => toast.error(err.message || "Failed to save"),
+  })
+
+  const deleteDocMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("oscar_documents").delete().eq("id", id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      toast.success("Document deleted")
+      queryClient.invalidateQueries({ queryKey: ["oscar-documents"] })
+    },
+    onError: (err: any) => toast.error(err.message || "Failed to delete"),
+  })
+
+  const openDocCreate = () => {
+    setEditingDoc(null)
+    setDocForm({ oscar: "all", doc_type: "sop", title: "", content: "" })
+    setDocDialogOpen(true)
+  }
+
+  const openDocEdit = (d: OscarDoc) => {
+    setEditingDoc(d)
+    setDocForm({ oscar: d.oscar, doc_type: d.doc_type, title: d.title, content: d.content })
+    setDocDialogOpen(true)
+  }
+
   const SessionCard = ({ s, muted = false }: { s: Training; muted?: boolean }) => (
     <Card className={`card-hover h-full ${muted ? "opacity-70" : ""}`}>
       <CardHeader className="pb-2">
@@ -188,20 +284,20 @@ export default function TrainingPage() {
   return (
     <div className="space-y-6 page-enter">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-900 p-6 text-white">
-        <div className="absolute -left-10 -top-16 h-56 w-56 rounded-full bg-indigo-500/20 blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl border bg-card p-6">
+        <div className="absolute -left-10 -top-16 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <GraduationCap className="h-6 w-6 text-indigo-300" />
+              <GraduationCap className="h-6 w-6 text-primary" />
               <h1 className="text-2xl font-bold tracking-tight">Training</h1>
             </div>
-            <p className="mt-1 max-w-xl text-sm text-slate-300">
+            <p className="mt-1 max-w-xl text-sm text-muted-foreground">
               The SOP manual and every scheduled training session — topics, venues, times and speakers.
             </p>
           </div>
           {canEdit && (
-            <Button onClick={openCreate} className="gap-2 bg-indigo-600 hover:bg-indigo-500">
+            <Button onClick={openCreate} className="gap-2">
               <Plus className="h-4 w-4" /> Schedule Training
             </Button>
           )}
@@ -210,9 +306,9 @@ export default function TrainingPage() {
 
       {/* SOP manual entry */}
       <Link href="/sop" className="block">
-        <Card className="card-hover group border-indigo-500/30 bg-gradient-to-r from-indigo-500/5 to-transparent">
+        <Card className="card-hover group border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
           <CardContent className="flex items-center gap-4 p-5">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-500">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <BookOpen className="h-6 w-6" />
             </div>
             <div className="min-w-0 flex-1">
@@ -260,6 +356,58 @@ export default function TrainingPage() {
         </div>
       )}
 
+      {/* Unit Documents (SOPs & Code of Conduct) */}
+      {canEdit && (
+        <div className="mt-12 space-y-4 border-t pt-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold tracking-tight">Unit Documents</h2>
+              <p className="text-sm text-muted-foreground mt-1">Manage SOPs and Code of Conduct documents specific to each Oscar.</p>
+            </div>
+            <Button onClick={openDocCreate} className="gap-2">
+              <Plus className="h-4 w-4" /> Add Document
+            </Button>
+          </div>
+
+          {docsLoading ? (
+            <div className="skeleton h-24 rounded-xl" />
+          ) : documents.length === 0 ? (
+            <div className="empty-state rounded-xl border">
+              <FileText className="h-8 w-8" />
+              <p className="font-medium">No documents yet</p>
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {documents.map(d => (
+                <Card key={d.id} className="card-hover">
+                  <div className="flex items-center justify-between p-4">
+                    <div className="flex items-center gap-4">
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${d.doc_type === 'sop' ? 'bg-blue-500/10 text-blue-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                        {d.doc_type === 'sop' ? <BookOpen className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
+                      </div>
+                      <div>
+                        <h4 className="font-medium flex gap-2 items-center">
+                          {d.title}
+                          <Badge variant="secondary" className="text-[10px] capitalize font-medium">{d.doc_type === 'sop' ? 'SOP' : 'Code of Conduct'}</Badge>
+                        </h4>
+                        <p className="text-xs text-muted-foreground mt-1 capitalize">{TARGET_OSCARS.find(o => o.id === d.oscar)?.name || d.oscar}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1 sm:flex-row">
+                      <Button variant="ghost" size="sm" onClick={() => openDocEdit(d)}>Edit</Button>
+                      <Button variant="ghost" size="sm" className="text-red-500" onClick={async () => {
+                        const ok = await confirm({ title: "Delete document?", message: `"${d.title}" will be permanently removed.` })
+                        if (ok) deleteDocMutation.mutate(d.id)
+                      }}>Delete</Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Create / edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
@@ -304,6 +452,59 @@ export default function TrainingPage() {
               <Button type="button" variant="outline" className="flex-1" onClick={() => setDialogOpen(false)}>Cancel</Button>
               <Button type="submit" className="flex-1" disabled={saveMutation.isPending}>
                 {saveMutation.isPending ? "Saving…" : editing ? "Save Changes" : "Schedule"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Doc Create / Edit Dialog */}
+      <Dialog open={docDialogOpen} onOpenChange={setDocDialogOpen}>
+        <DialogContent className="max-w-xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{editingDoc ? "Edit Unit Document" : "Add Unit Document"}</DialogTitle>
+            <DialogDescription>Assign a specialized SOP or Code of Conduct to an Oscar.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); saveDocMutation.mutate() }} className="mt-2 space-y-4 overflow-y-auto pr-2 pb-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Target Oscar Unit</Label>
+                <Select value={docForm.oscar} onValueChange={(val) => setDocForm({ ...docForm, oscar: val })}>
+                  <SelectTrigger><SelectValue placeholder="Select Unit..." /></SelectTrigger>
+                  <SelectContent>
+                    {TARGET_OSCARS.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Document Type</Label>
+                <Select value={docForm.doc_type} onValueChange={(val: any) => setDocForm({ ...docForm, doc_type: val })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sop">SOP Fragment</SelectItem>
+                    <SelectItem value="code_of_conduct">Code of Conduct</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Title</Label>
+              <Input value={docForm.title} onChange={(e) => setDocForm({ ...docForm, title: e.target.value })} placeholder="e.g. Serial Oscar Dress Protocol" required />
+            </div>
+            <div className="space-y-2 flex-1 flex flex-col">
+              <Label>Content (Markdown supported)</Label>
+              <Textarea
+                className="min-h-[250px] font-mono text-sm leading-relaxed whitespace-pre-wrap resize-y"
+                value={docForm.content}
+                onChange={(e) => setDocForm({ ...docForm, content: e.target.value })}
+                placeholder="Enter document text or markdown here..."
+                required
+              />
+            </div>
+            <div className="flex gap-2 pt-2 border-t">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setDocDialogOpen(false)}>Cancel</Button>
+              <Button type="submit" className="flex-1" disabled={saveDocMutation.isPending}>
+                {saveDocMutation.isPending ? "Saving…" : editingDoc ? "Save Changes" : "Create Document"}
               </Button>
             </div>
           </form>

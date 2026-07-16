@@ -15,7 +15,7 @@ export function oscarToRole(oscar: string | null | undefined): string | null {
   if (!oscar) return null
   const norm = oscar.trim().toLowerCase()
 
-  // Head variants first (so "Head Sierra Oscar" doesn't match the base unit)
+  // Head variants first (so "Head Serial Oscar" doesn't match the base unit)
   if (norm.includes('head_tango') || norm.includes('head tango')) return 'head_tango_oscar'
   if (norm.includes('head_echo') || norm.includes('head echo')) return 'head_echo_oscar'
   if (norm.includes('head_victor') || norm.includes('head victor')) return 'head_victor_oscar'
@@ -25,7 +25,7 @@ export function oscarToRole(oscar: string | null | undefined): string | null {
     return 'november_oscar' // legacy umbrella head, sub-unit not specified
   }
   if (norm.includes('head_alpha') || norm.includes('head alpha')) return 'head_alpha_oscar'
-  if (norm.includes('head_sierra') || norm.includes('head sierra')) return 'head_sierra_oscar'
+  if (norm.includes('head_sierra') || norm.includes('head sierra') || norm.includes('head_serial') || norm.includes('head serial')) return 'head_serial_oscar'
   if (norm.includes('head_compliance') || norm.includes('head compliance')) return 'head_compliance_oscar'
   if (norm.includes('head_welfare') || norm.includes('head welfare')) return 'head_welfare_oscar'
   if (norm.includes('head_hospitality') || norm.includes('head hospitality')) return 'head_hospitality_oscar'
@@ -42,8 +42,8 @@ export function oscarToRole(oscar: string | null | undefined): string | null {
   if (['no', 'november', 'november_oscar', 'november oscar'].includes(norm)) return 'november_oscar'
   // Alpha Oscar — Eagle Squares / Airports
   if (['ao', 'alpha', 'alpha_oscar', 'alpha oscar'].includes(norm)) return 'alpha_oscar'
-  // Sierra Oscar — Social Media
-  if (['so', 'sierra', 'sierra_oscar', 'sierra oscar'].includes(norm)) return 'sierra_oscar'
+  // Serial Oscar — Social Media (also matches legacy 'Sierra' values)
+  if (['so', 'sierra', 'sierra_oscar', 'sierra oscar', 'serial', 'serial_oscar', 'serial oscar'].includes(norm)) return 'serial_oscar'
   // Compliance Oscar — Grooming / Dress code
   if (['co', 'compliance', 'compliance_oscar', 'compliance oscar'].includes(norm)) return 'compliance_oscar'
   // Welfare Oscar — Meals / Officer welfare
@@ -189,20 +189,20 @@ export function canManageEagles(role: string | null | undefined, oscar?: string 
 }
 
 /**
- * Sierra — Social Media unit. Members can contribute; head + leadership manage.
+ * Serial — Social Media unit. Members can contribute; head + leadership manage.
  */
 export function canAccessSierra(role: string | null | undefined, oscar?: string | null): boolean {
   if (!role) return false
   if (isAdmin(role)) return true
   const effective = effectiveOscarRole(role, oscar)
-  return ['sierra_oscar', 'head_sierra_oscar'].includes(effective ?? '')
+  return ['serial_oscar', 'head_serial_oscar', 'sierra_oscar', 'head_sierra_oscar'].includes(effective ?? '')
 }
 
 export function canManageSierra(role: string | null | undefined, oscar?: string | null): boolean {
   if (!role) return false
   if (isAdmin(role)) return true
   const effective = effectiveOscarRole(role, oscar)
-  return ['sierra_oscar', 'head_sierra_oscar'].includes(effective ?? '')
+  return ['serial_oscar', 'head_serial_oscar', 'sierra_oscar', 'head_sierra_oscar'].includes(effective ?? '')
 }
 
 /**

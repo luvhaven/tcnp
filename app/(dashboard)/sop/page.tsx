@@ -11,7 +11,7 @@ import {
     Clock, CheckSquare, Navigation, Volume2, Landmark, Lock, Star,
     ChevronDown, Info, Terminal
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, effectiveOscarRole } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SubSection = { heading: string; body?: string; list?: string[]; table?: { cols: string[]; rows: string[][] }; highlight?: string; script?: string[] }
@@ -670,6 +670,7 @@ export default function SOPPage() {
     const [active, setActive] = useState('call-signs')
     const [userRole, setUserRole] = useState<string | null>(null)
     const [userOscar, setUserOscar] = useState<string | null>(null)
+    const [customDocs, setCustomDocs] = useState<{ id: string, oscar: string, title: string, content: string, doc_type: string }[]>([])
     const [expandedSections, setExpandedSections] = useState<Set<string>>(() => {
         // Start with all subsections of the first section expanded
         return new Set(SOP_SECTIONS[0].subsections.map((_, i) => `${SOP_SECTIONS[0].id}-${i}`))
@@ -681,16 +682,57 @@ export default function SOPPage() {
             if (!user) return
             const { data } = await supabase.from('users').select('role, oscar').eq('id', user.id).single<{ role: string; oscar: string }>()
             if (data) { setUserRole(data.role); setUserOscar(data.oscar) }
+
+            const { data: docs } = await supabase.from('oscar_documents').select('*')
+            if (docs) setCustomDocs(docs)
         }
         void load()
     }, [supabase])
+
+    const dynamicSections = useMemo(() => {
+        if (!userRole) return SOP_SECTIONS
+        const effective = effectiveOscarRole(userRole, userOscar)
+        const matches = customDocs.filter(d => d.oscar === 'all' || d.oscar === effective)
+
+        const sops = matches.filter(d => d.doc_type === 'sop')
+        const codes = matches.filter(d => d.doc_type === 'code_of_conduct')
+
+        const custom: SOPSection[] = []
+        if (sops.length > 0) {
+            custom.push({
+                id: 'unit-sops',
+                title: 'Unit specific SOPs',
+                icon: BookOpen,
+                color: 'text-blue-500', bg: 'bg-blue-500/10',
+                badge: 'UNIT.SOP',
+                subsections: sops.map(s => ({
+                    heading: s.title,
+                    body: s.content
+                }))
+            })
+        }
+        if (codes.length > 0) {
+            custom.push({
+                id: 'unit-codes',
+                title: 'Code of Conduct',
+                icon: Shield,
+                color: 'text-rose-500', bg: 'bg-rose-500/10',
+                badge: 'UNIT.CODE',
+                subsections: codes.map(c => ({
+                    heading: c.title,
+                    body: c.content
+                }))
+            })
+        }
+        return [...SOP_SECTIONS, ...custom]
+    }, [customDocs, userRole, userOscar])
 
     // Always show DO section to DOs, admins, captains
     const isDO = userRole === 'delta_oscar'
     const isAdmin = ['super_admin', 'dev_admin', 'admin', 'captain', 'head_of_command', 'head_of_operations', 'command'].includes(userRole ?? '')
 
     const filtered = useMemo(() =>
-        SOP_SECTIONS.filter(s => {
+        dynamicSections.filter(s => {
             if (search === '') return true
             const q = search.toLowerCase()
             return s.title.toLowerCase().includes(q) ||
@@ -701,10 +743,10 @@ export default function SOPPage() {
                     (sub.list ?? []).some(l => l.toLowerCase().includes(q))
                 )
         }),
-        [search]
+        [search, dynamicSections]
     )
 
-    const activeSection = SOP_SECTIONS.find(s => s.id === active) ?? SOP_SECTIONS[0]
+    const activeSection = dynamicSections.find(s => s.id === active) ?? dynamicSections[0]
 
     const toggleSection = (id: string) => {
         setExpandedSections(prev => {
@@ -719,7 +761,7 @@ export default function SOPPage() {
     const navigateTo = (id: string) => {
         setActive(id)
         setSearch('')
-        const section = SOP_SECTIONS.find(s => s.id === id)
+        const section = dynamicSections.find(s => s.id === id)
         if (section) {
             setExpandedSections(new Set(section.subsections.map((_, i) => `${id}-${i}`)))
         }

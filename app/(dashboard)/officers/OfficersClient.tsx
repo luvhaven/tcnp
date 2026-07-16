@@ -120,8 +120,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     { value: 'head_victor_oscar', label: 'Head, Victor Oscar' },
     { value: 'victor_oscar', label: 'Victor Oscar (VO)' },
     { value: 'delta_oscar', label: 'Delta Oscar (DO)' },
-    { value: 'head_sierra_oscar', label: 'Head, Sierra Oscar' },
-    { value: 'sierra_oscar', label: 'Sierra Oscar (SO)' },
+    { value: 'head_serial_oscar', label: 'Head, Serial Oscar' },
+    { value: 'serial_oscar', label: 'Serial Oscar (SO)' },
     { value: 'head_compliance_oscar', label: 'Head, Compliance Oscar' },
     { value: 'compliance_oscar', label: 'Compliance Oscar (CO)' },
     { value: 'head_welfare_oscar', label: 'Head, Welfare Oscar' },
@@ -139,7 +139,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     { id: 'victor', label: 'Victor Oscar (VO)', roles: ['head_victor_oscar', 'victor_oscar'] },
     { id: 'november', label: 'November Oscar (NO)', roles: ['november_oscar', 'head_noscar_den', 'noscar_den', 'head_noscar_nest', 'noscar_nest'] },
     { id: 'delta', label: 'Delta Oscar (DO)', roles: ['delta_oscar'] },
-    { id: 'sierra', label: 'Sierra Oscar (SO)', roles: ['head_sierra_oscar', 'sierra_oscar'] },
+    { id: 'serial', label: 'Serial Oscar (SO)', roles: ['head_serial_oscar', 'serial_oscar'] },
     { id: 'compliance', label: 'Compliance Oscar (CO)', roles: ['head_compliance_oscar', 'compliance_oscar'] },
     { id: 'welfare', label: 'Welfare Oscar (WO)', roles: ['head_welfare_oscar', 'welfare_oscar'] },
     { id: 'hospitality', label: 'Hospitality Oscar (HO)', roles: ['head_hospitality_oscar', 'hospitality_oscar'] },
@@ -674,46 +674,19 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       </motion.div>
 
       {/* Stats */}
-      <motion.div layout className="grid gap-4 md:grid-cols-4">
-        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Officers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{officers.length}</div>
-          </CardContent>
-        </Card>
-        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Active</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {officers.filter((o: Officer) => o.is_active).length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Online</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {officers.filter((o: Officer) => o.is_online).length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">With Titles</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {officers.filter((o: Officer) => o.current_title_id).length}
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: 'Total Officers', value: officers.length, color: 'text-foreground', bg: 'bg-primary/8', ring: 'ring-primary/15' },
+          { label: 'Active', value: officers.filter((o: Officer) => o.is_active).length, color: 'text-[hsl(var(--success))]', bg: 'bg-[hsl(var(--success)/0.08)]', ring: 'ring-[hsl(var(--success)/0.2)]' },
+          { label: 'Online Now', value: officers.filter((o: Officer) => o.is_online).length, color: 'text-sky-500', bg: 'bg-sky-500/8', ring: 'ring-sky-500/15' },
+          { label: 'With Titles', value: officers.filter((o: Officer) => o.current_title_id).length, color: 'text-violet-500', bg: 'bg-violet-500/8', ring: 'ring-violet-500/15' },
+        ].map(({ label, value, color, bg, ring }) => (
+          <div key={label} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
+            <p className="text-xs font-medium text-muted-foreground">{label}</p>
+            <p className={`stat-figure mt-2 text-3xl font-bold ${color}`}>{value}</p>
+          </div>
+        ))}
+      </div>
 
       <Tabs defaultValue="directory" className="space-y-4">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
@@ -940,9 +913,9 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                         </TableCell>
                         <TableCell>
                           {officer.is_active ? (
-                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Active</Badge>
+                            <Badge variant="outline" className="bg-[hsl(var(--success)/0.1)] text-[hsl(var(--success))] border-[hsl(var(--success)/0.3)]">Active</Badge>
                           ) : (
-                            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Inactive</Badge>
+                            <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30">Inactive</Badge>
                           )}
                         </TableCell>
                         <TableCell>

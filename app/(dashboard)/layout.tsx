@@ -209,8 +209,8 @@ export default function DashboardLayout({
             <Header onOpenSidebar={() => setMobileSidebarOpen(true)} />
           </ErrorBoundary>
 
-          <main className="flex-1 overflow-y-auto bg-gradient-to-br from-orange-50 via-background to-slate-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-900 px-3 py-4 sm:px-4 sm:py-6">
-            <div className="mx-auto max-w-6xl space-y-6 animate-fade-in">
+          <main className="flex-1 overflow-y-auto bg-background px-3 py-4 sm:px-5 sm:py-6">
+            <div className="mx-auto max-w-6xl">
               <ErrorBoundary>
                 {children}
               </ErrorBoundary>

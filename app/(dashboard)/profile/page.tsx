@@ -53,7 +53,7 @@ const OSCAR_UNITS = [
   "Hospitality Oscar",
   "November Oscar (Den)",
   "November Oscar (Nest)",
-  "Sierra Oscar",
+  "Serial Oscar",
   "Tango Oscar",
   "Victor Oscar",
   "Welfare Oscar",
@@ -200,8 +200,8 @@ export default function ProfilePage() {
   return (
     <div className="space-y-6 page-enter">
       {/* Hero */}
-      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 p-6 text-white">
-        <div className="absolute -right-10 -top-16 h-56 w-56 rounded-full bg-primary/20 blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl border bg-card p-6">
+        <div className="absolute -right-10 -top-16 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative z-10 flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
             {/* Headshot with upload */}
@@ -213,7 +213,7 @@ export default function ProfilePage() {
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
-                className="absolute -bottom-1 -right-1 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white shadow-lg ring-2 ring-slate-900 transition-transform hover:scale-105 disabled:opacity-60"
+                className="absolute -bottom-1 -right-1 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-2 ring-background transition-all hover:brightness-110 disabled:opacity-60"
                 aria-label="Change headshot"
               >
                 {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
@@ -222,11 +222,11 @@ export default function ProfilePage() {
             </div>
             <div className="text-center sm:text-left">
               <h1 className="text-2xl font-bold tracking-tight">{currentUser.full_name || "Your Name"}</h1>
-              <p className="text-sm text-slate-300">{currentUser.email}</p>
+              <p className="text-sm text-muted-foreground">{currentUser.email}</p>
               <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
-                {currentUser.role && <Badge className="border-0 bg-primary/20 text-primary-foreground uppercase text-[10px] tracking-wide">{roleLabel}</Badge>}
-                {currentUser.oscar && <Badge variant="outline" className="border-white/20 text-white text-[10px]">{currentUser.oscar}</Badge>}
-                {currentUser.team && <Badge variant="outline" className="border-white/20 text-white text-[10px] uppercase">{currentUser.is_team_head ? "★ " : ""}{currentUser.team}</Badge>}
+                {currentUser.role && <Badge className="border-0 bg-primary/15 text-primary uppercase text-[10px] tracking-wide">{roleLabel}</Badge>}
+                {currentUser.oscar && <Badge variant="outline" className="text-[10px]">{currentUser.oscar}</Badge>}
+                {currentUser.team && <Badge variant="outline" className="text-[10px] uppercase">{currentUser.is_team_head ? '★ ' : ''}{currentUser.team}</Badge>}
               </div>
             </div>
           </div>
@@ -235,9 +235,9 @@ export default function ProfilePage() {
           <div className="flex flex-col items-center gap-1">
             <CompletionRing percent={completion.percent} />
             {completion.isComplete ? (
-              <span className="flex items-center gap-1 text-xs text-emerald-400"><CheckCircle2 className="h-3.5 w-3.5" /> Profile complete</span>
+              <span className="flex items-center gap-1 text-xs text-[hsl(var(--success))]"><CheckCircle2 className="h-3.5 w-3.5" /> Profile complete</span>
             ) : (
-              <span className="text-xs text-slate-400">{completion.missingRequired.length} required left</span>
+              <span className="text-xs text-muted-foreground">{completion.missingRequired.length} required left</span>
             )}
           </div>
         </div>
