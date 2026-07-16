@@ -247,8 +247,8 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
             "flex flex-col transition-all duration-300 overflow-hidden whitespace-nowrap",
             collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
           )}>
-            <span className="text-sm font-semibold">The Covenant Nation</span>
-            <span className="text-xs text-muted-foreground">Central Application</span>
+            <span className="text-sm font-semibold truncate leading-tight">The Covenant Nation Protocol</span>
+            <span className="text-xs text-muted-foreground truncate leading-tight">Central Application</span>
           </div>
         </Link>
         {!isMobile && !collapsed && (
