@@ -132,7 +132,7 @@ export default function DashboardLayout({
 
   return (
     <ErrorBoundary>
-      <div className="flex h-screen overflow-hidden">
+      <div className="flex h-dvh min-h-0 overflow-hidden">
         {/* Presence heartbeat - updates last_seen every 60s so officers show as online */}
         <PresenceHeartbeat />
 
@@ -165,8 +165,8 @@ export default function DashboardLayout({
           </ErrorBoundary>
         )}
 
-        {/* Desktop Sidebar */}
-        <div className="hidden h-full md:flex">
+        {/* Desktop Sidebar — only from lg (1024px) up so tablets keep the mobile drawer */}
+        <div className="hidden h-full min-h-0 lg:flex">
           <ErrorBoundary>
             <Suspense fallback={<div className="w-72 h-full bg-background animate-pulse" />}>
               <Sidebar />
@@ -174,10 +174,10 @@ export default function DashboardLayout({
           </ErrorBoundary>
         </div>
 
-        {/* Mobile Sidebar Overlay */}
+        {/* Mobile / tablet Sidebar Overlay (below lg) */}
         <AnimatePresence>
           {mobileSidebarOpen && (
-            <div className="fixed inset-0 z-40 flex md:hidden pointer-events-auto">
+            <div className="fixed inset-0 z-40 flex pointer-events-auto lg:hidden">
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -204,11 +204,13 @@ export default function DashboardLayout({
         </AnimatePresence>
 
         {/* Main Content Area */}
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <ErrorBoundary>
             <Header onOpenSidebar={() => setMobileSidebarOpen(true)} />
           </ErrorBoundary>
 
+          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain bg-gradient-to-br from-orange-50 via-background to-slate-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-900 px-3 py-4 sm:px-4 sm:py-6">
+            <div className="mx-auto max-w-6xl min-w-0 space-y-6 animate-fade-in">
           <main className="flex-1 overflow-y-auto bg-background px-3 py-4 sm:px-5 sm:py-6">
             <div className="mx-auto max-w-6xl">
               <ErrorBoundary>

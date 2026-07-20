@@ -188,7 +188,7 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
       <motion.div 
         initial={{ opacity: 0, y: -20 }} 
         animate={{ opacity: 1, y: 0 }} 
-        className="flex items-center justify-between"
+        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Papas</h1>
@@ -204,7 +204,7 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
 
       {/* Stats */}
       <motion.div layout className="grid gap-4 md:grid-cols-2">
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-primary/60 border-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:border-primary/60 border-2">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">Total Papas</CardTitle>
@@ -221,7 +221,7 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
             </p>
           </CardContent>
         </Card>
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-sky-500/60 border-2">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:border-sky-500/60 border-2">
           <div className="absolute inset-0 bg-gradient-to-br from-sky-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium">With Flights</CardTitle>
@@ -284,18 +284,18 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
                 {filteredPapas.map((papa) => (
                   <motion.div
                     layout
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0, scale: 0.95 }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.2 }}
                     key={papa.id}
-                    className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:-translate-y-0.5 hover:shadow-md hover:border-primary/30"
+                    className="flex min-w-0 flex-col gap-3 overflow-hidden rounded-lg border p-4 transition-all hover:bg-accent hover:shadow-md hover:border-primary/30 sm:flex-row sm:items-center sm:justify-between"
                   >
-                    <div className="flex-1">
-                      <p className="font-medium text-lg">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-lg">
                         {papa.title} {papa.full_name}
                       </p>
-                      <div className="flex items-center gap-3 mt-1">
+                      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-3">
                         <p className="text-sm text-muted-foreground">
                           {papa.nationality || 'Nationality not set'}
                         </p>
@@ -306,13 +306,13 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
                         )}
                       </div>
                       {papa.phone && (
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className="mt-1 truncate text-xs text-muted-foreground">
                           📞 {papa.phone}
                         </p>
                       )}
                     </div>
                     {canManage && (
-                      <div className="flex items-center space-x-2">
+                      <div className="flex shrink-0 items-center gap-2">
                         <Button variant="ghost" size="icon" onClick={() => handleEdit(papa)} className="hover:bg-primary/10">
                           <Edit className="h-4 w-4" />
                         </Button>

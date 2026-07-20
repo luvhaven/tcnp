@@ -142,16 +142,19 @@ export default function ProgramExport({ programId, programName, status }: Progra
       disabled={!canExport || exporting}
       variant={canExport ? 'default' : 'secondary'}
       size="sm"
+      className="shrink-0"
     >
       {exporting ? (
         <>
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Exporting...
+          <span className="hidden sm:inline">Exporting...</span>
+          <span className="sm:hidden">...</span>
         </>
       ) : (
         <>
-          <Download className="mr-2 h-4 w-4" />
-          Export Program
+          <Download className="h-4 w-4 sm:mr-2" />
+          <span className="hidden sm:inline">Export Program</span>
+          <span className="sm:hidden">Export</span>
         </>
       )}
     </Button>

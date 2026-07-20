@@ -120,17 +120,23 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
   )
 
   return (
-    <header className="app-header sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-background/80 backdrop-blur-md px-4 md:px-6 shadow-sm transition-all duration-200">
+    <header className="app-header sticky top-0 z-40 flex h-16 min-w-0 items-center justify-between gap-2 border-b bg-background/80 px-3 shadow-sm backdrop-blur-md transition-all duration-200 sm:px-4 md:px-6">
       {/* Left: hamburger + greeting */}
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex min-w-0 items-center gap-3">
         <button
           type="button"
           aria-label="Open navigation sidebar"
           onClick={onOpenSidebar}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full border bg-background text-foreground shadow-sm md:hidden flex-shrink-0"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border bg-background text-foreground shadow-sm lg:hidden"
         >
           <Menu className="h-5 w-5" aria-hidden="true" />
         </button>
+        <div className="flex min-w-0 flex-col">
+          <h1 className="max-w-[130px] truncate text-sm font-semibold tracking-tight sm:max-w-xs md:text-lg lg:max-w-none">
+            Welcome, {profile?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'User'}
+          </h1>
+          {profile?.role && (
+            <span className="inline-flex max-w-full items-center truncate rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary md:px-3 md:py-1 md:text-[11px]">
         <div className="flex flex-col min-w-0">
           <h1 className="text-sm font-semibold tracking-tight md:text-base truncate max-w-[130px] sm:max-w-xs md:max-w-none leading-tight">
             Welcome, {firstName}
@@ -144,6 +150,8 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
       </div>
 
       {/* Right: action cluster */}
+      <div className="flex shrink-0 items-center gap-1 md:gap-2">
+        {/* Install — adaptive (label on desktop, icon on mobile), hides when installed */}
       <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
         <InstallButton />
         <ThemeToggle />

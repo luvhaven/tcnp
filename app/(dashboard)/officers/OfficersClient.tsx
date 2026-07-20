@@ -660,13 +660,13 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between">
-        <div>
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-3xl font-bold tracking-tight">Officers</h1>
           <p className="text-sm text-muted-foreground max-w-xl">Directory and management of all Protocol Officers</p>
         </div>
         {canManageOfficers && (
-          <Button onClick={() => { setEditing(null); resetForm(); setDialogOpen(true) }} className="gap-2">
+          <Button onClick={() => { setEditing(null); resetForm(); setDialogOpen(true) }} className="shrink-0 gap-2 self-start sm:self-auto">
             <Plus className="h-4 w-4" />
             <span>Add Officer</span>
           </Button>
@@ -674,6 +674,46 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       </motion.div>
 
       {/* Stats */}
+      <motion.div layout className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Total Officers</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{officers.length}</div>
+          </CardContent>
+        </Card>
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Active</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">
+              {officers.filter((o: Officer) => o.is_active).length}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Online</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {officers.filter((o: Officer) => o.is_online).length}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">With Titles</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">
+              {officers.filter((o: Officer) => o.current_title_id).length}
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { label: 'Total Officers', value: officers.length, color: 'text-foreground', bg: 'bg-primary/8', ring: 'ring-primary/15' },
@@ -789,17 +829,17 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                       exit={{ opacity: 0, scale: 0.95 }}
                       transition={{ duration: 0.2 }}
                       key={officer.id}
-                      className="flex items-center space-x-3 rounded-lg border p-4 bg-card transition-all hover:bg-accent hover:border-primary/30 hover:shadow-sm"
+                      className="flex min-w-0 items-center gap-3 overflow-hidden rounded-lg border bg-card p-4 transition-all hover:bg-accent hover:border-primary/30 hover:shadow-sm"
                     >
-                      <Avatar>
+                      <Avatar className="shrink-0">
                         {officer.photo_url ? <AvatarImage src={officer.photo_url} /> : <AvatarFallback className={getRoleBadgeColor(officer.role)}>{getInitials(officer.full_name || officer.email)}</AvatarFallback>}
                       </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{officer.full_name || 'No name'}</p>
-                        <p className="text-xs text-muted-foreground truncate">{officer.email}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <div className="flex items-center gap-1 flex-wrap min-w-0">
-                            <Badge className={`text-[10px] uppercase tracking-wide ${getRoleBadgeColor(officer.role)}`}>
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <p className="truncate font-medium">{officer.full_name || 'No name'}</p>
+                        <p className="truncate text-xs text-muted-foreground">{officer.email}</p>
+                        <div className="mt-2 flex min-w-0 items-center justify-between gap-2">
+                          <div className="flex min-w-0 flex-wrap items-center gap-1">
+                            <Badge className={`max-w-full truncate text-[10px] uppercase tracking-wide ${getRoleBadgeColor(officer.role)}`}>
                               {roles.find(r => r.value === officer.role)?.label || officer.role}
                             </Badge>
                             {officer.team && (

@@ -257,18 +257,53 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
+        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
       >
-        <div>
+        <div className="min-w-0">
           <h1 className="text-3xl font-bold tracking-tight">Programs</h1>
           <p className="text-sm text-muted-foreground max-w-xl">Manage events and programs</p>
         </div>
-        <Button onClick={openDialog}>
+        <Button onClick={openDialog} className="shrink-0 self-start sm:self-auto">
           <Plus className="mr-2 h-4 w-4" />
           Add Program
         </Button>
       </motion.div>
 
+      {/* Stats with Framer Motion layout animations */}
+      <motion.div layout className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[
+          { status: 'planning', label: 'Planning', icon: Calendar, color: 'blue' },
+          { status: 'active', label: 'Active', icon: CheckCircle, color: 'green' },
+          { status: 'completed', label: 'Completed', icon: CheckCircle, color: 'purple' },
+          { status: 'archived', label: 'Archived', icon: Archive, color: 'gray' },
+        ].map((stat, i) => {
+          const Icon = stat.icon
+          return (
+            <motion.div
+              key={stat.status}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: i * 0.1 }}
+              className="min-w-0"
+            >
+              <Card className={`group relative min-w-0 overflow-hidden border-2 transition-all duration-500 hover:shadow-2xl hover:border-${stat.color}-500/60`}>
+                <div className={`absolute inset-0 bg-gradient-to-br from-${stat.color}-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500`} />
+                <CardHeader className="relative z-10 flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="truncate text-sm font-medium">{stat.label}</CardTitle>
+                  <div className={`shrink-0 rounded-full bg-${stat.color}-500/10 p-2 group-hover:bg-${stat.color}-500/20 transition-colors`}>
+                    <Icon className={`h-4 w-4 text-${stat.color}-500 group-hover:scale-110 transition-transform`} />
+                  </div>
+                </CardHeader>
+                <CardContent className="relative z-10">
+                  <div className={`text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-${stat.color}-500 group-hover:to-${stat.color}-600 transition-all duration-500`}>
+                    {programs.filter(p => p.status === stat.status).length}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )
+        })}
+      </motion.div>
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
@@ -317,29 +352,34 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                 {programs.map((program) => (
                   <motion.div
                     layout
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0, scale: 0.95 }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.2 }}
                     key={program.id}
-                    className="flex flex-col gap-3 rounded-lg border p-4 transition-all hover:bg-accent hover:-translate-y-0.5 hover:shadow-md hover:border-primary/30 lg:flex-row lg:items-center lg:justify-between"
+                    className="flex min-w-0 flex-col gap-3 overflow-hidden rounded-lg border p-4 transition-all hover:bg-accent hover:shadow-md hover:border-primary/30 sm:flex-row sm:items-start sm:justify-between"
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-3">
-                        <div className={`h-3 w-3 rounded-full ${getStatusColor(program.status)}`} />
-                        <div>
-                          <p className="font-medium text-lg">{program.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {program.theatres?.name || 'No venue'} • Starts {new Date(program.start_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <div className={`mt-1.5 h-3 w-3 shrink-0 rounded-full ${getStatusColor(program.status)}`} />
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-lg">{program.name}</p>
+                          <p className="text-sm text-muted-foreground break-words">
+                            {program.theatres?.name || 'No venue'}
+                            {' • '}
+                            Starts{' '}
+                            {program.start_date && !Number.isNaN(new Date(program.start_date).getTime())
+                              ? new Date(program.start_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                              : '—'}
                           </p>
                           {program.description && (
-                            <p className="text-xs text-muted-foreground mt-1">{program.description}</p>
+                            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{program.description}</p>
                           )}
                         </div>
                       </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="secondary">
+                    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 sm:justify-end">
+                      <Badge variant="secondary" className="shrink-0">
                         {getStatusLabel(program.status)}
                       </Badge>
 
