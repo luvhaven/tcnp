@@ -758,45 +758,6 @@ export default function JourneysClient({
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Journeys</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{journeys.length}</div>
-          </CardContent>
-        </Card>
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Active</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {journeys.filter(j => ['in_progress', 'first_course', 'chapman', 'dessert'].includes(j.status)).length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Completed</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {journeys.filter(j => j.status === 'completed').length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Incidents</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {journeys.filter(j => j.status === 'broken_arrow').length}
-            </div>
-          </CardContent>
-        </Card>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { label: 'Total Journeys', value: journeys.length, color: 'text-foreground', ring: 'ring-border' },

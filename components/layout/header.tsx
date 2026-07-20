@@ -131,12 +131,6 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
         >
           <Menu className="h-5 w-5" aria-hidden="true" />
         </button>
-        <div className="flex min-w-0 flex-col">
-          <h1 className="max-w-[130px] truncate text-sm font-semibold tracking-tight sm:max-w-xs md:text-lg lg:max-w-none">
-            Welcome, {profile?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'User'}
-          </h1>
-          {profile?.role && (
-            <span className="inline-flex max-w-full items-center truncate rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary md:px-3 md:py-1 md:text-[11px]">
         <div className="flex flex-col min-w-0">
           <h1 className="text-sm font-semibold tracking-tight md:text-base truncate max-w-[130px] sm:max-w-xs md:max-w-none leading-tight">
             Welcome, {firstName}
@@ -150,8 +144,6 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
       </div>
 
       {/* Right: action cluster */}
-      <div className="flex shrink-0 items-center gap-1 md:gap-2">
-        {/* Install — adaptive (label on desktop, icon on mobile), hides when installed */}
       <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
         <InstallButton />
         <ThemeToggle />

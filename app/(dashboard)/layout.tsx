@@ -211,15 +211,12 @@ export default function DashboardLayout({
 
           <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain bg-gradient-to-br from-orange-50 via-background to-slate-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-900 px-3 py-4 sm:px-4 sm:py-6">
             <div className="mx-auto max-w-6xl min-w-0 space-y-6 animate-fade-in">
-          <main className="flex-1 overflow-y-auto bg-background px-3 py-4 sm:px-5 sm:py-6">
-            <div className="mx-auto max-w-6xl">
               <ErrorBoundary>
                 {children}
               </ErrorBoundary>
             </div>
           </main>
         </div>
-
         {/* Floating UI safe on every platform (install prompt is how iOS users
             learn about Add to Home Screen; password enforcer is plain UI) */}
         {canMountTracker && (
