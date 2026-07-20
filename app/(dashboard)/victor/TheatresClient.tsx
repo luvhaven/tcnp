@@ -204,64 +204,18 @@ export default function TheatresClient({
       )}
 
       {/* Stats Cards */}
-      <motion.div layout className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:border-primary/60 border-2">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium">Total Venues</CardTitle>
-            <div className="p-2 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors">
-              <MapPin className="h-4 w-4 text-primary group-hover:scale-110 transition-transform" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-primary group-hover:to-primary/70 transition-all duration-500">
-              {theatres.length}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Registered locations
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:border-emerald-500/60 border-2">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium">Total Capacity</CardTitle>
-            <div className="p-2 rounded-full bg-emerald-500/10 group-hover:bg-emerald-500/20 transition-colors">
-              <Users className="h-4 w-4 text-emerald-500 group-hover:scale-110 transition-transform" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-emerald-500 group-hover:to-emerald-600 transition-all duration-500">
-              {theatres.reduce((sum, t) => sum + (t.capacity || 0), 0).toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Combined seating
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:border-purple-500/60 border-2">
-          <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium">Average Capacity</CardTitle>
-            <div className="p-2 rounded-full bg-purple-500/10 group-hover:bg-purple-500/20 transition-colors">
-              <MapPin className="h-4 w-4 text-purple-500 group-hover:scale-110 transition-transform" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-purple-500 group-hover:to-purple-600 transition-all duration-500">
-              {theatres.length > 0
-                ? Math.round(theatres.reduce((sum, t) => sum + (t.capacity || 0), 0) / theatres.length).toLocaleString()
-                : 0
-              }
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Per venue
-            </p>
-          </CardContent>
-        </Card>
-      </motion.div>
+      <div className="grid gap-4 md:grid-cols-3">
+        {[
+          { label: 'Total Venues', value: theatres.length, color: 'text-foreground', bg: 'bg-primary/8', ring: 'ring-border' },
+          { label: 'Total Capacity', value: theatres.reduce((sum, t) => sum + (t.capacity || 0), 0).toLocaleString(), color: 'text-[hsl(var(--success))]', bg: 'bg-[hsl(var(--success)/0.08)]', ring: 'ring-[hsl(var(--success)/0.2)]' },
+          { label: 'Average Capacity', value: theatres.length > 0 ? Math.round(theatres.reduce((sum, t) => sum + (t.capacity || 0), 0) / theatres.length).toLocaleString() : 0, color: 'text-purple-500', bg: 'bg-purple-500/10', ring: 'ring-purple-500/20' },
+        ].map(({ label, value, color, bg, ring }) => (
+          <div key={label} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
+            <p className="text-xs font-medium text-muted-foreground">{label}</p>
+            <p className={`stat-figure mt-2 text-3xl font-bold ${color}`}>{value}</p>
+          </div>
+        ))}
+      </div>
 
       <Tabs defaultValue="venues" className="space-y-4">
         <TabsList>

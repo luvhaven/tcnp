@@ -383,39 +383,18 @@ export default function EchoPage() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid gap-4 md:grid-cols-4">
-                <Card className="hover:shadow-md transition-shadow">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Total Equipment</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats.total}</div>
-                    </CardContent>
-                </Card>
-                <Card className="hover:shadow-md transition-shadow border-green-200 dark:border-green-800">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-green-600">Available</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-green-600">{stats.available}</div>
-                    </CardContent>
-                </Card>
-                <Card className="hover:shadow-md transition-shadow border-blue-200 dark:border-blue-800">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-blue-600">In Use</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-blue-600">{stats.inUse}</div>
-                    </CardContent>
-                </Card>
-                <Card className="hover:shadow-md transition-shadow border-orange-200 dark:border-orange-800">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-orange-600">Maintenance</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-orange-600">{stats.maintenance}</div>
-                    </CardContent>
-                </Card>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                    { label: 'Total Equipment', value: stats.total, color: 'text-foreground', ring: 'ring-border' },
+                    { label: 'Available', value: stats.available, color: 'text-[hsl(var(--success))]', ring: 'ring-[hsl(var(--success)/0.2)]' },
+                    { label: 'In Use', value: stats.inUse, color: 'text-blue-500', ring: 'ring-blue-500/20' },
+                    { label: 'Maintenance', value: stats.maintenance, color: 'text-orange-500', ring: 'ring-orange-500/20' },
+                ].map(({ label, value, color, ring }) => (
+                    <div key={label} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
+                        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+                        <p className={`stat-figure mt-2 text-3xl font-bold ${color}`}>{value}</p>
+                    </div>
+                ))}
             </div>
 
             {/* Filters */}
