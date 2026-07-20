@@ -84,34 +84,34 @@ export default function CommandPage() {
   return (
     <div className="space-y-6 page-enter">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 p-6 text-white dark:border-border">
-        <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-orange-500/20 blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl border bg-card p-6">
+        <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-orange-500/10 blur-3xl" />
         <div className="relative z-10 flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <Radar className="h-6 w-6 text-orange-400" />
+              <Radar className="h-6 w-6 text-orange-500" />
               <h1 className="text-2xl font-bold tracking-tight">Command Centre</h1>
             </div>
-            <p className="mt-1 max-w-xl text-sm text-slate-300">
+            <p className="mt-1 max-w-xl text-sm text-muted-foreground">
               Unified control of journeys, live tracking, operations monitoring and equipment readiness.
             </p>
           </div>
-          <ShieldCheck className="hidden h-10 w-10 text-orange-400/60 sm:block" />
+          <ShieldCheck className="hidden h-10 w-10 text-orange-500/40 sm:block" />
         </div>
 
         {/* Live stats strip */}
         <div className="relative z-10 mt-6 grid grid-cols-3 gap-3">
-          <div className="rounded-xl bg-white/5 px-4 py-3 backdrop-blur">
+          <div className="rounded-xl bg-muted/50 px-4 py-3">
             <p className="text-2xl font-bold"><CountUp value={stats.activeJourneys} /></p>
-            <p className="text-[11px] uppercase tracking-wider text-slate-400">Active Journeys</p>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Active Journeys</p>
           </div>
-          <div className="rounded-xl bg-white/5 px-4 py-3 backdrop-blur">
+          <div className="rounded-xl bg-muted/50 px-4 py-3">
             <p className="text-2xl font-bold"><CountUp value={stats.onlineOfficers} /></p>
-            <p className="text-[11px] uppercase tracking-wider text-slate-400">Officers Online</p>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Officers Online</p>
           </div>
-          <div className="rounded-xl bg-white/5 px-4 py-3 backdrop-blur">
+          <div className="rounded-xl bg-muted/50 px-4 py-3">
             <p className="text-2xl font-bold"><CountUp value={stats.openIncidents} /></p>
-            <p className="text-[11px] uppercase tracking-wider text-slate-400">Open Incidents</p>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Open Incidents</p>
           </div>
         </div>
       </div>

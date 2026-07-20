@@ -591,7 +591,7 @@ function JourneyOperationsPanel({
             </Badge>
             <div className="flex gap-2 items-center">
               {isLead && (
-                <Badge className="bg-yellow-400 text-yellow-900 text-xs">
+                <Badge className="bg-amber-400/20 text-amber-600 dark:text-amber-400 border-amber-400/30 border text-xs">
                   <Crown className="h-3 w-3 mr-1" />Team Lead
                 </Badge>
               )}
@@ -674,12 +674,12 @@ function JourneyOperationsPanel({
 
       {/* ── Shift Handoff Acknowledgment ── */}
       {isPendingAcknowledge && (
-        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-4 my-4 animate-in fade-in zoom-in duration-300">
+        <div className="bg-amber-500/8 border border-amber-500/25 rounded-xl p-4 my-4 animate-in fade-in zoom-in duration-300">
           <div className="flex items-start gap-3">
-            <Radio className="h-5 w-5 text-amber-600 dark:text-amber-500 mt-0.5 animate-pulse" />
+            <Radio className="h-5 w-5 text-amber-500 mt-0.5 animate-pulse" />
             <div className="flex-1">
-              <h4 className="font-semibold text-amber-900 dark:text-amber-400 text-sm">Shift Handoff Pending</h4>
-              <p className="text-xs text-amber-800 dark:text-amber-500/80 mt-1 mb-3">
+              <h4 className="font-semibold text-amber-600 dark:text-amber-400 text-sm">Shift Handoff Pending</h4>
+              <p className="text-xs text-muted-foreground mt-1 mb-3">
                 You have been assigned to this journey. Please acknowledge to assume operational responsibility.
               </p>
               <button
@@ -701,10 +701,10 @@ function JourneyOperationsPanel({
           onClick={handleStartJourney}
           disabled={starting}
           className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-xl
-            bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700
-            text-white font-bold text-base shadow-lg shadow-emerald-500/30
-            transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]
-            disabled:opacity-60 disabled:cursor-not-allowed disabled:scale-100"
+            bg-[hsl(var(--success))] hover:bg-[hsl(var(--success)/0.9)] text-white
+            font-bold text-base shadow-lg
+            transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl
+            disabled:opacity-60 disabled:cursor-not-allowed disabled:translate-y-0"
         >
           {starting ? (
             <><Loader2 className="h-5 w-5 animate-spin" /> Starting Journey…</>

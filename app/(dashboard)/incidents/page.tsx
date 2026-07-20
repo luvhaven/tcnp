@@ -449,18 +449,17 @@ export default function IncidentsPage() {
                 ) : (
                   incidents.map((incident) => {
                     const severityConfig = SEVERITY_CONFIG[incident.severity]
-                    const statusConfig   = STATUS_CONFIG[incident.status]
-                    const StatusIcon     = statusConfig.icon
-                    const isBrokenArrow  = incident.type === 'BROKEN ARROW'
+                    const statusConfig = STATUS_CONFIG[incident.status]
+                    const StatusIcon = statusConfig.icon
+                    const isBrokenArrow = incident.type === 'BROKEN ARROW'
 
                     return (
                       <tr
                         key={incident.id}
-                        className={`border-b cursor-pointer transition-colors ${
-                          isBrokenArrow
-                            ? 'bg-red-50/60 dark:bg-red-950/20 hover:bg-red-100/60 dark:hover:bg-red-950/30'
+                        className={`border-b cursor-pointer transition-colors ${isBrokenArrow
+                            ? 'bg-destructive/5 hover:bg-destructive/10'
                             : 'hover:bg-muted/50'
-                        }`}
+                          }`}
                         onClick={() => openDialog(incident)}
                       >
                         {/* Papa */}
@@ -535,9 +534,8 @@ export default function IncidentsPage() {
                         {/* Type / Severity */}
                         <td className="py-4 px-4">
                           <div className="flex flex-col gap-1">
-                            <span className={`font-semibold text-sm ${
-                              isBrokenArrow ? 'text-destructive' : ''
-                            }`}>
+                            <span className={`font-semibold text-sm ${isBrokenArrow ? 'text-destructive' : ''
+                              }`}>
                               {isBrokenArrow && '🚨 '}{incident.type}
                             </span>
                             <Badge className={`${severityConfig.color} text-white text-[10px] w-fit`}>

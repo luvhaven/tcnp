@@ -1,25 +1,18 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { JourneyAlerts } from "@/components/dashboard/JourneyAlerts"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn, isAdmin } from "@/lib/utils"
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/lib/constants/tncpCallSigns"
 import {
-  Users,
-  Car,
-  MapPin,
-  AlertTriangle,
-  TrendingUp,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Download,
+  Users, Car, MapPin, AlertTriangle, TrendingUp, Clock,
+  CheckCircle, Download, ChevronRight, ArrowRight, Radio,
+  MessageSquare, Zap, Shield,
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
@@ -30,29 +23,150 @@ import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { CountUp } from "@/components/ui/count-up"
 
+// ─── Lazy-loaded charts ────────────────────────────────────────────────────────
+
 const DashboardCharts = dynamic(
   () => import("@/components/dashboard/DashboardCharts").then((m) => m.DashboardCharts),
   {
     ssr: false,
     loading: () => (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <div className="h-56 rounded-xl skeleton" />
-        <div className="h-56 rounded-xl skeleton" />
-        <div className="h-56 rounded-xl skeleton" />
+        <div className="h-56 rounded-2xl skeleton" />
+        <div className="h-56 rounded-2xl skeleton" />
+        <div className="h-56 rounded-2xl skeleton" />
       </div>
-    )
+    ),
   }
 )
+
+// ─── Static data ──────────────────────────────────────────────────────────────
+
+const STAT_DEFINITIONS = [
+  {
+    key: "totalPapas",
+    label: "Total Papas",
+    sub: "Registered guests",
+    Icon: Users,
+    color: "text-violet-500",
+    bg: "bg-violet-500/10",
+    ring: "ring-violet-500/20",
+    glow: "from-violet-500/8",
+  },
+  {
+    key: "totalCheetahs",
+    label: "Fleet Size",
+    sub: "Active vehicles",
+    Icon: Car,
+    color: "text-emerald-500",
+    bg: "bg-emerald-500/10",
+    ring: "ring-emerald-500/20",
+    glow: "from-emerald-500/8",
+  },
+  {
+    key: "activeJourneys",
+    label: "Active Journeys",
+    sub: "In progress or planned",
+    Icon: MapPin,
+    color: "text-sky-500",
+    bg: "bg-sky-500/10",
+    ring: "ring-sky-500/20",
+    glow: "from-sky-500/8",
+  },
+  {
+    key: "incidents",
+    label: "Open Incidents",
+    sub: "Requires attention",
+    Icon: AlertTriangle,
+    color: "text-amber-500",
+    bg: "bg-amber-500/10",
+    ring: "ring-amber-500/20",
+    glow: "from-amber-500/8",
+  },
+] as const
+
+const ADMIN_ACTIONS = [
+  { href: "/journeys", label: "Create Journey", sub: "Plan a new Papa movement", Icon: MapPin, color: "text-violet-500", bg: "bg-violet-500/10" },
+  { href: "/papas", label: "Add Papa", sub: "Register a new guest", Icon: Users, color: "text-emerald-500", bg: "bg-emerald-500/10" },
+  { href: "/command", label: "Command Centre", sub: "Live ops & tracking", Icon: Radio, color: "text-sky-500", bg: "bg-sky-500/10" },
+]
+
+const OFFICER_ACTIONS = [
+  { href: "/my-operations", label: "My Operations", sub: "Your assignments & call-sign", Icon: Zap, color: "text-orange-500", bg: "bg-orange-500/10" },
+  { href: "/chat", label: "Team Chat", sub: "Program rooms & your channel", Icon: MessageSquare, color: "text-sky-500", bg: "bg-sky-500/10" },
+  { href: "/compliance", label: "Outfit of the Day", sub: "Today's dress code", Icon: Shield, color: "text-violet-500", bg: "bg-violet-500/10" },
+]
+
+const FALLBACK_STATUS_COLORS: Record<string, string> = {
+  planned: "bg-blue-500 text-white",
+  in_progress: "bg-yellow-500 text-white",
+  completed: "bg-green-500 text-white",
+  cancelled: "bg-red-500 text-white",
+  broken_arrow: "bg-red-600 text-white",
+}
+
+const FALLBACK_STATUS_LABELS: Record<string, string> = {
+  planned: "Planned",
+  in_progress: "In Progress",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  broken_arrow: "BROKEN ARROW",
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const toTitleCase = (v: string) =>
+  v.replace(/_/g, " ").replace(/\b[a-z]/g, (c) => c.toUpperCase())
+
+const getStatusColor = (status: string) => {
+  const key = resolveCallSignKey(status)
+  if (key && TNCP_CALL_SIGN_COLORS[key]) return TNCP_CALL_SIGN_COLORS[key]
+  return FALLBACK_STATUS_COLORS[status] || "bg-gray-500 text-white"
+}
+
+const getStatusIndicatorClass = (status: string) =>
+  getStatusColor(status).split(" ").find((c) => c.startsWith("bg-")) || "bg-gray-500"
+
+const getStatusLabel = (status: string) =>
+  getCallSignLabel(status) || FALLBACK_STATUS_LABELS[status] || toTitleCase(status)
+
+// ─── Loading skeleton ─────────────────────────────────────────────────────────
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6 page-enter">
+      <div className="space-y-1.5">
+        <div className="h-3.5 w-32 rounded skeleton" />
+        <div className="h-8 w-56 rounded skeleton" />
+        <div className="h-4 w-72 rounded skeleton" />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="rounded-2xl border bg-card p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="h-3.5 w-24 rounded skeleton" />
+              <div className="h-9 w-9 rounded-xl skeleton" />
+            </div>
+            <div className="h-9 w-14 rounded skeleton" />
+            <div className="h-3 w-28 rounded skeleton" />
+          </div>
+        ))}
+      </div>
+      <div className="rounded-2xl border bg-card p-5 space-y-3">
+        <div className="h-5 w-36 rounded skeleton" />
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="h-14 rounded-xl skeleton" />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const router = useRouter()
   const supabase = createClient()
-  const [stats, setStats] = useState({
-    totalPapas: 0,
-    totalCheetahs: 0,
-    activeJourneys: 0,
-    incidents: 0,
-  })
+  const [stats, setStats] = useState({ totalPapas: 0, totalCheetahs: 0, activeJourneys: 0, incidents: 0 })
   const [recentJourneys, setRecentJourneys] = useState<any[]>([])
   const [activeProgram, setActiveProgram] = useState<{ id: string; name: string } | null>(null)
   const [myAssignment, setMyAssignment] = useState<any | null>(null)
@@ -61,52 +175,27 @@ export default function DashboardPage() {
   const [showInstallModal, setShowInstallModal] = useState(false)
   const { data: currentUser } = useCurrentUser()
   const isAdminUser = isAdmin(currentUser?.role)
-
-  useEffect(() => {
-    let mounted = true
-
-    const safeLoad = async () => {
-      try {
-        if (mounted) {
-          await loadDashboardData()
-        }
-      } catch (error) {
-        console.error('Dashboard load failed:', error)
-      }
-    }
-
-    safeLoad()
-
-    return () => {
-      mounted = false
-    }
-  }, [])
+  const quickActions = isAdminUser ? ADMIN_ACTIONS : OFFICER_ACTIONS
 
   const handleInstallClick = async () => {
     const result = await install()
-    if (result === 'show-instructions') {
-      setShowInstallModal(true)
-    } else if (result === 'accepted') {
-      toast.success('TCNP is now installed. Check your home screen or app launcher.')
-    }
+    if (result === "show-instructions") setShowInstallModal(true)
+    else if (result === "accepted") toast.success("TCNP is now installed. Check your home screen.")
   }
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     try {
-      // Get stats - Querying simplfied status column + legacy call signs for safety until migration is 100%
       const [papasRes, cheetahsRes, journeysRes, incidentsRes, programRes] = await Promise.all([
-        supabase.from('papas').select('id', { count: 'exact', head: true }),
-        supabase.from('cheetahs').select('id', { count: 'exact', head: true }),
-        // Active = anything not finished, matching the Ops Monitor definition
-        (supabase as any).from('journeys').select('id', { count: 'exact', head: true })
-          .not('status', 'in', '(completed,cancelled)')
-          .or('is_deleted.is.null,is_deleted.eq.false'),
-        supabase.from('incidents').select('id', { count: 'exact', head: true }).eq('status', 'open'),
-        supabase.from('programs').select('id, name').eq('status', 'active').order('created_at', { ascending: false }).limit(1),
+        supabase.from("papas").select("id", { count: "exact", head: true }),
+        supabase.from("cheetahs").select("id", { count: "exact", head: true }),
+        (supabase as any).from("journeys").select("id", { count: "exact", head: true })
+          .not("status", "in", "(completed,cancelled)")
+          .or("is_deleted.is.null,is_deleted.eq.false"),
+        supabase.from("incidents").select("id", { count: "exact", head: true }).eq("status", "open"),
+        supabase.from("programs").select("id, name").eq("status", "active").order("created_at", { ascending: false }).limit(1),
       ])
 
       setActiveProgram((programRes.data?.[0] as any) ?? null)
-
       setStats({
         totalPapas: papasRes.count || 0,
         totalCheetahs: cheetahsRes.count || 0,
@@ -114,488 +203,281 @@ export default function DashboardPage() {
         incidents: incidentsRes.count || 0,
       })
 
-      // Get recent journeys (soft-deleted excluded)
       const { data: journeys } = await (supabase as any)
-        .from('journeys')
-        .select(`
-          *,
-          papas(full_name, title),
-          cheetahs(call_sign, registration_number)
-        `)
-        .or('is_deleted.is.null,is_deleted.eq.false')
-        .order('created_at', { ascending: false })
+        .from("journeys")
+        .select("*, papas(full_name, title), cheetahs(call_sign, registration_number)")
+        .or("is_deleted.is.null,is_deleted.eq.false")
+        .order("created_at", { ascending: false })
         .limit(5)
 
       setRecentJourneys(journeys || [])
 
-      // My next assignment — the journey I'm on as a DO, soonest first
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         const { data: myDORows } = await (supabase as any)
-          .from('journey_duty_officers')
-          .select('journey_id')
-          .eq('user_id', user.id)
+          .from("journey_duty_officers").select("journey_id").eq("user_id", user.id)
         const doIds: string[] = (myDORows || []).map((r: any) => r.journey_id)
-
         const orParts = [`assigned_duty_officer_id.eq.${user.id}`]
-        if (doIds.length > 0) orParts.push(`id.in.(${doIds.join(',')})`)
+        if (doIds.length > 0) orParts.push(`id.in.(${doIds.join(",")})`)
 
         const { data: mine } = await (supabase as any)
-          .from('journeys')
-          .select('id, status, origin, destination, scheduled_departure, etd, papas(full_name, title)')
-          .not('status', 'in', '(completed,cancelled)')
-          .or('is_deleted.is.null,is_deleted.eq.false')
-          .or(orParts.join(','))
-          .order('etd', { ascending: true, nullsFirst: false })
+          .from("journeys")
+          .select("id, status, origin, destination, scheduled_departure, etd, papas(full_name, title)")
+          .not("status", "in", "(completed,cancelled)")
+          .or("is_deleted.is.null,is_deleted.eq.false")
+          .or(orParts.join(","))
+          .order("etd", { ascending: true, nullsFirst: false })
           .limit(1)
 
         setMyAssignment(mine?.[0] ?? null)
       }
-    } catch (error) {
-      console.error('Error loading dashboard:', error)
+    } catch (err) {
+      console.error("Dashboard load failed:", err)
     } finally {
       setLoading(false)
     }
-  }
+  }, [supabase])
 
+  useEffect(() => {
+    void loadDashboardData()
+  }, [loadDashboardData])
 
-  const FALLBACK_STATUS_COLORS: Record<string, string> = {
-    planned: 'bg-blue-500 text-white',
-    in_progress: 'bg-yellow-500 text-white',
-    completed: 'bg-green-500 text-white',
-    cancelled: 'bg-red-500 text-white',
-    broken_arrow: 'bg-red-600 text-white',
-  }
+  if (loading) return <DashboardSkeleton />
 
-  const FALLBACK_STATUS_LABELS: Record<string, string> = {
-    planned: 'Planned',
-    in_progress: 'In Progress',
-    completed: 'Completed',
-    cancelled: 'Cancelled',
-    broken_arrow: 'BROKEN ARROW',
-  }
-
-  const toTitleCase = (value: string) =>
-    value
-      .replace(/_/g, ' ')
-      .replace(/\b[a-z]/g, (char) => char.toUpperCase())
-
-  const getStatusColor = (status: string) => {
-    const key = resolveCallSignKey(status)
-    if (key && TNCP_CALL_SIGN_COLORS[key]) {
-      return TNCP_CALL_SIGN_COLORS[key]
-    }
-
-    return FALLBACK_STATUS_COLORS[status] || 'bg-gray-500 text-white'
-  }
-
-  const getStatusIndicatorClass = (status: string) => {
-    const classes = getStatusColor(status)
-    return classes.split(' ').find((className) => className.startsWith('bg-')) || 'bg-gray-500'
-  }
-
-  const getStatusLabel = (status: string) =>
-    getCallSignLabel(status) || FALLBACK_STATUS_LABELS[status] || toTitleCase(status)
-
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        {/* Header Skeleton */}
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="h-8 w-32 rounded-md skeleton" />
-            <div className="mt-2 h-4 w-64 rounded-md skeleton" />
-          </div>
-        </div>
-
-        {/* Stats Cards Skeleton */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <div className="h-4 w-24 rounded-md skeleton" />
-                <div className="h-8 w-8 rounded-md skeleton" />
-              </CardHeader>
-              <CardContent>
-                <div className="h-8 w-16 rounded-md skeleton mb-1" />
-                <div className="h-3 w-32 rounded-md skeleton" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Charts Skeleton */}
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <div className="h-5 w-32 rounded-md skeleton" />
-              <div className="h-4 w-48 rounded-md skeleton mt-2" />
-            </CardHeader>
-            <CardContent>
-              <div className="h-[300px] rounded-md skeleton" />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <div className="h-5 w-32 rounded-md skeleton" />
-              <div className="h-4 w-48 rounded-md skeleton mt-2" />
-            </CardHeader>
-            <CardContent>
-              <div className="h-[300px] rounded-md skeleton" />
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Recent Journeys Skeleton */}
-        <Card>
-          <CardHeader>
-            <div className="h-5 w-32 rounded-md skeleton" />
-            <div className="h-4 w-48 rounded-md skeleton mt-2" />
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="flex items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-2 flex-1">
-                    <div className="h-5 w-48 rounded-md skeleton" />
-                    <div className="h-4 w-64 rounded-md skeleton" />
-                    <div className="h-3 w-32 rounded-md skeleton" />
-                  </div>
-                  <div className="h-8 w-20 rounded-md skeleton" />
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+  const firstName = currentUser?.full_name?.split(" ")[0]
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Page Header — contextual hero */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div className="space-y-6 page-enter">
+
+      {/* ── Page header ──────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-primary">
-            {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-primary">
+            {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
           </p>
-          <h1 className="text-3xl font-bold tracking-tight">
-            {currentUser?.full_name ? `Welcome back, ${currentUser.full_name.split(' ')[0]}` : 'Dashboard'}
+          <h1 className="mt-1 text-2xl font-bold tracking-tight">
+            {firstName ? `Welcome back, ${firstName}` : "Dashboard"}
           </h1>
-          <p className="text-sm text-muted-foreground max-w-xl">
-            {activeProgram
-              ? <>Active operation: <span className="font-semibold text-foreground">{activeProgram.name}</span></>
-              : 'No active program — all quiet on the protocol front.'}
+          <p className="mt-1 text-sm text-muted-foreground">
+            {activeProgram ? (
+              <>Active operation: <span className="font-semibold text-foreground">{activeProgram.name}</span></>
+            ) : (
+              "No active operation — all quiet on the protocol front."
+            )}
           </p>
         </div>
-        {/* Install App button — always visible, works on every device */}
+
         {!isInstalled ? (
-          <Button
-            onClick={handleInstallClick}
-            variant="outline"
-            size="sm"
-            className="gap-2 rounded-full shadow-sm"
-          >
-            <Download className="h-4 w-4" aria-hidden="true" />
+          <Button onClick={handleInstallClick} variant="outline" size="sm" className="gap-2 rounded-full self-start shrink-0">
+            <Download className="h-3.5 w-3.5" aria-hidden="true" />
             Install App
           </Button>
         ) : (
-          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-            <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground self-start shrink-0 pt-1">
+            <CheckCircle className="h-3.5 w-3.5 text-green-500" aria-hidden="true" />
             App Installed
           </span>
         )}
       </div>
 
-      {/* PWA install instructions modal */}
       {showInstallModal && (
         <PWAInstallModal platform={pwaplatform} onClose={() => setShowInstallModal(false)} />
       )}
 
-      {/* Open mission availability requests awaiting my response */}
+      {/* ── Mission prompt ────────────────────────────────────────────────── */}
       <MissionRequestPrompt currentUserId={currentUser?.id ?? null} />
 
-      {/* My active assignment — the DO's fastest route into the field */}
+      {/* ── My active assignment banner ──────────────────────────────────── */}
       {myAssignment && (
         <button
-          onClick={() => router.push('/my-operations')}
-          className="group w-full rounded-2xl border border-primary/40 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-4 text-left shadow-sm transition-all hover:border-primary/70 hover:shadow-md"
+          onClick={() => router.push("/my-operations")}
+          className="group w-full rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/8 via-primary/4 to-transparent p-4 text-left transition-all hover:border-primary/60 hover:from-primary/12 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          aria-label="Open My Operations"
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
-                <MapPin className="h-5 w-5" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary">
+                <MapPin className="h-5 w-5" aria-hidden="true" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wider text-primary">My Active Assignment</p>
-                <p className="truncate font-semibold">
-                  {myAssignment.papas?.title} {myAssignment.papas?.full_name ?? 'Papa'} — {myAssignment.origin} → {myAssignment.destination}
+                <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">My Active Assignment</p>
+                <p className="truncate font-semibold text-sm mt-0.5">
+                  {myAssignment.papas?.title} {myAssignment.papas?.full_name ?? "Papa"} — {myAssignment.origin} → {myAssignment.destination}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  <Badge className={`${getStatusColor(myAssignment.status)} mr-2 text-[10px] uppercase`}>{getStatusLabel(myAssignment.status)}</Badge>
-                  {myAssignment.etd ? `ETD ${new Date(myAssignment.etd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'No ETD set'}
-                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <Badge className={`${getStatusColor(myAssignment.status)} text-[10px] uppercase px-2 py-0`}>
+                    {getStatusLabel(myAssignment.status)}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {myAssignment.etd
+                      ? `ETD ${new Date(myAssignment.etd).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                      : "No ETD set"}
+                  </span>
+                </div>
               </div>
             </div>
-            <span className="flex shrink-0 items-center gap-1 text-sm font-medium text-primary">
+            <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary transition-gap group-hover:gap-1.5">
               Open My Operations
-              <TrendingUp className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
             </span>
           </div>
         </button>
       )}
 
-      {/* Active Alerts */}
+      {/* ── Live alerts ───────────────────────────────────────────────────── */}
       <JourneyAlerts />
 
-      {/* Stats Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-primary/60 border-2">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium">Total Papas</CardTitle>
-            <div className="p-2 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors">
-              <Users className="h-4 w-4 text-primary group-hover:scale-110 transition-transform" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="stat-figure text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-primary group-hover:to-primary/70 transition-all duration-500 animate-[countUp_0.8s_ease-out]">
-              <CountUp value={stats.totalPapas} />
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Registered guests
-            </p>
-          </CardContent>
-        </Card>
+      {/* ── Stat cards ────────────────────────────────────────────────────── */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {STAT_DEFINITIONS.map(({ key, label, sub, Icon, color, bg, ring, glow }, idx) => (
+          <div
+            key={key}
+            className={cn(
+              "relative overflow-hidden rounded-2xl border bg-card p-5",
+              "transition-all duration-200 hover:shadow-elevation-lg hover:-translate-y-0.5",
+              `ring-1 ${ring}`
+            )}
+            style={{ animationDelay: `${idx * 60}ms` }}
+          >
+            {/* Background glow (static, no JS) */}
+            <div className={`absolute inset-0 bg-gradient-to-br ${glow} to-transparent pointer-events-none`} aria-hidden="true" />
 
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-emerald-500/60 border-2">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium">Fleet Size</CardTitle>
-            <div className="p-2 rounded-full bg-emerald-500/10 group-hover:bg-emerald-500/20 transition-colors">
-              <Car className="h-4 w-4 text-emerald-500 group-hover:scale-110 transition-transform" />
+            <div className="relative flex items-start justify-between gap-2">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">{label}</p>
+                <p className={`stat-figure mt-2 text-3xl font-bold tracking-tight`}>
+                  <CountUp value={stats[key]} />
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">{sub}</p>
+              </div>
+              <div className={`shrink-0 rounded-xl ${bg} p-2.5`}>
+                <Icon className={`h-4.5 w-4.5 ${color}`} aria-hidden="true" />
+              </div>
             </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="stat-figure text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-emerald-500 group-hover:to-emerald-600 transition-all duration-500 animate-[countUp_0.8s_ease-out_0.1s_both]">
-              <CountUp value={stats.totalCheetahs} />
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Active vehicles
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-sky-500/60 border-2">
-          <div className="absolute inset-0 bg-gradient-to-br from-sky-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium">Active Journeys</CardTitle>
-            <div className="p-2 rounded-full bg-sky-500/10 group-hover:bg-sky-500/20 transition-colors">
-              <MapPin className="h-4 w-4 text-sky-500 group-hover:scale-110 transition-transform" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="stat-figure text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-sky-500 group-hover:to-sky-600 transition-all duration-500 animate-[countUp_0.8s_ease-out_0.2s_both]">
-              <CountUp value={stats.activeJourneys} />
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              In progress or planned
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:border-amber-500/60 border-2">
-          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium">Open Incidents</CardTitle>
-            <div className="p-2 rounded-full bg-amber-500/10 group-hover:bg-amber-500/20 transition-colors">
-              <AlertTriangle className="h-4 w-4 text-amber-500 group-hover:scale-110 transition-transform" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="stat-figure text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-amber-500 group-hover:to-amber-600 transition-all duration-500 animate-[countUp_0.8s_ease-out_0.3s_both]">
-              <CountUp value={stats.incidents} />
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Requires attention
-            </p>
-          </CardContent>
-        </Card>
+          </div>
+        ))}
       </div>
 
-      {/* Analytics Charts — enabled on every platform. Recharts renders plain SVG
-          and the component is already client-only (ssr:false), so the old iOS
-          hydration concern no longer applies. ErrorBoundary keeps iOS safe. */}
+      {/* ── Analytics Charts ──────────────────────────────────────────────── */}
       <ErrorBoundary>
         <DashboardCharts />
       </ErrorBoundary>
 
-      {/* Recent Journeys */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Journeys</CardTitle>
-          <CardDescription>Latest journey activities</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {recentJourneys.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <MapPin className="h-12 w-12 text-muted-foreground/50" />
-              <p className="mt-4 text-sm text-muted-foreground">No journeys yet</p>
-              <p className="text-xs text-muted-foreground">Create your first journey to get started</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {recentJourneys.map((journey) => {
-                // iOS Saftey: Parse Date safely
-                const createdDate = journey.created_at ? new Date(journey.created_at) : null;
-                const isValidDate = createdDate && !isNaN(createdDate.getTime());
+      {/* ── Recent Journeys ───────────────────────────────────────────────── */}
+      <div className="rounded-2xl border bg-card overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b">
+          <div>
+            <h2 className="text-sm font-semibold">Recent Journeys</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Latest journey activities</p>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => router.push("/journeys")}
+          >
+            View all <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+        </div>
 
-                return (
-                  <div
-                    key={journey.id}
-                    className="flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-accent hover:border-primary/30 hover:shadow-sm"
+        {recentJourneys.length === 0 ? (
+          <div className="empty-state py-12">
+            <MapPin className="h-10 w-10" aria-hidden="true" />
+            <p className="font-medium text-sm">No journeys yet</p>
+            <p className="text-xs text-muted-foreground">Create your first journey to see it here</p>
+            {isAdminUser && (
+              <Button variant="outline" size="sm" className="mt-4 gap-2" onClick={() => router.push("/journeys")}>
+                <ArrowRight className="h-3.5 w-3.5" /> Create Journey
+              </Button>
+            )}
+          </div>
+        ) : (
+          <ul className="divide-y divide-border/60">
+            {recentJourneys.map((journey) => {
+              const createdDate = journey.created_at ? new Date(journey.created_at) : null
+              const isValidDate = createdDate && !isNaN(createdDate.getTime())
+
+              return (
+                <li key={journey.id}>
+                  <button
+                    className="w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:bg-accent/50"
+                    onClick={() => router.push("/journeys")}
                   >
-                    <div className="flex items-center space-x-4">
-                      <div className={`h-2 w-2 rounded-full flex-shrink-0 ${getStatusIndicatorClass(journey.status)}`} />
-                      <div>
-                        <p className="font-medium">
-                          {journey.papas?.title} {journey.papas?.full_name}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {journey.cheetahs?.call_sign} • {journey.cheetahs?.registration_number}
-                        </p>
-                      </div>
+                    {/* Status dot */}
+                    <div
+                      className={`h-2.5 w-2.5 shrink-0 rounded-full ${getStatusIndicatorClass(journey.status)}`}
+                      aria-hidden="true"
+                    />
+
+                    {/* Main info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">
+                        {journey.papas?.title} {journey.papas?.full_name}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">
+                        {[journey.cheetahs?.call_sign, journey.cheetahs?.registration_number].filter(Boolean).join(" · ")}
+                      </p>
                     </div>
-                    <div className="flex items-center space-x-4">
+
+                    {/* Right side */}
+                    <div className="flex items-center gap-3 shrink-0">
                       <Badge
-                        variant={journey.status === 'broken_arrow' ? 'destructive' : 'secondary'}
-                        className="uppercase tracking-wide text-[11px] px-3 py-1"
+                        variant={journey.status === "broken_arrow" ? "destructive" : "secondary"}
+                        className="uppercase tracking-wide text-[10px] px-2 py-0 hidden sm:flex"
                       >
                         {getStatusLabel(journey.status)}
                       </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {isValidDate
-                          ? formatDistanceToNow(createdDate!, { addSuffix: true })
-                          : 'Just now'}
+                      <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                        {isValidDate ? formatDistanceToNow(createdDate!, { addSuffix: true }) : "Just now"}
                       </span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-primary"
-                        onClick={() => router.push('/journeys')}
-                        title="View in Journeys"
-                      >
-                        <TrendingUp className="h-4 w-4" />
-                      </Button>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground/40" aria-hidden="true" />
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
+
+      {/* ── Quick Actions ─────────────────────────────────────────────────── */}
+      <div>
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-3">Quick Actions</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {quickActions.map(({ href, label, sub, Icon, color, bg }) => (
+            <button
+              key={href}
+              onClick={() => router.push(href)}
+              className="group flex items-center gap-4 rounded-2xl border bg-card p-4 text-left transition-all duration-200 hover:shadow-elevation-md hover:-translate-y-0.5 hover:border-border/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            >
+              <div className={`shrink-0 rounded-xl ${bg} p-2.5 transition-transform group-hover:scale-110`}>
+                <Icon className={`h-4 w-4 ${color}`} aria-hidden="true" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm">{label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">{sub}</p>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground/30 transition-transform group-hover:translate-x-0.5 shrink-0" aria-hidden="true" />
+            </button>
+          ))}
+
+          {/* PWA install quick action */}
+          {!isInstalled && (
+            <button
+              onClick={handleInstallClick}
+              className="group flex items-center gap-4 rounded-2xl border border-dashed border-border bg-card/50 p-4 text-left transition-all duration-200 hover:bg-card hover:shadow-elevation-sm hover:border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            >
+              <div className="shrink-0 rounded-xl bg-primary/10 p-2.5 transition-transform group-hover:scale-110">
+                <Download className="h-4 w-4 text-primary" aria-hidden="true" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm">Install App</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Faster access on this device</p>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground/30 transition-transform group-hover:translate-x-0.5 shrink-0" aria-hidden="true" />
+            </button>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Quick Actions — role-aware: admins get creation flows, officers get field tools */}
-      <div className="grid gap-6 md:grid-cols-3">
-        {isAdminUser ? (
-          <>
-            <Card
-              className="cursor-pointer transition-all hover:bg-accent hover:shadow-lg hover:-translate-y-0.5"
-              onClick={() => router.push('/journeys')}
-            >
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <MapPin className="h-5 w-5" />
-                  <span>Create Journey</span>
-                </CardTitle>
-                <CardDescription>Plan a new journey for a Papa</CardDescription>
-              </CardHeader>
-            </Card>
-
-            <Card
-              className="cursor-pointer transition-all hover:bg-accent hover:shadow-lg hover:-translate-y-0.5"
-              onClick={() => router.push('/papas')}
-            >
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Users className="h-5 w-5" />
-                  <span>Add Papa</span>
-                </CardTitle>
-                <CardDescription>Register a new guest</CardDescription>
-              </CardHeader>
-            </Card>
-
-            <Card
-              className="cursor-pointer transition-all hover:bg-accent hover:shadow-lg hover:-translate-y-0.5"
-              onClick={() => router.push('/command')}
-            >
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <TrendingUp className="h-5 w-5" />
-                  <span>Command Centre</span>
-                </CardTitle>
-                <CardDescription>Journeys, live tracking and ops monitoring</CardDescription>
-              </CardHeader>
-            </Card>
-          </>
-        ) : (
-          <>
-            <Card
-              className="cursor-pointer transition-all hover:bg-accent hover:shadow-lg hover:-translate-y-0.5"
-              onClick={() => router.push('/my-operations')}
-            >
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <MapPin className="h-5 w-5" />
-                  <span>My Operations</span>
-                </CardTitle>
-                <CardDescription>Your assignments and call-sign controls</CardDescription>
-              </CardHeader>
-            </Card>
-
-            <Card
-              className="cursor-pointer transition-all hover:bg-accent hover:shadow-lg hover:-translate-y-0.5"
-              onClick={() => router.push('/chat')}
-            >
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Users className="h-5 w-5" />
-                  <span>Team Chat</span>
-                </CardTitle>
-                <CardDescription>Program rooms and your team channel</CardDescription>
-              </CardHeader>
-            </Card>
-
-            <Card
-              className="cursor-pointer transition-all hover:bg-accent hover:shadow-lg hover:-translate-y-0.5"
-              onClick={() => router.push('/compliance')}
-            >
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Car className="h-5 w-5" />
-                  <span>Outfit of the Day</span>
-                </CardTitle>
-                <CardDescription>Today&apos;s dress code and grooming standard</CardDescription>
-              </CardHeader>
-            </Card>
-          </>
-        )}
-
-        {!isInstalled && (
-          <Card
-            className="cursor-pointer transition-all hover:bg-accent hover:shadow-lg hover:-translate-y-0.5"
-            onClick={handleInstallClick}
-          >
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Download className="h-5 w-5 text-primary" />
-                <span>Download App</span>
-              </CardTitle>
-              <CardDescription>Install TCNP Journey on this device for faster access</CardDescription>
-            </CardHeader>
-          </Card>
-        )}
+        </div>
       </div>
     </div>
   )

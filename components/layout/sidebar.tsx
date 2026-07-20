@@ -68,7 +68,7 @@ const NAV_SECTIONS: NavSection[] = [
       { name: "Victor", href: "/victor", icon: Landmark },
       { name: "November (Nest)", href: "/nests", icon: Hotel },
       { name: "November (Den)", href: "/den", icon: Home },
-      { name: "Sierra", href: "/sierra", icon: Camera },
+      { name: "Serial", href: "/serial", icon: Camera },
       { name: "Compliance", href: "/compliance", icon: Shirt },
       { name: "Welfare", href: "/welfare", icon: UtensilsCrossed },
       { name: "Hospitality", href: "/hospitality", icon: Compass },
@@ -138,8 +138,8 @@ const ROLE_EXTRA: Record<string, string[]> = {
   noscar_den: ["/den"],
   head_noscar_nest: ["/nests"],
   noscar_nest: ["/nests"],
-  sierra_oscar: ["/sierra"],
-  head_sierra_oscar: ["/sierra"],
+  serial_oscar: ["/serial"],
+  head_serial_oscar: ["/serial"],
   compliance_oscar: ["/compliance"],
   head_compliance_oscar: ["/compliance"],
   welfare_oscar: ["/welfare"],
@@ -247,8 +247,8 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
             "flex flex-col transition-all duration-300 overflow-hidden whitespace-nowrap",
             collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
           )}>
-            <span className="text-sm font-semibold">The Covenant Nation</span>
-            <span className="text-xs text-muted-foreground">Journey Management</span>
+            <span className="text-sm font-semibold truncate leading-tight">The Covenant Nation Protocol</span>
+            <span className="text-xs text-muted-foreground truncate leading-tight">Central Application</span>
           </div>
         </Link>
         {!isMobile && !collapsed && (
@@ -281,67 +281,67 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
             )}
             <div className="space-y-1">
               {section.items.map((item, index) => {
-          const isActive = pathname === item.href
-          const isChat = item.name === "Team Chat"
-          const isOps = item.name === "My Operations"
-          return (
-            <motion.div
-              key={item.href}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: (sectionIndex * 2 + index) * 0.03, duration: 0.2, ease: "easeOut" }}
-            >
-              <Link
-                href={item.href}
-                onClick={isMobile ? onClose : undefined}
-                className={cn(
-                  "relative flex items-center justify-start px-3 py-2 text-sm font-medium rounded-r-lg rounded-l-none gap-3 mr-1 transition-colors duration-150 border-l-[3px] border-transparent",
-                  isActive
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
-                )}
-                title={collapsed ? item.name : undefined}
-              >
-                {/* Active pill glides between items via shared layout animation */}
-                {isActive && (
-                  <motion.span
-                    layoutId={isMobile ? "sidebar-active-mobile" : "sidebar-active"}
-                    className="absolute inset-0 -left-[3px] rounded-r-lg border-l-[3px] border-primary bg-primary/10 shadow-sm"
-                    transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                    aria-hidden
-                  />
-                )}
-                <div className="relative z-10 flex-shrink-0">
-                  <item.icon className="h-5 w-5" />
-                  {/* Collapsed badge dots */}
-                  {isChat && unreadChat > 0 && collapsed && (
-                    <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                  )}
-                  {isOps && unreadAssignments > 0 && collapsed && (
-                    <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
-                  )}
-                </div>
-                <span className={cn(
-                  "relative z-10 flex items-center justify-between w-full transition-all duration-300 overflow-hidden whitespace-nowrap",
-                  collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
-                )}>
-                  <span>{item.name}</span>
-                  <span className="flex gap-1 ml-auto">
-                    {isChat && unreadChat > 0 && !collapsed && (
-                      <Badge variant="destructive" className="bg-red-500 text-white font-semibold animate-pulse shadow-lg">
-                        {unreadChat > 99 ? '99+' : unreadChat}
-                      </Badge>
-                    )}
-                    {isOps && unreadAssignments > 0 && !collapsed && (
-                      <Badge className="bg-orange-500 text-white font-semibold animate-pulse shadow-lg">
-                        {unreadAssignments > 9 ? '9+' : unreadAssignments}
-                      </Badge>
-                    )}
-                  </span>
-                </span>
-              </Link>
-            </motion.div>
-          )
+                const isActive = pathname === item.href
+                const isChat = item.name === "Team Chat"
+                const isOps = item.name === "My Operations"
+                return (
+                  <motion.div
+                    key={item.href}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: (sectionIndex * 2 + index) * 0.03, duration: 0.2, ease: "easeOut" }}
+                  >
+                    <Link
+                      href={item.href}
+                      onClick={isMobile ? onClose : undefined}
+                      className={cn(
+                        "relative flex items-center justify-start px-3 py-2 text-sm font-medium rounded-r-xl rounded-l-none gap-3 transition-colors duration-150",
+                        isActive
+                          ? "text-primary"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                      )}
+                      title={collapsed ? item.name : undefined}
+                    >
+                      {/* Active pill glides between items via shared layout animation */}
+                      {isActive && (
+                        <motion.span
+                          layoutId={isMobile ? "sidebar-active-mobile" : "sidebar-active"}
+                          className="absolute inset-0 rounded-r-xl rounded-l-none border-l-4 border-primary bg-primary/10"
+                          transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                          aria-hidden
+                        />
+                      )}
+                      <div className="relative z-10 flex-shrink-0">
+                        <item.icon className="h-5 w-5" />
+                        {/* Collapsed badge dots */}
+                        {isChat && unreadChat > 0 && collapsed && (
+                          <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                        )}
+                        {isOps && unreadAssignments > 0 && collapsed && (
+                          <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+                        )}
+                      </div>
+                      <span className={cn(
+                        "relative z-10 flex items-center justify-between w-full transition-all duration-300 overflow-hidden whitespace-nowrap",
+                        collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
+                      )}>
+                        <span>{item.name}</span>
+                        <span className="flex gap-1 ml-auto">
+                          {isChat && unreadChat > 0 && !collapsed && (
+                            <Badge variant="destructive" className="bg-red-500 text-white font-semibold text-[10px] h-4 px-1.5 min-w-[1rem]">
+                              {unreadChat > 99 ? '99+' : unreadChat}
+                            </Badge>
+                          )}
+                          {isOps && unreadAssignments > 0 && !collapsed && (
+                            <Badge className="bg-orange-500 text-white font-semibold text-[10px] h-4 px-1.5 min-w-[1rem]">
+                              {unreadAssignments > 9 ? '9+' : unreadAssignments}
+                            </Badge>
+                          )}
+                        </span>
+                      </span>
+                    </Link>
+                  </motion.div>
+                )
               })}
             </div>
           </div>
@@ -350,10 +350,10 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
 
       {/* Footer */}
       {!collapsed && (
-        <div className="mt-auto border-t border-border/50 bg-background/50 p-4 backdrop-blur-sm">
-          <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-            <span>Version 1.0.1</span>
-            <span>&copy; {new Date().getFullYear()} TCNP</span>
+        <div className="mt-auto border-t border-border/50 p-4">
+          <div className="flex flex-col gap-0.5 text-[11px] text-muted-foreground/60">
+            <span className="font-medium text-muted-foreground/80">TCNP Platform</span>
+            <span>v1.0.1 · Central Application</span>
           </div>
         </div>
       )}

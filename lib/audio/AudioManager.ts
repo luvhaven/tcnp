@@ -25,6 +25,10 @@ class AudioManager {
   private _alarmIntervalId: ReturnType<typeof setInterval> | null = null
   /** Used to signal the alarm cycle to stop if mute fires mid-burst */
   private _alarmGeneration = 0
+  /** Live oscillator/gain nodes for the current alarm burst, so stopAlarm() can
+   *  silence tones that were already scheduled into the future (Web Audio can't
+   *  be un-scheduled by clearing the JS interval — the node must be stopped). */
+  private _alarmNodes: { osc: OscillatorNode; gain: GainNode }[] = []
 
   private constructor() {
     if (typeof window !== 'undefined') {
@@ -194,13 +198,42 @@ class AudioManager {
 
   // ------------------------------------------------------------------ emergency alarm
 
+  /** Schedule one alarm tone AND keep a handle to it so stopAlarm() can kill it
+   *  even after it has been scheduled but before it has finished sounding. */
+  private scheduleAlarmTone(frequency: number, startOffset: number, duration: number): void {
+    if (this._muted) return
+    try {
+      const c = this.ctx
+      const osc = c.createOscillator()
+      const gain = c.createGain()
+      osc.type = 'sawtooth'
+      osc.frequency.value = frequency
+      const t = c.currentTime + startOffset
+      gain.gain.setValueAtTime(0, t)
+      gain.gain.linearRampToValueAtTime(0.4, t + 0.012)
+      gain.gain.exponentialRampToValueAtTime(0.001, t + duration)
+      osc.connect(gain)
+      gain.connect(c.destination)
+      osc.start(t)
+      osc.stop(t + duration + 0.05)
+      const node = { osc, gain }
+      this._alarmNodes.push(node)
+      // Auto-forget once it has finished so the list doesn't grow unbounded
+      osc.onended = () => {
+        this._alarmNodes = this._alarmNodes.filter(n => n !== node)
+      }
+    } catch {
+      // Audio unavailable (iOS low-power, no user gesture, etc.)
+    }
+  }
+
   private _playAlarmBurst(): void {
     if (this._muted) return
     // Sawtooth pattern identical to the previous BrokenArrowAlert.tsx
-    this.scheduleTone(880, 0.00, 0.28, 'sawtooth', 0.4)
-    this.scheduleTone(660, 0.35, 0.28, 'sawtooth', 0.4)
-    this.scheduleTone(880, 0.70, 0.28, 'sawtooth', 0.4)
-    this.scheduleTone(660, 1.05, 0.28, 'sawtooth', 0.4)
+    this.scheduleAlarmTone(880, 0.00, 0.28)
+    this.scheduleAlarmTone(660, 0.35, 0.28)
+    this.scheduleAlarmTone(880, 0.70, 0.28)
+    this.scheduleAlarmTone(660, 1.05, 0.28)
   }
 
   /** Start repeating alarm loop. Call stopAlarm() to halt. */
@@ -221,6 +254,19 @@ class AudioManager {
       this._alarmIntervalId = null
     }
     this._alarmGeneration++
+    // Silence any tones that were already scheduled into the future — clearing
+    // the interval alone leaves the last burst (up to ~1.4s of audio) playing.
+    const now = this._ctx ? this._ctx.currentTime : 0
+    for (const { osc, gain } of this._alarmNodes) {
+      try {
+        gain.gain.cancelScheduledValues(now)
+        gain.gain.setValueAtTime(0, now)
+        osc.stop(now)
+      } catch {
+        // Node may have already ended
+      }
+    }
+    this._alarmNodes = []
   }
 
   get isAlarmActive(): boolean {

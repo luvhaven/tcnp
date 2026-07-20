@@ -69,7 +69,7 @@ hatch**.
 
 | Content | Owner | Page |
 |---|---|---|
-| Social media assets | Sierra Oscar | `/sierra` |
+| Social media assets | Serial Oscar | `/sierra` |
 | Outfits & grooming | Compliance Oscar | `/compliance` |
 | Menus / menu of the day | Welfare + November (Den) | `/welfare`, `/den` |
 | Papa accommodations | November (Nest) | `/nests` (DOs see only their Papa's) |

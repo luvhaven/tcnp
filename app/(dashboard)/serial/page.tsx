@@ -64,10 +64,10 @@ function statusMeta(status: string) {
 }
 
 function publicUrl(path: string) {
-  return supabase.storage.from("sierra-media").getPublicUrl(path).data.publicUrl
+  return supabase.storage.from("serial-media").getPublicUrl(path).data.publicUrl
 }
 
-export default function SierraPage() {
+export default function SerialPage() {
   const { data: currentUser, isLoading: userLoading } = useCurrentUser()
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -100,7 +100,7 @@ export default function SierraPage() {
   })
 
   const { data: assets = [], isLoading } = useQuery({
-    queryKey: ["sierra-media"],
+    queryKey: ["serial-media"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("media_assets")
@@ -139,7 +139,7 @@ export default function SierraPage() {
         const isVideo = file.type.startsWith("video/")
         const ext = file.name.split(".").pop() || (isVideo ? "mp4" : "jpg")
         const path = `${form.program_id || "untagged"}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
-        const { error: upErr } = await supabase.storage.from("sierra-media").upload(path, file, { contentType: file.type })
+        const { error: upErr } = await supabase.storage.from("serial-media").upload(path, file, { contentType: file.type })
         if (upErr) throw upErr
         const { error: insErr } = await supabase.from("media_assets").insert({
           program_id: form.program_id || null,
@@ -156,7 +156,7 @@ export default function SierraPage() {
       toast.success(`${ok} asset${ok > 1 ? "s" : ""} uploaded`)
       setUploadOpen(false)
       setForm({ title: "", caption: "", category: "arrival", program_id: "", files: [] })
-      queryClient.invalidateQueries({ queryKey: ["sierra-media"] })
+      queryClient.invalidateQueries({ queryKey: ["serial-media"] })
     } catch (err: any) {
       toast.error(err.message || "Upload failed")
     } finally {
@@ -175,19 +175,19 @@ export default function SierraPage() {
       const { error } = await supabase.from("media_assets").update(updates).eq("id", id)
       if (error) throw error
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["sierra-media"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["serial-media"] }),
     onError: (err: any) => toast.error(err.message || "Update failed"),
   })
 
   const deleteMutation = useMutation({
     mutationFn: async (asset: MediaAsset) => {
-      await supabase.storage.from("sierra-media").remove([asset.storage_path])
+      await supabase.storage.from("serial-media").remove([asset.storage_path])
       const { error } = await supabase.from("media_assets").delete().eq("id", asset.id)
       if (error) throw error
     },
     onSuccess: () => {
       toast.success("Asset deleted")
-      queryClient.invalidateQueries({ queryKey: ["sierra-media"] })
+      queryClient.invalidateQueries({ queryKey: ["serial-media"] })
     },
     onError: (err: any) => toast.error(err.message || "Delete failed"),
   })
@@ -200,9 +200,9 @@ export default function SierraPage() {
     return (
       <div className="empty-state">
         <Lock className="h-12 w-12" />
-        <h2 className="text-lg font-semibold">Sierra — Restricted</h2>
+        <h2 className="text-lg font-semibold">Serial — Restricted</h2>
         <p className="max-w-sm text-sm text-muted-foreground">
-          The Sierra media room is limited to the Sierra unit, Command, Captains and Admins.
+          The Serial media room is limited to the Serial unit, Command, Captains and Admins.
         </p>
       </div>
     )
@@ -217,7 +217,7 @@ export default function SierraPage() {
           <div>
             <div className="flex items-center gap-2">
               <Camera className="h-6 w-6 text-fuchsia-300" />
-              <h1 className="text-2xl font-bold tracking-tight">Sierra</h1>
+              <h1 className="text-2xl font-bold tracking-tight">Serial</h1>
               <Badge className="bg-fuchsia-500/20 text-fuchsia-200 border-0 uppercase text-[10px] tracking-wider">Social Media Unit</Badge>
             </div>
             <p className="mt-1 max-w-xl text-sm text-slate-300">
@@ -300,7 +300,7 @@ export default function SierraPage() {
                         <video src={publicUrl(asset.storage_path)} className="h-full w-full object-cover" controls preload="metadata" />
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={publicUrl(asset.storage_path)} alt={asset.title ?? "Sierra media"} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" loading="lazy" />
+                        <img src={publicUrl(asset.storage_path)} alt={asset.title ?? "Serial media"} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" loading="lazy" />
                       )}
                       <div className="absolute left-2 top-2 flex gap-1">
                         <Badge className={cn("border-0 text-[10px] uppercase tracking-wide", meta.color)}>{meta.label}</Badge>

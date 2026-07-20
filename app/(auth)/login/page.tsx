@@ -1,93 +1,184 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Loader2, ChevronDown } from "lucide-react";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const QUOTES = [
+  "Excellence is not an act, but a habit.",
+  "Precision in every detail, power in every action.",
+  "Protocol is the invisible architecture of power.",
+  "Command the room, secure the objective.",
+  "The standard is perfection. We accept nothing less.",
+];
+
+const OSCAR_OPTIONS = [
+  { value: "Command", label: "Command", sub: "HQ & Leadership" },
+  { value: "Alpha Oscar", label: "Alpha Oscar", sub: "Eagle Square" },
+  { value: "Compliance Oscar", label: "Compliance Oscar", sub: "Grooming & Dress Code" },
+  { value: "Hospitality Oscar", label: "Hospitality Oscar", sub: "Papa Experiences" },
+  { value: "November Oscar (Den)", label: "November Oscar (Den)", sub: "Lounge & Menus" },
+  { value: "November Oscar (Nest)", label: "November Oscar (Nest)", sub: "Hotels & Accommodation" },
+  { value: "Serial Oscar", label: "Serial Oscar", sub: "Social Media" },
+  { value: "Tango Oscar", label: "Tango Oscar", sub: "Transport" },
+  { value: "Victor Oscar", label: "Victor Oscar", sub: "Theatre" },
+  { value: "Welfare Oscar", label: "Welfare Oscar", sub: "Meals & Welfare" },
+];
+
+const TEAM_OPTIONS = [
+  { value: "strength", label: "Team Strength" },
+  { value: "wisdom", label: "Team Wisdom" },
+  { value: "swift", label: "Team Swift" },
+];
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function FieldLabel({ htmlFor, children }: { htmlFor: string; children: React.ReactNode }) {
+  return (
+    <label
+      htmlFor={htmlFor}
+      className="block text-[10px] font-semibold text-gray-400 mb-1.5 uppercase tracking-[0.15em]"
+    >
+      {children}
+    </label>
+  );
+}
+
+const INPUT_CLS =
+  "w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-600 text-sm " +
+  "focus:outline-none focus:ring-2 focus:ring-orange-500/60 focus:border-orange-500/40 focus:bg-white/8 " +
+  "transition-all duration-200 shadow-inner";
+
+function GlassInput({
+  id,
+  type = "text",
+  value,
+  onChange,
+  required,
+  placeholder,
+  autoComplete,
+  autoCapitalize,
+  autoCorrect,
+  spellCheck,
+  inputMode,
+  className = "",
+  children,
+}: {
+  id: string;
+  type?: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  required?: boolean;
+  placeholder?: string;
+  autoComplete?: string;
+  autoCapitalize?: string;
+  autoCorrect?: string;
+  spellCheck?: boolean;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  className?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <input
+        id={id}
+        type={type}
+        value={value}
+        onChange={onChange}
+        required={required}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        autoCapitalize={autoCapitalize}
+        autoCorrect={autoCorrect}
+        spellCheck={spellCheck}
+        inputMode={inputMode}
+        className={`${INPUT_CLS} ${className}`}
+      />
+      {children}
+    </div>
+  );
+}
+
+function GlassSelect({
+  id,
+  value,
+  onChange,
+  required,
+  children,
+}: {
+  id: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <select
+        id={id}
+        value={value}
+        onChange={onChange}
+        required={required}
+        className={`${INPUT_CLS} appearance-none pr-10 cursor-pointer`}
+        style={{ colorScheme: "dark" }}
+      >
+        {children}
+      </select>
+      <ChevronDown
+        className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none"
+        aria-hidden="true"
+      />
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [mode, setMode] = useState<"login" | "signup">("login");
+
+  // Signup fields
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
-  const [role, setRole] = useState("viewer");
+  const [role] = useState("viewer");
   const [oscar, setOscar] = useState("");
   const [team, setTeam] = useState("");
+
+  // Rotating quote — fixed stale-closure bug by using functional updater
   const [quoteIndex, setQuoteIndex] = useState(0);
-  const [isFading, setIsFading] = useState(false);
-  const [displayText, setDisplayText] = useState("Excellence is not an act, but a habit.");
+  const [quoteFading, setQuoteFading] = useState(false);
 
   const router = useRouter();
   const supabase = createClient();
 
-  const QUOTES = [
-    "Excellence is not an act, but a habit.",
-    "Precision in every detail, power in every action.",
-    "Protocol is the invisible architecture of power.",
-    "Command the room, secure the objective.",
-    "The standard is perfection. We accept nothing less."
-  ];
+  // Fixed: Using useCallback + functional setState to avoid stale closure
+  const advanceQuote = useCallback(() => {
+    setQuoteFading(true);
+    setTimeout(() => {
+      setQuoteIndex((i) => (i + 1) % QUOTES.length);
+      setQuoteFading(false);
+    }, 600);
+  }, []);
 
-  // Soft Morphing Engine
   useEffect(() => {
-    const interval = setInterval(() => {
-      setIsFading(true);
+    const id = setInterval(advanceQuote, 8000);
+    return () => clearInterval(id);
+  }, [advanceQuote]);
 
-      setTimeout(() => {
-        const nextIndex = (quoteIndex + 1) % QUOTES.length;
-        setDisplayText(QUOTES[nextIndex]);
-        setQuoteIndex(nextIndex);
-        setIsFading(false);
-      }, 800); // 800ms fade out, swap, then fade back in
-
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [quoteIndex]);
-
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password.length < 6) {
-      toast.error("Password must be at least 6 characters.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), password, full_name: fullName.trim(), phone: phone.trim() || undefined, role, oscar: oscar.trim() || undefined, team: team || undefined })
-      });
-
-      let data = {};
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        data = await res.json();
-      } else {
-        const text = await res.text();
-        console.error("Non-JSON API response:", text);
-        throw new Error(`Server returned ${res.status}: ${res.statusText}`);
-      }
-
-      if (!res.ok) throw new Error((data as any).error || "Failed to sign up");
-      toast.success("Clearance requested successfully. Waiting for Admin approval.");
-      setMode('login');
-      setPassword('');
-    } catch (err: any) {
-      toast.error(err.message || "An error occurred during sign up.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // ─── Handlers ───────────────────────────────────────────────────────────────
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     let loginSuccess = false;
 
     try {
@@ -99,52 +190,38 @@ export default function LoginPage() {
       if (error) throw error;
 
       if (data.user) {
-
-        // Enforce activation_status block via admin-secured server route (bypasses RLS)
-        // Explicitly pass access_token in the body to bypass iOS Safari ITP cookie race condition.
-        // On iOS, cookies are not committed before this fetch fires, causing the server to see no session.
-        const activationRes = await fetch('/api/auth/check-activation', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const activationRes = await fetch("/api/auth/check-activation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ access_token: data.session?.access_token ?? null }),
-        })
-        const activationData = await activationRes.json()
+        });
+        const activationData = await activationRes.json();
 
-        if (!activationRes.ok || activationData.status !== 'active') {
-          await supabase.auth.signOut()
+        if (!activationRes.ok || activationData.status !== "active") {
+          await supabase.auth.signOut();
           throw new Error(
-            activationData.status === 'pending'
+            activationData.status === "pending"
               ? "Your account is awaiting admin approval."
               : activationData.error || "Security Clearance Denied: Account is deactivated or restricted."
-          )
+          );
         }
 
         loginSuccess = true;
         toast.success("Login successful!");
+        await new Promise((resolve) => setTimeout(resolve, 200));
 
-        // Small delay for iOS to process
-        await new Promise(resolve => setTimeout(resolve, 200));
-
-        // Use window.location for iOS Safari compatibility
-        // This is more reliable than Next.js router on iOS
-        if (typeof window !== 'undefined') {
-          window.location.href = '/dashboard';
+        if (typeof window !== "undefined") {
+          window.location.href = "/dashboard";
         } else {
           router.replace("/dashboard");
         }
       }
-    } catch (error: any) {
-      // Only show error if login was not successful
+    } catch (err: any) {
       if (!loginSuccess) {
-        console.error("Login error:", error);
-
-        let message = "Failed to login";
-        if (error?.message === "Failed to fetch") {
-          message = "Unable to connect to server. Please check your internet connection.";
-        } else if (error?.message) {
-          message = error.message;
-        }
-
+        const message =
+          err?.message === "Failed to fetch"
+            ? "Unable to connect. Please check your connection."
+            : err?.message || "Failed to login";
         toast.error(message);
       }
     } finally {
@@ -152,192 +229,398 @@ export default function LoginPage() {
     }
   };
 
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password,
+          full_name: fullName.trim(),
+          phone: phone.trim() || undefined,
+          role,
+          oscar: oscar.trim() || undefined,
+          team: team || undefined,
+        }),
+      });
+
+      let data: any = {};
+      const ct = res.headers.get("content-type");
+      if (ct?.includes("application/json")) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(`Server returned ${res.status}: ${text}`);
+      }
+
+      if (!res.ok) throw new Error(data.error || "Failed to sign up");
+      toast.success("Clearance requested. Awaiting admin approval.");
+      setMode("login");
+      setPassword("");
+    } catch (err: any) {
+      toast.error(err.message || "An error occurred during sign up.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ─── Render ──────────────────────────────────────────────────────────────────
+
+  const switchToSignup = () => setMode("signup");
+  const switchToLogin = () => setMode("login");
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950 relative overflow-hidden selection:bg-orange-500/30">
 
-      {/* 1. Cinematic Wide Shot Background */}
-      <div className="absolute inset-0 z-0">
+      {/* Background Image — composited once, no JS animation */}
+      <div className="absolute inset-0 z-0" aria-hidden="true">
         <Image
           src="/tcnp_cinematic_bg.png"
-          alt="TCNP Protocol Operations"
+          alt=""
           fill
-          className="object-cover opacity-[0.45] mix-blend-luminosity brightness-[0.8] contrast-[1.2]"
+          className="object-cover opacity-40 brightness-75 contrast-110"
           priority
+          sizes="100vw"
         />
-        {/* Subtle slow pulsing vignette overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/40 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-gray-950/80 via-transparent to-gray-950/80" />
+        {/* Gradient overlays — static, GPU-composited */}
+        <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/50 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-gray-950/70 via-transparent to-gray-950/70" />
       </div>
 
-      {/* 2. Abstract Neon Aurora Gradients */}
-      <div className="absolute inset-0 z-0 pointer-events-none opacity-50 mix-blend-screen">
-        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-blue-600/30 blur-[130px] rounded-full animate-pulse" style={{ animationDuration: '8s' }} />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-orange-600/20 blur-[150px] rounded-full hidden md:block animate-pulse" style={{ animationDuration: '12s' }} />
-        <div className="absolute top-[30%] right-[10%] w-[30%] h-[30%] bg-purple-600/20 blur-[100px] rounded-full animate-pulse" style={{ animationDuration: '10s' }} />
+      {/* Ambient light blobs — will-change: transform for GPU isolation */}
+      <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden="true">
+        <div
+          className="absolute top-[-20%] left-[-10%] w-[50%] h-[60%] rounded-full opacity-30"
+          style={{
+            background: "radial-gradient(circle, rgba(37,99,235,0.35) 0%, transparent 70%)",
+            willChange: "transform",
+            animation: "floatBlob1 18s ease-in-out infinite alternate",
+          }}
+        />
+        <div
+          className="absolute bottom-[-15%] right-[-10%] w-[55%] h-[55%] rounded-full opacity-25"
+          style={{
+            background: "radial-gradient(circle, rgba(234,88,12,0.3) 0%, transparent 70%)",
+            willChange: "transform",
+            animation: "floatBlob2 22s ease-in-out infinite alternate",
+          }}
+        />
       </div>
 
-      {/* 3. The Login Card Container */}
-      <div className="w-full max-w-md relative z-10 px-6 sm:px-4 animate-slide-up">
-        <div className="bg-black/30 dark:bg-black/40 rounded-[2.5rem] shadow-[0_0_80px_rgba(0,0,0,0.8)] border border-white/10 p-8 md:p-10 backdrop-blur-2xl ring-1 ring-white/5 overflow-hidden transition-all duration-500">
+      {/* ── Main card ─────────────────────────────────────────────────────── */}
+      <div className="w-full max-w-[420px] relative z-10 px-5 sm:px-4">
+        <div
+          className="rounded-[2rem] border border-white/10 p-8 sm:p-10 overflow-hidden"
+          style={{
+            background: "rgba(0,0,0,0.4)",
+            backdropFilter: "blur(24px)",
+            WebkitBackdropFilter: "blur(24px)",
+            boxShadow: "0 0 0 1px rgba(255,255,255,0.05), 0 32px 80px rgba(0,0,0,0.7), 0 8px 24px rgba(0,0,0,0.5)",
+            animation: "cardEnter 0.5s cubic-bezier(0.16,1,0.3,1) both",
+          }}
+        >
+          {/* Card inner glow */}
+          <div
+            className="absolute -top-32 -left-32 w-80 h-80 rounded-full pointer-events-none"
+            style={{ background: "radial-gradient(circle, rgba(234,88,12,0.08) 0%, transparent 65%)" }}
+            aria-hidden="true"
+          />
 
-          {/* Internal ambient card glow */}
-          <div className="absolute -top-32 -left-32 w-64 h-64 bg-orange-500/10 rounded-full blur-[80px] pointer-events-none" />
-
-          {/* Header */}
-          <div className="text-center mb-8 relative z-10">
+          {/* ── Header ──────────────────────────────────────────────── */}
+          <div className="text-center mb-7 relative z-10">
             <div className="flex justify-center mb-4">
-              <div className="relative h-20 w-20 drop-shadow-[0_0_20px_rgba(255,255,255,0.4)] transition-transform duration-700 hover:scale-105">
-                <Image src="/tcnp_logo.png" alt="TCNP Excellence" fill className="object-contain" priority />
+              <div className="relative h-16 w-16 ring-1 ring-white/10 rounded-2xl overflow-hidden drop-shadow-[0_0_20px_rgba(255,255,255,0.25)]">
+                <Image src="/tcnp_logo.png" alt="TCNP logo" fill className="object-contain p-1" priority />
               </div>
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-white mb-2 drop-shadow-lg">
-              TCNP PLATFORM
+            <h1 className="text-2xl font-bold tracking-tight text-white leading-none">
+              TCNP Platform
             </h1>
-            <p className="text-[11px] font-semibold tracking-[0.25em] text-orange-200/70 uppercase">
-              Global Protocol Operations
+            <p className="text-[10px] font-semibold tracking-[0.22em] text-orange-300/60 uppercase mt-1.5">
+              Central Application
             </p>
           </div>
 
-          {mode === 'login' ? (
-            <form onSubmit={handleLogin} className="space-y-6 relative z-10 animate-in fade-in zoom-in-95 duration-500">
-              <div className="group">
-                <label htmlFor="email" className="block text-xs font-medium text-gray-300 mb-2 uppercase tracking-wide">
-                  Clearance Email
-                </label>
-                <input
-                  id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
-                  autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} inputMode="email"
-                  className="w-full px-5 py-4 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-white/30 transition-all duration-300 shadow-inner"
-                  placeholder="Enter email"
+          {/* ── Mode toggle tabs ─────────────────────────────────── */}
+          <div
+            className="relative flex bg-white/5 rounded-2xl p-1 mb-7"
+            role="tablist"
+            aria-label="Authentication mode"
+          >
+            <div
+              className="absolute inset-y-1 rounded-xl bg-white/10 border border-white/10 transition-all duration-300"
+              style={{
+                left: mode === "login" ? "4px" : "50%",
+                right: mode === "login" ? "50%" : "4px",
+              }}
+              aria-hidden="true"
+            />
+            <button
+              role="tab"
+              aria-selected={mode === "login"}
+              aria-controls="login-form"
+              onClick={switchToLogin}
+              className={`relative z-10 flex-1 py-2 text-xs font-semibold rounded-xl transition-colors duration-200 tracking-wide ${mode === "login" ? "text-white" : "text-gray-500 hover:text-gray-300"
+                }`}
+            >
+              Sign In
+            </button>
+            <button
+              role="tab"
+              aria-selected={mode === "signup"}
+              aria-controls="signup-form"
+              onClick={switchToSignup}
+              className={`relative z-10 flex-1 py-2 text-xs font-semibold rounded-xl transition-colors duration-200 tracking-wide ${mode === "signup" ? "text-white" : "text-gray-500 hover:text-gray-300"
+                }`}
+            >
+              Request Access
+            </button>
+          </div>
+
+          {/* ── Login Form ─────────────────────────────────────────── */}
+          {mode === "login" && (
+            <form
+              id="login-form"
+              role="tabpanel"
+              onSubmit={handleLogin}
+              className="space-y-5 relative z-10"
+              style={{ animation: "formEnter 0.3s cubic-bezier(0.16,1,0.3,1) both" }}
+              noValidate
+            >
+              <div>
+                <FieldLabel htmlFor="login-email">Email Address</FieldLabel>
+                <GlassInput
+                  id="login-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  inputMode="email"
                 />
               </div>
 
-              <div className="group">
-                <label htmlFor="password" className="block text-xs font-medium text-gray-300 mb-2 uppercase tracking-wide">
-                  Security Key
-                </label>
-                <div className="relative">
-                  <input
-                    id="password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required
-                    autoComplete="current-password"
-                    className="w-full px-5 py-4 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-white/30 transition-all duration-300 shadow-inner pr-12"
-                    placeholder="••••••••"
-                  />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none z-10">
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              <div>
+                <FieldLabel htmlFor="login-password">Password</FieldLabel>
+                <GlassInput
+                  id="login-password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  className="pr-12"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-200 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/50"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-pressed={showPassword}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
-                </div>
+                </GlassInput>
               </div>
 
-              <div className="pt-2 space-y-4">
-                <button type="submit" disabled={loading} className="relative w-full group overflow-hidden bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white font-bold py-4 px-4 rounded-xl shadow-[0_0_20px_rgba(234,88,12,0.3)] hover:shadow-[0_0_30px_rgba(234,88,12,0.5)] transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed transform hover:-translate-y-0.5">
-                  <span className="absolute top-0 -left-[100%] w-1/2 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-[-25deg] group-hover:animate-[shine_1s_ease-in-out_forwards]" />
-                  <span className="relative z-10 uppercase tracking-widest text-sm text-shadow-sm">{loading ? 'Authenticating...' : 'Commence Operations'}</span>
-                </button>
-                <button type="button" onClick={() => setMode('signup')} className="w-full text-xs text-gray-400 hover:text-white transition-colors uppercase tracking-widest">
-                  Request Clearance (Sign Up)
-                </button>
-              </div>
-            </form>
-          ) : (
-            <form onSubmit={handleSignup} className="space-y-4 relative z-10 animate-in fade-in zoom-in-95 duration-500">
-              <div className="group">
-                <label className="block text-xs font-medium text-gray-300 mb-1 uppercase tracking-wide">Official Name</label>
-                <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="John Doe" autoComplete="name" className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner" />
-              </div>
-              <div className="group">
-                <label className="block text-xs font-medium text-gray-300 mb-1 uppercase tracking-wide">Clearance Email</label>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="Enter email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} inputMode="email" className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner" />
-              </div>
-              <div className="group">
-                <label className="block text-xs font-medium text-gray-300 mb-1 uppercase tracking-wide">Phone Number</label>
-                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+234 800 000 0000" autoComplete="tel" inputMode="tel" className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner" />
-              </div>
-              <div className="group">
-                <label className="block text-xs font-medium text-gray-300 mb-1 uppercase tracking-wide">Security Key (Password)</label>
-                <div className="relative">
-                  <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" autoComplete="new-password" className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner pr-12" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none z-10">
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
-                </div>
-              </div>
-              <div className="group">
-                <label className="block text-xs font-medium text-gray-300 mb-1 uppercase tracking-wide">Oscar Callsign (Optional)</label>
-                <div className="relative">
-                  <select
-                    value={oscar}
-                    onChange={(e) => setOscar(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner appearance-none cursor-pointer"
-                  >
-                    <option value="" className="bg-gray-900 text-gray-400">Select an Oscar Callsign...</option>
-                    <option value="Command" className="bg-gray-900 text-white">Command — HQ &amp; Leadership</option>
-                    <option value="Alpha Oscar" className="bg-gray-900 text-white">Alpha Oscar — Eagle Square</option>
-                    <option value="Compliance Oscar" className="bg-gray-900 text-white">Compliance Oscar — Grooming &amp; Dress Code</option>
-                    <option value="Hospitality Oscar" className="bg-gray-900 text-white">Hospitality Oscar — Papa Experiences</option>
-                    <option value="November Oscar (Den)" className="bg-gray-900 text-white">November Oscar (Den) — Lounge &amp; Menus</option>
-                    <option value="November Oscar (Nest)" className="bg-gray-900 text-white">November Oscar (Nest) — Hotels &amp; Accommodation</option>
-                    <option value="Sierra Oscar" className="bg-gray-900 text-white">Sierra Oscar — Social Media</option>
-                    <option value="Tango Oscar" className="bg-gray-900 text-white">Tango Oscar — Transport</option>
-                    <option value="Victor Oscar" className="bg-gray-900 text-white">Victor Oscar — Theatre</option>
-                    <option value="Welfare Oscar" className="bg-gray-900 text-white">Welfare Oscar — Meals &amp; Welfare</option>
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
-                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
-                  </div>
-                </div>
-              </div>
-              <div className="group">
-                <label className="block text-xs font-medium text-gray-300 mb-1 uppercase tracking-wide">Protocol Team</label>
-                <div className="relative">
-                  <select
-                    value={team}
-                    onChange={(e) => setTeam(e.target.value)}
-                    required
-                    className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner appearance-none cursor-pointer"
-                  >
-                    <option value="" className="bg-gray-900 text-gray-400">Select your Team...</option>
-                    <option value="strength" className="bg-gray-900 text-white">Team Strength</option>
-                    <option value="wisdom" className="bg-gray-900 text-white">Team Wisdom</option>
-                    <option value="swift" className="bg-gray-900 text-white">Team Swift</option>
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
-                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-2 space-y-3">
-                <button type="submit" disabled={loading} className="relative w-full group overflow-hidden bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold py-4 px-4 rounded-xl transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed">
-                  <span className="relative z-10 uppercase tracking-widest text-sm text-shadow-sm">{loading ? 'Processing...' : 'Submit Clearance Request'}</span>
-                </button>
-                <button type="button" onClick={() => setMode('login')} className="w-full text-xs text-gray-400 hover:text-white transition-colors uppercase tracking-widest">
-                  Back to Login
-                </button>
-              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                aria-busy={loading}
+                className="relative w-full flex items-center justify-center gap-2.5 overflow-hidden text-white font-bold py-3.5 px-4 rounded-xl transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/60"
+                style={{
+                  background: "linear-gradient(135deg, #ea580c 0%, #f97316 60%, #fb923c 100%)",
+                  boxShadow: loading ? "none" : "0 0 24px rgba(234,88,12,0.35), 0 4px 12px rgba(0,0,0,0.3)",
+                }}
+              >
+                {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                <span className="relative z-10 uppercase tracking-widest text-xs">
+                  {loading ? "Authenticating…" : "Sign In"}
+                </span>
+              </button>
             </form>
           )}
 
-          {/* Footer Insignia */}
-          <div className="mt-8 text-center opacity-50 relative z-10">
-            <p className="text-[10px] text-gray-400 tracking-wider">
-              COMMAND CENTER
-            </p>
-          </div>
+          {/* ── Signup Form ────────────────────────────────────────── */}
+          {mode === "signup" && (
+            <form
+              id="signup-form"
+              role="tabpanel"
+              onSubmit={handleSignup}
+              className="space-y-4 relative z-10"
+              style={{ animation: "formEnter 0.3s cubic-bezier(0.16,1,0.3,1) both" }}
+              noValidate
+            >
+              {/* Row: name + phone */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <FieldLabel htmlFor="signup-name">Full Name</FieldLabel>
+                  <GlassInput
+                    id="signup-name"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required
+                    placeholder="John Doe"
+                    autoComplete="name"
+                  />
+                </div>
+                <div>
+                  <FieldLabel htmlFor="signup-phone">Phone</FieldLabel>
+                  <GlassInput
+                    id="signup-phone"
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+234 800 000 0000"
+                    autoComplete="tel"
+                    inputMode="tel"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <FieldLabel htmlFor="signup-email">Email Address</FieldLabel>
+                <GlassInput
+                  id="signup-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  inputMode="email"
+                />
+              </div>
+
+              <div>
+                <FieldLabel htmlFor="signup-password">Password</FieldLabel>
+                <GlassInput
+                  id="signup-password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder="Min. 6 characters"
+                  autoComplete="new-password"
+                  className="pr-12"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-200 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/50"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-pressed={showPassword}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </GlassInput>
+              </div>
+
+              {/* Row: Oscar + Team */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <FieldLabel htmlFor="signup-oscar">Oscar Unit</FieldLabel>
+                  <GlassSelect
+                    id="signup-oscar"
+                    value={oscar}
+                    onChange={(e) => setOscar(e.target.value)}
+                  >
+                    <option value="" className="bg-gray-900 text-gray-400">
+                      Select…
+                    </option>
+                    {OSCAR_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value} className="bg-gray-900 text-white">
+                        {o.label}
+                      </option>
+                    ))}
+                  </GlassSelect>
+                </div>
+                <div>
+                  <FieldLabel htmlFor="signup-team">Team</FieldLabel>
+                  <GlassSelect
+                    id="signup-team"
+                    value={team}
+                    onChange={(e) => setTeam(e.target.value)}
+                    required
+                  >
+                    <option value="" className="bg-gray-900 text-gray-400">
+                      Select…
+                    </option>
+                    {TEAM_OPTIONS.map((t) => (
+                      <option key={t.value} value={t.value} className="bg-gray-900 text-white">
+                        {t.label}
+                      </option>
+                    ))}
+                  </GlassSelect>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                aria-busy={loading}
+                className="relative w-full flex items-center justify-center gap-2.5 overflow-hidden rounded-xl py-3.5 px-4 text-white font-bold transition-all duration-200 border border-white/15 hover:bg-white/15 hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{ background: "rgba(255,255,255,0.08)" }}
+              >
+                {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                <span className="uppercase tracking-widest text-xs">
+                  {loading ? "Submitting…" : "Submit Request"}
+                </span>
+              </button>
+            </form>
+          )}
+
+          {/* ── Footer ──────────────────────────────────────────────── */}
+          <p className="mt-6 text-center text-[10px] text-gray-600 tracking-widest uppercase relative z-10">
+            Command Center · Secure Access
+          </p>
         </div>
 
-        {/* Soft Morphing Quote */}
-        <div className="mt-8 text-center px-4">
-          <p className={`text-gray-400 text-sm italic serif mt-2 transition-opacity duration-700 ease-in-out ${isFading ? 'opacity-0' : 'opacity-80'}`}>
-            "{displayText}"
+        {/* Rotating quote */}
+        <div className="mt-6 text-center px-6" aria-live="polite" aria-atomic="true">
+          <p
+            className="text-gray-500 text-xs italic leading-relaxed transition-opacity duration-500"
+            style={{ opacity: quoteFading ? 0 : 0.7 }}
+          >
+            &ldquo;{QUOTES[quoteIndex]}&rdquo;
           </p>
         </div>
       </div>
 
-      <style dangerouslySetInnerHTML={{
-        __html: `
-        @keyframes shine { 100% { left: 200%; } }
-      `}} />
+      {/* ── CSS for keyframes (moved to style tag in layout—or inline here) ── */}
+      <style>{`
+        @keyframes cardEnter {
+          from { opacity: 0; transform: translateY(16px) scale(0.98); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes formEnter {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes floatBlob1 {
+          from { transform: translate(0, 0) scale(1); }
+          to   { transform: translate(4%, 3%) scale(1.05); }
+        }
+        @keyframes floatBlob2 {
+          from { transform: translate(0, 0) scale(1); }
+          to   { transform: translate(-4%, -3%) scale(1.08); }
+        }
+      `}</style>
     </div>
   );
 }

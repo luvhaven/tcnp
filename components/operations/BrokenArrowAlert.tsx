@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { AlertTriangle, X, ShieldAlert, Volume2, VolumeX } from 'lucide-react'
@@ -21,11 +21,19 @@ export function BrokenArrowAlert() {
   const [dismissed, setDismissed] = useState(false)
   // Mirror the global muted state for rendering
   const [muted, setMuted] = useState(() => audioManager.muted)
+  // Journeys whose broken_arrow the operator has already acknowledged. Prevents
+  // re-alarming when the same still-broken_arrow row is updated again (e.g. an
+  // admin edits ETA, or a duplicate realtime frame arrives). Cleared when the
+  // journey leaves broken_arrow, so a genuinely new incident alerts again.
+  const acknowledgedRef = useRef<Set<string>>(new Set())
 
   const handleDismiss = useCallback(() => {
     audioManager.stopAlarm()
     setDismissed(true)
-    setAlert(null)
+    setAlert(prev => {
+      if (prev) acknowledgedRef.current.add(prev.journeyId)
+      return null
+    })
   }, [])
 
   const handleMuteToggle = useCallback(() => {
@@ -52,7 +60,17 @@ export function BrokenArrowAlert() {
         { event: 'UPDATE', schema: 'public', table: 'journeys' },
         async (payload) => {
           const updated = payload.new as any
-          if (updated?.status !== 'broken_arrow') return
+          if (!updated?.id) return
+
+          if (updated.status !== 'broken_arrow') {
+            // Journey resumed or cleared — forget any prior acknowledgement so a
+            // future broken_arrow on this journey raises a fresh alarm.
+            acknowledgedRef.current.delete(updated.id)
+            return
+          }
+
+          // Already acknowledged this incident — don't re-open or re-sound it.
+          if (acknowledgedRef.current.has(updated.id)) return
 
           let papaName = 'Unknown Papa'
           let cheetahCallSign = 'Unknown Cheetah'

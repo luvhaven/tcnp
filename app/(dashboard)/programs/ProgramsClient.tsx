@@ -304,6 +304,29 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
           )
         })}
       </motion.div>
+      {/* Stats */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { status: 'planning', label: 'Planning', Icon: Calendar, color: 'text-sky-500', bg: 'bg-sky-500/10', ring: 'ring-sky-500/20' },
+          { status: 'active', label: 'Active', Icon: CheckCircle, color: 'text-[hsl(var(--success))]', bg: 'bg-[hsl(var(--success)/0.08)]', ring: 'ring-[hsl(var(--success)/0.2)]' },
+          { status: 'completed', label: 'Completed', Icon: CheckCircle, color: 'text-violet-500', bg: 'bg-violet-500/10', ring: 'ring-violet-500/20' },
+          { status: 'archived', label: 'Archived', Icon: Archive, color: 'text-muted-foreground', bg: 'bg-muted/60', ring: 'ring-border' },
+        ].map(({ status, label, Icon, color, bg, ring }) => (
+          <div key={status} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">{label}</p>
+                <p className={`stat-figure mt-2 text-3xl font-bold ${color}`}>
+                  {programs.filter(p => p.status === status).length}
+                </p>
+              </div>
+              <div className={`shrink-0 rounded-xl ${bg} p-2.5`}>
+                <Icon className={`h-4 w-4 ${color}`} aria-hidden="true" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
 
       <Card>
         <CardHeader>
