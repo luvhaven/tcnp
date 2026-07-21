@@ -797,18 +797,6 @@ export default function JourneysClient({
             </div>
           </CardContent>
         </Card>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          { label: 'Total Journeys', value: journeys.length, color: 'text-foreground', ring: 'ring-border' },
-          { label: 'Active', value: journeys.filter(j => ['in_progress', 'cocktail', 'first_course', 'chapman', 'dessert'].includes(j.status)).length, color: 'text-sky-500', ring: 'ring-sky-500/20' },
-          { label: 'Completed', value: journeys.filter(j => j.status === 'completed').length, color: 'text-[hsl(var(--success))]', ring: 'ring-[hsl(var(--success)/0.2)]' },
-          { label: 'Incidents', value: journeys.filter(j => j.status === 'broken_arrow').length, color: 'text-destructive', ring: 'ring-destructive/20' },
-        ].map(({ label, value, color, ring }) => (
-          <div key={label} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
-            <p className="text-xs font-medium text-muted-foreground">{label}</p>
-            <p className={`stat-figure mt-2 text-3xl font-bold ${color}`}>{value}</p>
-          </div>
-        ))}
       </div>
 
       {/* Journeys Tabs */}
@@ -1503,6 +1491,6 @@ export default function JourneysClient({
         open={!!timelineJourneyId}
         onOpenChange={(open) => !open && setTimelineJourneyId(null)}
       />
-    </div >
+    </div>
   )
 }
