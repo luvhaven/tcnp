@@ -307,25 +307,17 @@ export default function MyAssignmentsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-          <CardHeader className="pb-3">
-            <CardDescription>Active Journeys</CardDescription>
-            <CardTitle className="text-3xl">{activeJourneys.length}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-          <CardHeader className="pb-3">
-            <CardDescription>Completed</CardDescription>
-            <CardTitle className="text-3xl">{completedJourneys.length}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-          <CardHeader className="pb-3">
-            <CardDescription>Total Assignments</CardDescription>
-            <CardTitle className="text-3xl">{journeys.length}</CardTitle>
-          </CardHeader>
-        </Card>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {[
+          { label: 'Active Journeys', value: activeJourneys.length, color: 'text-sky-500', bg: 'bg-sky-500/10', ring: 'ring-sky-500/20' },
+          { label: 'Completed', value: completedJourneys.length, color: 'text-[hsl(var(--success))]', bg: 'bg-[hsl(var(--success)/0.08)]', ring: 'ring-[hsl(var(--success)/0.2)]' },
+          { label: 'Total Assignments', value: journeys.length, color: 'text-foreground', bg: 'bg-primary/8', ring: 'ring-primary/15' },
+        ].map(({ label, value, color, bg, ring }) => (
+          <div key={label} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
+            <p className="text-xs font-medium text-muted-foreground">{label}</p>
+            <p className={`stat-figure mt-2 text-3xl font-bold ${color}`}>{value}</p>
+          </div>
+        ))}
       </div>
 
       {/* Tabs */}

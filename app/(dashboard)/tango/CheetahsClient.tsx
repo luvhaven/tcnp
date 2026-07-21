@@ -284,62 +284,19 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
       </motion.div>
 
       {/* Stats */}
-      <motion.div layout className="grid grid-cols-2 gap-3 nav:grid-cols-4">
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:border-primary/60 border-2">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium">Total Fleet</CardTitle>
-            <div className="p-2 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors">
-              <Car className="h-4 w-4 text-primary group-hover:scale-110 transition-transform" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-primary group-hover:to-primary/70 transition-all duration-500">{cheetahs.length}</div>
-          </CardContent>
-        </Card>
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:border-green-500/60 border-2">
-          <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium">Available</CardTitle>
-            <div className="p-2 rounded-full bg-green-500/10 group-hover:bg-green-500/20 transition-colors">
-              <Car className="h-4 w-4 text-green-500 group-hover:scale-110 transition-transform" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-green-500 group-hover:to-green-600 transition-all duration-500">
-              {cheetahs.filter(c => c.status === 'available').length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:border-blue-500/60 border-2">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium">In Use</CardTitle>
-            <div className="p-2 rounded-full bg-blue-500/10 group-hover:bg-blue-500/20 transition-colors">
-              <Car className="h-4 w-4 text-blue-500 group-hover:scale-110 transition-transform" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-blue-500 group-hover:to-blue-600 transition-all duration-500">
-              {cheetahs.filter(c => c.status === 'in_use').length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:border-orange-500/60 border-2">
-          <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium">Maintenance</CardTitle>
-            <div className="p-2 rounded-full bg-orange-500/10 group-hover:bg-orange-500/20 transition-colors">
-              <Car className="h-4 w-4 text-orange-500 group-hover:scale-110 transition-transform" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-orange-500 group-hover:to-orange-600 transition-all duration-500">
-              {cheetahs.filter(c => c.status === 'maintenance').length}
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+      <div className="grid gap-4 grid-cols-2 nav:grid-cols-4">
+        {[
+          { label: 'Total Fleet', value: cheetahs.length, color: 'text-foreground', ring: 'ring-border' },
+          { label: 'Available', value: cheetahs.filter(c => c.status === 'available').length, color: 'text-[hsl(var(--success))]', ring: 'ring-[hsl(var(--success)/0.2)]' },
+          { label: 'In Use', value: cheetahs.filter(c => c.status === 'in_use').length, color: 'text-blue-500', ring: 'ring-blue-500/20' },
+          { label: 'Maintenance', value: cheetahs.filter(c => c.status === 'maintenance').length, color: 'text-orange-500', ring: 'ring-orange-500/20' },
+        ].map(({ label, value, color, ring }) => (
+          <div key={label} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
+            <p className="text-xs font-medium text-muted-foreground">{label}</p>
+            <p className={`stat-figure mt-2 text-3xl font-bold ${color}`}>{value}</p>
+          </div>
+        ))}
+      </div>
 
       <Card>
         <CardHeader>

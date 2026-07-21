@@ -220,7 +220,6 @@ export default function DashboardLayout({
             </div>
           </main>
         </div>
-
         {/* Floating UI safe on every platform (install prompt is how iOS users
             learn about Add to Home Screen; password enforcer is plain UI) */}
         {canMountTracker && (

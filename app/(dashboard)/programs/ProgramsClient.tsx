@@ -269,43 +269,9 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
         </Button>
       </motion.div>
 
-      {/* Stats with Framer Motion layout animations */}
-      <motion.div layout className="grid grid-cols-2 gap-3 nav:grid-cols-4">
-        {[
-          { status: 'planning', label: 'Planning', icon: Calendar, color: 'blue' },
-          { status: 'active', label: 'Active', icon: CheckCircle, color: 'green' },
-          { status: 'completed', label: 'Completed', icon: CheckCircle, color: 'purple' },
-          { status: 'archived', label: 'Archived', icon: Archive, color: 'gray' },
-        ].map((stat, i) => {
-          const Icon = stat.icon
-          return (
-            <motion.div
-              key={stat.status}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: i * 0.1 }}
-              className="min-w-0"
-            >
-              <Card className={`group relative min-w-0 overflow-hidden border-2 transition-all duration-500 hover:shadow-2xl hover:border-${stat.color}-500/60`}>
-                <div className={`absolute inset-0 bg-gradient-to-br from-${stat.color}-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500`} />
-                <CardHeader className="relative z-10 flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="truncate text-sm font-medium">{stat.label}</CardTitle>
-                  <div className={`shrink-0 rounded-full bg-${stat.color}-500/10 p-2 group-hover:bg-${stat.color}-500/20 transition-colors`}>
-                    <Icon className={`h-4 w-4 text-${stat.color}-500 group-hover:scale-110 transition-transform`} />
-                  </div>
-                </CardHeader>
-                <CardContent className="relative z-10">
-                  <div className={`text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-${stat.color}-500 group-hover:to-${stat.color}-600 transition-all duration-500`}>
-                    {programs.filter(p => p.status === stat.status).length}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )
-        })}
-      </motion.div>
+
       {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 nav:grid-cols-4">
         {[
           { status: 'planning', label: 'Planning', Icon: Calendar, color: 'text-sky-500', bg: 'bg-sky-500/10', ring: 'ring-sky-500/20' },
           { status: 'active', label: 'Active', Icon: CheckCircle, color: 'text-[hsl(var(--success))]', bg: 'bg-[hsl(var(--success)/0.08)]', ring: 'ring-[hsl(var(--success)/0.2)]' },

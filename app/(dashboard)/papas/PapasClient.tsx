@@ -9,7 +9,7 @@ import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Users, Plus, Edit, Trash2, Plane, Search } from "lucide-react"
+import { Users, Plus, Edit, Trash2, Search } from "lucide-react"
 import { toast } from "sonner"
 import PapaFormTabs from "@/components/papas/PapaFormTabs"
 import { canManagePapas } from "@/lib/utils"
@@ -185,9 +185,9 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
 
   return (
     <div className="space-y-6">
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }} 
-        animate={{ opacity: 1, y: 0 }} 
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
         className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
@@ -203,42 +203,17 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
       </motion.div>
 
       {/* Stats */}
-      <motion.div layout className="grid gap-4 md:grid-cols-2">
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:border-primary/60 border-2">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium">Total Papas</CardTitle>
-            <div className="p-2 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors">
-              <Users className="h-4 w-4 text-primary group-hover:scale-110 transition-transform" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-primary group-hover:to-primary/70 transition-all duration-500">
-              {papas.length}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Registered guests
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:border-sky-500/60 border-2">
-          <div className="absolute inset-0 bg-gradient-to-br from-sky-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium">With Flights</CardTitle>
-            <div className="p-2 rounded-full bg-sky-500/10 group-hover:bg-sky-500/20 transition-colors">
-              <Plane className="h-4 w-4 text-sky-500 group-hover:scale-110 transition-transform" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 group-hover:from-sky-500 group-hover:to-sky-600 transition-all duration-500">
-              {papas.filter(p => p.flight_number).length}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Arriving by air
-            </p>
-          </CardContent>
-        </Card>
-      </motion.div>
+      <div className="grid gap-4 md:grid-cols-2">
+        {[
+          { label: 'Total Papas', value: papas.length, color: 'text-foreground', ring: 'ring-border' },
+          { label: 'With Flights', value: papas.filter(p => p.flight_number).length, color: 'text-sky-500', ring: 'ring-sky-500/20' },
+        ].map(({ label, value, color, ring }) => (
+          <div key={label} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
+            <p className="text-xs font-medium text-muted-foreground">{label}</p>
+            <p className={`stat-figure mt-2 text-3xl font-bold ${color}`}>{value}</p>
+          </div>
+        ))}
+      </div>
 
       <Card>
         <CardHeader>

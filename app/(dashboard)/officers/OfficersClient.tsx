@@ -673,48 +673,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
         )}
       </motion.div>
 
-      {/* Stats */}
-      <motion.div layout className="grid grid-cols-2 gap-3 nav:grid-cols-4">
-        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Officers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{officers.length}</div>
-          </CardContent>
-        </Card>
-        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Active</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {officers.filter((o: Officer) => o.is_active).length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Online</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {officers.filter((o: Officer) => o.is_online).length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">With Titles</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {officers.filter((o: Officer) => o.current_title_id).length}
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 nav:grid-cols-4">
         {[
           { label: 'Total Officers', value: officers.length, color: 'text-foreground', bg: 'bg-primary/8', ring: 'ring-primary/15' },
           { label: 'Active', value: officers.filter((o: Officer) => o.is_active).length, color: 'text-[hsl(var(--success))]', bg: 'bg-[hsl(var(--success)/0.08)]', ring: 'ring-[hsl(var(--success)/0.2)]' },
