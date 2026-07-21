@@ -709,7 +709,7 @@ export default function JourneysClient({
                       </div>
                       <div className="h-4 w-28 rounded-md skeleton" />
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 nav:grid-cols-4 gap-4">
                       {[...Array(4)].map((_, i) => (
                         <div key={i} className="flex items-start gap-2">
                           <div className="mt-1 h-8 w-8 rounded-full skeleton" />
@@ -758,18 +758,45 @@ export default function JourneysClient({
       )}
 
       {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          { label: 'Total Journeys', value: journeys.length, color: 'text-foreground', ring: 'ring-border' },
-          { label: 'Active', value: journeys.filter(j => ['in_progress', 'cocktail', 'first_course', 'chapman', 'dessert'].includes(j.status)).length, color: 'text-sky-500', ring: 'ring-sky-500/20' },
-          { label: 'Completed', value: journeys.filter(j => j.status === 'completed').length, color: 'text-[hsl(var(--success))]', ring: 'ring-[hsl(var(--success)/0.2)]' },
-          { label: 'Incidents', value: journeys.filter(j => j.status === 'broken_arrow').length, color: 'text-destructive', ring: 'ring-destructive/20' },
-        ].map(({ label, value, color, ring }) => (
-          <div key={label} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
-            <p className="text-xs font-medium text-muted-foreground">{label}</p>
-            <p className={`stat-figure mt-2 text-3xl font-bold ${color}`}>{value}</p>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 gap-3 nav:grid-cols-4">
+        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Total Journeys</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{journeys.length}</div>
+          </CardContent>
+        </Card>
+        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Active</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {journeys.filter(j => ['in_progress', 'first_course', 'chapman', 'dessert'].includes(j.status)).length}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Completed</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {journeys.filter(j => j.status === 'completed').length}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Incidents</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {journeys.filter(j => j.status === 'broken_arrow').length}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Journeys Tabs */}
@@ -866,7 +893,7 @@ export default function JourneysClient({
                         </div>
 
                         {/* Main Info Row */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 nav:grid-cols-4 gap-4">
                           {/* Papa */}
                           <div className="flex items-start gap-2">
                             <div className="mt-1 p-1.5 bg-primary/10 rounded-full">
@@ -1464,6 +1491,6 @@ export default function JourneysClient({
         open={!!timelineJourneyId}
         onOpenChange={(open) => !open && setTimelineJourneyId(null)}
       />
-    </div >
+    </div>
   )
 }

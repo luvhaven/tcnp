@@ -9,7 +9,7 @@ import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Users, Plus, Edit, Trash2, Plane, Search } from "lucide-react"
+import { Users, Plus, Edit, Trash2, Search } from "lucide-react"
 import { toast } from "sonner"
 import PapaFormTabs from "@/components/papas/PapaFormTabs"
 import { canManagePapas } from "@/lib/utils"
@@ -205,9 +205,9 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-2">
         {[
-          { label: 'Total Papas', value: papas.length, color: 'text-foreground', bg: 'bg-primary/8', ring: 'ring-border' },
-          { label: 'With Flights', value: papas.filter(p => p.flight_number).length, color: 'text-sky-500', bg: 'bg-sky-500/8', ring: 'ring-sky-500/20' },
-        ].map(({ label, value, color, bg, ring }) => (
+          { label: 'Total Papas', value: papas.length, color: 'text-foreground', ring: 'ring-border' },
+          { label: 'With Flights', value: papas.filter(p => p.flight_number).length, color: 'text-sky-500', ring: 'ring-sky-500/20' },
+        ].map(({ label, value, color, ring }) => (
           <div key={label} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
             <p className="text-xs font-medium text-muted-foreground">{label}</p>
             <p className={`stat-figure mt-2 text-3xl font-bold ${color}`}>{value}</p>
