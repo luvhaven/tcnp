@@ -20,7 +20,7 @@ import { Header } from "@/components/layout/header"
 // Dynamically import ALL potentially problematic components with SSR disabled
 const Sidebar = dynamic(
   () => import("@/components/layout/sidebar").then((m) => m.Sidebar),
-  { ssr: false, loading: () => <div className="w-72 h-full bg-background animate-pulse" /> }
+  { ssr: false, loading: () => <div className="h-full w-[248px] bg-background animate-pulse" /> }
 )
 
 // These components are COMPLETELY DISABLED on iOS - they cause crashes
@@ -165,19 +165,19 @@ export default function DashboardLayout({
           </ErrorBoundary>
         )}
 
-        {/* Desktop Sidebar — only from lg (1024px) up so tablets keep the mobile drawer */}
-        <div className="hidden h-full min-h-0 lg:flex">
+        {/* Desktop Sidebar — push layout from nav (860px) up */}
+        <div className="relative hidden h-full min-h-0 overflow-visible nav:flex">
           <ErrorBoundary>
-            <Suspense fallback={<div className="w-72 h-full bg-background animate-pulse" />}>
+            <Suspense fallback={<div className="h-full w-[248px] bg-background animate-pulse" />}>
               <Sidebar />
             </Suspense>
           </ErrorBoundary>
         </div>
 
-        {/* Mobile / tablet Sidebar Overlay (below lg) */}
+        {/* Mobile / tablet off-canvas drawer (below 860px) */}
         <AnimatePresence>
           {mobileSidebarOpen && (
-            <div className="fixed inset-0 z-40 flex pointer-events-auto lg:hidden">
+            <div className="fixed inset-0 z-40 flex pointer-events-auto nav:hidden">
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -190,11 +190,11 @@ export default function DashboardLayout({
                 initial={{ x: "-100%" }}
                 animate={{ x: 0 }}
                 exit={{ x: "-100%" }}
-                transition={{ type: "spring", damping: 28, stiffness: 300 }}
-                className="relative z-50 h-full w-72 max-w-[80%]"
+                transition={{ type: "tween", duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
+                className="relative z-50 h-full w-[248px] max-w-[80%] shadow-2xl"
               >
                 <ErrorBoundary>
-                  <Suspense fallback={<div className="w-72 h-full bg-background animate-pulse" />}>
+                  <Suspense fallback={<div className="h-full w-[248px] bg-background animate-pulse" />}>
                     <Sidebar isMobile onClose={() => setMobileSidebarOpen(false)} />
                   </Suspense>
                 </ErrorBoundary>
@@ -206,7 +206,10 @@ export default function DashboardLayout({
         {/* Main Content Area */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <ErrorBoundary>
-            <Header onOpenSidebar={() => setMobileSidebarOpen(true)} />
+            <Header
+              sidebarOpen={mobileSidebarOpen}
+              onOpenSidebar={() => setMobileSidebarOpen((o) => !o)}
+            />
           </ErrorBoundary>
 
           <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain bg-gradient-to-br from-orange-50 via-background to-slate-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-900 px-3 py-4 sm:px-4 sm:py-6">
