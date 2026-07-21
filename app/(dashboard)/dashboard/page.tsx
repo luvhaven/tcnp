@@ -252,9 +252,6 @@ export default function DashboardPage() {
       {/* ── Page header ──────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-primary">
-            {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-          </p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight">
             {firstName ? `Welcome back, ${firstName}` : "Dashboard"}
           </h1>
@@ -328,7 +325,7 @@ export default function DashboardPage() {
       <JourneyAlerts />
 
       {/* ── Stat cards ────────────────────────────────────────────────────── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 nav:grid-cols-4">
         {STAT_DEFINITIONS.map(({ key, label, sub, Icon, color, bg, ring, glow }, idx) => (
           <div
             key={key}

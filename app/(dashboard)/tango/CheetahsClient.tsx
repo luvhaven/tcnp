@@ -284,7 +284,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
       </motion.div>
 
       {/* Stats */}
-      <motion.div layout className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <motion.div layout className="grid grid-cols-2 gap-3 nav:grid-cols-4">
         <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:border-primary/60 border-2">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
@@ -550,7 +550,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 nav:grid-cols-4">
               <div className="space-y-2">
                 <Label htmlFor="color">Color *</Label>
                 <Input

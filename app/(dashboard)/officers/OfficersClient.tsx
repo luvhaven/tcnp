@@ -674,7 +674,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       </motion.div>
 
       {/* Stats */}
-      <motion.div layout className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <motion.div layout className="grid grid-cols-2 gap-3 nav:grid-cols-4">
         <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Officers</CardTitle>

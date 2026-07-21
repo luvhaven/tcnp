@@ -709,7 +709,7 @@ export default function JourneysClient({
                       </div>
                       <div className="h-4 w-28 rounded-md skeleton" />
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 nav:grid-cols-4 gap-4">
                       {[...Array(4)].map((_, i) => (
                         <div key={i} className="flex items-start gap-2">
                           <div className="mt-1 h-8 w-8 rounded-full skeleton" />
@@ -758,7 +758,7 @@ export default function JourneysClient({
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 nav:grid-cols-4">
         <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Journeys</CardTitle>
@@ -905,7 +905,7 @@ export default function JourneysClient({
                         </div>
 
                         {/* Main Info Row */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 nav:grid-cols-4 gap-4">
                           {/* Papa */}
                           <div className="flex items-start gap-2">
                             <div className="mt-1 p-1.5 bg-primary/10 rounded-full">

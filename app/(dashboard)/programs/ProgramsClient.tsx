@@ -270,7 +270,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
       </motion.div>
 
       {/* Stats with Framer Motion layout animations */}
-      <motion.div layout className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <motion.div layout className="grid grid-cols-2 gap-3 nav:grid-cols-4">
         {[
           { status: 'planning', label: 'Planning', icon: Calendar, color: 'blue' },
           { status: 'active', label: 'Active', icon: CheckCircle, color: 'green' },

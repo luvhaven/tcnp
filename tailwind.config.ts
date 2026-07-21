@@ -7,9 +7,13 @@ const config: Config = {
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
-  theme: {
-  	extend: {
-  		colors: {
+	theme: {
+		extend: {
+			screens: {
+				// Sidebar push-layout / drawer split (~tablet portrait+)
+				nav: '860px',
+			},
+			colors: {
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',
