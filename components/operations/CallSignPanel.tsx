@@ -190,7 +190,7 @@ export default function CallSignPanel({
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <Waves className="h-4 w-4 text-sky-600" />
+                <Waves className="h-4 w-4 text-info" />
                 Live Broadcasts
               </CardTitle>
               <CardDescription className="text-xs">Traffic & route updates — visible on Ops Monitor</CardDescription>
@@ -286,16 +286,32 @@ export default function CallSignPanel({
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {selectedSign?.key === 'broken_arrow' ? '🚨 BROKEN ARROW' : `Execute: ${selectedSign?.label}`}
+            <DialogTitle className={cn(
+              'flex items-center gap-2',
+              selectedSign?.key === 'broken_arrow' && 'text-destructive'
+            )}>
+              {selectedSign?.key === 'broken_arrow' && <AlertTriangle className="h-5 w-5 shrink-0" />}
+              {selectedSign?.key === 'broken_arrow'
+                ? 'Declare Broken Arrow'
+                : `Send ${selectedSign?.label}`}
             </DialogTitle>
             <DialogDescription>{selectedSign?.description}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 py-2">
+            {selectedSign?.key === 'broken_arrow' && (
+              <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive">
+                This raises a full-screen alarm for every officer on duty and opens a
+                critical incident. Use it only when the Cheetah is immobilised.
+              </p>
+            )}
             {EVENT_CALL_SIGNS.includes(selectedSign?.key as CallSignKey) && (
-              <p className="text-xs text-muted-foreground bg-muted rounded-lg p-2">
-                📡 This is a <strong>live broadcast</strong> — it will appear on the Ops Monitor without changing your main journey status.
+              <p className="flex items-start gap-2 rounded-lg bg-muted p-2.5 text-xs text-muted-foreground">
+                <Waves className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  This is a <strong>live broadcast</strong> — it reaches the Ops Monitor
+                  without changing the journey&rsquo;s movement status.
+                </span>
               </p>
             )}
             <div className="space-y-1">

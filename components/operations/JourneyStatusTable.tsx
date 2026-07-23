@@ -231,10 +231,10 @@ export default function JourneyStatusTable() {
                     }
                     if (meta.kind === 'emergency') {
                         try { audioManager.playChime('broken_arrow') } catch { /* ignore */ }
-                        toast.error(`🚨 ${meta.code} — ${meta.meaning}`)
+                        toast.error(meta.code, { description: meta.meaning })
                     } else if (meta.kind === 'broadcast') {
                         try { audioManager.playChime('info') } catch { /* ignore */ }
-                        toast.info(`📡 ${meta.code} — ${meta.meaning}`)
+                        toast.info(meta.code, { description: meta.meaning })
                     }
                 }
             )
@@ -443,7 +443,7 @@ export default function JourneyStatusTable() {
             playCallSignChime()
             toast.success(
                 isEventOnly
-                    ? `📡 ${getCallSignLabel(newCallSign)} broadcast sent`
+                    ? `${getCallSignLabel(newCallSign)} broadcast sent`
                     : `Call sign updated to ${getCallSignLabel(newCallSign)}`
             )
             setCallSignDialogOpen(false)
