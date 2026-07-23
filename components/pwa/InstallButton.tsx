@@ -30,15 +30,24 @@ export default function InstallButton() {
 
   return (
     <>
+      {/* Adaptive: labelled button above 860px, icon-only below */}
       <Button
         onClick={handleClick}
         variant="outline"
         size="sm"
-        className="bg-primary/5 hover:bg-primary/10 border-primary/20 text-primary"
+        className="hidden bg-primary/5 text-primary border-primary/20 hover:bg-primary/10 nav:inline-flex"
+      >
+        <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+        Install App
+      </Button>
+      <Button
+        onClick={handleClick}
+        variant="ghost"
+        size="icon"
+        className="inline-flex h-9 w-9 text-primary nav:hidden"
         aria-label="Install app"
       >
-        <Download className="h-4 w-4 sm:mr-2" aria-hidden="true" />
-        <span className="hidden sm:inline">Install App</span>
+        <Download className="h-4 w-4" aria-hidden="true" />
       </Button>
 
       {showModal && (

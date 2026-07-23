@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { MapPin, Plus, Edit, Trash2, Users, Scan, ChevronDown, Armchair } from "lucide-react"
+import { MapPin, Plus, Edit, Trash2, Scan, ChevronDown, Armchair } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -206,10 +206,10 @@ export default function TheatresClient({
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-3">
         {[
-          { label: 'Total Venues', value: theatres.length, color: 'text-foreground', bg: 'bg-primary/8', ring: 'ring-border' },
-          { label: 'Total Capacity', value: theatres.reduce((sum, t) => sum + (t.capacity || 0), 0).toLocaleString(), color: 'text-[hsl(var(--success))]', bg: 'bg-[hsl(var(--success)/0.08)]', ring: 'ring-[hsl(var(--success)/0.2)]' },
-          { label: 'Average Capacity', value: theatres.length > 0 ? Math.round(theatres.reduce((sum, t) => sum + (t.capacity || 0), 0) / theatres.length).toLocaleString() : 0, color: 'text-purple-500', bg: 'bg-purple-500/10', ring: 'ring-purple-500/20' },
-        ].map(({ label, value, color, bg, ring }) => (
+          { label: 'Total Venues', value: theatres.length, color: 'text-foreground', ring: 'ring-border' },
+          { label: 'Total Capacity', value: theatres.reduce((sum, t) => sum + (t.capacity || 0), 0).toLocaleString(), color: 'text-[hsl(var(--success))]', ring: 'ring-[hsl(var(--success)/0.2)]' },
+          { label: 'Average Capacity', value: theatres.length > 0 ? Math.round(theatres.reduce((sum, t) => sum + (t.capacity || 0), 0) / theatres.length).toLocaleString() : 0, color: 'text-purple-500', ring: 'ring-purple-500/20' },
+        ].map(({ label, value, color, ring }) => (
           <div key={label} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
             <p className="text-xs font-medium text-muted-foreground">{label}</p>
             <p className={`stat-figure mt-2 text-3xl font-bold ${color}`}>{value}</p>

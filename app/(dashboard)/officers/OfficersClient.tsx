@@ -673,8 +673,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
         )}
       </motion.div>
 
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 nav:grid-cols-4">
         {[
           { label: 'Total Officers', value: officers.length, color: 'text-foreground', bg: 'bg-primary/8', ring: 'ring-primary/15' },
           { label: 'Active', value: officers.filter((o: Officer) => o.is_active).length, color: 'text-[hsl(var(--success))]', bg: 'bg-[hsl(var(--success)/0.08)]', ring: 'ring-[hsl(var(--success)/0.2)]' },
