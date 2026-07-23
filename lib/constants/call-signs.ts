@@ -146,3 +146,76 @@ export const SITREP_CODES: SitrepCode[] = [
     { key: 'dessert', code: 'Dessert', meaning: 'Departure from Theatre to Nest', kind: 'status' },
     { key: 'broken_arrow', code: 'Broken Arrow', meaning: 'Distress — major incident immobilizing all Cheetahs', kind: 'emergency' },
 ]
+
+// ── Canonical call-sign visual language ──────────────────────────────────────
+//
+// Before this existed, three separate colour maps disagreed: "Cocktail" rendered
+// green on My Operations, amber on the Ops Monitor and indigo on the Dashboard.
+// An officer who learns a colour on one screen was actively misled on the next.
+//
+// The rule now: COLOUR ENCODES SEVERITY, FORM (the icon) ENCODES IDENTITY.
+//   · Routine movement phases share one calm accent — the label already says
+//     which phase it is, so spending colour on identity wastes the only channel
+//     that can carry urgency. The icon shows direction instead.
+//   · Only genuine exceptions take a status colour, so a glance at a full board
+//     answers "is anything wrong?" without reading a single word.
+//   · Broken Arrow owns red *exclusively*. Heavy traffic is a delay, not an
+//     emergency — if both were red the real emergency would stop standing out.
+
+export type CallSignSeverity = 'idle' | 'active' | 'success' | 'info' | 'warning' | 'critical'
+
+/** Direction of travel, used to pick the icon — identity without spending colour. */
+export type CallSignDirection = 'outbound' | 'inbound' | 'transit' | 'arrived' | 'alert' | 'none'
+
+export interface CallSignVisual {
+    severity: CallSignSeverity
+    direction: CallSignDirection
+}
+
+const DEFAULT_VISUAL: CallSignVisual = { severity: 'idle', direction: 'none' }
+
+const CALL_SIGN_VISUALS: Record<string, CallSignVisual> = {
+    // Movement phases — calm, identical severity, differentiated by direction icon
+    first_course: { severity: 'active', direction: 'outbound' },
+    cocktail: { severity: 'active', direction: 'transit' },
+    dessert: { severity: 'active', direction: 'inbound' },
+    // Arrival at the Theatre gate is the goal state of an outbound run
+    chapman: { severity: 'success', direction: 'arrived' },
+
+    // Live broadcasts — these are the exceptions that must catch the eye
+    blue_cocktail: { severity: 'info', direction: 'transit' },
+    red_cocktail: { severity: 'warning', direction: 'transit' },
+    re_order: { severity: 'info', direction: 'transit' },
+
+    // Emergency — sole owner of red
+    broken_arrow: { severity: 'critical', direction: 'alert' },
+
+    // Lifecycle states (journeys.status values that aren't SITREP codes)
+    planned: { severity: 'idle', direction: 'none' },
+    scheduled: { severity: 'idle', direction: 'none' },
+    completed: { severity: 'success', direction: 'arrived' },
+    cancelled: { severity: 'idle', direction: 'none' },
+}
+
+export const getCallSignVisual = (key: string | null | undefined): CallSignVisual =>
+    (key && CALL_SIGN_VISUALS[key]) || DEFAULT_VISUAL
+
+/** Tailwind classes per severity — solid fill, for primary status badges. */
+export const SEVERITY_SOLID: Record<CallSignSeverity, string> = {
+    idle: 'bg-muted text-muted-foreground border-transparent',
+    active: 'bg-primary text-primary-foreground border-transparent',
+    success: 'bg-success text-success-foreground border-transparent',
+    info: 'bg-info text-info-foreground border-transparent',
+    warning: 'bg-warning text-warning-foreground border-transparent',
+    critical: 'bg-destructive text-destructive-foreground border-transparent',
+}
+
+/** Tinted/low-emphasis variant — for secondary chips that shouldn't shout. */
+export const SEVERITY_SOFT: Record<CallSignSeverity, string> = {
+    idle: 'bg-muted/60 text-muted-foreground border-border',
+    active: 'bg-primary/10 text-primary border-primary/25',
+    success: 'bg-success/10 text-success border-success/25',
+    info: 'bg-info/10 text-info border-info/25',
+    warning: 'bg-warning/10 text-warning border-warning/30',
+    critical: 'bg-destructive/10 text-destructive border-destructive/30',
+}

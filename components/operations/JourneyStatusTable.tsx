@@ -26,6 +26,7 @@ import {
 import { formatDistanceToNow } from 'date-fns'
 import { Search, Radio, Clock, Loader2, ChevronDown, Download, Waves, AlertTriangle } from 'lucide-react'
 import { CALL_SIGNS, getCallSignLabel, getCallSignColor, SITREP_CODES, CALL_SIGN_KEY_TO_DB_ENUM, type CallSignKey } from '@/lib/constants/call-signs'
+import { CallSignChip } from '@/components/ui/call-sign-chip'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -33,6 +34,7 @@ import { cn } from '@/lib/utils'
 // come from journey_events, not journeys.status, so they'd otherwise be invisible
 // on this monitor. Keyed by journey_id.
 interface LiveBroadcast {
+    key: string        // underscored call sign key — drives the shared severity system
     code: string       // Title-case call sign, e.g. "Red Cocktail"
     meaning: string
     kind: 'status' | 'broadcast' | 'emergency'
@@ -213,6 +215,7 @@ export default function JourneyStatusTable() {
                     setBroadcasts(prev => ({
                         ...prev,
                         [row.journey_id]: {
+                            key: meta.key,
                             code: meta.code,
                             meaning: meta.meaning,
                             kind: meta.kind,
@@ -338,6 +341,7 @@ export default function JourneyStatusTable() {
                     const meta = SITREP_BY_DB_CODE[row.event_type]
                     if (!meta) continue
                     seeded[row.journey_id] = {
+                        key: meta.key,
                         code: meta.code,
                         meaning: meta.meaning,
                         kind: meta.kind,
@@ -451,26 +455,10 @@ export default function JourneyStatusTable() {
         }
     }
 
-    const getCallSignBadgeColor = (callSign: string): string => {
-        const colorMap: Record<string, string> = {
-            'first_course': 'bg-blue-500 hover:bg-blue-600 text-white',
-            'dessert': 'bg-indigo-500 hover:bg-indigo-600 text-white',
-            'cocktail': 'bg-amber-500 hover:bg-amber-600 text-white',
-            'blue_cocktail': 'bg-cyan-500 hover:bg-cyan-600 text-white',
-            'red_cocktail': 'bg-orange-500 hover:bg-orange-600 text-white',
-            're_order': 'bg-purple-500 hover:bg-purple-600 text-white',
-            'chapman': 'bg-teal-500 hover:bg-teal-600 text-white',
-            'broken_arrow': 'bg-destructive hover:bg-destructive/90 text-white',
-        }
-        return colorMap[callSign] || 'bg-gray-500 hover:bg-gray-600 text-white'
-    }
-
-    const getStatusBadgeColor = (status: string): string => {
-        if (status === 'broken_arrow') return 'bg-destructive text-white'
-        if (status === 'chapman' || status === 'cocktail') return 'bg-teal-500 text-white'
-        if (status.includes('route')) return 'bg-blue-500 text-white'
-        return 'bg-green-500 text-white'
-    }
+    // Call-sign colours now come from the canonical severity system via
+    // <CallSignChip>. The two local colour maps that used to live here disagreed
+    // with the other surfaces (Cocktail was amber here, green on My Operations)
+    // and have been removed rather than re-synced, so there is only one source.
 
     const ADMIN_ROLES = ['super_admin', 'dev_admin', 'admin', 'captain', 'head_of_command', 'head_of_operations', 'command', 'hod', 'hop']
     const isAdmin = currentUser?.role && ADMIN_ROLES.includes(currentUser.role)
@@ -684,7 +672,6 @@ export default function JourneyStatusTable() {
                             filteredJourneys.map((journey) => {
                                 const callSign = journey.status || journey.current_call_sign || 'planned'
                                 const callSignLabel = getCallSignLabel(callSign) || callSign.replace(/_/g, ' ')
-                                const callSignColor = getCallSignBadgeColor(callSign)
                                 const canClick = !!(journey.duty_officers?.some(d => d.user_id === currentUser?.id) || currentUser?.id === journey.assigned_duty_officer_id || currentUser?.id === (journey as any).assigned_do_id)
                                 const isBroken = callSign === 'broken_arrow'
                                 const broadcast = broadcasts[journey.id]
@@ -728,37 +715,35 @@ export default function JourneyStatusTable() {
                                             )}
                                         </TableCell>
                                         <TableCell colSpan={1}>
-                                            <button
-                                                onClick={() => handleCallSignClick(journey)}
-                                                disabled={!canClick}
-                                                title={!canClick ? 'Only assigned DOs or admins can update' : `Update call sign: ${callSignLabel}`}
-                                                className={cn(
-                                                    "px-3 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 w-full",
-                                                    callSignColor,
-                                                    canClick ? "cursor-pointer hover:opacity-90" : "cursor-default opacity-70",
-                                                    isBroken && "animate-pulse ring-2 ring-destructive ring-offset-1"
-                                                )}
-                                            >
-                                                <Radio className="h-3 w-3" />
-                                                {callSignLabel}
-                                                {canClick && <ChevronDown className="h-3 w-3 ml-auto" />}
-                                            </button>
-                                            {/* Latest live SITREP broadcast (traffic / route / emergency) */}
+                                            {/* Only the assigned DO can change a call sign. Previously the
+                                                read-only case rendered the same button at 70% opacity, which
+                                                reads as "disabled control" rather than "status" — so admins
+                                                now get a plain chip with no false affordance. */}
+                                            {canClick ? (
+                                                <button
+                                                    onClick={() => handleCallSignClick(journey)}
+                                                    title={`Update call sign — currently ${callSignLabel}`}
+                                                    className={cn(
+                                                        "group flex w-full items-center gap-1.5 rounded-full p-0.5 pr-2 text-left transition-all",
+                                                        "hover:bg-muted/60 focus-visible:outline-none"
+                                                    )}
+                                                >
+                                                    <CallSignChip callSign={callSign} />
+                                                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-y-0.5" />
+                                                </button>
+                                            ) : (
+                                                <CallSignChip callSign={callSign} />
+                                            )}
+                                            {/* Latest live SITREP broadcast (traffic / route / emergency).
+                                                Rendered through the same chip as the status above so a
+                                                "Red Cocktail" here is the exact colour it is everywhere else. */}
                                             {broadcast && broadcast.kind !== 'status' && (
                                                 <div
-                                                    className={cn(
-                                                        "mt-1.5 flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium",
-                                                        broadcast.kind === 'emergency'
-                                                            ? "bg-destructive/10 text-destructive"
-                                                            : "bg-sky-500/10 text-sky-700 dark:text-sky-300"
-                                                    )}
+                                                    className="mt-1.5 flex items-center gap-1.5"
                                                     title={broadcast.notes || broadcast.meaning}
                                                 >
-                                                    {broadcast.kind === 'emergency'
-                                                        ? <AlertTriangle className="h-3 w-3 shrink-0" />
-                                                        : <Waves className="h-3 w-3 shrink-0" />}
-                                                    <span className="truncate">{broadcast.code}</span>
-                                                    <span className="opacity-70 ml-auto whitespace-nowrap">
+                                                    <CallSignChip callSign={broadcast.key} variant="soft" size="sm" />
+                                                    <span className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
                                                         {formatDistanceToNow(new Date(broadcast.at), { addSuffix: true })}
                                                     </span>
                                                 </div>

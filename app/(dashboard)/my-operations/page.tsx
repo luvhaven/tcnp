@@ -17,6 +17,7 @@ import { toast } from 'sonner'
 import { useCelebrate } from '@/components/providers/CelebrateProvider'
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from '@/lib/constants/tncpCallSigns'
 import { CALL_SIGN_KEY_TO_DB_ENUM, type CallSignKey } from '@/lib/constants/call-signs'
+import { CallSignChip } from '@/components/ui/call-sign-chip'
 import { cn } from '@/lib/utils'
 import { oscarToRole } from '@/lib/utils'
 
@@ -516,9 +517,6 @@ function JourneyOperationsPanel({
     }
   }
 
-  const statusKey = resolveCallSignKey(journey.status)
-  const statusColor = statusKey ? TNCP_CALL_SIGN_COLORS[statusKey] : 'bg-gray-500 text-white'
-
   // First movement call sign when the journey starts, per SOP TCNP.01.05:
   //   First Course = departure from Nest to Theatre
   //   Dessert      = departure from Theatre to Nest
@@ -586,9 +584,7 @@ function JourneyOperationsPanel({
       <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
         <CardContent className="pt-4 pb-4">
           <div className="flex items-center justify-between mb-3">
-            <Badge className={cn(statusColor, 'text-xs font-semibold')}>
-              {getCallSignLabel(journey.status) || journey.status.replace(/_/g, ' ')}
-            </Badge>
+            <CallSignChip callSign={journey.status} />
             <div className="flex gap-2 items-center">
               {isLead && (
                 <Badge className="bg-amber-400/20 text-amber-600 dark:text-amber-400 border-amber-400/30 border text-xs">
@@ -739,8 +735,6 @@ function JourneyOperationsPanel({
 // ─── Read-only feed card ───────────────────────────────────────────────────────
 
 function JourneyFeedCard({ journey, showCountdown = false }: { journey: Journey; showCountdown?: boolean }) {
-  const statusKey = resolveCallSignKey(journey.status)
-  const statusColor = statusKey ? TNCP_CALL_SIGN_COLORS[statusKey] : 'bg-gray-500 text-white'
   const lead = journey.duty_officers?.find(d => d.is_lead)
   const depTime = journey.scheduled_departure ? new Date(journey.scheduled_departure) : null
 
@@ -752,9 +746,7 @@ function JourneyFeedCard({ journey, showCountdown = false }: { journey: Journey;
             <p className="font-semibold text-sm">{journey.papas?.title} {journey.papas?.full_name ?? 'Unknown Papa'}</p>
             <p className="text-xs text-muted-foreground">{journey.origin} → {journey.destination}</p>
           </div>
-          <Badge className={cn(statusColor, 'text-xs')}>
-            {getCallSignLabel(journey.status) || journey.status.replace(/_/g, ' ')}
-          </Badge>
+          <CallSignChip callSign={journey.status} size="sm" />
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
           {lead && (

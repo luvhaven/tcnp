@@ -6,6 +6,11 @@ const config: Config = {
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    // lib/ holds shared class maps (e.g. the call-sign severity palette in
+    // lib/constants/call-signs.ts). Without this glob those classes are never
+    // seen by the scanner and get purged out of the build — the styles simply
+    // vanish in production while looking fine in dev.
+    "./lib/**/*.{js,ts,jsx,tsx}",
   ],
 	theme: {
 		extend: {
@@ -71,6 +76,13 @@ const config: Config = {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'
+  		},
+  		transitionTimingFunction: {
+  			// Slight overshoot — used for toggles/thumbs so they land with a
+  			// little physicality. Named here rather than written inline as an
+  			// arbitrary value, because commas inside ease-[...] make Tailwind
+  			// treat the class as ambiguous and emit a build warning.
+  			spring: 'cubic-bezier(0.34, 1.3, 0.64, 1)',
   		},
   		boxShadow: {
   			xs: 'var(--shadow-xs)',

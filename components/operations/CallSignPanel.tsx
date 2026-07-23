@@ -10,7 +10,23 @@ import {
   Loader2, CheckCircle, AlertTriangle, Clock, Navigation,
   Radio, Waves, AlertCircle
 } from 'lucide-react'
-import { CALL_SIGNS, type CallSign, type CallSignKey, getCallSignLabel } from '@/lib/constants/call-signs'
+import {
+  CALL_SIGNS, getCallSignLabel, getCallSignVisual,
+  SEVERITY_SOLID, SEVERITY_SOFT,
+  type CallSign, type CallSignKey, type CallSignDirection,
+} from '@/lib/constants/call-signs'
+import { ArrowUpRight, ArrowDownLeft, MapPin, Minus } from 'lucide-react'
+import { CallSignChip } from '@/components/ui/call-sign-chip'
+
+/** Direction glyph per movement phase — identity carried by form, not colour. */
+const PHASE_ICON: Record<CallSignDirection, React.ComponentType<{ className?: string }>> = {
+  outbound: ArrowUpRight,
+  inbound: ArrowDownLeft,
+  transit: Navigation,
+  arrived: MapPin,
+  alert: AlertTriangle,
+  none: Minus,
+}
 import { useJourneyStatus, STATUS_CALL_SIGNS, EVENT_CALL_SIGNS } from '@/hooks/useJourneyStatus'
 import { formatDistanceToNow } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -23,18 +39,12 @@ interface CallSignPanelProps {
   destination?: string
 }
 
-// ─── Hex colours per call sign (guaranteed render — no Tailwind purge risk) ────
-
-const SIGN_COLORS: Record<string, { base: string; hover: string }> = {
-  first_course:  { base: '#2563eb', hover: '#1d4ed8' },
-  cocktail:      { base: '#059669', hover: '#047857' },
-  chapman:       { base: '#0d9488', hover: '#0f766e' },
-  dessert:       { base: '#4f46e5', hover: '#4338ca' },
-  blue_cocktail: { base: '#0ea5e9', hover: '#0284c7' },
-  red_cocktail:  { base: '#f97316', hover: '#ea580c' },
-  re_order:      { base: '#9333ea', hover: '#7e22ce' },
-  broken_arrow:  { base: '#dc2626', hover: '#b91c1c' },
-}
+// Colour for these buttons now comes from the shared severity system
+// (lib/constants/call-signs.ts) rather than eight hand-picked hexes that
+// disagreed with every other screen. As an *action* grid the movement phases
+// stay quiet and are told apart by their direction icon + label; the currently
+// active phase is the one that fills in. That way the loud colours are left
+// for the choices that actually carry consequence — traffic and distress.
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -49,12 +59,17 @@ export default function CallSignPanel({
   const [selectedSign, setSelectedSign] = useState<CallSign | null>(null)
   const [notes, setNotes] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [hoveredKey, setHoveredKey] = useState<string | null>(null)
 
-  const getBtnStyle = useCallback((key: string, isHovered: boolean) => {
-    const c = SIGN_COLORS[key]
-    if (!c) return { backgroundColor: '#6b7280', color: '#ffffff' }
-    return { backgroundColor: isHovered ? c.hover : c.base, color: '#ffffff', transition: 'background-color 150ms ease' }
+  /** Movement phases: outline until they're the live phase, then filled. */
+  const statusBtnClass = useCallback((key: string, isActive: boolean) => {
+    const { severity } = getCallSignVisual(key)
+    return isActive ? SEVERITY_SOLID[severity] : SEVERITY_SOFT[severity]
+  }, [])
+
+  /** Broadcasts carry consequence, so they stay tinted at rest. */
+  const eventBtnClass = useCallback((key: string) => {
+    const { severity } = getCallSignVisual(key)
+    return SEVERITY_SOFT[severity]
   }, [])
 
   const isTerminal = status === 'completed' || status === 'cancelled'
@@ -92,14 +107,10 @@ export default function CallSignPanel({
                 <Radio className="h-4 w-4 text-primary animate-pulse" />
                 <span className="text-sm font-semibold">Current Status</span>
               </div>
-              <Badge
-                variant={isTerminal ? 'destructive' : 'default'}
-                className="capitalize"
-              >
-                {status
-                  ? getCallSignLabel(status) || status.replace(/_/g, ' ')
-                  : 'Planned — Awaiting First Call Sign'}
-              </Badge>
+              <CallSignChip
+                callSign={status ?? 'planned'}
+                label={status ? undefined : 'Awaiting first call sign'}
+              />
             </div>
             {lastUpdated && (
               <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -147,26 +158,27 @@ export default function CallSignPanel({
               <div className="grid grid-cols-2 gap-2">
                 {CALL_SIGNS.filter(s => STATUS_CALL_SIGNS.includes(s.key)).map(sign => {
                   const isActive = status === sign.key
-                  const isHov = hoveredKey === sign.key
+                  const { direction } = getCallSignVisual(sign.key)
+                  const DirIcon = PHASE_ICON[direction]
                   return (
                     <button
                       key={sign.key}
                       onClick={() => handleSignClick(sign)}
                       disabled={loading}
-                      onMouseEnter={() => setHoveredKey(sign.key)}
-                      onMouseLeave={() => setHoveredKey(null)}
-                      style={getBtnStyle(sign.key, isHov)}
+                      aria-pressed={isActive}
                       className={cn(
-                        'py-3 px-2 rounded-lg border-2 border-transparent flex flex-col items-center gap-1 text-center transition-transform hover:scale-[1.03] active:scale-[0.98]',
-                        isActive && 'ring-2 ring-white/60 ring-offset-2',
-                        loading && 'opacity-60 cursor-not-allowed'
+                        'relative flex flex-col items-center gap-1 rounded-lg border px-2 py-3 text-center transition-all duration-150',
+                        'hover:-translate-y-0.5 hover:shadow-elevation active:translate-y-0',
+                        statusBtnClass(sign.key, isActive),
+                        loading && 'cursor-not-allowed opacity-60'
                       )}
                     >
                       {isActive && (
-                        <span className="text-[9px] font-bold uppercase tracking-widest opacity-80 bg-white/20 rounded px-1">Active</span>
+                        <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
                       )}
-                      <span className="font-semibold text-sm">{sign.label}</span>
-                      <span className="text-[10px] opacity-80 leading-tight">{sign.description}</span>
+                      <DirIcon className="h-4 w-4 opacity-80" aria-hidden />
+                      <span className="text-sm font-semibold">{sign.label}</span>
+                      <span className="text-[10px] leading-tight opacity-75">{sign.description}</span>
                     </button>
                   )
                 })}
@@ -184,29 +196,25 @@ export default function CallSignPanel({
               <CardDescription className="text-xs">Traffic & route updates — visible on Ops Monitor</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
-              {CALL_SIGNS.filter(s => EVENT_CALL_SIGNS.includes(s.key)).map(sign => {
-                const isHov = hoveredKey === sign.key
-                return (
-                  <button
-                    key={sign.key}
-                    onClick={() => handleSignClick(sign)}
-                    disabled={loading}
-                    onMouseEnter={() => setHoveredKey(sign.key)}
-                    onMouseLeave={() => setHoveredKey(null)}
-                    style={getBtnStyle(sign.key, isHov)}
-                    className={cn(
-                      'w-full py-2 px-3 rounded-lg border-2 border-transparent flex items-center gap-3 transition-transform hover:scale-[1.02] active:scale-[0.98]',
-                      loading && 'opacity-60 cursor-not-allowed'
-                    )}
-                  >
-                    <div className="w-2 h-2 rounded-full bg-white/50 flex-shrink-0" />
-                    <div className="text-left">
-                      <span className="font-semibold text-sm block">{sign.label}</span>
-                      <span className="text-[10px] opacity-80">{sign.description}</span>
-                    </div>
-                  </button>
-                )
-              })}
+              {CALL_SIGNS.filter(s => EVENT_CALL_SIGNS.includes(s.key)).map(sign => (
+                <button
+                  key={sign.key}
+                  onClick={() => handleSignClick(sign)}
+                  disabled={loading}
+                  className={cn(
+                    'flex w-full items-center gap-3 rounded-lg border px-3 py-2 transition-all duration-150',
+                    'hover:-translate-y-0.5 hover:shadow-elevation active:translate-y-0',
+                    eventBtnClass(sign.key),
+                    loading && 'cursor-not-allowed opacity-60'
+                  )}
+                >
+                  <span className="h-2 w-2 flex-shrink-0 rounded-full bg-current" aria-hidden />
+                  <div className="text-left">
+                    <span className="block text-sm font-semibold">{sign.label}</span>
+                    <span className="text-[10px] opacity-75">{sign.description}</span>
+                  </div>
+                </button>
+              ))}
 
               {/* Complete journey */}
               <button
