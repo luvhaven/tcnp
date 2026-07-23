@@ -20,9 +20,11 @@ const AvatarImage = React.forwardRef<
   HTMLImageElement,
   React.ImgHTMLAttributes<HTMLImageElement>
 >(({ className, ...props }, ref) => (
+  // object-cover: without it, non-square uploads (phone photos are almost
+  // never square) stretched to fit and distorted every face in the app
   <img
     ref={ref}
-    className={cn("aspect-square h-full w-full", className)}
+    className={cn("aspect-square h-full w-full object-cover", className)}
     {...props}
   />
 ))

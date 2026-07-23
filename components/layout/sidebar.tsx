@@ -241,7 +241,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
           onClick={isMobile ? onClose : undefined}
         >
           <div className="relative h-8 w-8 flex-shrink-0">
-            <Image src="/tcnp_logo.png" alt="The Covenant Nation" fill className="object-contain" priority />
+            <Image src="/tcnp_logo.png" alt="The Covenant Nation" fill sizes="32px" className="object-contain" priority />
           </div>
           <div className={cn(
             "flex flex-col transition-all duration-300 overflow-hidden whitespace-nowrap",

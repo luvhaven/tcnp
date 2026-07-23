@@ -128,7 +128,42 @@
 
   code,
   .mono {
-    font-family: var(--font-mono), monospace;
+    font-family: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+    font-feature-settings: 'liga' 0;
+  }
+
+  /* Brand-tinted text selection — small detail, big perceived quality */
+  ::selection {
+    background: hsl(var(--primary) / 0.22);
+    color: inherit;
+  }
+
+  /* Headings never orphan a single word; body copy avoids awkward rag */
+  h1,
+  h2,
+  h3,
+  h4 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Chrome/Safari autofill used to paint inputs opaque yellow/white,
+     ignoring the theme entirely — repaint with our surface + text colors */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px hsl(var(--background)) inset;
+    -webkit-text-fill-color: hsl(var(--foreground));
+    caret-color: hsl(var(--foreground));
+    transition: background-color 9999s ease-in-out 0s;
+  }
+
+  /* Disabled controls should read as untouchable everywhere */
+  :disabled {
+    cursor: not-allowed;
   }
 }
 
@@ -139,22 +174,35 @@
   z-index: 0;
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar — slim, track-less, rounded; fades in on hover like macOS */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-muted;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-muted-foreground/30 rounded-md;
+  @apply bg-muted-foreground/25 rounded-full;
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-muted-foreground/50;
+  @apply bg-muted-foreground/45;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
 }
 
 /* Broken Arrow Emergency Animation */

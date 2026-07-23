@@ -5,8 +5,10 @@ function Skeleton({
     ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
     return (
+        // `.skeleton` (globals.css) = directional shimmer sweep — reads as
+        // "loading" far better than a static opacity pulse
         <div
-            className={cn("animate-pulse rounded-md bg-muted", className)}
+            className={cn("skeleton rounded-md", className)}
             {...props}
         />
     )

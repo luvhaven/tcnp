@@ -65,7 +65,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${jetbrainsMono.variable}`}>
+      {/* font-family itself comes from globals.css via var(--font-inter) — the
+          variable classes above are what actually define those CSS variables.
+          Without them, --font-mono never resolved and JetBrains Mono was loaded
+          but silently never rendered anywhere in the app. */}
       <body className={inter.className}>
         {/* Apply saved theme before first paint — prevents light-mode flash for dark users */}
         <script

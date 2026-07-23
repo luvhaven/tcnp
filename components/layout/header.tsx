@@ -67,6 +67,11 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
   const firstName = profile?.full_name?.split(/\s+/)[0] || user?.email?.split('@')[0] || 'User'
   const initials = getInitials(profile?.full_name, user?.email)
 
+  // Time-of-day greeting — "Welcome" every hour of every day reads robotic;
+  // this is the cheapest possible way to make the app feel aware of the user
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+
   // ── Shared profile dropdown content ──────────────────────────────────────
   const ProfileDropdownContent = () => (
     <DropdownMenuContent align="end" className="w-64 p-0 overflow-hidden">
@@ -133,7 +138,7 @@ export function Header({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
         </button>
         <div className="flex flex-col min-w-0">
           <h1 className="text-sm font-semibold tracking-tight md:text-base truncate max-w-[130px] sm:max-w-xs md:max-w-none leading-tight">
-            Welcome, {firstName}
+            {greeting}, {firstName}
           </h1>
           {profile?.role && (
             <span className="hidden sm:inline-flex w-fit max-w-full items-center rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary md:px-3 md:py-1 md:text-[10px]">
