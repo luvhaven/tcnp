@@ -40,7 +40,12 @@ type SessionSpeaker = {
     papas: { full_name: string, title: string }
 }
 
-export default function ProgramSchedule({ programId }: { programId: string }) {
+export default function ProgramSchedule({
+    programId,
+    // Defaults to false so a caller that forgets to pass this gets the safe,
+    // read-only behaviour rather than silently exposing destructive controls.
+    canManage = false,
+}: { programId: string; canManage?: boolean }) {
     const supabase = createClient()
     const confirm = useConfirm()
     const [days, setDays] = useState<ProgramDay[]>([])
@@ -153,6 +158,10 @@ export default function ProgramSchedule({ programId }: { programId: string }) {
     }
 
     const handleDelete = async (table: string, id: string) => {
+        if (!canManage) {
+            toast.error('Only Command and leadership can change a program schedule.')
+            return
+        }
         if (!await confirm({ message: 'Are you sure you want to delete this?', variant: 'destructive' })) return
         try {
             const { error } = await (supabase as any).from(table).delete().eq('id', id)

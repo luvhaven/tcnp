@@ -15,7 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Textarea } from "@/components/ui/textarea"
 import Image from "next/image"
 
-export default function VIPManagementPanel() {
+// Defaults to false so a caller that omits it gets read-only, not an open door.
+export default function VIPManagementPanel({ canManage = false }: { canManage?: boolean }) {
     const supabase = createClient()
     const confirm = useConfirm()
     const [selectedProgramId, setSelectedProgramId] = useState<string>("")
@@ -198,6 +199,10 @@ export default function VIPManagementPanel() {
     }
 
     const handleDelete = async (id: string) => {
+        if (!canManage) {
+            toast.error('Only Victor Oscar and leadership can remove a senior minister.')
+            return
+        }
         if (!await confirm({ message: 'Are you sure you want to remove this VIP?', variant: 'destructive' })) return
 
         try {

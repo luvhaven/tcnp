@@ -172,7 +172,14 @@ export function HeadshotCropDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-sm">
+      {/* The crop window is a fixed 288px because the export maths depends on
+          it, so on a short screen (phone landscape, or portrait once browser
+          chrome is subtracted) header + circle + slider + actions exceeded the
+          viewport. The dialog is position:fixed, so the overflow simply wasn't
+          reachable — "Use Photo" sat below the fold with nothing to scroll.
+          dvh tracks the *dynamic* viewport, so this stays correct while mobile
+          browser chrome collapses on scroll. */}
+      <DialogContent className="flex max-h-[92dvh] max-w-sm flex-col overflow-y-auto overscroll-contain">
         <DialogHeader>
           <DialogTitle>Frame Your Headshot</DialogTitle>
           <DialogDescription>
@@ -237,7 +244,10 @@ export function HeadshotCropDialog({
             <ZoomIn className="h-4 w-4 shrink-0 text-muted-foreground" />
           </div>
 
-          <div className="flex gap-2">
+          {/* Pinned to the bottom of the scroll area: even if the crop window
+              does push the dialog past the viewport, the confirm action stays
+              on screen rather than requiring a scroll to discover. */}
+          <div className="sticky bottom-0 -mx-6 -mb-6 flex gap-2 border-t bg-background px-6 pb-6 pt-3">
             <Button type="button" variant="outline" className="flex-1 gap-1.5" onClick={reset}>
               <RotateCcw className="h-4 w-4" /> Reset
             </Button>

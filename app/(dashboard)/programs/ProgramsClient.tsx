@@ -18,6 +18,8 @@ import { motion, AnimatePresence } from "framer-motion"
 import ProgramExport from "@/components/programs/ProgramExport"
 import ProgramSchedule from "@/components/programs/ProgramSchedule"
 import { RequestAvailabilityButton, AvailabilityRosterButton } from "@/components/missions/MissionAvailability"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
+import { isAdmin } from "@/lib/utils"
 
 type Program = {
   id: string
@@ -35,6 +37,14 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
   const supabase = createClient()
   const confirm = useConfirm()
   const queryClient = useQueryClient()
+
+  // Programs are owned by leadership. This page previously rendered Create /
+  // Edit / Delete to every authenticated officer, so a Delta Oscar saw the same
+  // destructive controls a Captain did. RLS is the real boundary, but shipping
+  // buttons that either silently no-op or genuinely destroy a program is not a
+  // choice we get to leave to the database.
+  const { data: currentUser } = useCurrentUser()
+  const canManagePrograms = isAdmin(currentUser?.role)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Program | null>(null)
@@ -190,6 +200,10 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!canManagePrograms) {
+      toast.error('Only Command and leadership can create or edit a program.')
+      return
+    }
     const data = {
       ...formData,
       theatre_id: formData.theatre_id || null
@@ -210,12 +224,22 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
     setDialogOpen(true)
   }
 
+  // Hiding a button is presentation, not authorisation — re-check at the point
+  // of action so a stale render or a console call still can't get through.
   const handleDelete = async (id: string) => {
+    if (!canManagePrograms) {
+      toast.error('Only Command and leadership can delete a program.')
+      return
+    }
     if (!await confirm({ message: 'Delete this program? This will affect all related data.', variant: 'destructive' })) return
     deleteMutation.mutate(id)
   }
 
   const handleStatusChange = async (id: string, newStatus: string) => {
+    if (!canManagePrograms) {
+      toast.error('Only Command and leadership can change a program’s status.')
+      return
+    }
     statusMutation.mutate({ id, status: newStatus })
   }
 
@@ -263,10 +287,12 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
           <h1 className="text-3xl font-bold tracking-tight">Programs</h1>
           <p className="text-sm text-muted-foreground max-w-xl">Manage events and programs</p>
         </div>
-        <Button onClick={openDialog} className="shrink-0 self-start sm:self-auto">
-          <Plus className="mr-2 h-4 w-4" />
-          Add Program
-        </Button>
+        {canManagePrograms && (
+          <Button onClick={openDialog} className="shrink-0 self-start sm:self-auto">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Program
+          </Button>
+        )}
       </motion.div>
 
 
@@ -307,10 +333,12 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Calendar className="h-12 w-12 text-muted-foreground/50" />
               <p className="mt-4 text-sm font-medium">No programs yet</p>
-              <Button className="mt-4" onClick={openDialog}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Program
-              </Button>
+              {canManagePrograms && (
+                <Button className="mt-4" onClick={openDialog}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Program
+                </Button>
+              )}
             </div>
           ) : (
             <motion.div layout className="space-y-3">
@@ -400,12 +428,16 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                         <Calendar className="mr-2 h-4 w-4" />
                         Schedule
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(program)} className="hover:bg-primary/10">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(program.id)} className="hover:bg-destructive/10">
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      {canManagePrograms && (
+                        <>
+                          <Button variant="ghost" size="icon" onClick={() => handleEdit(program)} className="hover:bg-primary/10" aria-label={`Edit ${program.name}`}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(program.id)} className="hover:bg-destructive/10" aria-label={`Delete ${program.name}`}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </motion.div>
                 ))}
@@ -581,7 +613,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
               Manage days, sessions, and speaker assignments for this program.
             </DialogDescription>
           </DialogHeader>
-          {scheduleProgram && <ProgramSchedule programId={scheduleProgram.id} />}
+          {scheduleProgram && <ProgramSchedule programId={scheduleProgram.id} canManage={canManagePrograms} />}
         </DialogContent>
       </Dialog>
     </div>

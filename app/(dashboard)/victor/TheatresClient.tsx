@@ -320,7 +320,7 @@ export default function TheatresClient({
             </div>
 
             {selectedTheatreId ? (
-              <VIPManagementPanel />
+              <VIPManagementPanel canManage={canManage} />
             ) : (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12">

@@ -108,23 +108,37 @@ function NotificationItem({
         <p className="mt-1 text-[10px] text-muted-foreground/70">{timeAgo}</p>
       </div>
 
-      {/* Actions — appear on hover */}
-      <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+      {/* Actions.
+          These used to be opacity-0 until group-hover, which meant that on any
+          touch device — where no hover event ever fires — they were permanently
+          invisible and dismissing a notification was impossible. Reveal-on-hover
+          is now scoped to pointers that actually support hovering; touch gets
+          them shown outright. focus-within keeps them reachable by keyboard. */}
+      <div
+        className="absolute right-2 top-2 flex items-center gap-1 transition-opacity
+                   [@media(hover:hover)]:opacity-0
+                   [@media(hover:hover)]:group-hover:opacity-100
+                   [@media(hover:hover)]:group-focus-within:opacity-100"
+      >
         {!notification.is_read && (
           <button
+            type="button"
             title="Mark as read"
+            aria-label="Mark notification as read"
             onClick={(e) => { e.stopPropagation(); onMarkRead(notification.id) }}
-            className="rounded p-1 text-muted-foreground hover:bg-background hover:text-primary"
+            className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-background hover:text-primary"
           >
-            <CheckCheck className="h-3.5 w-3.5" />
+            <CheckCheck className="h-4 w-4" />
           </button>
         )}
         <button
+          type="button"
           title="Dismiss"
+          aria-label="Dismiss notification"
           onClick={(e) => { e.stopPropagation(); onDelete(notification.id) }}
-          className="rounded p-1 text-muted-foreground hover:bg-background hover:text-destructive"
+          className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-background hover:text-destructive"
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          <Trash2 className="h-4 w-4" />
         </button>
       </div>
     </motion.div>
