@@ -23,11 +23,11 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "TCNP Central Application",
+    default: "TCN Protocol Central Application",
     template: "%s · TCNP",
   },
   description: "Enterprise Central Application System for The Covenant Nation Protocol",
-  applicationName: "TCNP Central Application",
+  applicationName: "TCN Protocol Central Application",
   manifest: "/manifest.json",
   icons: {
     icon: "/icon-192.png",

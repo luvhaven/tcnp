@@ -207,7 +207,7 @@ export default function LoginPage() {
         }
 
         loginSuccess = true;
-        toast.success("Login successful!");
+        toast.success("Signed in securely.");
         await new Promise((resolve) => setTimeout(resolve, 200));
 
         if (typeof window !== "undefined") {
@@ -277,7 +277,7 @@ export default function LoginPage() {
   const switchToLogin = () => setMode("login");
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-950 relative overflow-hidden selection:bg-orange-500/30">
+    <main className="min-h-dvh flex items-center justify-center bg-gray-950 relative overflow-x-hidden overflow-y-auto py-6 selection:bg-orange-500/30">
 
       {/* Background Image — composited once, no JS animation */}
       <div className="absolute inset-0 z-0" aria-hidden="true">
@@ -317,7 +317,7 @@ export default function LoginPage() {
       {/* ── Main card ─────────────────────────────────────────────────────── */}
       <div className="w-full max-w-[420px] relative z-10 px-5 sm:px-4">
         <div
-          className="rounded-[2rem] border border-white/10 p-8 sm:p-10 overflow-hidden"
+          className="rounded-[2rem] border border-white/10 p-6 sm:p-10 overflow-hidden"
           style={{
             background: "rgba(0,0,0,0.4)",
             backdropFilter: "blur(24px)",
@@ -337,11 +337,18 @@ export default function LoginPage() {
           <div className="text-center mb-7 relative z-10">
             <div className="flex justify-center mb-4">
               <div className="relative h-16 w-16 ring-1 ring-white/10 rounded-2xl overflow-hidden drop-shadow-[0_0_20px_rgba(255,255,255,0.25)]">
-                <Image src="/tcnp_logo.png" alt="TCNP logo" fill className="object-contain p-1" priority />
+                <Image
+                  src="/tcnp_logo.png"
+                  alt="TCNP logo"
+                  fill
+                  sizes="64px"
+                  className="object-contain p-1"
+                  priority
+                />
               </div>
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-white leading-none">
-              TCNP Platform
+              TCN Protocol
             </h1>
             <p className="text-[10px] font-semibold tracking-[0.22em] text-orange-300/60 uppercase mt-1.5">
               Central Application
@@ -464,7 +471,7 @@ export default function LoginPage() {
               noValidate
             >
               {/* Row: name + phone */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-4 sm:grid-cols-2 sm:gap-3">
                 <div>
                   <FieldLabel htmlFor="signup-name">Full Name</FieldLabel>
                   <GlassInput
@@ -472,7 +479,7 @@ export default function LoginPage() {
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     required
-                    placeholder="John Doe"
+                    placeholder="Amina Okafor"
                     autoComplete="name"
                   />
                 </div>
@@ -532,7 +539,7 @@ export default function LoginPage() {
               </div>
 
               {/* Row: Oscar + Team */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-4 sm:grid-cols-2 sm:gap-3">
                 <div>
                   <FieldLabel htmlFor="signup-oscar">Oscar Unit</FieldLabel>
                   <GlassSelect
@@ -621,6 +628,6 @@ export default function LoginPage() {
           to   { transform: translate(-4%, -3%) scale(1.08); }
         }
       `}</style>
-    </div>
+    </main>
   );
 }

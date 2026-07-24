@@ -135,7 +135,7 @@ export default function InstallPage() {
             </Card>
 
             <p className="mt-8 text-xs text-gray-400">
-                v1.0.0 • The Covenant Nation Protocol
+                v3.1.7 • TCN Protocol
             </p>
         </div>
     )

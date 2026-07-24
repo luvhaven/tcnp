@@ -135,6 +135,7 @@
 
   html {
     @apply h-full overflow-x-hidden;
+    scroll-behavior: smooth;
   }
 
   body {
@@ -498,7 +499,7 @@ h1 {
   position: fixed;
   bottom: 1rem;
   right: 1rem;
-  z-index: 9999;
+  z-index: 60;
   animation: slideUp 0.3s ease-out;
 }
 

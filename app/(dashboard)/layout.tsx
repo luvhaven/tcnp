@@ -133,6 +133,12 @@ export default function DashboardLayout({
   return (
     <ErrorBoundary>
       <div className="flex h-dvh min-h-0 overflow-hidden">
+        <a
+          href="#main-content"
+          className="fixed left-4 top-3 z-[70] -translate-y-20 rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background shadow-elevation-lg transition-transform focus:translate-y-0"
+        >
+          Skip to main content
+        </a>
         {/* Presence heartbeat - updates last_seen every 60s so officers show as online */}
         <PresenceHeartbeat />
 
@@ -212,7 +218,11 @@ export default function DashboardLayout({
             />
           </ErrorBoundary>
 
-          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain bg-gradient-to-br from-orange-50 via-background to-slate-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-900 px-3 py-4 sm:px-4 sm:py-6">
+          <main
+            id="main-content"
+            tabIndex={-1}
+            className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain bg-gradient-to-br from-orange-50 via-background to-slate-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-900 px-3 py-4 sm:px-4 sm:py-6"
+          >
             <div className="mx-auto max-w-6xl min-w-0 space-y-6 animate-fade-in">
               <ErrorBoundary>
                 {children}
