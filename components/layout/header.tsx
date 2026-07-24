@@ -146,7 +146,8 @@ function ProfileAvatar({
       {photoUrl ? (
         <AvatarImage src={photoUrl} alt="" className="object-cover" />
       ) : (
-        <AvatarFallback className="bg-[#ea580c] text-sm font-bold text-white">
+        // was bg-[#ea580c]: white on it measures 3.56:1, under AA
+        <AvatarFallback className="bg-primary-text text-sm font-bold text-white">
           {initials}
         </AvatarFallback>
       )}

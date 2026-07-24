@@ -26,7 +26,12 @@ const config: Config = {
   			foreground: 'hsl(var(--foreground))',
   			primary: {
   				DEFAULT: 'hsl(var(--primary))',
-  				foreground: 'hsl(var(--primary-foreground))'
+  				foreground: 'hsl(var(--primary-foreground))',
+  				// The legible cut of the brand orange — use as a FILL behind white
+  				// text (bg-primary-text), where the vivid --primary only reaches
+  				// 2.94:1. Orange *text* is handled by the .text-primary override
+  				// in globals.css, so call sites don't need to change.
+  				text: 'hsl(var(--primary-text))'
   			},
   			secondary: {
   				DEFAULT: 'hsl(var(--secondary))',

@@ -276,7 +276,9 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
             {collapsed && !isMobile ? (
               sectionIndex > 0 && <div className="mx-3 mb-2 border-t border-border/60" />
             ) : (
-              <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 select-none">
+              // 10px at muted-foreground/70 measured 2.72:1 — under AA. Full
+              // muted-foreground at 11px clears it while staying a quiet label.
+              <p className="select-none px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 {section.label}
               </p>
             )}
@@ -316,7 +318,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
                   <item.icon className="h-5 w-5" />
                   {/* Collapsed badge dots */}
                   {isChat && unreadChat > 0 && collapsed && !isMobile && (
-                    <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                    <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive motion-safe:animate-pulse" />
                   )}
                   {isOps && unreadAssignments > 0 && collapsed && !isMobile && (
                     <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
@@ -329,12 +331,14 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
                   <span>{item.name}</span>
                   <span className="flex gap-1 ml-auto">
                     {isChat && unreadChat > 0 && !(collapsed && !isMobile) && (
-                      <Badge variant="destructive" className="bg-red-500 text-white font-semibold animate-pulse shadow-lg">
+                      // bg-red-500 previously overrode the destructive variant here,
+                      // pinning white text at 3.76:1 — let the token through instead
+                      <Badge variant="destructive" className="font-semibold shadow-elevation">
                         {unreadChat > 99 ? '99+' : unreadChat}
                       </Badge>
                     )}
                     {isOps && unreadAssignments > 0 && !(collapsed && !isMobile) && (
-                      <Badge className="bg-orange-500 text-white font-semibold animate-pulse shadow-lg">
+                      <Badge className="bg-primary-text font-semibold text-white shadow-elevation">
                         {unreadAssignments > 9 ? '9+' : unreadAssignments}
                       </Badge>
                     )}

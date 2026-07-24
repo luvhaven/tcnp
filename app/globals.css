@@ -15,16 +15,27 @@
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-    /* TCNP Brand Orange */
+    /* TCNP Brand Orange — the vivid fill colour, used for buttons/backgrounds */
     --primary: 24 100% 50%;
     --primary-foreground: 0 0% 100%;
+    /* Brand orange is NOT legible as text: rgb(255,102,0) on white measures
+       2.94:1, well under the 4.5:1 WCAG AA needs. Measured on the live
+       dashboard it was failing on the active nav item and the role badge.
+       This darker cut hits 5.26:1 on white and 4.73:1 on the tinted badge
+       while staying unmistakably the same brand hue. Use it for orange TEXT
+       and icons; keep --primary for fills. */
+    --primary-text: 24 100% 36%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
+    /* Was 60.2% lightness, which put white text on it at only 3.78:1 — measured
+       failing on the notification count and unread badges. 48% lifts that to
+       4.88:1, and a deeper red reads as heavier, which is what an alarm colour
+       should do anyway. */
+    --destructive: 0 84.2% 48%;
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
@@ -38,14 +49,19 @@
 
     /* Semantic status tokens — used instead of raw Tailwind colors (bg-green-500
        etc.) so status color has one source of truth and adapts correctly in dark mode */
-    --success: 142 71% 35%;
+    /* Status fills carry white text (badges, chips), so their lightness is set
+       by that pairing, not by taste: measured, 31% is the lightest green that
+       still clears 4.5:1 against white. */
+    --success: 142 71% 31%;
     --success-foreground: 0 0% 100%;
     /* Pushed to 44° gold, away from the 24° brand orange. At 38° a "heavy
        traffic" warning was the same hue as ordinary brand chrome and stopped
        reading as a warning at all. Semantic status must never share the accent. */
     --warning: 44 96% 39%;
-    --warning-foreground: 0 0% 100%;
-    --info: 213 84% 48%;
+    /* Gold takes dark ink, not white — white on it measures 2.87:1. The dark
+       theme already did this correctly; light was the outlier. */
+    --warning-foreground: 44 100% 8%;
+    --info: 213 84% 45%;
     --info-foreground: 0 0% 100%;
 
     /* Elevation scale — soft, low-opacity, slightly warm-tinted shadows instead of
@@ -73,6 +89,9 @@
     /* TCNP Brand Orange for dark mode */
     --primary: 24 100% 50%;
     --primary-foreground: 0 0% 100%;
+    /* On the dark ground the full-strength orange already measures 6.58:1,
+       so text keeps the vivid value here — darkening it would hurt. */
+    --primary-text: 24 100% 50%;
     --secondary: 224 18% 10%;
     --secondary-foreground: 210 40% 98%;
     --muted: 224 18% 10%;
@@ -90,11 +109,12 @@
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
 
-    --success: 142 64% 42%;
+    /* Same rule on the dark ground — these fills keep white text on them */
+    --success: 142 64% 32%;
     --success-foreground: 0 0% 100%;
     --warning: 44 96% 56%;
     --warning-foreground: 224 20% 6%;
-    --info: 213 90% 60%;
+    --info: 213 90% 45%;
     --info-foreground: 0 0% 100%;
 
     /* Dark surfaces need deeper, more opaque shadows to read against a dark background */
@@ -167,6 +187,18 @@
   /* Disabled controls should read as untouchable everywhere */
   :disabled {
     cursor: not-allowed;
+  }
+}
+
+/* ─── Accessible brand text ───────────────────────────────────────────────── */
+/* `text-primary` appears in 126 places. Rather than rewrite every call site,
+   redirect the utility itself to the legible cut of the brand orange. Same
+   layer as Tailwind's own utility, so this wins purely on source order — no
+   !important, and `bg-primary` keeps the vivid fill it was designed for.
+   Verified on the live dashboard: 2.94:1 → 5.26:1 on white. */
+@layer utilities {
+  .text-primary {
+    color: hsl(var(--primary-text));
   }
 }
 
@@ -341,6 +373,31 @@
 
 /* Touch-friendly spacing for mobile */
 @media (max-width: 768px) {
+
+  /* Header icon buttons are 36px and toolbar buttons 32px tall — visually
+     right, but under the 44px a thumb actually needs. Rather than inflate
+     the chrome, project an invisible 44px hit area from the centre so the
+     tap target grows without the layout moving. */
+  header button,
+  header a,
+  nav button {
+    position: relative;
+  }
+
+  header button::after,
+  header a::after,
+  nav button::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 100%;
+    min-width: 44px;
+    min-height: 44px;
+    transform: translate(-50%, -50%);
+  }
+
   .touch-target {
     min-height: 44px;
     min-width: 44px;
