@@ -1,71 +1,48 @@
--- Lock down write access to programs and their schedule sub-tables.
+-- Close a live privilege-escalation hole on the programs table.
 --
--- WHY: ProgramsClient shipped Create/Edit/Delete to every authenticated officer
--- with no role check (fixed in the UI in commit dcf40ef), but the UI is not the
--- security boundary — RLS is. A policy restricting programs to leadership existed
--- only in docs/archive/ SQL; it was never in an applied migration, so there was
--- no tracked guarantee it is live on the database. This migration makes the
--- boundary explicit and idempotent.
+-- Confirmed against the live database (2026-07-25): alongside the correct
+-- admin-only policies, programs carried three rogue policies granting write
+-- access to EVERY authenticated user, and because permissive RLS policies are
+-- OR'd together these overrode the admin ones entirely:
 --
--- MODEL: read is open to any authenticated user (every list view needs it);
--- write (insert/update/delete) is restricted to is_admin(), the SECURITY DEFINER
--- helper already deployed and used by the nests/theatres policies. Its role set
--- (super_admin, dev_admin, admin, captain, vice_captain, head_of_operations,
--- head_of_command, command) is exactly the client isAdmin() list, so the UI and
--- the database agree.
+--   programs_delete_authenticated  DELETE  role authenticated  USING (true)
+--   programs_insert_authenticated  INSERT  role authenticated  CHECK (true)
+--   programs_update_authenticated  UPDATE  role authenticated  USING/CHECK (true)
 --
--- SAFE FOR EXISTING FLOWS: the only anon/authed-client writer to these tables is
--- the (now admin-gated) programs UI. Server routes that legitimately mutate them
--- use the service-role client, which bypasses RLS entirely — so enabling RLS
--- here cannot break background/admin automation.
+-- That is exactly the reported bug: any logged-in officer, down to a Delta
+-- Oscar, could delete or edit any program. The ProgramsClient UI gate (commit
+-- dcf40ef) hid the buttons; this removes the actual server-side hole.
 --
--- NOT INCLUDED: theatre_vips (senior ministers). That table is Victor-Oscar
--- owned, not admin-only, so an is_admin()-only policy would wrongly lock out
--- Victor Oscars. It needs a Victor-scoped policy verified against live schema;
--- it is gated in the UI in the meantime.
+-- End state for programs: exactly two policies —
+--   · SELECT for any authenticated user (every list view needs it)
+--   · ALL (insert/update/delete) restricted to is_admin(), the SECURITY DEFINER
+--     helper already used by the previous "Admins have full access" policy.
+--
+-- The schedule sub-tables (program_days, program_sessions, session_speakers)
+-- were checked in the same pass and are already correctly restricted to
+-- leadership via has_any_role(...), so they are deliberately left untouched.
+-- theatre_vips (Victor-Oscar owned) is likewise out of scope here.
+--
+-- Idempotent: safe to run more than once.
 
--- Fail loudly if the helper this migration depends on is somehow absent, rather
--- than silently creating a policy that references a missing function.
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_proc WHERE proname = 'is_admin' AND pronamespace = 'public'::regnamespace
-  ) THEN
-    RAISE EXCEPTION 'is_admin() not found in public schema — aborting programs RLS migration';
-  END IF;
-END $$;
+ALTER TABLE public.programs ENABLE ROW LEVEL SECURITY;
 
-DO $$
-DECLARE
-  t text;
-BEGIN
-  FOREACH t IN ARRAY ARRAY['programs', 'program_days', 'program_sessions', 'session_speakers']
-  LOOP
-    -- Enable RLS (no-op if already enabled)
-    EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
+-- Drop the three write holes, plus the redundant duplicate SELECT and ALL
+-- policies that had accumulated, so we end with one clean pair.
+DROP POLICY IF EXISTS "programs_delete_authenticated" ON public.programs;
+DROP POLICY IF EXISTS "programs_insert_authenticated" ON public.programs;
+DROP POLICY IF EXISTS "programs_update_authenticated" ON public.programs;
+DROP POLICY IF EXISTS "programs_modify_policy" ON public.programs;              -- dup admin-write
+DROP POLICY IF EXISTS "Admins have full access to programs" ON public.programs; -- superseded below
+DROP POLICY IF EXISTS "programs_select_all" ON public.programs;                 -- dup select
+DROP POLICY IF EXISTS "All users can view programs" ON public.programs;         -- dup select
+DROP POLICY IF EXISTS "Authenticated users can view programs" ON public.programs;-- dup select
 
-    -- Drop every prior policy on the table so re-running yields one clean pair,
-    -- and so any legacy over-permissive "authenticated can do anything" policy
-    -- (the actual hole) is removed rather than left to OR-grant writes.
-    DECLARE
-      p record;
-    BEGIN
-      FOR p IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = t
-      LOOP
-        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', p.policyname, t);
-      END LOOP;
-    END;
+-- Canonical pair.
+DROP POLICY IF EXISTS "programs_select_authenticated" ON public.programs;
+CREATE POLICY "programs_select_authenticated" ON public.programs
+  FOR SELECT USING (auth.uid() IS NOT NULL);
 
-    -- Read: any authenticated user.
-    EXECUTE format(
-      'CREATE POLICY %I ON public.%I FOR SELECT USING (auth.uid() IS NOT NULL)',
-      t || '_select_authenticated', t
-    );
-
-    -- Write (insert / update / delete): leadership only.
-    EXECUTE format(
-      'CREATE POLICY %I ON public.%I FOR ALL USING (is_admin()) WITH CHECK (is_admin())',
-      t || '_admin_write', t
-    );
-  END LOOP;
-END $$;
+DROP POLICY IF EXISTS "programs_admin_write" ON public.programs;
+CREATE POLICY "programs_admin_write" ON public.programs
+  FOR ALL USING (is_admin()) WITH CHECK (is_admin());
