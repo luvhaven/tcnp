@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Calendar, Plus, Edit, Trash2, Archive, CheckCircle, Building2 } from "lucide-react"
+import { Calendar, Plus, Edit, Trash2, Archive, CheckCircle, Building2, Search, Filter } from "lucide-react"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import ProgramExport from "@/components/programs/ProgramExport"
@@ -48,6 +48,8 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Program | null>(null)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -276,43 +278,58 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
     return status.charAt(0).toUpperCase() + status.slice(1)
   }
 
+  const filteredPrograms = useMemo(() => {
+    return programs.filter((program) => {
+      const matchesSearch = search.trim() === '' || 
+        program.name.toLowerCase().includes(search.toLowerCase()) ||
+        (program.theatres?.name && program.theatres.name.toLowerCase().includes(search.toLowerCase())) ||
+        (program.description && program.description.toLowerCase().includes(search.toLowerCase()))
+
+      const matchesStatus = statusFilter === 'all' || program.status === statusFilter
+      return matchesSearch && matchesStatus
+    })
+  }, [programs, search, statusFilter])
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 page-enter">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
       >
         <div className="min-w-0">
-          <h1 className="text-3xl font-bold tracking-tight">Programs</h1>
-          <p className="text-sm text-muted-foreground max-w-xl">Manage events and programs</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Programs & Events</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground max-w-xl">Central registry of ministry programs, theatre venues, schedules, and rosters.</p>
         </div>
         {canManagePrograms && (
-          <Button onClick={openDialog} className="shrink-0 self-start sm:self-auto">
-            <Plus className="mr-2 h-4 w-4" />
+          <Button onClick={openDialog} className="shrink-0 self-start sm:self-auto shadow-sm font-semibold gap-1.5">
+            <Plus className="h-4 w-4" />
             Add Program
           </Button>
         )}
       </motion.div>
 
-
       {/* Stats */}
       <div className="grid gap-4 grid-cols-2 nav:grid-cols-4">
         {[
           { status: 'planning', label: 'Planning', Icon: Calendar, color: 'text-sky-500', bg: 'bg-sky-500/10', ring: 'ring-sky-500/20' },
-          { status: 'active', label: 'Active', Icon: CheckCircle, color: 'text-[hsl(var(--success))]', bg: 'bg-[hsl(var(--success)/0.08)]', ring: 'ring-[hsl(var(--success)/0.2)]' },
-          { status: 'completed', label: 'Completed', Icon: CheckCircle, color: 'text-violet-500', bg: 'bg-violet-500/10', ring: 'ring-violet-500/20' },
+          { status: 'active', label: 'Active', Icon: CheckCircle, color: 'text-emerald-500', bg: 'bg-emerald-500/10', ring: 'ring-emerald-500/20' },
+          { status: 'completed', label: 'Completed', Icon: CheckCircle, color: 'text-purple-500', bg: 'bg-purple-500/10', ring: 'ring-purple-500/20' },
           { status: 'archived', label: 'Archived', Icon: Archive, color: 'text-muted-foreground', bg: 'bg-muted/60', ring: 'ring-border' },
         ].map(({ status, label, Icon, color, bg, ring }) => (
-          <div key={status} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
+          <div
+            key={status}
+            onClick={() => setStatusFilter(prev => prev === status ? 'all' : status)}
+            className={`rounded-2xl border bg-card p-4 sm:p-5 ring-1 ${ring} transition-all cursor-pointer hover:shadow-elevation-md hover:-translate-y-0.5 ${statusFilter === status ? 'border-primary shadow-xs' : ''}`}
+          >
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="text-xs font-medium text-muted-foreground">{label}</p>
-                <p className={`stat-figure mt-2 text-3xl font-bold ${color}`}>
+                <p className={`stat-figure mt-1.5 text-2xl sm:text-3xl font-bold ${color}`}>
                   {programs.filter(p => p.status === status).length}
                 </p>
               </div>
-              <div className={`shrink-0 rounded-xl ${bg} p-2.5`}>
+              <div className={`shrink-0 rounded-xl ${bg} p-2`}>
                 <Icon className={`h-4 w-4 ${color}`} aria-hidden="true" />
               </div>
             </div>
@@ -320,127 +337,191 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
         ))}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Calendar className="h-5 w-5" />
-            <span>All Programs</span>
-          </CardTitle>
-          <CardDescription>Manage all events and programs</CardDescription>
+      <Card className="border-border/60 overflow-hidden">
+        <CardHeader className="pb-3 border-b bg-muted/20">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-primary" />
+                <span>All Programs</span>
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Operational lifecycle from initial planning to completion & archiving
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(['all', 'active', 'planning', 'completed', 'archived'] as const).map(tab => (
+                <Badge
+                  key={tab}
+                  variant={statusFilter === tab ? 'default' : 'outline'}
+                  onClick={() => setStatusFilter(tab)}
+                  className={`text-[10px] font-semibold uppercase tracking-wider cursor-pointer transition-colors ${statusFilter === tab ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+                >
+                  {tab}
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          {/* Search bar */}
+          <div className="mt-3 flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search programs by name, theatre venue, or description…"
+                className="pl-9 bg-background h-9 text-xs"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            {search && (
+              <Button variant="ghost" size="sm" onClick={() => setSearch('')} className="text-xs h-9">
+                Clear
+              </Button>
+            )}
+          </div>
         </CardHeader>
-        <CardContent>
-          {programs.length === 0 ? (
+        <CardContent className="p-4 sm:p-6">
+          {filteredPrograms.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Calendar className="h-12 w-12 text-muted-foreground/50" />
-              <p className="mt-4 text-sm font-medium">No programs yet</p>
-              {canManagePrograms && (
-                <Button className="mt-4" onClick={openDialog}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Program
+              <div className="h-12 w-12 rounded-2xl bg-muted/60 flex items-center justify-center text-muted-foreground/60 mb-3">
+                <Calendar className="h-6 w-6" />
+              </div>
+              <p className="text-sm font-semibold">{search || statusFilter !== 'all' ? 'No matching programs found' : 'No programs registered'}</p>
+              <p className="text-xs text-muted-foreground max-w-sm mt-1">
+                {search || statusFilter !== 'all' ? 'Try adjusting your search terms or status filter.' : 'Create your first program to start scheduling Papas, venues, and duties.'}
+              </p>
+              {canManagePrograms && !search && statusFilter === 'all' && (
+                <Button className="mt-4 gap-1.5 text-xs font-semibold" size="sm" onClick={openDialog}>
+                  <Plus className="h-3.5 w-3.5" />
+                  Add First Program
                 </Button>
               )}
             </div>
           ) : (
             <motion.div layout className="space-y-3">
               <AnimatePresence>
-                {programs.map((program) => (
-                  <motion.div
-                    layout
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ duration: 0.2 }}
-                    key={program.id}
-                    className="flex min-w-0 flex-col gap-3 overflow-hidden rounded-lg border p-4 transition-all hover:bg-accent hover:shadow-md hover:border-primary/30 sm:flex-row sm:items-start sm:justify-between"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-start gap-3">
-                        <div className={`mt-1.5 h-3 w-3 shrink-0 rounded-full ${getStatusColor(program.status)}`} />
-                        <div className="min-w-0">
-                          <p className="truncate font-medium text-lg">{program.name}</p>
-                          <p className="text-sm text-muted-foreground break-words">
-                            {program.theatres?.name || 'No venue'}
-                            {' • '}
-                            Starts{' '}
-                            {program.start_date && !Number.isNaN(new Date(program.start_date).getTime())
-                              ? new Date(program.start_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-                              : '—'}
-                          </p>
-                          {program.description && (
-                            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{program.description}</p>
-                          )}
+                {filteredPrograms.map((program) => {
+                  const statusBadges: Record<string, { label: string; className: string }> = {
+                    active: { label: 'Active', className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
+                    planning: { label: 'Planning', className: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20' },
+                    completed: { label: 'Completed', className: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20' },
+                    archived: { label: 'Archived', className: 'bg-muted text-muted-foreground border-border' },
+                  }
+                  const badgeInfo = statusBadges[program.status] || { label: program.status, className: 'bg-muted' }
+
+                  return (
+                    <motion.div
+                      layout
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.2 }}
+                      key={program.id}
+                      className="flex min-w-0 flex-col gap-3 overflow-hidden rounded-xl border border-border/70 p-4 transition-all hover:bg-card hover:border-primary/40 hover:shadow-xs sm:flex-row sm:items-start sm:justify-between"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <div className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${getStatusColor(program.status)}`} />
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="truncate font-semibold text-base text-foreground">{program.name}</h3>
+                              <Badge variant="outline" className={`text-[10px] font-semibold uppercase tracking-wider ${badgeInfo.className}`}>
+                                {badgeInfo.label}
+                              </Badge>
+                            </div>
+                            <p className="mt-1 text-xs text-muted-foreground break-words flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                              {program.theatres?.name ? (
+                                <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                                  <Building2 className="h-3 w-3 text-muted-foreground" />
+                                  {program.theatres.name}
+                                </span>
+                              ) : (
+                                <span>No venue assigned</span>
+                              )}
+                              <span>•</span>
+                              <span>
+                                Starts{' '}
+                                {program.start_date && !Number.isNaN(new Date(program.start_date).getTime())
+                                  ? new Date(program.start_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                                  : '—'}
+                              </span>
+                            </p>
+                            {program.description && (
+                              <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">{program.description}</p>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 sm:justify-end">
-                      <Badge variant="secondary" className="shrink-0">
-                        {getStatusLabel(program.status)}
-                      </Badge>
+                      <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5 sm:justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-border/40">
+                        <ProgramExport
+                          programId={program.id}
+                          programName={program.name}
+                          status={program.status}
+                        />
 
-                      <ProgramExport
-                        programId={program.id}
-                        programName={program.name}
-                        status={program.status}
-                      />
+                        {['planning', 'active'].includes(program.status) && (
+                          <>
+                            <RequestAvailabilityButton programId={program.id} programName={program.name} />
+                            <AvailabilityRosterButton programId={program.id} programName={program.name} />
+                          </>
+                        )}
 
-                      {['planning', 'active'].includes(program.status) && (
-                        <>
-                          <RequestAvailabilityButton programId={program.id} programName={program.name} />
-                          <AvailabilityRosterButton programId={program.id} programName={program.name} />
-                        </>
-                      )}
-
-                      {program.status === 'planning' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleStatusChange(program.id, 'active')}
-                        >
-                          Activate
-                        </Button>
-                      )}
-
-                      {program.status === 'active' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleStatusChange(program.id, 'completed')}
-                        >
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Complete
-                        </Button>
-                      )}
-
-                      {program.status === 'completed' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleStatusChange(program.id, 'archived')}
-                        >
-                          <Archive className="h-4 w-4 mr-1" />
-                          Archive
-                        </Button>
-                      )}
-                      <Button variant="outline" size="sm" onClick={() => {
-                        setScheduleProgram(program)
-                        setScheduleOpen(true)
-                      }}>
-                        <Calendar className="mr-2 h-4 w-4" />
-                        Schedule
-                      </Button>
-                      {canManagePrograms && (
-                        <>
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(program)} className="hover:bg-primary/10" aria-label={`Edit ${program.name}`}>
-                            <Edit className="h-4 w-4" />
+                        {program.status === 'planning' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs font-semibold text-sky-600 dark:text-sky-400 hover:bg-sky-500/10"
+                            onClick={() => handleStatusChange(program.id, 'active')}
+                          >
+                            Activate
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(program.id)} className="hover:bg-destructive/10" aria-label={`Delete ${program.name}`}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
+                        )}
+
+                        {program.status === 'active' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                            onClick={() => handleStatusChange(program.id, 'completed')}
+                          >
+                            <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                            Complete
                           </Button>
-                        </>
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
+                        )}
+
+                        {program.status === 'completed' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-500/10"
+                            onClick={() => handleStatusChange(program.id, 'archived')}
+                          >
+                            <Archive className="h-3.5 w-3.5 mr-1" />
+                            Archive
+                          </Button>
+                        )}
+                        <Button variant="outline" size="sm" className="h-8 text-xs font-medium" onClick={() => {
+                          setScheduleProgram(program)
+                          setScheduleOpen(true)
+                        }}>
+                          <Calendar className="mr-1.5 h-3.5 w-3.5" />
+                          Schedule
+                        </Button>
+                        {canManagePrograms && (
+                          <>
+                            <Button variant="ghost" size="icon" onClick={() => handleEdit(program)} className="h-8 w-8 hover:bg-primary/10" aria-label={`Edit ${program.name}`}>
+                              <Edit className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDelete(program.id)} className="h-8 w-8 hover:bg-destructive/10 text-destructive" aria-label={`Delete ${program.name}`}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </motion.div>
+                  )
+                })}
               </AnimatePresence>
             </motion.div>
           )}

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { motion } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { CountUp } from "@/components/ui/count-up"
 import {
@@ -15,6 +16,9 @@ import {
   Volume2,
   ArrowRight,
   ShieldCheck,
+  Radio,
+  AlertTriangle,
+  Plus,
 } from "lucide-react"
 
 // ─── Singleton client ───
@@ -31,29 +35,37 @@ const MODULES = [
     name: "Journeys",
     href: "/journeys",
     icon: Route,
-    description: "Plan and run Papa movements with call-sign workflows.",
-    accent: "from-orange-500/15 to-orange-500/0 text-orange-500",
+    tag: "Convoy Ops",
+    description: "Plan and coordinate Papa movements with real-time call-sign progress.",
+    accent: "from-orange-500/20 via-orange-500/10 to-transparent text-orange-500 border-orange-500/20 hover:border-orange-500/40",
+    iconBg: "bg-orange-500/10 text-orange-500",
   },
   {
     name: "Live Tracking",
     href: "/tracking/live",
     icon: MapPin,
-    description: "Real-time officer and convoy positions on the map.",
-    accent: "from-emerald-500/15 to-emerald-500/0 text-emerald-500",
+    tag: "GPS Map",
+    description: "Real-time officer positions, convoy movements, and arrival telemetry.",
+    accent: "from-emerald-500/20 via-emerald-500/10 to-transparent text-emerald-500 border-emerald-500/20 hover:border-emerald-500/40",
+    iconBg: "bg-emerald-500/10 text-emerald-500",
   },
   {
-    name: "Ops Monitor",
+    name: "Operations Monitor",
     href: "/operations-monitor",
     icon: Activity,
-    description: "Mission control view of every active operation.",
-    accent: "from-sky-500/15 to-sky-500/0 text-sky-500",
+    tag: "Mission Control",
+    description: "Full situational overview of active operations, convoys, and assignments.",
+    accent: "from-sky-500/20 via-sky-500/10 to-transparent text-sky-500 border-sky-500/20 hover:border-sky-500/40",
+    iconBg: "bg-sky-500/10 text-sky-500",
   },
   {
-    name: "Echo",
+    name: "Echo & Equipment",
     href: "/echo",
     icon: Volume2,
-    description: "Equipment, AV briefings and pre-op checklists.",
-    accent: "from-purple-500/15 to-purple-500/0 text-purple-500",
+    tag: "Readiness",
+    description: "Equipment logistics, AV readiness briefings, and pre-op equipment checklists.",
+    accent: "from-purple-500/20 via-purple-500/10 to-transparent text-purple-500 border-purple-500/20 hover:border-purple-500/40",
+    iconBg: "bg-purple-500/10 text-purple-500",
   },
 ]
 
@@ -83,61 +95,129 @@ export default function CommandPage() {
 
   return (
     <div className="space-y-6 page-enter">
-      {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl border bg-card p-6">
-        <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-orange-500/10 blur-3xl" />
-        <div className="relative z-10 flex items-start justify-between gap-4">
+      {/* Header with Glassmorphism & Live Pulse */}
+      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-card via-card/95 to-background p-6 shadow-sm">
+        <div className="absolute -right-12 -top-12 h-56 w-56 rounded-full bg-orange-500/10 blur-3xl pointer-events-none" />
+        <div className="absolute -left-12 -bottom-12 h-56 w-56 rounded-full bg-sky-500/10 blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2">
-              <Radar className="h-6 w-6 text-orange-500" />
-              <h1 className="text-2xl font-bold tracking-tight">Command Centre</h1>
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500">
+                <Radar className="h-5 w-5 animate-spin-slow" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-bold tracking-tight">Command Centre</h1>
+                  <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    LIVE OPS
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Central mission control for convoys, telemetry, operational monitoring, and field safety.
+                </p>
+              </div>
             </div>
-            <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-              Unified control of journeys, live tracking, operations monitoring and equipment readiness.
-            </p>
           </div>
-          <ShieldCheck className="hidden h-10 w-10 text-orange-500/40 sm:block" />
+
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <Link href="/journeys">
+              <Button size="sm" className="gap-1.5 text-xs font-semibold shadow-sm">
+                <Plus className="h-3.5 w-3.5" />
+                Plan Journey
+              </Button>
+            </Link>
+            <Link href="/tracking/live">
+              <Button size="sm" variant="outline" className="gap-1.5 text-xs font-medium">
+                <Radio className="h-3.5 w-3.5 text-emerald-500" />
+                Live Map
+              </Button>
+            </Link>
+            <Link href="/incidents">
+              <Button size="sm" variant="outline" className="gap-1.5 text-xs font-medium text-destructive hover:bg-destructive/10">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Incidents
+              </Button>
+            </Link>
+          </div>
         </div>
 
-        {/* Live stats strip */}
-        <div className="relative z-10 mt-6 grid grid-cols-3 gap-3">
-          <div className="rounded-xl bg-muted/50 px-4 py-3">
-            <p className="text-2xl font-bold"><CountUp value={stats.activeJourneys} /></p>
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Active Journeys</p>
+        {/* Live telemetry stat cards */}
+        <div className="relative z-10 mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="flex items-center justify-between rounded-xl bg-background/80 backdrop-blur-sm border border-border/60 px-4 py-3.5 shadow-sm">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Active Journeys</p>
+              <p className="text-2xl font-bold tracking-tight text-foreground mt-0.5">
+                <CountUp value={stats.activeJourneys} />
+              </p>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500">
+              <Route className="h-5 w-5" />
+            </div>
           </div>
-          <div className="rounded-xl bg-muted/50 px-4 py-3">
-            <p className="text-2xl font-bold"><CountUp value={stats.onlineOfficers} /></p>
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Officers Online</p>
+
+          <div className="flex items-center justify-between rounded-xl bg-background/80 backdrop-blur-sm border border-border/60 px-4 py-3.5 shadow-sm">
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Officers Online</p>
+              </div>
+              <p className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400 mt-0.5">
+                <CountUp value={stats.onlineOfficers} />
+              </p>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
           </div>
-          <div className="rounded-xl bg-muted/50 px-4 py-3">
-            <p className="text-2xl font-bold"><CountUp value={stats.openIncidents} /></p>
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Open Incidents</p>
+
+          <div className="flex items-center justify-between rounded-xl bg-background/80 backdrop-blur-sm border border-border/60 px-4 py-3.5 shadow-sm">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Open Incidents</p>
+              <p className={`text-2xl font-bold tracking-tight mt-0.5 ${stats.openIncidents > 0 ? "text-amber-500" : "text-foreground"}`}>
+                <CountUp value={stats.openIncidents} />
+              </p>
+            </div>
+            <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${stats.openIncidents > 0 ? "bg-amber-500/15 text-amber-500" : "bg-muted text-muted-foreground"}`}>
+              <AlertTriangle className="h-5 w-5" />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Module cards */}
+      {/* Module grid */}
       <div className="grid gap-4 sm:grid-cols-2">
         {MODULES.map((mod, i) => (
           <motion.div
             key={mod.href}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.06, duration: 0.25, ease: "easeOut" }}
+            transition={{ delay: i * 0.05, duration: 0.25, ease: "easeOut" }}
           >
-            <Link href={mod.href} className="block h-full">
-              <Card className="card-hover group h-full overflow-hidden">
-                <CardContent className="relative flex h-full flex-col gap-3 p-5">
-                  <div className={`absolute inset-0 bg-gradient-to-br ${mod.accent.split(" ").slice(0, 2).join(" ")} opacity-60`} />
-                  <div className="relative z-10 flex items-center justify-between">
-                    <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-background shadow-sm ${mod.accent.split(" ").pop()}`}>
-                      <mod.icon className="h-5 w-5" />
+            <Link href={mod.href} className="block h-full group focus-visible:outline-none">
+              <Card className={`h-full overflow-hidden border transition-all duration-200 hover:shadow-elevation-md hover:-translate-y-0.5 ${mod.accent}`}>
+                <CardContent className="relative flex h-full flex-col justify-between gap-4 p-5">
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <div className={`flex h-11 w-11 items-center justify-center rounded-xl shadow-sm ${mod.iconBg}`}>
+                        <mod.icon className="h-5 w-5" />
+                      </div>
+                      <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider bg-background/80">
+                        {mod.tag}
+                      </Badge>
                     </div>
-                    <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-hover:translate-x-1 group-hover:text-foreground" />
+                    <h2 className="text-base font-semibold text-foreground group-hover:text-primary transition-colors">
+                      {mod.name}
+                    </h2>
+                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                      {mod.description}
+                    </p>
                   </div>
-                  <div className="relative z-10">
-                    <h2 className="font-semibold">{mod.name}</h2>
-                    <p className="mt-0.5 text-sm text-muted-foreground">{mod.description}</p>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-border/40 text-xs font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
+                    <span>Open Module</span>
+                    <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-1" />
                   </div>
                 </CardContent>
               </Card>
@@ -146,9 +226,9 @@ export default function CommandPage() {
         ))}
       </div>
 
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">Note</Badge>
-        Echo is no longer a standalone protocol unit — its equipment tooling now lives here under Command.
+      <div className="flex items-center gap-2 text-xs text-muted-foreground rounded-xl bg-muted/40 p-3 border border-border/40">
+        <Badge variant="outline" className="text-[10px] uppercase tracking-wide bg-background">Note</Badge>
+        <span>Echo is integrated under Command for pre-op equipment logistics and AV readiness checklists.</span>
       </div>
     </div>
   )

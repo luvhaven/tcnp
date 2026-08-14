@@ -250,31 +250,45 @@ export default function DashboardPage() {
     <div className="space-y-6 page-enter">
 
       {/* ── Page header ──────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight">
-            {firstName ? `Welcome back, ${firstName}` : "Dashboard"}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {activeProgram ? (
-              <>Active operation: <span className="font-semibold text-foreground">{activeProgram.name}</span></>
-            ) : (
-              "No active operation — all quiet on the protocol front."
-            )}
-          </p>
-        </div>
+      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-card via-card/95 to-background p-6 shadow-xs">
+        <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Executive Overview</span>
+              {activeProgram && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  {activeProgram.name}
+                </span>
+              )}
+            </div>
+            <h1 className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+              {firstName ? `Welcome back, ${firstName}` : "Command Dashboard"}
+            </h1>
+            <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
+              {activeProgram ? (
+                <>Active operational protocol is currently engaged for <span className="font-semibold text-foreground">{activeProgram.name}</span>.</>
+              ) : (
+                "All systems nominal — stand by for program assignments and journey dispatch."
+              )}
+            </p>
+          </div>
 
-        {!isInstalled ? (
-          <Button onClick={handleInstallClick} variant="outline" size="sm" className="gap-2 rounded-full self-start shrink-0">
-            <Download className="h-3.5 w-3.5" aria-hidden="true" />
-            Install App
-          </Button>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground self-start shrink-0 pt-1">
-            <CheckCircle className="h-3.5 w-3.5 text-green-500" aria-hidden="true" />
-            App Installed
-          </span>
-        )}
+          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+            {!isInstalled ? (
+              <Button onClick={handleInstallClick} variant="outline" size="sm" className="gap-2 rounded-xl self-start shrink-0 text-xs font-medium bg-background/80 shadow-xs">
+                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                Install App
+              </Button>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground px-3 py-1.5 rounded-xl bg-background/80 border border-border/60 shadow-xs">
+                <CheckCircle className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
+                App Installed
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
       {showInstallModal && (
