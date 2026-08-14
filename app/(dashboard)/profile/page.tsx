@@ -51,7 +51,7 @@ const OSCAR_UNITS = [
   "Compliance Oscar",
   "Delta Oscar",
   "Hospitality Oscar",
-  "November Oscar (Den)",
+  "November Oscar (Theatre)",
   "November Oscar (Nest)",
   "Serial Oscar",
   "Tango Oscar",

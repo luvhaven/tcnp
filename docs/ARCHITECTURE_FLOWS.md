@@ -71,7 +71,7 @@ hatch**.
 |---|---|---|
 | Social media assets | Serial Oscar | `/sierra` |
 | Outfits & grooming | Compliance Oscar | `/compliance` |
-| Menus / menu of the day | Welfare + November (Den) | `/welfare`, `/den` |
+| Menus / menu of the day | Welfare + November (Theatre) | `/welfare`, `/den` |
 | Papa accommodations | November (Nest) | `/nests` (DOs see only their Papa's) |
 | Seat arrangements | Head of Victor | `/victor` |
 | Places for Papas | Hospitality Oscar | `/hospitality` |

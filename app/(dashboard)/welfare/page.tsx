@@ -128,7 +128,7 @@ export default function WelfarePage() {
             </Select>
           </div>
 
-          {/* Menus (shared with November (Den)) */}
+          {/* Menus (shared with November (Theatre)) */}
           <DenMenus canEdit={canEdit} selectedProgram={filterProgram} currentUserId={currentUser?.id ?? null} />
         </>
       )}

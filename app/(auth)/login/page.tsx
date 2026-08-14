@@ -22,7 +22,7 @@ const OSCAR_OPTIONS = [
   { value: "Alpha Oscar", label: "Alpha Oscar", sub: "Eagle Square" },
   { value: "Compliance Oscar", label: "Compliance Oscar", sub: "Grooming & Dress Code" },
   { value: "Hospitality Oscar", label: "Hospitality Oscar", sub: "Papa Experiences" },
-  { value: "November Oscar (Den)", label: "November Oscar (Den)", sub: "Lounge & Menus" },
+  { value: "November Oscar (Theatre)", label: "November Oscar (Theatre)", sub: "Lounge & Menus" },
   { value: "November Oscar (Nest)", label: "November Oscar (Nest)", sub: "Hotels & Accommodation" },
   { value: "Serial Oscar", label: "Serial Oscar", sub: "Social Media" },
   { value: "Tango Oscar", label: "Tango Oscar", sub: "Transport" },

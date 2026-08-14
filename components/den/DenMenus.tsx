@@ -273,7 +273,7 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
             <div className="empty-state rounded-xl border">
               <UtensilsCrossed className="h-10 w-10" />
               <p className="font-medium">No menus published</p>
-              <p className="text-sm text-muted-foreground">Welfare and November (Den) can publish the menu of the day here.</p>
+              <p className="text-sm text-muted-foreground">Welfare and November (Theatre) can publish the menu of the day here.</p>
             </div>
           )}
         </>

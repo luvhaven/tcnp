@@ -38,7 +38,6 @@ import {
   Radar,
 } from "lucide-react"
 
-
 type NavItem = { name: string; href: string; icon: React.ComponentType<{ className?: string }> }
 type NavSection = { label: string; items: NavItem[] }
 
@@ -65,7 +64,7 @@ const NAV_SECTIONS: NavSection[] = [
       { name: "Tango", href: "/tango", icon: Car },
       { name: "Victor", href: "/victor", icon: Landmark },
       { name: "November (Nest)", href: "/nests", icon: Hotel },
-      { name: "November (Den)", href: "/den", icon: Home },
+      { name: "November (Theatre)", href: "/den", icon: Home },
       { name: "Serial", href: "/serial", icon: Camera },
       { name: "Compliance", href: "/compliance", icon: Shirt },
       { name: "Welfare", href: "/welfare", icon: UtensilsCrossed },
@@ -284,69 +283,67 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
             )}
             <div className="space-y-1">
               {section.items.map((item, index) => {
-          const isActive = pathname === item.href
-          const isChat = item.name === "Team Chat"
-          const isOps = item.name === "My Operations"
-          return (
-            <motion.div
-              key={item.href}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: (sectionIndex * 2 + index) * 0.03, duration: 0.2, ease: "easeOut" }}
-            >
-              <Link
-                href={item.href}
-                onClick={isMobile ? onClose : undefined}
-                className={cn(
-                  "relative flex items-center justify-start px-3 py-2 text-sm font-medium rounded-r-lg rounded-l-none gap-3 mr-1 transition-colors duration-150 border-l-[3px] border-transparent",
-                  isActive
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
-                )}
-                title={collapsed && !isMobile ? item.name : undefined}
-              >
-                {/* Active pill glides between items via shared layout animation */}
-                {isActive && (
-                  <motion.span
-                    layoutId={isMobile ? "sidebar-active-mobile" : "sidebar-active"}
-                    className="absolute inset-0 -left-[3px] rounded-r-lg border-l-[3px] border-primary bg-primary/10 shadow-sm"
-                    transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                    aria-hidden
-                  />
-                )}
-                <div className="relative z-10 flex-shrink-0">
-                  <item.icon className="h-5 w-5" />
-                  {/* Collapsed badge dots */}
-                  {isChat && unreadChat > 0 && collapsed && !isMobile && (
-                    <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive motion-safe:animate-pulse" />
-                  )}
-                  {isOps && unreadAssignments > 0 && collapsed && !isMobile && (
-                    <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
-                  )}
-                </div>
-                <span className={cn(
-                  "relative z-10 flex items-center justify-between w-full transition-all duration-300 overflow-hidden whitespace-nowrap",
-                  collapsed && !isMobile ? "w-0 opacity-0" : "w-auto opacity-100"
-                )}>
-                  <span>{item.name}</span>
-                  <span className="flex gap-1 ml-auto">
-                    {isChat && unreadChat > 0 && !(collapsed && !isMobile) && (
-                      // bg-red-500 previously overrode the destructive variant here,
-                      // pinning white text at 3.76:1 — let the token through instead
-                      <Badge variant="destructive" className="font-semibold shadow-elevation">
-                        {unreadChat > 99 ? '99+' : unreadChat}
-                      </Badge>
-                    )}
-                    {isOps && unreadAssignments > 0 && !(collapsed && !isMobile) && (
-                      <Badge className="bg-primary-text font-semibold text-white shadow-elevation">
-                        {unreadAssignments > 9 ? '9+' : unreadAssignments}
-                      </Badge>
-                    )}
-                  </span>
-                </span>
-              </Link>
-            </motion.div>
-          )
+                const isActive = pathname === item.href
+                const isChat = item.name === "Team Chat"
+                const isOps = item.name === "My Operations"
+                return (
+                  <motion.div
+                    key={item.href}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: (sectionIndex * 2 + index) * 0.03, duration: 0.2, ease: "easeOut" }}
+                  >
+                    <Link
+                      href={item.href}
+                      onClick={isMobile ? onClose : undefined}
+                      className={cn(
+                        "relative flex items-center justify-start px-3 py-2 text-sm font-medium rounded-r-lg rounded-l-none gap-3 mr-1 transition-colors duration-150 border-l-[3px] border-transparent",
+                        isActive
+                          ? "text-primary"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                      )}
+                      title={collapsed && !isMobile ? item.name : undefined}
+                    >
+                      {/* Active pill glides between items via shared layout animation */}
+                      {isActive && (
+                        <motion.span
+                          layoutId={isMobile ? "sidebar-active-mobile" : "sidebar-active"}
+                          className="absolute inset-0 -left-[3px] rounded-r-lg border-l-[3px] border-primary bg-primary/10 shadow-sm"
+                          transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                          aria-hidden
+                        />
+                      )}
+                      <div className="relative z-10 flex-shrink-0">
+                        <item.icon className="h-5 w-5" />
+                        {/* Collapsed badge dots */}
+                        {isChat && unreadChat > 0 && collapsed && !isMobile && (
+                          <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive motion-safe:animate-pulse" />
+                        )}
+                        {isOps && unreadAssignments > 0 && collapsed && !isMobile && (
+                          <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+                        )}
+                      </div>
+                      <span className={cn(
+                        "relative z-10 flex items-center justify-between w-full transition-all duration-300 overflow-hidden whitespace-nowrap",
+                        collapsed && !isMobile ? "w-0 opacity-0" : "w-auto opacity-100"
+                      )}>
+                        <span>{item.name}</span>
+                        <span className="flex gap-1 ml-auto">
+                          {isChat && unreadChat > 0 && !(collapsed && !isMobile) && (
+                            <Badge variant="destructive" className="font-semibold shadow-elevation">
+                              {unreadChat > 99 ? '99+' : unreadChat}
+                            </Badge>
+                          )}
+                          {isOps && unreadAssignments > 0 && !(collapsed && !isMobile) && (
+                            <Badge className="bg-primary-text font-semibold text-white shadow-elevation">
+                              {unreadAssignments > 9 ? '9+' : unreadAssignments}
+                            </Badge>
+                          )}
+                        </span>
+                      </span>
+                    </Link>
+                  </motion.div>
+                )
               })}
             </div>
           </div>

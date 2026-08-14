@@ -327,7 +327,7 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
         className="flex items-center justify-between"
       >
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">November (Den)</h2>
+          <h2 className="text-3xl font-bold tracking-tight">November (Theatre)</h2>
           <p className="text-muted-foreground">
             The Den, secure lounge locations, and menu of the day
           </p>

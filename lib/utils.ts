@@ -20,7 +20,7 @@ export function oscarToRole(oscar: string | null | undefined): string | null {
   if (norm.includes('head_echo') || norm.includes('head echo')) return 'head_echo_oscar'
   if (norm.includes('head_victor') || norm.includes('head victor')) return 'head_victor_oscar'
   if (norm.includes('head_november') || norm.includes('head november') || norm.includes('head_noscar') || norm.includes('head noscar')) {
-    if (norm.includes('den')) return 'head_noscar_den'
+    if (norm.includes('den') || norm.includes('theatre') || norm.includes('theater')) return 'head_noscar_den'
     if (norm.includes('nest')) return 'head_noscar_nest'
     return 'november_oscar' // legacy umbrella head, sub-unit not specified
   }
@@ -36,8 +36,8 @@ export function oscarToRole(oscar: string | null | undefined): string | null {
   if (['eo', 'echo', 'echo_oscar', 'echo oscar'].includes(norm)) return 'echo_oscar'
   // Victor Oscar — Venue / Theatre
   if (['vo', 'victor', 'victor_oscar', 'victor oscar'].includes(norm)) return 'victor_oscar'
-  // November Oscar — split into Den (private lounge / menus) and Nest (hotels) sub-units
-  if (norm.includes('november') && norm.includes('den')) return 'noscar_den'
+  // November Oscar — split into Theatre/Den (private lounge / menus) and Nest (hotels) sub-units
+  if (norm.includes('november') && (norm.includes('den') || norm.includes('theatre') || norm.includes('theater'))) return 'noscar_den'
   if (norm.includes('november') && norm.includes('nest')) return 'noscar_nest'
   if (['no', 'november', 'november_oscar', 'november oscar'].includes(norm)) return 'november_oscar'
   // Alpha Oscar — Eagle Squares / Airports
@@ -140,7 +140,7 @@ export function canManageNoscarNest(role: string | null | undefined, oscar?: str
 }
 
 /**
- * Check if a user can manage the November (Den) page — private lounge
+ * Check if a user can manage the November (Theatre) page — private lounge
  * locations and Lounge/Den menus. Legacy `november_oscar` officers (not yet
  * split into a specific sub-unit) retain access to both Den and Nest.
  */
