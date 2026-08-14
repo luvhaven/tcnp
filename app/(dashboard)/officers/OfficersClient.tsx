@@ -14,9 +14,10 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { UserCircle, Plus, Edit, Trash2, UserCheck, UserX, Award, Search, LayoutGrid, List, Download, Filter } from "lucide-react"
+import { UserCircle, Plus, Edit, Trash2, UserCheck, UserX, Award, Search, LayoutGrid, List, Download, Filter, Eye } from "lucide-react"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
+import { OfficerProfileDialog } from "@/components/officers/OfficerProfileDialog"
 
 type Officer = {
   id: string
@@ -34,6 +35,16 @@ type Officer = {
   team?: string | null
   is_team_head?: boolean | null
   created_at: string
+  date_of_birth?: string | null
+  gender?: string | null
+  address?: string | null
+  city?: string | null
+  bio?: string | null
+  emergency_contact_name?: string | null
+  emergency_contact_phone?: string | null
+  profile_completed_at?: string | null
+  last_seen?: string | null
+  updated_at?: string | null
 }
 
 type OfficialTitle = {
@@ -60,6 +71,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
   const [dialogOpen, setDialogOpen] = useState(false)
   const [titleDialogOpen, setTitleDialogOpen] = useState(false)
   const [assignFromDirectoryOpen, setAssignFromDirectoryOpen] = useState(false)
+  const [viewingOfficer, setViewingOfficer] = useState<Officer | null>(null)
   const [editing, setEditing] = useState<Officer | null>(null)
   const [assigningTitleFor, setAssigningTitleFor] = useState<Officer | null>(null)
   const [formData, setFormData] = useState({
@@ -788,13 +800,17 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                       exit={{ opacity: 0, scale: 0.95 }}
                       transition={{ duration: 0.2 }}
                       key={officer.id}
-                      className="flex min-w-0 items-center gap-3 overflow-hidden rounded-lg border bg-card p-4 transition-all hover:bg-accent hover:border-primary/30 hover:shadow-sm"
+                      onClick={() => setViewingOfficer(officer)}
+                      className="group flex min-w-0 items-center gap-3 overflow-hidden rounded-lg border bg-card p-4 transition-all hover:bg-accent hover:border-primary/40 hover:shadow-md cursor-pointer relative"
                     >
-                      <Avatar className="shrink-0">
+                      <Avatar className="shrink-0 group-hover:ring-2 group-hover:ring-primary/40 transition">
                         {officer.photo_url ? <AvatarImage src={officer.photo_url} /> : <AvatarFallback className={getRoleBadgeColor(officer.role)}>{getInitials(officer.full_name || officer.email)}</AvatarFallback>}
                       </Avatar>
                       <div className="min-w-0 flex-1 overflow-hidden">
-                        <p className="truncate font-medium">{officer.full_name || 'No name'}</p>
+                        <div className="flex items-center justify-between gap-1">
+                          <p className="truncate font-medium group-hover:text-primary transition-colors">{officer.full_name || 'No name'}</p>
+                          <Eye className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                        </div>
                         <p className="truncate text-xs text-muted-foreground">{officer.email}</p>
                         <div className="mt-2 flex min-w-0 items-center justify-between gap-2">
                           <div className="flex min-w-0 flex-wrap items-center gap-1">
@@ -899,13 +915,13 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                             className="h-4 w-4 rounded border-input text-primary focus:ring-primary bg-background dark:bg-background/50 accent-primary/80"
                           />
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8">
+                        <TableCell className="cursor-pointer" onClick={() => setViewingOfficer(officer)}>
+                          <div className="flex items-center gap-3 group">
+                            <Avatar className="h-8 w-8 ring-1 ring-border group-hover:ring-primary/50 transition">
                               {officer.photo_url ? <AvatarImage src={officer.photo_url} /> : <AvatarFallback className={getRoleBadgeColor(officer.role)}>{getInitials(officer.full_name || officer.email)}</AvatarFallback>}
                             </Avatar>
                             <div className="flex flex-col">
-                              <span className={`font-medium ${!officer.is_active ? 'opacity-60 text-muted-foreground' : ''}`}>{officer.full_name || 'No name'}</span>
+                              <span className={`font-medium group-hover:text-primary transition ${!officer.is_active ? 'opacity-60 text-muted-foreground' : ''}`}>{officer.full_name || 'No name'}</span>
                               <span className="text-xs text-muted-foreground">{officer.email}</span>
                             </div>
                           </div>
@@ -925,6 +941,9 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:text-primary" onClick={() => setViewingOfficer(officer)} title="View Full Profile">
+                              <Eye className="h-4 w-4" />
+                            </Button>
                             <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleEdit(officer)} title="Edit">
                               <Edit className="h-4 w-4" />
                             </Button>
@@ -959,10 +978,10 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                     key={officer.id}
                   >
                     <Card className={`${!officer.is_active ? 'opacity-60' : ''} transition-all hover:-translate-y-0.5 hover:shadow-md h-full flex flex-col`}>
-                      <CardHeader>
+                      <CardHeader className="cursor-pointer" onClick={() => setViewingOfficer(officer)}>
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-3">
-                            <div className="pt-0.5">
+                            <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
                               <input
                                 type="checkbox"
                                 checked={selectedOfficers.includes(officer.id)}
@@ -977,7 +996,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                               {officer.photo_url ? <AvatarImage src={officer.photo_url} /> : <AvatarFallback className={getRoleBadgeColor(officer.role)}>{getInitials(officer.full_name || officer.email)}</AvatarFallback>}
                             </Avatar>
                             <div>
-                              <CardTitle className="text-base">{officer.full_name || 'No Name'}</CardTitle>
+                              <CardTitle className="text-base hover:text-primary transition-colors">{officer.full_name || 'No Name'}</CardTitle>
                               <CardDescription className="text-xs">{officer.email}</CardDescription>
                             </div>
                           </div>
@@ -995,7 +1014,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-3 flex-1 flex flex-col justify-between">
-                        <div className="space-y-1 text-sm">
+                        <div className="space-y-1 text-sm cursor-pointer" onClick={() => setViewingOfficer(officer)}>
                           <div className="flex items-center justify-between">
                             <span className="text-muted-foreground">Role:</span>
                             <Badge className={getRoleBadgeColor(officer.role)}>
@@ -1022,12 +1041,16 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                           )}
                         </div>
 
-                        <div className="flex gap-2 pt-2 border-t mt-4">
-                          <Button size="sm" variant="outline" className="flex-1" onClick={() => handleEdit(officer)}>
+                        <div className="flex flex-wrap gap-1.5 pt-2 border-t mt-4">
+                          <Button size="sm" variant="secondary" className="flex-1 min-w-[70px]" onClick={() => setViewingOfficer(officer)}>
+                            <Eye className="h-3 w-3 mr-1" />
+                            Profile
+                          </Button>
+                          <Button size="sm" variant="outline" className="flex-1 min-w-[65px]" onClick={() => handleEdit(officer)}>
                             <Edit className="h-3 w-3 mr-1" />
                             Edit
                           </Button>
-                          <Button size="sm" variant="outline" className="flex-1" onClick={() => handleAssignTitleClick(officer)}>
+                          <Button size="sm" variant="outline" className="flex-1 min-w-[65px]" onClick={() => handleAssignTitleClick(officer)}>
                             <Award className="h-3 w-3 mr-1" />
                             Title
                           </Button>
@@ -1074,14 +1097,14 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                       key={officer.id}
                     >
                       <Card className="transition-all hover:-translate-y-0.5 hover:shadow-md h-full flex flex-col border-orange-500/30 bg-orange-500/5">
-                        <CardHeader>
+                        <CardHeader className="cursor-pointer" onClick={() => setViewingOfficer(officer)}>
                           <div className="flex items-start justify-between">
                             <div className="flex items-center gap-3">
                               <Avatar>
                                 {officer.photo_url ? <AvatarImage src={officer.photo_url} /> : <AvatarFallback className="bg-orange-500 text-white">{getInitials(officer.full_name || officer.email)}</AvatarFallback>}
                               </Avatar>
                               <div>
-                                <CardTitle className="text-base">{officer.full_name || 'No Name'}</CardTitle>
+                                <CardTitle className="text-base hover:text-primary transition-colors">{officer.full_name || 'No Name'}</CardTitle>
                                 <CardDescription className="text-xs">{officer.email}</CardDescription>
                               </div>
                             </div>
@@ -1091,7 +1114,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                           </div>
                         </CardHeader>
                         <CardContent className="space-y-3 flex-1 flex flex-col justify-between">
-                          <div className="space-y-1 text-sm">
+                          <div className="space-y-1 text-sm cursor-pointer" onClick={() => setViewingOfficer(officer)}>
                             <div className="flex items-center justify-between">
                               <span className="text-muted-foreground">Requested Role:</span>
                               <Badge className={getRoleBadgeColor(officer.role)}>
@@ -1113,9 +1136,13 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                           </div>
 
                           <div className="flex gap-2 pt-2 border-t mt-4">
+                            <Button size="sm" variant="outline" onClick={() => setViewingOfficer(officer)} title="View Full Profile">
+                              <Eye className="h-4 w-4 mr-1" />
+                              Details
+                            </Button>
                             <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={() => toggleActivationMutation.mutate(officer)}>
                               <UserCheck className="h-4 w-4 mr-2" />
-                              Approve & Activate
+                              Approve
                             </Button>
                             {officer.role !== 'dev_admin' && officer.id !== currentUser?.id && (
                               <Button size="sm" variant="outline" onClick={() => handleDelete(officer)}>
@@ -1361,6 +1388,20 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Full Officer Profile Dialog */}
+      <OfficerProfileDialog
+        officer={viewingOfficer}
+        open={!!viewingOfficer}
+        onOpenChange={(open) => {
+          if (!open) setViewingOfficer(null)
+        }}
+        canManage={!!canManageOfficers}
+        onEdit={(officer) => handleEdit(officer as Officer)}
+        onAssignTitle={(officer) => handleAssignTitleClick(officer as Officer)}
+        onToggleActivation={(officer) => toggleActivationMutation.mutate(officer as Officer)}
+        onDelete={(officer) => handleDelete(officer as Officer)}
+      />
     </div>
   )
 }

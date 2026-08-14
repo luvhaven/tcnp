@@ -31,6 +31,8 @@ yarn-error.log*
 
 # mcp config (contains secrets)
 .mcp.json
+.codex/
+.claude/
 
 # vercel
 .vercel

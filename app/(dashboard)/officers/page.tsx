@@ -33,7 +33,15 @@ export default async function OfficersPage() {
       activation_status,
       photo_url,
       team,
-      is_team_head
+      is_team_head,
+      date_of_birth,
+      gender,
+      address,
+      city,
+      bio,
+      emergency_contact_name,
+      emergency_contact_phone,
+      profile_completed_at
     `)
     .order('full_name')
 
