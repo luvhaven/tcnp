@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { MapPin, Plus, Edit, Trash2, Scan, ChevronDown, Armchair } from "lucide-react"
+import { MapPin, Plus, Edit, Trash2, Scan, ChevronDown, Armchair, Landmark } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -184,13 +184,25 @@ export default function TheatresClient({
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
       >
-        <div className="min-w-0">
-          <h1 className="text-3xl font-bold tracking-tight">Victor</h1>
-          <p className="text-sm text-muted-foreground max-w-xl">Manage event venues and locations</p>
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+            <Landmark className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Victor</h1>
+              <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+                Venues & Seating
+              </Badge>
+            </div>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Event theatres, VIP seat arrangements, and hall layout management.
+            </p>
+          </div>
         </div>
         {canManage && (
-          <Button onClick={openDialog} className="shrink-0 self-start sm:self-auto">
-            <Plus className="mr-2 h-4 w-4" />
+          <Button onClick={openDialog} className="shadow-sm font-semibold gap-1.5 self-start sm:self-auto">
+            <Plus className="h-4 w-4" />
             Add Venue
           </Button>
         )}

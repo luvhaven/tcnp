@@ -320,26 +320,36 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
     : denLocations.filter((n: any) => n.program_id === selectedProgram)
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 page-enter">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
+        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
       >
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">November (Theatre)</h2>
-          <p className="text-muted-foreground">
-            The Den, secure lounge locations, and menu of the day
-          </p>
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
+            <Home className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">November (Theatre)</h1>
+              <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20">
+                VIP Lounge & Den
+              </Badge>
+            </div>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Private Den lounges, VIP refreshments, menu of the day, and assigned officers.
+            </p>
+          </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 self-start sm:self-auto">
           {canManage && (
             <Button onClick={() => {
               setEditing(null)
               resetForm()
               setDialogOpen(true)
-            }}>
-              <Plus className="mr-2 h-4 w-4" />
+            }} className="shadow-sm font-semibold gap-1.5">
+              <Plus className="h-4 w-4" />
               Add Den
             </Button>
           )}

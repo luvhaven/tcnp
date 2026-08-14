@@ -345,26 +345,36 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
     : nestLocations.filter((n: any) => n.program_id === selectedProgram)
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 page-enter">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
+        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
       >
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">November (Nest)</h2>
-          <p className="text-muted-foreground">
-            Hotel accommodation for Papas and the officers assigned to each Nest
-          </p>
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+            <Hotel className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">November (Nest)</h1>
+              <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20">
+                Hotel & Accommodations
+              </Badge>
+            </div>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Papa hotel accommodations, suite comfort checklists, and assigned Nest officers.
+            </p>
+          </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 self-start sm:self-auto">
           {canManage && (
             <Button onClick={() => {
               setEditing(null)
               resetForm()
               setDialogOpen(true)
-            }}>
-              <Plus className="mr-2 h-4 w-4" />
+            }} className="shadow-sm font-semibold gap-1.5">
+              <Plus className="h-4 w-4" />
               Add Nest
             </Button>
           )}

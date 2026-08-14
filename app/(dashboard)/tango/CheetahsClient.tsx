@@ -265,19 +265,31 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 page-enter">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
+        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
       >
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Tango</h1>
-          <p className="text-sm text-muted-foreground max-w-xl">Manage protocol vehicles</p>
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+            <Car className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Tango</h1>
+              <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+                Cheetah Fleet & Transport
+              </Badge>
+            </div>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              VIP Cheetah vehicles, assigned drivers, and FLOWER safety inspections.
+            </p>
+          </div>
         </div>
         {canManage && (
-          <Button onClick={openCreateDialog}>
-            <Plus className="mr-2 h-4 w-4" />
+          <Button onClick={openCreateDialog} className="shadow-sm font-semibold gap-1.5 self-start sm:self-auto">
+            <Plus className="h-4 w-4" />
             Add New Cheetah
           </Button>
         )}
