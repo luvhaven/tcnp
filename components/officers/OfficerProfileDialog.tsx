@@ -261,10 +261,10 @@ export function OfficerProfileDialog({
             </div>
 
             {/* Completion indicator */}
-            <div className="hidden sm:flex flex-col items-center gap-1 shrink-0 bg-background/80 backdrop-blur px-3 py-2 rounded-xl border border-border/50 shadow-sm">
-              <CompletionRing percent={completion.percent} size={64} strokeWidth={6} />
-              <span className="text-[10px] font-medium text-muted-foreground">
-                {completion.isComplete ? "Profile 100%" : `${completion.percent}% Complete`}
+            <div className="hidden sm:flex flex-col items-center justify-center shrink-0 bg-background/90 backdrop-blur-md px-3.5 py-2.5 rounded-xl border border-border/60 shadow-sm min-w-[90px]">
+              <CompletionRing percent={completion.percent} size={54} strokeWidth={5} showLabel={false} />
+              <span className={`text-[10px] font-semibold mt-1 ${completion.isComplete ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+                {completion.isComplete ? "Complete" : `${completion.percent}% Done`}
               </span>
             </div>
           </div>
@@ -484,7 +484,14 @@ export function OfficerProfileDialog({
                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
                       <Sparkles className="h-4 w-4 text-amber-500" /> Profile Completion Breakdown
                     </CardTitle>
-                    <Badge variant={completion.isComplete ? "default" : "outline"} className="text-[10px]">
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] font-semibold ${
+                        completion.isComplete
+                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                          : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                      }`}
+                    >
                       {completion.percent}% Complete
                     </Badge>
                   </div>
