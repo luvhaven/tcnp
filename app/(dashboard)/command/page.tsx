@@ -197,10 +197,10 @@ export default function CommandPage() {
           >
             <Link href={mod.href} className="block h-full group focus-visible:outline-none">
               <Card className={`h-full overflow-hidden border transition-all duration-200 hover:shadow-elevation-md hover:-translate-y-0.5 ${mod.accent}`}>
-                <CardContent className="relative flex h-full flex-col justify-between gap-4 p-5">
+                <div className="relative flex h-full flex-col justify-between gap-4 p-5 sm:p-6">
                   <div>
-                    <div className="flex items-center justify-between gap-2 mb-3">
-                      <div className={`flex h-11 w-11 items-center justify-center rounded-xl shadow-sm ${mod.iconBg}`}>
+                    <div className="flex items-center justify-between gap-2 mb-3.5">
+                      <div className={`flex h-11 w-11 items-center justify-center rounded-xl shadow-xs ${mod.iconBg}`}>
                         <mod.icon className="h-5 w-5" />
                       </div>
                       <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider bg-background/80">
@@ -215,11 +215,11 @@ export default function CommandPage() {
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-border/40 text-xs font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
+                  <div className="flex items-center justify-between pt-3 border-t border-border/40 text-xs font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
                     <span>Open Module</span>
                     <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-1" />
                   </div>
-                </CardContent>
+                </div>
               </Card>
             </Link>
           </motion.div>
