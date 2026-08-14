@@ -1,6 +1,17 @@
 "use client"
 
-import { LogOut, Sun, Moon, Laptop, Palette } from "lucide-react"
+import Link from "next/link"
+import {
+  LogOut,
+  Sun,
+  Moon,
+  Palette,
+  UserCircle,
+  Settings,
+  KeyRound,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react"
 import {
   Popover,
   PopoverContent,
@@ -47,35 +58,40 @@ function HamburgerIcon({ isOpen }: { isOpen: boolean }) {
 const THEME_OPTIONS: { value: AppTheme; icon: typeof Sun; label: string }[] = [
   { value: "light", icon: Sun, label: "Light" },
   { value: "dark", icon: Moon, label: "Dark" },
-  { value: "auto", icon: Laptop, label: "System" },
 ]
 
 function ThemeSegmented() {
   const { theme, setTheme } = useTheme()
+  const currentTheme = theme === "dark" ? "dark" : "light"
+
   return (
-    <div className="flex items-center justify-between px-1 py-1">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Palette className="h-4 w-4" aria-hidden="true" />
+    <div className="flex items-center justify-between px-1 py-1.5">
+      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        <Palette className="h-4 w-4 text-primary" aria-hidden="true" />
         <span>Theme</span>
       </div>
-      <div className="flex items-center gap-0.5 rounded-lg bg-muted p-1">
-        {THEME_OPTIONS.map(({ value, icon: Icon, label }) => (
-          <button
-            key={value}
-            type="button"
-            aria-label={label}
-            title={label}
-            onClick={() => setTheme(value)}
-            className={cn(
-              "flex h-7 w-7 items-center justify-center rounded-md transition-all duration-150",
-              theme === value
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
-        ))}
+      <div className="flex items-center gap-1 rounded-lg bg-muted/80 p-0.5 border border-border/50">
+        {THEME_OPTIONS.map(({ value, icon: Icon, label }) => {
+          const isSelected = currentTheme === value
+          return (
+            <button
+              key={value}
+              type="button"
+              aria-label={`${label} mode`}
+              title={`${label} mode`}
+              onClick={() => setTheme(value)}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-150",
+                isSelected
+                  ? "bg-background text-foreground shadow-xs font-semibold"
+                  : "text-muted-foreground hover:text-foreground hover:bg-background/40"
+              )}
+            >
+              <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>{label}</span>
+            </button>
+          )
+        })}
       </div>
     </div>
   )
@@ -128,7 +144,7 @@ function ProfileAvatar({
   email?: string | null
   size?: "md" | "lg"
 }) {
-  const sizeClass = size === "lg" ? "h-11 w-11" : "h-10 w-10"
+  const sizeClass = size === "lg" ? "h-11 w-11" : "h-9 w-9"
 
   if (loading) {
     return (
@@ -142,12 +158,11 @@ function ProfileAvatar({
   const initials = getInitials(fullName, email)
 
   return (
-    <Avatar className={cn(sizeClass, "shadow-sm")}>
+    <Avatar className={cn(sizeClass, "shadow-xs border border-border/60")}>
       {photoUrl ? (
         <AvatarImage src={photoUrl} alt="" className="object-cover" />
       ) : (
-        // was bg-[#ea580c]: white on it measures 3.56:1, under AA
-        <AvatarFallback className="bg-primary-text text-sm font-bold text-white">
+        <AvatarFallback className="bg-primary-text text-xs font-bold text-white">
           {initials}
         </AvatarFallback>
       )}
@@ -172,6 +187,7 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
   }, [])
 
   const displayName = profile?.full_name || user?.email?.split("@")[0] || "User"
+  const firstName = profile?.full_name ? profile.full_name.split(" ")[0] : displayName
 
   const handleLogout = async () => {
     setMenuOpen(false)
@@ -180,7 +196,7 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
   }
 
   return (
-    <header className="app-header sticky top-0 z-40 flex h-16 min-w-0 items-center justify-between gap-2 border-b bg-background/80 px-4 shadow-sm backdrop-blur-md transition-all duration-200 nav:px-8">
+    <header className="app-header sticky top-0 z-40 flex h-16 min-w-0 items-center justify-between gap-2 border-b bg-background/80 px-4 shadow-xs backdrop-blur-md transition-all duration-200 nav:px-8">
       {/* Left: hamburger + date & role */}
       <div className="flex min-w-0 items-center gap-3">
         <button
@@ -207,8 +223,8 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
         </div>
       </div>
 
-      {/* Right: Install → Notifications → Profile */}
-      <div className="flex shrink-0 items-center gap-1 md:gap-2">
+      {/* Right: Install → Notifications → Profile Pill Trigger */}
+      <div className="flex shrink-0 items-center gap-1.5 md:gap-2.5">
         <InstallButton />
         <NotificationCenter />
 
@@ -216,43 +232,122 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
           <PopoverTrigger asChild>
             <button
               type="button"
-              aria-label={userLoading ? "Loading profile" : "Open profile menu"}
+              aria-label={userLoading ? "Loading profile" : "Open user menu"}
               aria-busy={userLoading}
               aria-expanded={menuOpen}
               disabled={userLoading}
-              className="inline-flex shrink-0 items-center justify-center rounded-full transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ea580c]/40 disabled:pointer-events-none disabled:hover:scale-100"
+              className={cn(
+                "group flex shrink-0 items-center gap-2 rounded-full border border-border/70 bg-card/70 p-1 pl-1 pr-2.5 transition-all duration-200 shadow-2xs",
+                "hover:border-primary/40 hover:bg-muted/80 hover:shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                menuOpen && "border-primary/50 bg-muted/90 ring-2 ring-primary/20 shadow-xs"
+              )}
+            >
+              <div className="relative">
+                <ProfileAvatar
+                  loading={userLoading}
+                  photoUrl={profile?.photo_url}
+                  fullName={profile?.full_name}
+                  email={user?.email}
+                />
+                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-background" />
+              </div>
+
+              <div className="hidden flex-col text-left nav:flex">
+                <span className="max-w-[95px] truncate text-xs font-semibold leading-tight text-foreground group-hover:text-primary transition-colors">
+                  {firstName}
+                </span>
+                <span className="max-w-[95px] truncate text-[10px] text-muted-foreground leading-tight">
+                  {profile?.oscar || (profile?.role ? formatRole(profile.role) : "Officer")}
+                </span>
+              </div>
+
+              <ChevronDown
+                className={cn(
+                  "h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 group-hover:text-foreground",
+                  menuOpen && "rotate-180 text-primary"
+                )}
+                aria-hidden="true"
+              />
+            </button>
+          </PopoverTrigger>
+
+          <PopoverContent
+            align="end"
+            side="bottom"
+            sideOffset={8}
+            className="w-[270px] rounded-2xl border border-border/70 bg-popover/95 p-3 text-popover-foreground shadow-xl backdrop-blur-md"
+          >
+            {/* Header User Card (Clickable to My Profile) */}
+            <Link
+              href="/profile"
+              onClick={() => setMenuOpen(false)}
+              className="group -m-1 mb-2 flex items-center gap-3 rounded-xl p-2.5 transition-colors hover:bg-muted/70"
             >
               <ProfileAvatar
                 loading={userLoading}
                 photoUrl={profile?.photo_url}
                 fullName={profile?.full_name}
                 email={user?.email}
+                size="md"
               />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent
-            align="end"
-            side="bottom"
-            sideOffset={8}
-            className="w-[260px] rounded-[14px] border-0 bg-white p-3 text-foreground shadow-lg dark:bg-card"
-          >
-            <div className="flex min-w-0 flex-col px-1 py-1">
-              <p className="truncate text-sm font-bold leading-tight">{displayName}</p>
-              <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <div className="flex items-center justify-between gap-1">
+                  <p className="truncate text-sm font-bold leading-tight group-hover:text-primary transition-colors">{displayName}</p>
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+                </div>
+                <p className="truncate text-xs text-muted-foreground mt-0.5">{user?.email}</p>
+                {profile?.role && (
+                  <span className="mt-1 inline-flex w-fit items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary">
+                    {formatRole(profile.role)}
+                  </span>
+                )}
+              </div>
+            </Link>
+
+            <hr className="my-1.5 border-border/60" />
+
+            {/* Navigation links */}
+            <div className="space-y-0.5 py-1">
+              <Link
+                href="/profile"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <UserCircle className="h-4 w-4 text-primary" />
+                <span>My Profile</span>
+              </Link>
+              <Link
+                href="/settings"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <Settings className="h-4 w-4" />
+                <span>Settings</span>
+              </Link>
+              <Link
+                href="/change-password"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <KeyRound className="h-4 w-4" />
+                <span>Change Password</span>
+              </Link>
             </div>
 
-            <hr className="my-2 border-border" />
+            <hr className="my-1.5 border-border/60" />
 
+            {/* Theme switcher: Light & Dark only */}
             <ThemeSegmented />
 
-            <hr className="my-2 border-border" />
+            <hr className="my-1.5 border-border/60" />
 
+            {/* Logout button */}
             <button
               type="button"
               onClick={handleLogout}
-              className="mt-3 flex w-full items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/20"
+              className="flex w-full items-center gap-2 rounded-xl bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20"
             >
-              <LogOut className="h-4 w-4" aria-hidden="true" />
+              <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
               Log out
             </button>
           </PopoverContent>
