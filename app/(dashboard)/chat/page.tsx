@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { MessagesSquare, Radio } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSearchParams } from 'next/navigation'
+import { isAdmin } from '@/lib/utils'
 
 type ChatProgram = {
   id: string
@@ -73,7 +74,7 @@ function ChatContent() {
 
         let visiblePrograms = (allPrograms || []) as ChatProgram[]
 
-        if (!['super_admin', 'dev_admin', 'admin'].includes(userRow.role ?? '')) {
+        if (!isAdmin(userRow.role)) {
           // Restrict officers to programs they are assigned to via current_title_assignments
           const { data: assignments, error: assignError } = await (supabase as any)
             .from('current_title_assignments')
@@ -231,7 +232,7 @@ function ChatContent() {
               </div>
             )}
 
-            {role && ['super_admin', 'dev_admin', 'admin'].includes(role) && (
+            {role && isAdmin(role) && (
               <AdminChatControls programId={program?.id} programName={program?.name} />
             )}
           </div>
@@ -250,7 +251,7 @@ function ChatContent() {
               <div className="h-[320px] w-full rounded-lg skeleton" />
             ) : programs.length === 0 ? (
               <div className="p-6 text-sm text-muted-foreground">
-                {role && !['super_admin', 'dev_admin', 'admin'].includes(role)
+                {role && !isAdmin(role)
                   ? 'You have no program assignments yet. Once you are added to a program, you will be able to chat with that program team here.'
                   : 'No programs found. Create a program first, then use this page to chat with the program team.'}
               </div>

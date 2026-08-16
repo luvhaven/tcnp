@@ -18,8 +18,7 @@ import { useCelebrate } from '@/components/providers/CelebrateProvider'
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from '@/lib/constants/tncpCallSigns'
 import { CALL_SIGN_KEY_TO_DB_ENUM, type CallSignKey } from '@/lib/constants/call-signs'
 import { CallSignChip } from '@/components/ui/call-sign-chip'
-import { cn } from '@/lib/utils'
-import { oscarToRole } from '@/lib/utils'
+import { cn, oscarToRole, isAdmin, effectiveOscarRole } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,19 +52,8 @@ interface Journey {
   duty_officers?: DutyOfficer[]
 }
 
-const ADMIN_ROLES = ['super_admin', 'dev_admin', 'admin', 'captain', 'head_of_command', 'head_of_operations', 'command', 'hod', 'hop']
-
-// ─── Role-based journey filter ─────────────────────────────────────────────
-/**
- * Returns true if the given journey is relevant to the user.
- *
- * Permissions are Oscar-based: the permanent `oscar` column governs which
- * journey types the officer sees. `role=delta_oscar` just means they have an
- * additional DO assignment for a specific journey — it does NOT strip their
- * base Oscar access.
- */
 function journeyMatchesRole(journey: Journey, role: string, userId: string, oscar?: string | null): boolean {
-  if (ADMIN_ROLES.includes(role)) return true
+  if (isAdmin(role) || isAdmin(effectiveOscarRole(role, oscar))) return true
 
   // Resolve the effective permanent Oscar even when the user is assigned as DO
   const effectiveRole = (role !== 'delta_oscar' ? role : null) ?? oscarToRole(oscar) ?? role
@@ -151,7 +139,7 @@ export default function MyOperationsPage() {
       setUserRole(role)
       setUserOscar(oscar)
 
-      const isAdmin = ADMIN_ROLES.includes(role)
+      const isAdminUser = isAdmin(role) || isAdmin(effectiveOscarRole(role, oscar))
 
       // Get program IDs where this user is assigned
       const { data: assignments } = await (supabase as any)
@@ -190,7 +178,7 @@ export default function MyOperationsPage() {
         .or('is_deleted.is.null,is_deleted.eq.false')
         .order('etd', { ascending: true, nullsFirst: false })
 
-      if (!isAdmin) {
+      if (!isAdminUser) {
         // Build OR: journeys in my programs OR journeys I'm a DO for
         const orParts: string[] = []
         if (programIds.length > 0) orParts.push(`program_id.in.(${programIds.join(',')})`)
@@ -326,7 +314,7 @@ export default function MyOperationsPage() {
     )
   }
 
-  const isAdmin = userRole ? ADMIN_ROLES.includes(userRole) : false
+  const isAdminUser = Boolean(userRole && (isAdmin(userRole) || isAdmin(effectiveOscarRole(userRole, userOscar))))
   const myAssigned = journeys.filter(j =>
     j.duty_officers?.some(d => d.user_id === userId) ||
     j.assigned_duty_officer_id === userId
@@ -343,7 +331,7 @@ export default function MyOperationsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">My Operations</h1>
           <p className="text-muted-foreground">
-            {isAdmin ? 'Full operational view — admin override enabled' : 'Your assignments, updates and journey reminders'}
+            {isAdminUser ? 'Full operational view — leadership override enabled' : 'Your assignments, updates and journey reminders'}
           </p>
         </div>
         <div className="flex gap-2 mt-1">
@@ -351,9 +339,9 @@ export default function MyOperationsPage() {
             <Radio className="h-3 w-3 animate-pulse text-green-500" />
             {journeys.length} Active
           </Badge>
-          {isAdmin && (
+          {isAdminUser && (
             <Badge className="bg-primary/20 text-primary border-primary/30 border">
-              <Shield className="h-3 w-3 mr-1" />Admin
+              <Shield className="h-3 w-3 mr-1" />Leadership
             </Badge>
           )}
         </div>
@@ -385,7 +373,7 @@ export default function MyOperationsPage() {
                 </Badge>
               )}
             </TabsTrigger>
-            {(programFeed.length > 0 || isAdmin) && (
+            {(programFeed.length > 0 || isAdminUser) && (
               <TabsTrigger value="program">
                 Program Feed
                 {programFeed.length > 0 && (
@@ -427,19 +415,19 @@ export default function MyOperationsPage() {
                 </TabsList>
                 {myAssigned.map(j => (
                   <TabsContent key={j.id} value={j.id}>
-                    <JourneyOperationsPanel journey={j} currentUserId={userId} isAdmin={isAdmin} />
+                    <JourneyOperationsPanel journey={j} currentUserId={userId} isAdmin={isAdminUser} />
                   </TabsContent>
                 ))}
               </Tabs>
             ) : (
-              <JourneyOperationsPanel journey={myAssigned[0]} currentUserId={userId} isAdmin={isAdmin} />
+              <JourneyOperationsPanel journey={myAssigned[0]} currentUserId={userId} isAdmin={isAdminUser} />
             )}
           </TabsContent>
 
           {/* ── Program Feed ────────────────────────────────────────────── */}
           <TabsContent value="program" className="space-y-3">
             <p className="text-xs text-muted-foreground">View-only feed of all journeys in your programs.</p>
-            {(isAdmin ? journeys : programFeed).map(j => (
+            {(isAdminUser ? journeys : programFeed).map(j => (
               <JourneyFeedCard key={j.id} journey={j} />
             ))}
           </TabsContent>

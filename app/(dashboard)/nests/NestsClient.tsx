@@ -19,10 +19,11 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Hotel, Plus, Edit, Trash2, Building, Users, UserPlus, UserCheck, ChevronDown } from "lucide-react"
 import { toast } from "sonner"
-import { canManageNests } from "@/lib/utils"
+import { canManageNests, isAdmin, effectiveOscarRole } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 import PapaAccommodations from "@/components/nests/PapaAccommodations"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
+import { OfficerProfileDialog, type OfficerProfileData } from "@/components/officers/OfficerProfileDialog"
 
 type Program = {
   id: string
@@ -56,6 +57,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [officerDialogOpen, setOfficerDialogOpen] = useState(false)
+  const [selectedOfficer, setSelectedOfficer] = useState<OfficerProfileData | null>(null)
   const [editing, setEditing] = useState<any>(null)
   const [selectedNest, setSelectedNest] = useState<any>(null)
   const [selectedProgram, setSelectedProgram] = useState<string>('all')
@@ -483,15 +485,34 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
                               ) : (
                                 <div className="space-y-2">
                                   {nestOfficers.map(assignment => (
-                                    <div key={assignment.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50 transition-colors hover:bg-muted">
-                                      <div className="flex items-center gap-2">
-                                        <Avatar className="h-6 w-6">
+                                    <div key={assignment.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50 transition-colors hover:bg-muted group">
+                                      <div
+                                        className="flex items-center gap-2 cursor-pointer hover:text-primary transition-colors flex-1"
+                                        onClick={() => {
+                                          if (!assignment.user) return
+                                          setSelectedOfficer({
+                                            id: assignment.user.id,
+                                            email: assignment.user.email || '',
+                                            full_name: assignment.user.full_name || null,
+                                            phone: null,
+                                            oscar: assignment.user.oscar || null,
+                                            role: assignment.user.role || 'officer',
+                                            unit: null,
+                                            current_title_id: null,
+                                            is_active: assignment.is_active,
+                                            activation_status: assignment.is_active ? 'active' : 'inactive',
+                                            created_at: new Date().toISOString()
+                                          })
+                                        }}
+                                        title="View Full Profile"
+                                      >
+                                        <Avatar className="h-6 w-6 group-hover:ring-1 group-hover:ring-primary/40 transition">
                                           <AvatarFallback className="text-xs">
                                             {getInitials(assignment.user?.full_name || '')}
                                           </AvatarFallback>
                                         </Avatar>
                                         <div>
-                                          <p className="text-xs font-medium">{assignment.user?.full_name}</p>
+                                          <p className="text-xs font-medium group-hover:underline">{assignment.user?.full_name}</p>
                                           <p className="text-[10px] text-muted-foreground">{assignment.user?.oscar}</p>
                                         </div>
                                       </div>
@@ -708,6 +729,16 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Full Officer Profile Dialog */}
+      <OfficerProfileDialog
+        officer={selectedOfficer}
+        open={!!selectedOfficer}
+        onOpenChange={(open) => {
+          if (!open) setSelectedOfficer(null)
+        }}
+        canManage={Boolean(currentUser && (isAdmin(currentUser.role) || isAdmin(currentUser.oscar)))}
+      />
     </div>
   )
 }

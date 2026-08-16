@@ -140,6 +140,12 @@ export function OfficerProfileDialog({
       case 'captain':
       case 'vice_captain':
         return 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+      case 'command':
+      case 'head_of_command':
+      case 'head_of_operations':
+      case 'hod':
+      case 'hop':
+        return 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30'
       default:
         return 'bg-secondary text-secondary-foreground'
     }

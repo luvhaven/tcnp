@@ -23,6 +23,7 @@ import {
   User,
   Download
 } from 'lucide-react'
+import { isAdmin, effectiveOscarRole } from '@/lib/utils'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 
@@ -128,8 +129,8 @@ export default function IncidentsPage() {
 
       setCurrentUser(userData)
 
-      const canManageIncidents = ['super_admin', 'dev_admin', 'admin'].includes(userData?.role)
-      setCanManage(Boolean(canManageIncidents))
+      const canManageIncidents = Boolean(userData && (isAdmin(userData.role) || isAdmin(effectiveOscarRole(userData.role, userData.oscar))))
+      setCanManage(canManageIncidents)
 
       const { data: incidentsData, error } = await supabase
         .from('incidents')

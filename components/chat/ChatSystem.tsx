@@ -20,6 +20,7 @@ import type {
 } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { notificationService } from '@/lib/services/notificationService'
+import { isAdmin } from '@/lib/utils'
 
 type ChatMessageRow = Database['public']['Tables']['chat_messages']['Row']
 type ChatMessageInsert = Database['public']['Tables']['chat_messages']['Insert']
@@ -299,7 +300,7 @@ export default function ChatSystem({
       return
     }
 
-    if (['super_admin', 'dev_admin', 'admin'].includes(currentUser.role)) {
+    if (isAdmin(currentUser.role)) {
       setCanChatInProgram(true)
       setProgramAccessChecked(true)
       return
@@ -964,9 +965,9 @@ export default function ChatSystem({
 
   const handleDeleteMessage = useCallback(async (messageId: string, hardDelete: boolean = false) => {
     if (!currentUser?.id) return
-    const isAdmin = ['super_admin', 'dev_admin', 'admin'].includes(currentUser.role)
+    const isUserAdmin = isAdmin(currentUser.role)
 
-    if (hardDelete && isAdmin) {
+    if (hardDelete && isUserAdmin) {
       const { error } = await (supabase as any).from('chat_messages').delete().eq('id', messageId)
       if (error) {
         toast.error(`Could not delete message: ${error.message}`);
@@ -979,7 +980,7 @@ export default function ChatSystem({
     const deletedAt = new Date().toISOString()
     const isOwner = messages.find(m => m.id === messageId)?.sender_id === currentUser.id
 
-    if (isAdmin && !isOwner) {
+    if (isUserAdmin && !isOwner) {
       // Soft delete by Admin
       const { error } = await (supabase as any).from('chat_messages').update({ deleted_at: deletedAt, deleted_by_admin: true }).eq('id', messageId)
       if (error) { toast.error(error.message); return }
@@ -1259,8 +1260,8 @@ export default function ChatSystem({
     if (message.is_archived) return false
     if (!currentUser) return false
 
-    // Admins can see all messages
-    if (['super_admin', 'dev_admin', 'admin'].includes(currentUser.role)) return true
+    // Admins and leadership can see all messages
+    if (isAdmin(currentUser.role)) return true
 
     // Sender can see their own messages
     if (message.sender_id === currentUser.id) return true

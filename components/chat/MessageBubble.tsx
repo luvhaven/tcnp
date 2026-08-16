@@ -2,6 +2,7 @@ import React, { memo } from 'react'
 import { format } from 'date-fns'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Smile, CornerUpLeft, Pencil, Trash2, Lock } from 'lucide-react'
+import { isAdmin } from '@/lib/utils'
 
 // Types (mirrored from ChatSystem to prevent circular dependencies while keeping it simple)
 export type MessageUserMeta = {
@@ -165,7 +166,7 @@ export const MessageBubble = memo(({
                                     This message was deleted by Admin
                                 </div>
                             ) : (
-                                ['super_admin', 'dev_admin', 'admin'].includes(currentUserRole ?? '') ? (
+                                isAdmin(currentUserRole) ? (
                                     <>
                                         <div className="break-words mb-1.5">{renderContent(msg.content, searchQuery, isOwn)}</div>
                                         <div className={`italic text-[11px] font-medium leading-tight ${isOwn ? 'text-white/80' : 'text-muted-foreground/80'}`}>
@@ -195,10 +196,10 @@ export const MessageBubble = memo(({
                             <button onClick={() => setShowReactionPicker(showReactionPicker === msg.id ? null : msg.id)} title="React" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><Smile className="h-3.5 w-3.5" /></button>
                             <button onClick={() => handleReply(msg)} title="Reply" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><CornerUpLeft className="h-3.5 w-3.5" /></button>
                             {isEditable && <button onClick={() => handleEdit(msg)} title="Edit" className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"><Pencil className="h-3.5 w-3.5" /></button>}
-                            {(isOwn || ['super_admin', 'dev_admin', 'admin'].includes(currentUserRole ?? '')) && <button onClick={async (e) => { e.preventDefault(); e.stopPropagation(); if (await confirm({ message: 'Are you sure you want to delete this message?', variant: 'destructive' })) { void handleDeleteMessage(msg.id); } }} title="Delete" className="h-6 w-6 rounded-lg hover:bg-destructive/10 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>}
+                            {(isOwn || isAdmin(currentUserRole)) && <button onClick={async (e) => { e.preventDefault(); e.stopPropagation(); if (await confirm({ message: 'Are you sure you want to delete this message?', variant: 'destructive' })) { void handleDeleteMessage(msg.id); } }} title="Delete" className="h-6 w-6 rounded-lg hover:bg-destructive/10 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>}
                         </div>
                     )}
-                    {msg.deleted_at && ['super_admin', 'dev_admin', 'admin'].includes(currentUserRole ?? '') && (
+                    {msg.deleted_at && isAdmin(currentUserRole) && (
                         <div className={`absolute -top-9 ${isOwn ? 'right-0' : 'left-0'} opacity-0 group-hover/msg:opacity-100 transition-opacity flex gap-0.5 bg-background/95 backdrop-blur-sm rounded-xl p-1 shadow-lg border z-20`}>
                             <button onClick={async (e) => { e.preventDefault(); e.stopPropagation(); if (await confirm({ message: 'Permanently destroy this message?', variant: 'destructive' })) { void handleDeleteMessage(msg.id, true); } }} title="Destroy permanently" className="h-6 w-6 rounded-lg hover:bg-destructive/10 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
                         </div>

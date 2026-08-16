@@ -28,7 +28,8 @@ import { Search, Radio, Clock, Loader2, ChevronDown, Download, Waves, AlertTrian
 import { CALL_SIGNS, getCallSignLabel, getCallSignColor, SITREP_CODES, CALL_SIGN_KEY_TO_DB_ENUM, type CallSignKey } from '@/lib/constants/call-signs'
 import { CallSignChip } from '@/components/ui/call-sign-chip'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn, isAdmin, effectiveOscarRole } from '@/lib/utils'
+import { OfficerProfileDialog, type OfficerProfileData } from '@/components/officers/OfficerProfileDialog'
 
 // Latest live SITREP broadcast (traffic / route / emergency) per journey — these
 // come from journey_events, not journeys.status, so they'd otherwise be invisible
@@ -87,6 +88,7 @@ export default function JourneyStatusTable() {
     const [selectedJourneyForTimes, setSelectedJourneyForTimes] = useState<Journey | null>(null)
     const [timesForm, setTimesForm] = useState({ eta: '', etd: '' })
     const [savingTimes, setSavingTimes] = useState(false)
+    const [selectedOfficer, setSelectedOfficer] = useState<OfficerProfileData | null>(null)
     // Realtime connection status for the status dot in the footer
     const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
     // Stable per-tab channel name — prevents multi-tab subscription collision
@@ -277,7 +279,8 @@ export default function JourneyStatusTable() {
 
             // Check if user can update call signs (DO or admin)
             const userRole = (userData as any)?.role as string | undefined
-            const canUpdate = userRole && ['super_admin', 'dev_admin', 'admin', 'delta_oscar', 'captain', 'vice_captain', 'command', 'head_of_command', 'head_of_operations'].includes(userRole)
+            const userOscar = (userData as any)?.oscar as string | undefined
+            const canUpdate = userRole && (isAdmin(userRole) || isAdmin(effectiveOscarRole(userRole, userOscar)) || userRole === 'delta_oscar')
             setCanUpdateCallSigns(Boolean(canUpdate))
         } catch (error) {
             console.error('Error loading current user:', error)
@@ -460,8 +463,7 @@ export default function JourneyStatusTable() {
     // with the other surfaces (Cocktail was amber here, green on My Operations)
     // and have been removed rather than re-synced, so there is only one source.
 
-    const ADMIN_ROLES = ['super_admin', 'dev_admin', 'admin', 'captain', 'head_of_command', 'head_of_operations', 'command', 'hod', 'hop']
-    const isAdmin = currentUser?.role && ADMIN_ROLES.includes(currentUser.role)
+    const isLeadership = Boolean(currentUser?.role && (isAdmin(currentUser.role) || isAdmin(effectiveOscarRole(currentUser.role, currentUser.oscar))))
 
     const filteredJourneys = journeys.filter(journey => {
         const doNames = journey.duty_officers?.map(d => d.users?.full_name?.toLowerCase() ?? '').join(' ') ??
@@ -704,10 +706,28 @@ export default function JourneyStatusTable() {
                                             {allDOs.length > 0 ? (
                                                 <div className="flex flex-col gap-0.5">
                                                     {allDOs.map(d => (
-                                                        <div key={d.user_id} className="flex items-center gap-1 text-xs">
+                                                        <button
+                                                            key={d.user_id}
+                                                            type="button"
+                                                            onClick={() => setSelectedOfficer({
+                                                                id: d.user_id,
+                                                                full_name: d.users?.full_name ?? null,
+                                                                email: '',
+                                                                phone: null,
+                                                                oscar: d.users?.oscar ?? null,
+                                                                role: 'officer',
+                                                                unit: null,
+                                                                current_title_id: null,
+                                                                is_active: true,
+                                                                activation_status: 'active',
+                                                                created_at: new Date().toISOString()
+                                                            })}
+                                                            className="flex items-center gap-1 text-xs text-left cursor-pointer hover:text-primary transition-colors py-0.5 group rounded px-1 -mx-1 hover:bg-accent/50"
+                                                            title="View Officer Full Profile"
+                                                        >
                                                             {d.is_lead && <span className="text-yellow-500" title="Team Lead">⭐</span>}
-                                                            <span className={d.is_lead ? 'font-semibold' : ''}>{d.users?.full_name ?? '—'}</span>
-                                                        </div>
+                                                            <span className={cn(d.is_lead ? 'font-semibold' : '', "group-hover:underline")}>{d.users?.full_name ?? '—'}</span>
+                                                        </button>
                                                     ))}
                                                 </div>
                                             ) : (
@@ -908,6 +928,16 @@ export default function JourneyStatusTable() {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Officer Full Profile Dialog */}
+            <OfficerProfileDialog
+                officer={selectedOfficer}
+                open={!!selectedOfficer}
+                onOpenChange={(open) => {
+                    if (!open) setSelectedOfficer(null)
+                }}
+                canManage={isLeadership}
+            />
         </div>
     )
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { isAdmin } from '@/lib/utils'
 
 export async function POST(request: Request) {
     try {
@@ -21,8 +22,8 @@ export async function POST(request: Request) {
 
         const role = (currentUser as { role?: string } | null)?.role
 
-        if (!role || !['super_admin', 'dev_admin', 'admin', 'head_of_command'].includes(role)) {
-            return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
+        if (!role || !isAdmin(role)) {
+            return NextResponse.json({ error: 'Forbidden: Leadership access required' }, { status: 403 })
         }
 
         const body = await request.json()

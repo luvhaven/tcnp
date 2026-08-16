@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { isAdmin } from '@/lib/utils'
 
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     // Only admins/captains/command can assign DOs
     const { data: currentUser } = await supabase
@@ -15,8 +16,7 @@ export async function POST(req: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    const adminRoles = ['super_admin', 'dev_admin', 'admin', 'captain', 'head_of_command', 'head_of_operations', 'command']
-    if (!currentUser || !adminRoles.includes(currentUser.role)) {
+    if (!currentUser || !isAdmin(currentUser.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

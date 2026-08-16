@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { FileText } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
+import { isAdmin, effectiveOscarRole } from "@/lib/utils"
 
 export default function AuditLogsPage() {
   const supabase = createClient()
@@ -31,13 +32,13 @@ export default function AuditLogsPage() {
 
       const { data: userData } = await supabase
         .from('users')
-        .select('role')
+        .select('role, oscar')
         .eq('id', user.id)
         .single()
 
-      if (!userData || !['super_admin', 'dev_admin', 'admin'].includes((userData as any).role)) {
+      if (!userData || !(isAdmin((userData as any).role) || isAdmin(effectiveOscarRole((userData as any).role, (userData as any).oscar)))) {
         setAuthorized(false)
-        toast.error('Access denied. Admin privileges required to view audit logs.')
+        toast.error('Access denied. Leadership privileges required to view audit logs.')
         return
       }
 

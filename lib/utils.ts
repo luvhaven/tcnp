@@ -73,11 +73,23 @@ export function effectiveOscarRole(role: string | null | undefined, oscar: strin
 }
 
 /**
- * Check if a user role is an admin
+ * Check if a user role is an admin / leadership role (Super Admin, Dev Admin, Admin, Captain, Vice Captain, Command, HOC, HOP)
  */
 export function isAdmin(role: string | null | undefined): boolean {
   if (!role) return false
-  return ['admin', 'dev_admin', 'super_admin', 'captain', 'vice_captain', 'head_of_operations', 'head_of_command', 'command'].includes(role)
+  return ['admin', 'dev_admin', 'super_admin', 'captain', 'vice_captain', 'head_of_operations', 'head_of_command', 'command', 'hod', 'hop'].includes(role)
+}
+
+/**
+ * Check if a user can view an officer's full profile (including emergency contacts, personal info, titles and duty history).
+ * Admins, Captain, Vice Captain, Command leadership, and Head of Welfare have full access.
+ */
+export function canViewOfficerFullProfile(role: string | null | undefined, oscar?: string | null | undefined): boolean {
+  if (!role) return false
+  if (isAdmin(role)) return true
+  const effective = effectiveOscarRole(role, oscar)
+  if (effective && isAdmin(effective)) return true
+  return ['head_welfare_oscar'].includes(effective ?? '')
 }
 
 /**

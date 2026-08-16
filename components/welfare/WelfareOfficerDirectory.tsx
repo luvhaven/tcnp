@@ -3,14 +3,16 @@
 import { useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase/client"
-import { cn } from "@/lib/utils"
+import { cn, isAdmin, effectiveOscarRole } from "@/lib/utils"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
-  Search, Cake, Phone, Mail, HeartPulse, Loader2, Users, PartyPopper,
+  Search, Cake, Phone, Mail, HeartPulse, Loader2, Users, PartyPopper, Eye,
 } from "lucide-react"
+import { OfficerProfileDialog, type OfficerProfileData } from "@/components/officers/OfficerProfileDialog"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
 
 const supabase = createClient()
 
@@ -62,6 +64,12 @@ function daysUntilBirthday(month: number, day: number, today: Date): number {
  */
 export default function WelfareOfficerDirectory() {
   const [search, setSearch] = useState("")
+  const [selectedOfficer, setSelectedOfficer] = useState<OfficerProfileData | null>(null)
+  const { data: currentUser } = useCurrentUser()
+
+  const canManage = Boolean(
+    currentUser && (isAdmin(currentUser.role) || isAdmin(effectiveOscarRole(currentUser.role, currentUser.oscar)))
+  )
 
   const { data: officers = [], isLoading, error } = useQuery({
     queryKey: ["welfare-officer-directory"],
@@ -93,6 +101,27 @@ export default function WelfareOfficerDirectory() {
     )
   }, [officers, search])
 
+  const handleOpenOfficer = (officer: WelfareOfficer) => {
+    const profileData: OfficerProfileData = {
+      id: officer.id,
+      email: officer.email || '',
+      full_name: officer.full_name,
+      phone: officer.phone,
+      oscar: officer.oscar,
+      role: officer.role || 'officer',
+      unit: null,
+      current_title_id: null,
+      is_active: officer.is_active,
+      activation_status: officer.is_active ? 'active' : 'inactive',
+      photo_url: officer.photo_url,
+      team: officer.team,
+      created_at: new Date().toISOString(),
+      emergency_contact_name: officer.emergency_contact_name,
+      emergency_contact_phone: officer.emergency_contact_phone,
+    }
+    setSelectedOfficer(profileData)
+  }
+
   if (isLoading) {
     return <div className="flex items-center justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
   }
@@ -117,7 +146,12 @@ export default function WelfareOfficerDirectory() {
             </p>
             <div className="flex flex-wrap gap-2">
               {upcomingBirthdays.map(o => (
-                <Badge key={o.id} variant="outline" className="gap-1 border-amber-400/50 text-xs">
+                <Badge
+                  key={o.id}
+                  variant="outline"
+                  className="gap-1 border-amber-400/50 text-xs cursor-pointer hover:bg-amber-500/10 transition"
+                  onClick={() => handleOpenOfficer(o)}
+                >
                   <Cake className="h-3 w-3" />
                   {o.full_name} — {MONTH_NAMES[o.birth_month! - 1]} {o.birth_day}
                   {o.daysUntil === 0 && <span className="font-semibold text-amber-600 dark:text-amber-400">· Today!</span>}
@@ -146,14 +180,24 @@ export default function WelfareOfficerDirectory() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map(o => (
-            <Card key={o.id} className={cn("card-hover", !o.is_active && "opacity-60")}>
+            <Card
+              key={o.id}
+              className={cn(
+                "card-hover cursor-pointer transition-all hover:border-primary/50 hover:shadow-md relative group",
+                !o.is_active && "opacity-60"
+              )}
+              onClick={() => handleOpenOfficer(o)}
+            >
               <CardContent className="space-y-2 p-4">
                 <div className="flex items-center gap-3">
-                  <Avatar className="h-10 w-10">
+                  <Avatar className="h-10 w-10 group-hover:ring-2 group-hover:ring-primary/40 transition">
                     {o.photo_url ? <AvatarImage src={o.photo_url} className="object-cover" /> : <AvatarFallback className="text-xs">{initials(o.full_name)}</AvatarFallback>}
                   </Avatar>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{o.full_name ?? "Unnamed officer"}</p>
+                    <div className="flex items-center justify-between gap-1">
+                      <p className="truncate text-sm font-semibold group-hover:text-primary transition-colors">{o.full_name ?? "Unnamed officer"}</p>
+                      <Eye className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                    </div>
                     <div className="flex flex-wrap items-center gap-1">
                       {o.oscar && <Badge variant="secondary" className="text-[9px]">{o.oscar}</Badge>}
                       {o.team && <Badge variant="outline" className="border-primary/40 text-[9px] uppercase text-primary">{o.team}</Badge>}
@@ -183,6 +227,17 @@ export default function WelfareOfficerDirectory() {
           ))}
         </div>
       )}
+
+      {/* Full Officer Profile Dialog */}
+      <OfficerProfileDialog
+        officer={selectedOfficer}
+        open={!!selectedOfficer}
+        onOpenChange={(open) => {
+          if (!open) setSelectedOfficer(null)
+        }}
+        canManage={canManage}
+      />
     </div>
   )
 }
+

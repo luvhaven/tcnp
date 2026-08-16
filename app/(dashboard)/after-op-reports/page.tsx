@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Loader2, ClipboardList, Star, AlertTriangle, Download, User, Calendar, MapPin } from 'lucide-react'
 import { format } from 'date-fns'
-import { cn } from '@/lib/utils'
+import { cn, isAdmin } from '@/lib/utils'
 
 interface FeedbackReport {
     id: string
@@ -104,8 +104,7 @@ export default function AfterOpReportPage() {
         URL.revokeObjectURL(url)
     }
 
-    const ADMIN_ROLES = ['super_admin', 'dev_admin', 'admin', 'captain', 'head_of_command', 'head_of_operations', 'command', 'hod', 'hop']
-    const isAdmin = userRole && ADMIN_ROLES.includes(userRole)
+    const isUserAdmin = Boolean(userRole && isAdmin(userRole))
 
     return (
         <div className="space-y-6 animate-fade-in">
@@ -116,10 +115,10 @@ export default function AfterOpReportPage() {
                         After-Op Reports
                     </h1>
                     <p className="text-muted-foreground mt-1">
-                        Consolidated DO post-operation feedback. {isAdmin ? 'All reports visible.' : 'Your submitted reports.'}
+                        Consolidated DO post-operation feedback. {isUserAdmin ? 'All reports visible.' : 'Your submitted reports.'}
                     </p>
                 </div>
-                {reports.length > 0 && isAdmin && (
+                {reports.length > 0 && isUserAdmin && (
                     <Button size="sm" variant="outline" onClick={handleExportCSV} className="gap-2 text-xs">
                         <Download className="h-3.5 w-3.5" />Export CSV
                     </Button>

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
+import { isAdmin } from '@/lib/utils'
 
 // Build the hardened service-role client right here to avoid any wrapper issues
 function buildAdminClient() {
@@ -32,8 +33,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Could not verify caller role' }, { status: 403 })
     }
 
-    if (!['admin', 'dev_admin', 'command', 'head_of_command'].includes(callerRow.role)) {
-      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
+    if (!callerRow.role || !isAdmin(callerRow.role)) {
+      return NextResponse.json({ error: 'Forbidden: Leadership access required' }, { status: 403 })
     }
 
     // 2. Parse body
