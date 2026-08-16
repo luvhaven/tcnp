@@ -414,7 +414,7 @@ export function OfficerProfileDialog({
                       <span className="font-medium">{mergedOfficer.full_name || "—"}</span>
                     </div>
                     <div className="flex justify-between items-center py-1 border-b border-border/40">
-                      <span className="text-muted-foreground">OSCAR Call Sign:</span>
+                      <span className="text-muted-foreground">Oscar Unit:</span>
                       <span className="font-medium">{mergedOfficer.oscar || "—"}</span>
                     </div>
                     <div className="flex justify-between items-center py-1 border-b border-border/40">
@@ -428,10 +428,6 @@ export function OfficerProfileDialog({
                           "Unassigned"
                         )}
                       </span>
-                    </div>
-                    <div className="flex justify-between items-center py-1 border-b border-border/40">
-                      <span className="text-muted-foreground">Primary Unit:</span>
-                      <span className="font-medium">{mergedOfficer.unit || "General Protocol"}</span>
                     </div>
                     <div className="flex justify-between items-center py-1">
                       <span className="text-muted-foreground">System Role:</span>
