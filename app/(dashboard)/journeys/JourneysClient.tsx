@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { cn, canManageJourney, isAdmin } from "@/lib/utils"
+import { cn, canManageJourney, isAdmin, effectiveOscarRole } from "@/lib/utils"
 import {
   MapPin,
   Plus,
@@ -265,12 +265,13 @@ export default function JourneysClient({
 
           const { data: userRow, error } = await supabase
             .from('users')
-            .select('role')
+            .select('role, oscar')
             .eq('id', user.id)
             .single<any>()
 
           if (!error && userRow?.role) {
-            setCurrentRole(userRow.role)
+            const eff = effectiveOscarRole(userRow.role, userRow.oscar)
+            setCurrentRole(eff || userRow.role)
           }
         }
       } catch (error) {

@@ -1,18 +1,18 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { JourneyAlerts } from "@/components/dashboard/JourneyAlerts"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { cn, isAdmin } from "@/lib/utils"
+import { cn, isAdmin, effectiveOscarRole } from "@/lib/utils"
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/lib/constants/tncpCallSigns"
 import {
-  Users, Car, MapPin, AlertTriangle, TrendingUp, Clock,
-  CheckCircle, Download, ChevronRight, ArrowRight, Radio,
-  MessageSquare, Zap, Shield,
+  Users, Car, MapPin, AlertTriangle, Download, ChevronRight, ArrowRight, Radio,
+  MessageSquare, Zap, Shield, Plane, Landmark, Hotel, Home, Camera,
+  UtensilsCrossed, Compass, Calendar, CheckCircle,
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
@@ -39,13 +39,13 @@ const DashboardCharts = dynamic(
   }
 )
 
-// ─── Static data ──────────────────────────────────────────────────────────────
+// ─── Executive Stat Definitions ────────────────────────────────────────────────
 
-const STAT_DEFINITIONS = [
+const EXECUTIVE_STATS = [
   {
     key: "totalPapas",
     label: "Total Papas",
-    sub: "Registered guests",
+    sub: "Registered VIP guests",
     Icon: Users,
     color: "text-violet-500",
     bg: "bg-violet-500/10",
@@ -55,7 +55,7 @@ const STAT_DEFINITIONS = [
   {
     key: "totalCheetahs",
     label: "Fleet Size",
-    sub: "Active vehicles",
+    sub: "Active Cheetah vehicles",
     Icon: Car,
     color: "text-emerald-500",
     bg: "bg-emerald-500/10",
@@ -88,12 +88,6 @@ const ADMIN_ACTIONS = [
   { href: "/journeys", label: "Create Journey", sub: "Plan a new Papa movement", Icon: MapPin, color: "text-violet-500", bg: "bg-violet-500/10" },
   { href: "/papas", label: "Add Papa", sub: "Register a new guest", Icon: Users, color: "text-emerald-500", bg: "bg-emerald-500/10" },
   { href: "/command", label: "Command Centre", sub: "Live ops & tracking", Icon: Radio, color: "text-sky-500", bg: "bg-sky-500/10" },
-]
-
-const OFFICER_ACTIONS = [
-  { href: "/my-operations", label: "My Operations", sub: "Your assignments & call-sign", Icon: Zap, color: "text-orange-500", bg: "bg-orange-500/10" },
-  { href: "/chat", label: "Team Chat", sub: "Program rooms & your channel", Icon: MessageSquare, color: "text-sky-500", bg: "bg-sky-500/10" },
-  { href: "/compliance", label: "Outfit of the Day", sub: "Today's dress code", Icon: Shield, color: "text-violet-500", bg: "bg-violet-500/10" },
 ]
 
 const FALLBACK_STATUS_COLORS: Record<string, string> = {
@@ -129,6 +123,35 @@ const getStatusIndicatorClass = (status: string) =>
 const getStatusLabel = (status: string) =>
   getCallSignLabel(status) || FALLBACK_STATUS_LABELS[status] || toTitleCase(status)
 
+function getUnitActionForRole(role?: string | null, oscar?: string | null) {
+  const r = (oscar || role || "").toLowerCase()
+  if (r.includes("alpha")) {
+    return { href: "/alpha", label: "Alpha Aviation Hub", sub: "Eagle Squares & Flights", Icon: Plane, color: "text-purple-500", bg: "bg-purple-500/10" }
+  }
+  if (r.includes("tango")) {
+    return { href: "/tango", label: "Tango Fleet", sub: "Cheetah vehicle management", Icon: Car, color: "text-emerald-500", bg: "bg-emerald-500/10" }
+  }
+  if (r.includes("victor")) {
+    return { href: "/victor", label: "Victor Venues", sub: "Theatres & seat layouts", Icon: Landmark, color: "text-amber-500", bg: "bg-amber-500/10" }
+  }
+  if (r.includes("nest")) {
+    return { href: "/nests", label: "November Nest", sub: "Hotel accommodations & rooms", Icon: Hotel, color: "text-indigo-500", bg: "bg-indigo-500/10" }
+  }
+  if (r.includes("den") || r.includes("theatre")) {
+    return { href: "/den", label: "November Den", sub: "VIP Lounges & Menus", Icon: Home, color: "text-indigo-500", bg: "bg-indigo-500/10" }
+  }
+  if (r.includes("serial") || r.includes("sierra")) {
+    return { href: "/serial", label: "Serial Media", sub: "Social media & press coverage", Icon: Camera, color: "text-pink-500", bg: "bg-pink-500/10" }
+  }
+  if (r.includes("welfare")) {
+    return { href: "/welfare", label: "Welfare Portal", sub: "Officer welfare & meals", Icon: UtensilsCrossed, color: "text-emerald-500", bg: "bg-emerald-500/10" }
+  }
+  if (r.includes("hospitality")) {
+    return { href: "/hospitality", label: "Hospitality Hub", sub: "Guest hospitality & amenities", Icon: Compass, color: "text-sky-500", bg: "bg-sky-500/10" }
+  }
+  return { href: "/compliance", label: "Outfit of the Day", sub: "Today's dress code & grooming", Icon: Shield, color: "text-violet-500", bg: "bg-violet-500/10" }
+}
+
 // ─── Loading skeleton ─────────────────────────────────────────────────────────
 
 function DashboardSkeleton() {
@@ -161,21 +184,26 @@ function DashboardSkeleton() {
   )
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Page Component ───────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const router = useRouter()
   const supabase = createClient()
   const [stats, setStats] = useState({ totalPapas: 0, totalCheetahs: 0, activeJourneys: 0, incidents: 0 })
+  const [myAssignmentsCount, setMyAssignmentsCount] = useState(0)
   const [recentJourneys, setRecentJourneys] = useState<any[]>([])
+  const [myScheduledJourneys, setMyScheduledJourneys] = useState<any[]>([])
   const [activeProgram, setActiveProgram] = useState<{ id: string; name: string } | null>(null)
   const [myAssignment, setMyAssignment] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
   const { isInstalled, install, platform: pwaplatform } = usePWAInstall()
   const [showInstallModal, setShowInstallModal] = useState(false)
-  const { data: currentUser } = useCurrentUser()
-  const isAdminUser = isAdmin(currentUser?.role)
-  const quickActions = isAdminUser ? ADMIN_ACTIONS : OFFICER_ACTIONS
+  const { data: currentUser, isLoading: userLoading } = useCurrentUser()
+
+  const isLeadership = useMemo(() => {
+    if (!currentUser) return false
+    return isAdmin(currentUser.role) || isAdmin(effectiveOscarRole(currentUser.role, currentUser.oscar))
+  }, [currentUser])
 
   const handleInstallClick = async () => {
     const result = await install()
@@ -185,66 +213,98 @@ export default function DashboardPage() {
 
   const loadDashboardData = useCallback(async () => {
     try {
-      const [papasRes, cheetahsRes, journeysRes, incidentsRes, programRes] = await Promise.all([
-        supabase.from("papas").select("id", { count: "exact", head: true }),
-        supabase.from("cheetahs").select("id", { count: "exact", head: true }),
-        (supabase as any).from("journeys").select("id", { count: "exact", head: true })
-          .not("status", "in", "(completed,cancelled)")
-          .or("is_deleted.is.null,is_deleted.eq.false"),
-        supabase.from("incidents").select("id", { count: "exact", head: true }).eq("status", "open"),
-        supabase.from("programs").select("id, name").eq("status", "active").order("created_at", { ascending: false }).limit(1),
-      ])
-
-      setActiveProgram((programRes.data?.[0] as any) ?? null)
-      setStats({
-        totalPapas: papasRes.count || 0,
-        totalCheetahs: cheetahsRes.count || 0,
-        activeJourneys: journeysRes.count || 0,
-        incidents: incidentsRes.count || 0,
-      })
-
-      const { data: journeys } = await (supabase as any)
-        .from("journeys")
-        .select("*, papas(full_name, title), cheetahs(call_sign, registration_number)")
-        .or("is_deleted.is.null,is_deleted.eq.false")
+      // 1. Fetch active program (everyone sees current program)
+      const { data: programData } = await supabase
+        .from("programs")
+        .select("id, name")
+        .eq("status", "active")
         .order("created_at", { ascending: false })
-        .limit(5)
+        .limit(1)
 
-      setRecentJourneys(journeys || [])
+      setActiveProgram((programData?.[0] as any) ?? null)
 
       const { data: { user } } = await supabase.auth.getUser()
+
+      // 2. Fetch officer-specific assigned duties
       if (user) {
         const { data: myDORows } = await (supabase as any)
-          .from("journey_duty_officers").select("journey_id").eq("user_id", user.id)
+          .from("journey_duty_officers")
+          .select("journey_id")
+          .eq("user_id", user.id)
+
         const doIds: string[] = (myDORows || []).map((r: any) => r.journey_id)
-        const orParts = [`assigned_duty_officer_id.eq.${user.id}`]
+        const orParts = [`assigned_duty_officer_id.eq.${user.id}`, `assigned_do_id.eq.${user.id}`]
         if (doIds.length > 0) orParts.push(`id.in.(${doIds.join(",")})`)
 
-        const { data: mine } = await (supabase as any)
+        const { data: myJourneysList, count: myCount } = await (supabase as any)
           .from("journeys")
-          .select("id, status, origin, destination, scheduled_departure, etd, papas(full_name, title)")
+          .select("*, papas(full_name, title), cheetahs(call_sign, registration_number)", { count: "exact" })
           .not("status", "in", "(completed,cancelled)")
           .or("is_deleted.is.null,is_deleted.eq.false")
           .or(orParts.join(","))
           .order("etd", { ascending: true, nullsFirst: false })
-          .limit(1)
+          .limit(5)
 
-        setMyAssignment(mine?.[0] ?? null)
+        setMyScheduledJourneys(myJourneysList || [])
+        setMyAssignmentsCount(myCount || 0)
+        setMyAssignment(myJourneysList?.[0] ?? null)
+      }
+
+      // 3. If leadership, fetch global metrics & VIP fleet journeys
+      if (isLeadership) {
+        const [papasRes, cheetahsRes, journeysRes, incidentsRes] = await Promise.all([
+          supabase.from("papas").select("id", { count: "exact", head: true }),
+          supabase.from("cheetahs").select("id", { count: "exact", head: true }),
+          (supabase as any).from("journeys").select("id", { count: "exact", head: true })
+            .not("status", "in", "(completed,cancelled)")
+            .or("is_deleted.is.null,is_deleted.eq.false"),
+          supabase.from("incidents").select("id", { count: "exact", head: true }).eq("status", "open"),
+        ])
+
+        setStats({
+          totalPapas: papasRes.count || 0,
+          totalCheetahs: cheetahsRes.count || 0,
+          activeJourneys: journeysRes.count || 0,
+          incidents: incidentsRes.count || 0,
+        })
+
+        const { data: journeys } = await (supabase as any)
+          .from("journeys")
+          .select("*, papas(full_name, title), cheetahs(call_sign, registration_number)")
+          .or("is_deleted.is.null,is_deleted.eq.false")
+          .order("created_at", { ascending: false })
+          .limit(5)
+
+        setRecentJourneys(journeys || [])
       }
     } catch (err) {
       console.error("Dashboard load failed:", err)
     } finally {
       setLoading(false)
     }
-  }, [supabase])
+  }, [supabase, isLeadership])
 
   useEffect(() => {
-    void loadDashboardData()
-  }, [loadDashboardData])
+    if (!userLoading) {
+      void loadDashboardData()
+    }
+  }, [loadDashboardData, userLoading])
 
-  if (loading) return <DashboardSkeleton />
+  if (loading || userLoading) return <DashboardSkeleton />
 
   const firstName = currentUser?.full_name?.split(" ")[0]
+  const officerUnit = currentUser?.oscar || (currentUser?.role ? toTitleCase(currentUser.role) : "General Duty")
+  const officerTeam = currentUser?.team ? `Team ${toTitleCase(currentUser.team)}` : "Unassigned Team"
+
+  // Dynamic quick actions for officers
+  const officerQuickActions = [
+    { href: "/my-operations", label: "My Operations", sub: "Your assignments & call-sign", Icon: Zap, color: "text-orange-500", bg: "bg-orange-500/10" },
+    { href: "/chat", label: "Team Chat", sub: "Program rooms & team channel", Icon: MessageSquare, color: "text-sky-500", bg: "bg-sky-500/10" },
+    getUnitActionForRole(currentUser?.role, currentUser?.oscar),
+    { href: "/welfare", label: "Welfare & Dining", sub: "Officer welfare & meals", Icon: UtensilsCrossed, color: "text-emerald-500", bg: "bg-emerald-500/10" },
+  ]
+
+  const quickActions = isLeadership ? ADMIN_ACTIONS : officerQuickActions
 
   return (
     <div className="space-y-6 page-enter">
@@ -255,7 +315,9 @@ export default function DashboardPage() {
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Executive Overview</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {isLeadership ? "Executive Overview" : "Officer Portal"}
+              </span>
               {activeProgram && (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -264,13 +326,17 @@ export default function DashboardPage() {
               )}
             </div>
             <h1 className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-              {firstName ? `Welcome back, ${firstName}` : "Command Dashboard"}
+              {firstName ? `Welcome back, ${firstName}` : isLeadership ? "Command Dashboard" : "Operations Dashboard"}
             </h1>
             <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
-              {activeProgram ? (
-                <>Active operational protocol is currently engaged for <span className="font-semibold text-foreground">{activeProgram.name}</span>.</>
+              {isLeadership ? (
+                activeProgram ? (
+                  <>Active operational protocol is currently engaged for <span className="font-semibold text-foreground">{activeProgram.name}</span>.</>
+                ) : (
+                  "All systems nominal — stand by for program assignments and journey dispatch."
+                )
               ) : (
-                "All systems nominal — stand by for program assignments and journey dispatch."
+                <>Operational duty assigned to <span className="font-semibold text-foreground">{officerUnit}</span> • <span className="font-semibold text-foreground">{officerTeam}</span>.</>
               )}
             </p>
           </div>
@@ -313,7 +379,7 @@ export default function DashboardPage() {
               <div className="min-w-0">
                 <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">My Active Assignment</p>
                 <p className="truncate font-semibold text-sm mt-0.5">
-                  {myAssignment.papas?.title} {myAssignment.papas?.full_name ?? "Papa"} — {myAssignment.origin} → {myAssignment.destination}
+                  {myAssignment.papas?.title} {myAssignment.papas?.full_name ?? "Papa"} — {myAssignment.origin || "Origin"} → {myAssignment.destination || "Destination"}
                 </p>
                 <div className="flex items-center gap-2 mt-1">
                   <Badge className={`${getStatusColor(myAssignment.status)} text-[10px] uppercase px-2 py-0`}>
@@ -335,126 +401,260 @@ export default function DashboardPage() {
         </button>
       )}
 
-      {/* ── Live alerts ───────────────────────────────────────────────────── */}
-      <JourneyAlerts />
+      {/* ── Leadership Only: Live alerts ─────────────────────────────────── */}
+      {isLeadership && <JourneyAlerts />}
 
       {/* ── Stat cards ────────────────────────────────────────────────────── */}
-      <div className="grid gap-4 grid-cols-2 nav:grid-cols-4">
-        {STAT_DEFINITIONS.map(({ key, label, sub, Icon, color, bg, ring, glow }, idx) => (
-          <div
-            key={key}
-            className={cn(
-              "relative overflow-hidden rounded-2xl border bg-card p-5",
-              "transition-all duration-200 hover:shadow-elevation-lg hover:-translate-y-0.5",
-              `ring-1 ${ring}`
-            )}
-            style={{ animationDelay: `${idx * 60}ms` }}
-          >
-            {/* Background glow (static, no JS) */}
-            <div className={`absolute inset-0 bg-gradient-to-br ${glow} to-transparent pointer-events-none`} aria-hidden="true" />
-
+      {isLeadership ? (
+        <div className="grid gap-4 grid-cols-2 nav:grid-cols-4">
+          {EXECUTIVE_STATS.map(({ key, label, sub, Icon, color, bg, ring, glow }, idx) => (
+            <div
+              key={key}
+              className={cn(
+                "relative overflow-hidden rounded-2xl border bg-card p-5",
+                "transition-all duration-200 hover:shadow-elevation-lg hover:-translate-y-0.5",
+                `ring-1 ${ring}`
+              )}
+              style={{ animationDelay: `${idx * 60}ms` }}
+            >
+              <div className={`absolute inset-0 bg-gradient-to-br ${glow} to-transparent pointer-events-none`} aria-hidden="true" />
+              <div className="relative flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">{label}</p>
+                  <p className="stat-figure mt-2 text-3xl font-bold tracking-tight">
+                    <CountUp value={stats[key]} />
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">{sub}</p>
+                </div>
+                <div className={`shrink-0 rounded-xl ${bg} p-2.5`}>
+                  <Icon className={`h-4.5 w-4.5 ${color}`} aria-hidden="true" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* Regular Officer Stat Cards */
+        <div className="grid gap-4 grid-cols-2 nav:grid-cols-4">
+          {/* Card 1: My Assignments */}
+          <div className="relative overflow-hidden rounded-2xl border bg-card p-5 ring-1 ring-sky-500/20 transition-all duration-200 hover:shadow-elevation-lg hover:-translate-y-0.5">
+            <div className="absolute inset-0 bg-gradient-to-br from-sky-500/8 to-transparent pointer-events-none" />
             <div className="relative flex items-start justify-between gap-2">
               <div>
-                <p className="text-xs font-medium text-muted-foreground">{label}</p>
-                <p className={`stat-figure mt-2 text-3xl font-bold tracking-tight`}>
-                  <CountUp value={stats[key]} />
+                <p className="text-xs font-medium text-muted-foreground">My Assignments</p>
+                <p className="stat-figure mt-2 text-3xl font-bold tracking-tight text-sky-600 dark:text-sky-400">
+                  <CountUp value={myAssignmentsCount} />
                 </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">{sub}</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">Active & planned journeys</p>
               </div>
-              <div className={`shrink-0 rounded-xl ${bg} p-2.5`}>
-                <Icon className={`h-4.5 w-4.5 ${color}`} aria-hidden="true" />
+              <div className="shrink-0 rounded-xl bg-sky-500/10 p-2.5">
+                <MapPin className="h-4.5 w-4.5 text-sky-500" aria-hidden="true" />
               </div>
             </div>
           </div>
-        ))}
-      </div>
 
-      {/* ── Analytics Charts ──────────────────────────────────────────────── */}
-      <ErrorBoundary>
-        <DashboardCharts />
-      </ErrorBoundary>
+          {/* Card 2: Protocol Unit */}
+          <div className="relative overflow-hidden rounded-2xl border bg-card p-5 ring-1 ring-purple-500/20 transition-all duration-200 hover:shadow-elevation-lg hover:-translate-y-0.5">
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/8 to-transparent pointer-events-none" />
+            <div className="relative flex items-start justify-between gap-2">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Protocol Unit</p>
+                <p className="mt-2 text-xl font-bold tracking-tight text-foreground truncate max-w-[140px]">
+                  {officerUnit}
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">Operational assignment</p>
+              </div>
+              <div className="shrink-0 rounded-xl bg-purple-500/10 p-2.5">
+                <Shield className="h-4.5 w-4.5 text-purple-500" aria-hidden="true" />
+              </div>
+            </div>
+          </div>
 
-      {/* ── Recent Journeys ───────────────────────────────────────────────── */}
+          {/* Card 3: Protocol Team */}
+          <div className="relative overflow-hidden rounded-2xl border bg-card p-5 ring-1 ring-emerald-500/20 transition-all duration-200 hover:shadow-elevation-lg hover:-translate-y-0.5">
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/8 to-transparent pointer-events-none" />
+            <div className="relative flex items-start justify-between gap-2">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Protocol Team</p>
+                <p className="mt-2 text-xl font-bold tracking-tight text-foreground truncate max-w-[140px]">
+                  {currentUser?.team ? `Team ${toTitleCase(currentUser.team)}` : "Unassigned"}
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {currentUser?.is_team_head ? "★ Team Lead" : "Team Member"}
+                </p>
+              </div>
+              <div className="shrink-0 rounded-xl bg-emerald-500/10 p-2.5">
+                <Users className="h-4.5 w-4.5 text-emerald-500" aria-hidden="true" />
+              </div>
+            </div>
+          </div>
+
+          {/* Card 4: Program Status */}
+          <div className="relative overflow-hidden rounded-2xl border bg-card p-5 ring-1 ring-amber-500/20 transition-all duration-200 hover:shadow-elevation-lg hover:-translate-y-0.5">
+            <div className="absolute inset-0 bg-gradient-to-br from-amber-500/8 to-transparent pointer-events-none" />
+            <div className="relative flex items-start justify-between gap-2">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Active Program</p>
+                <p className="mt-2 text-base font-bold tracking-tight text-foreground truncate max-w-[140px]">
+                  {activeProgram?.name || "Standby"}
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {activeProgram ? "Protocol engaged" : "Awaiting activation"}
+                </p>
+              </div>
+              <div className="shrink-0 rounded-xl bg-amber-500/10 p-2.5">
+                <Radio className="h-4.5 w-4.5 text-amber-500" aria-hidden="true" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Leadership Only: Analytics Charts ─────────────────────────────── */}
+      {isLeadership && (
+        <ErrorBoundary>
+          <DashboardCharts />
+        </ErrorBoundary>
+      )}
+
+      {/* ── Journeys Section ──────────────────────────────────────────────── */}
       <div className="rounded-2xl border bg-card overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <div>
-            <h2 className="text-sm font-semibold">Recent Journeys</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Latest journey activities</p>
+            <h2 className="text-sm font-semibold">
+              {isLeadership ? "Recent VIP Journeys" : "My Scheduled Journeys"}
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {isLeadership ? "Latest convoy activities across the program" : "Journeys where you are assigned on duty"}
+            </p>
           </div>
           <Button
             variant="ghost"
             size="sm"
             className="gap-1 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => router.push("/journeys")}
+            onClick={() => router.push(isLeadership ? "/journeys" : "/my-operations")}
           >
-            View all <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            {isLeadership ? "View all" : "My Operations"} <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
           </Button>
         </div>
 
-        {recentJourneys.length === 0 ? (
-          <div className="empty-state py-12">
-            <MapPin className="h-10 w-10" aria-hidden="true" />
-            <p className="font-medium text-sm">No journeys yet</p>
-            <p className="text-xs text-muted-foreground">Create your first journey to see it here</p>
-            {isAdminUser && (
+        {isLeadership ? (
+          // Leadership View: Global Journeys
+          recentJourneys.length === 0 ? (
+            <div className="empty-state py-12">
+              <MapPin className="h-10 w-10" aria-hidden="true" />
+              <p className="font-medium text-sm">No journeys yet</p>
+              <p className="text-xs text-muted-foreground">Create your first journey to see it here</p>
               <Button variant="outline" size="sm" className="mt-4 gap-2" onClick={() => router.push("/journeys")}>
                 <ArrowRight className="h-3.5 w-3.5" /> Create Journey
               </Button>
-            )}
-          </div>
+            </div>
+          ) : (
+            <ul className="divide-y divide-border/60">
+              {recentJourneys.map((journey) => {
+                const createdDate = journey.created_at ? new Date(journey.created_at) : null
+                const isValidDate = createdDate && !isNaN(createdDate.getTime())
+
+                return (
+                  <li key={journey.id}>
+                    <button
+                      className="w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:bg-accent/50"
+                      onClick={() => router.push("/journeys")}
+                    >
+                      <div
+                        className={`h-2.5 w-2.5 shrink-0 rounded-full ${getStatusIndicatorClass(journey.status)}`}
+                        aria-hidden="true"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">
+                          {journey.papas?.title} {journey.papas?.full_name}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          {[journey.cheetahs?.call_sign, journey.cheetahs?.registration_number].filter(Boolean).join(" · ")}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <Badge
+                          variant={journey.status === "broken_arrow" ? "destructive" : "secondary"}
+                          className="uppercase tracking-wide text-[10px] px-2 py-0 hidden sm:flex"
+                        >
+                          {getStatusLabel(journey.status)}
+                        </Badge>
+                        <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                          {isValidDate ? formatDistanceToNow(createdDate!, { addSuffix: true }) : "Just now"}
+                        </span>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground/40" aria-hidden="true" />
+                      </div>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )
         ) : (
-          <ul className="divide-y divide-border/60">
-            {recentJourneys.map((journey) => {
-              const createdDate = journey.created_at ? new Date(journey.created_at) : null
-              const isValidDate = createdDate && !isNaN(createdDate.getTime())
+          // Officer View: Assigned Journeys Only
+          myScheduledJourneys.length === 0 ? (
+            <div className="empty-state py-12">
+              <MapPin className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
+              <p className="font-medium text-sm">No duty assignments yet</p>
+              <p className="text-xs text-muted-foreground max-w-sm text-center mt-1">
+                You currently have no scheduled journeys assigned. When Command assigns you to a convoy, it will appear here and in My Operations.
+              </p>
+              <Button variant="outline" size="sm" className="mt-4 gap-2" onClick={() => router.push("/my-operations")}>
+                <Zap className="h-3.5 w-3.5 text-orange-500" /> Open My Operations
+              </Button>
+            </div>
+          ) : (
+            <ul className="divide-y divide-border/60">
+              {myScheduledJourneys.map((journey) => {
+                const createdDate = journey.created_at ? new Date(journey.created_at) : null
+                const isValidDate = createdDate && !isNaN(createdDate.getTime())
 
-              return (
-                <li key={journey.id}>
-                  <button
-                    className="w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:bg-accent/50"
-                    onClick={() => router.push("/journeys")}
-                  >
-                    {/* Status dot */}
-                    <div
-                      className={`h-2.5 w-2.5 shrink-0 rounded-full ${getStatusIndicatorClass(journey.status)}`}
-                      aria-hidden="true"
-                    />
-
-                    {/* Main info */}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">
-                        {journey.papas?.title} {journey.papas?.full_name}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate mt-0.5">
-                        {[journey.cheetahs?.call_sign, journey.cheetahs?.registration_number].filter(Boolean).join(" · ")}
-                      </p>
-                    </div>
-
-                    {/* Right side */}
-                    <div className="flex items-center gap-3 shrink-0">
-                      <Badge
-                        variant={journey.status === "broken_arrow" ? "destructive" : "secondary"}
-                        className="uppercase tracking-wide text-[10px] px-2 py-0 hidden sm:flex"
-                      >
-                        {getStatusLabel(journey.status)}
-                      </Badge>
-                      <span className="text-[11px] text-muted-foreground whitespace-nowrap">
-                        {isValidDate ? formatDistanceToNow(createdDate!, { addSuffix: true }) : "Just now"}
-                      </span>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground/40" aria-hidden="true" />
-                    </div>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
+                return (
+                  <li key={journey.id}>
+                    <button
+                      className="w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:bg-accent/50"
+                      onClick={() => router.push("/my-operations")}
+                    >
+                      <div
+                        className={`h-2.5 w-2.5 shrink-0 rounded-full ${getStatusIndicatorClass(journey.status)}`}
+                        aria-hidden="true"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">
+                          {journey.papas?.title} {journey.papas?.full_name} — {journey.origin || "Origin"} → {journey.destination || "Destination"}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          {[journey.cheetahs?.call_sign, journey.cheetahs?.registration_number].filter(Boolean).join(" · ") || "Fleet details pending"}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <Badge
+                          variant={journey.status === "broken_arrow" ? "destructive" : "secondary"}
+                          className="uppercase tracking-wide text-[10px] px-2 py-0 hidden sm:flex"
+                        >
+                          {getStatusLabel(journey.status)}
+                        </Badge>
+                        <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                          {journey.etd ? `ETD ${new Date(journey.etd).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "No ETD"}
+                        </span>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground/40" aria-hidden="true" />
+                      </div>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )
         )}
       </div>
 
       {/* ── Quick Actions ─────────────────────────────────────────────────── */}
       <div>
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-3">Quick Actions</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-3">
+          {isLeadership ? "Command Actions" : "Officer Quick Actions"}
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {quickActions.map(({ href, label, sub, Icon, color, bg }) => (
             <button
               key={href}

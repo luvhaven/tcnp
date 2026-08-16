@@ -93,6 +93,19 @@ export function canViewOfficerFullProfile(role: string | null | undefined, oscar
 }
 
 /**
+ * Check if a user can view Live Tracking / Command maps.
+ * Exclusively for admins, active command, Captain, Vice Captain, and Head of Operations.
+ */
+export function canViewLiveTracking(role: string | null | undefined, oscar?: string | null | undefined): boolean {
+  if (!role) return false
+  if (isAdmin(role)) return true
+  const effective = effectiveOscarRole(role, oscar)
+  if (effective && isAdmin(effective)) return true
+  return false
+}
+
+
+/**
  * Check if a user can manage a journey.
  * Admins and HOC/HOP can manage all journeys.
  * DOs (or anyone assigned to a journey) can manage their assigned journeys.

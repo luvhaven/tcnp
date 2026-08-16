@@ -27,7 +27,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import PapaFormTabs from "@/components/papas/PapaFormTabs"
-import { canManagePapas } from "@/lib/utils"
+import { canManagePapas, effectiveOscarRole } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 
 type Papa = {
@@ -77,8 +77,9 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return null
-      const { data } = await supabase.from('users').select('role').eq('id', user.id).single()
-      return data?.role || null
+      const { data } = await supabase.from('users').select('role, oscar').eq('id', user.id).single()
+      const eff = effectiveOscarRole(data?.role, data?.oscar)
+      return eff || data?.role || null
     }
   })
 

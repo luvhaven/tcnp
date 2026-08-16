@@ -4,60 +4,12 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import LiveTrackingMap from '@/components/tracking/LiveTrackingMap'
 
-type CurrentUser = {
-  id: string
-  role: string | null
-}
-
-// Roles that can view live tracking
-const ALLOWED_ROLES = [
-  'super_admin',
-  'dev_admin',
-  'admin',
-  'command',
-  'captain',
-  'vice_captain',
-  'head_of_command',
-  'head_of_operations',
-  'tango_oscar',
-  'head_tango_oscar',
-  'alpha_oscar',
-  'november_oscar',
-  'noscar_den',
-  'head_noscar_den',
-  'noscar_nest',
-  'head_noscar_nest',
-]
+import { canViewLiveTracking } from '@/lib/utils'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
 
 export default function LiveTrackingPage() {
-  const supabase = createClient()
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
-
-        const { data: userData } = await supabase
-          .from('users')
-          .select('id, role')
-          .eq('id', user.id)
-          .single()
-
-        if (userData) {
-          setCurrentUser(userData as CurrentUser)
-        }
-      } catch (err) {
-        console.error('Unexpected error loading user for live tracking:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadUser()
-  }, [supabase])
+  const { data: currentUser, isLoading: loading } = useCurrentUser()
+  const hasAccess = Boolean(currentUser && canViewLiveTracking(currentUser.role, currentUser.oscar))
 
   // Loading skeleton
   if (loading) {
@@ -75,7 +27,7 @@ export default function LiveTrackingPage() {
   }
 
   // No access — show access denied instead of blank
-  if (!currentUser || !ALLOWED_ROLES.includes(currentUser.role ?? '')) {
+  if (!hasAccess) {
     return (
       <div className="flex h-full flex-col items-center justify-center p-8 text-center animate-in fade-in zoom-in-95 duration-500">
         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10 text-red-500">
@@ -83,7 +35,7 @@ export default function LiveTrackingPage() {
         </div>
         <h2 className="text-xl font-bold tracking-tight">Access Restricted</h2>
         <p className="mt-2 max-w-md text-muted-foreground">
-          Your current role (<span className="font-semibold text-foreground">{currentUser?.role || 'Unassigned'}</span>) does not have clearance to view Live Tracking.
+          Live Tracking is restricted to Admin, Command, Captain, Vice Captain, and Operations Leadership. Your current role (<span className="font-semibold text-foreground">{currentUser?.role || 'Unassigned'}</span>) does not have clearance.
         </p>
       </div>
     )

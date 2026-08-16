@@ -69,10 +69,16 @@ const MODULES = [
   },
 ]
 
+import { isAdmin, effectiveOscarRole } from "@/lib/utils"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
+
 export default function CommandPage() {
+  const { data: currentUser, isLoading: userLoading } = useCurrentUser()
+  const hasAccess = Boolean(currentUser && (isAdmin(currentUser.role) || isAdmin(effectiveOscarRole(currentUser.role, currentUser.oscar))))
   const [stats, setStats] = useState<CommandStats>({ activeJourneys: 0, onlineOfficers: 0, openIncidents: 0 })
 
   useEffect(() => {
+    if (!hasAccess) return
     const load = async () => {
       try {
         const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
@@ -91,7 +97,33 @@ export default function CommandPage() {
       }
     }
     void load()
-  }, [])
+  }, [hasAccess])
+
+  if (userLoading) {
+    return (
+      <div className="space-y-6 page-enter">
+        <div className="h-44 rounded-2xl skeleton" />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="h-40 rounded-2xl skeleton" />
+          <div className="h-40 rounded-2xl skeleton" />
+        </div>
+      </div>
+    )
+  }
+
+  if (!hasAccess) {
+    return (
+      <div className="flex h-[60vh] flex-col items-center justify-center p-8 text-center animate-in fade-in zoom-in-95 duration-500">
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10 text-red-500">
+          <AlertTriangle className="h-8 w-8" />
+        </div>
+        <h2 className="text-xl font-bold tracking-tight">Command Clearance Required</h2>
+        <p className="mt-2 max-w-md text-muted-foreground text-sm">
+          Access to the Command Centre is restricted to Admin, Active Command, Captain, Vice Captain, and Operations Leadership.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 page-enter">
