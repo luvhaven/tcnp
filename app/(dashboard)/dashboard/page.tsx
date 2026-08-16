@@ -290,28 +290,28 @@ export default function DashboardPage() {
     }
   }, [loadDashboardData, userLoading])
 
-  if (loading || userLoading) return <DashboardSkeleton />
-
-  const firstName = currentUser?.full_name?.split(" ")[0]
-  const officerUnit = currentUser?.oscar || (currentUser?.role ? toTitleCase(currentUser.role) : "General Duty")
-  const officerTeam = currentUser?.team ? `Team ${toTitleCase(currentUser.team)}` : "Unassigned Team"
-  const canAccessCommand = Boolean(currentUser && canAccessCommandCentre(currentUser.role, currentUser.oscar))
-
-  // Dynamic quick actions for leadership
+  // ── Leadership quick actions — must be a useMemo BEFORE any early return ──
   const leadershipQuickActions = useMemo(() => {
-    const actions = [
+    const canCmd = Boolean(currentUser && canAccessCommandCentre(currentUser.role, currentUser.oscar))
+    const actions: Array<{ href: string; label: string; sub: string; Icon: any; color: string; bg: string }> = [
       { href: "/journeys", label: "Create Journey", sub: "Plan a new Papa movement", Icon: MapPin, color: "text-violet-500", bg: "bg-violet-500/10" },
       { href: "/papas", label: "Add Papa", sub: "Register a new guest", Icon: Users, color: "text-emerald-500", bg: "bg-emerald-500/10" },
     ]
-    if (canAccessCommand) {
+    if (canCmd) {
       actions.push({ href: "/command", label: "Command Centre", sub: "Live ops & tracking", Icon: Radio, color: "text-sky-500", bg: "bg-sky-500/10" })
     } else {
       actions.push({ href: "/chat", label: "Team Chat", sub: "Program rooms & team channel", Icon: MessageSquare, color: "text-sky-500", bg: "bg-sky-500/10" })
     }
     return actions
-  }, [canAccessCommand])
+  }, [currentUser])
 
-  // Dynamic quick actions for officers
+  if (loading || userLoading) return <DashboardSkeleton />
+
+  const firstName = currentUser?.full_name?.split(" ")[0]
+  const officerUnit = currentUser?.oscar || (currentUser?.role ? toTitleCase(currentUser.role) : "General Duty")
+  const officerTeam = currentUser?.team ? `Team ${toTitleCase(currentUser.team)}` : "Unassigned Team"
+
+  // Dynamic quick actions for officers (plain const — no hooks needed)
   const officerQuickActions = [
     { href: "/my-operations", label: "My Operations", sub: "Your assignments & call-sign", Icon: Zap, color: "text-orange-500", bg: "bg-orange-500/10" },
     { href: "/chat", label: "Team Chat", sub: "Program rooms & team channel", Icon: MessageSquare, color: "text-sky-500", bg: "bg-sky-500/10" },
