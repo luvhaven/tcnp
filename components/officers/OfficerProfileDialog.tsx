@@ -13,8 +13,9 @@ import { CompletionRing } from "@/components/profile/CompletionRing"
 import {
   User, Mail, Phone, MapPin, Cake, HeartPulse, Award, Calendar,
   ShieldCheck, Briefcase, Activity, CheckCircle2, Circle, Clock,
-  Edit, Trash2, UserCheck, UserX, Copy, ExternalLink, Sparkles, AlertCircle, Compass
+  Edit, Trash2, UserCheck, UserX, Copy, ExternalLink, Sparkles, AlertCircle, Compass, X
 } from "lucide-react"
+
 import { toast } from "sonner"
 
 export type OfficerProfileData = {
@@ -200,6 +201,16 @@ export function OfficerProfileDialog({
         <div className="relative p-6 bg-gradient-to-br from-primary/20 via-primary/5 to-background border-b shrink-0 overflow-hidden">
           <div className="absolute -right-12 -top-12 h-44 w-44 rounded-full bg-primary/15 blur-2xl pointer-events-none" />
           <div className="absolute left-1/3 -bottom-10 h-32 w-32 rounded-full bg-sky-500/10 blur-xl pointer-events-none" />
+
+          {/* Close button */}
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            aria-label="Close"
+            className="absolute top-3 right-3 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-background/80 border border-border/60 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
 
           <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
