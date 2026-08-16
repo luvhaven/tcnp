@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { cn, canManageJourney, isAdmin, effectiveOscarRole } from "@/lib/utils"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
 import {
   MapPin,
   Plus,
@@ -139,6 +140,16 @@ export default function JourneysClient({
   const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentRole, setCurrentRole] = useState<string | null>(null)
+  const { data: currentUser } = useCurrentUser()
+
+  // Derive role/id from the shared cached hook — no async race condition
+  const resolvedRole = useMemo(() => {
+    if (!currentUser) return currentRole
+    const eff = effectiveOscarRole(currentUser.role, currentUser.oscar)
+    return eff || currentUser.role
+  }, [currentUser, currentRole])
+
+  const resolvedUserId = currentUser?.id ?? currentUserId
 
   // Timeline UI State
   const [timelineJourneyId, setTimelineJourneyId] = useState<string | null>(null)
@@ -179,7 +190,7 @@ export default function JourneysClient({
     notes: ''
   })
 
-  const canCreateJourney = currentRole ? isAdmin(currentRole) : false
+  const canCreateJourney = resolvedRole ? isAdmin(resolvedRole) : false
 
   // Fetch officers eligible for the SELECTED program only — eligible means
   // formally title-assigned to it, or having responded "available" to a
@@ -259,28 +270,23 @@ export default function JourneysClient({
     const init = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
-
         if (user) {
           setCurrentUserId(user.id)
-
-          const { data: userRow, error } = await supabase
+          // Also set currentRole as fallback in case useCurrentUser hasn't resolved yet
+          const { data: userRow } = await supabase
             .from('users')
             .select('role, oscar')
             .eq('id', user.id)
             .single<any>()
-
-          if (!error && userRow?.role) {
+          if (userRow?.role) {
             const eff = effectiveOscarRole(userRow.role, userRow.oscar)
             setCurrentRole(eff || userRow.role)
           }
         }
       } catch (error) {
         console.error('Error loading current user for JourneysPage:', error)
-      } finally {
-        // Lookups and initial journeys already loaded via Server Components
       }
     }
-
     init()
 
     // Subscribe to real-time updates
@@ -588,8 +594,8 @@ export default function JourneysClient({
 
   const handleCallSign = async (journey: Journey, newStatus: string) => {
     try {
-      const canUpdate = currentRole && currentUserId
-        ? canManageJourney(currentRole, journey.assigned_do_id === currentUserId)
+      const canUpdate = resolvedRole && resolvedUserId
+        ? canManageJourney(resolvedRole, journey.assigned_do_id === resolvedUserId)
         : false
 
       if (!canUpdate) {
@@ -653,8 +659,8 @@ export default function JourneysClient({
     return workflow[currentStatus] ?? []
   }
 
-  const canUpdateSelectedJourney = selectedJourney && currentRole && currentUserId
-    ? canManageJourney(currentRole, selectedJourney.assigned_do_id === currentUserId)
+  const canUpdateSelectedJourney = selectedJourney && resolvedRole && resolvedUserId
+    ? canManageJourney(resolvedRole, selectedJourney.assigned_do_id === resolvedUserId)
     : false
 
   if (loading) {
