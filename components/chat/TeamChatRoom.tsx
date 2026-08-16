@@ -6,12 +6,13 @@ import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
-import { canModerateTeamChat, cn, OFFICER_TEAMS } from "@/lib/utils"
+import { canModerateTeamChat, cn, OFFICER_TEAMS, isAdmin, effectiveOscarRole } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
+import { AdminChatControls } from "@/components/chat/AdminChatControls"
 import {
   Users, Send, Trash2, Flag, ShieldCheck, Crown, UserMinus, Loader2, MessagesSquare, AtSign,
 } from "lucide-react"
@@ -242,11 +243,17 @@ export default function TeamChatRoom() {
 
   const moderateMutation = useMutation({
     mutationFn: async ({ id, action }: { id: string; action: "delete" | "flag" | "unflag" }) => {
-      const updates: any = action === "delete"
-        ? { deleted_at: new Date().toISOString(), deleted_by_admin: true }
-        : { flagged: action === "flag", flagged_by: currentUser?.id ?? null }
-      const { error } = await supabase.from("chat_messages").update(updates).eq("id", id)
-      if (error) throw error
+      const response = await fetch('/api/admin/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: action === 'delete' ? 'soft_delete' : action,
+          messageId: id
+        })
+      })
+      const res = await response.json()
+      if (!response.ok) throw new Error(res.error || 'Moderation failed')
+      return res
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-chat", team] }),
     onError: (err: any) => toast.error(err.message || "Moderation failed"),
@@ -306,6 +313,9 @@ export default function TeamChatRoom() {
               <Badge className="hidden gap-1 border-0 bg-white/10 text-[10px] uppercase tracking-wide text-white sm:inline-flex">
                 <ShieldCheck className="h-3 w-3" /> Moderator
               </Badge>
+            )}
+            {currentUser && (isAdmin(currentUser.role) || isAdmin(effectiveOscarRole(currentUser.role, currentUser.oscar))) && (
+              <AdminChatControls team={team} teamName={theme?.label || `Team ${team}`} />
             )}
             <Button variant="ghost" size="sm" className="h-8 gap-1 text-white hover:bg-white/10" onClick={() => setShowMembers(v => !v)}>
               <Users className="h-4 w-4" /> {showMembers ? "Hide" : "Members"}

@@ -24,9 +24,11 @@ import { format } from 'date-fns'
 interface AdminChatControlsProps {
     programId?: string | null
     programName?: string | null
+    team?: string | null
+    teamName?: string | null
 }
 
-export function AdminChatControls({ programId, programName }: AdminChatControlsProps) {
+export function AdminChatControls({ programId, programName, team, teamName }: AdminChatControlsProps) {
     const [loading, setLoading] = useState(false)
     const confirm = useConfirm()
     const supabase = createClient()
@@ -40,12 +42,16 @@ export function AdminChatControls({ programId, programName }: AdminChatControlsP
 
         if (programId) {
             query = query.eq('program_id', programId)
+        } else if (team) {
+            query = query.eq('team', team)
         }
 
         const { data, error } = await query
         if (error) throw error
         return data
     }
+
+    const contextName = programName || teamName || (team ? `Team ${team}` : null)
 
     const handleDownloadPDF = async () => {
         try {
@@ -57,7 +63,7 @@ export function AdminChatControls({ programId, programName }: AdminChatControlsP
             }
 
             const doc = new jsPDF()
-            const title = programName ? `Chat Log - ${programName}` : 'All Chats Log'
+            const title = contextName ? `Chat Log - ${contextName}` : 'All Chats Log'
             doc.text(title, 14, 15)
 
             const tableData = chats.map(chat => [
@@ -78,7 +84,7 @@ export function AdminChatControls({ programId, programName }: AdminChatControlsP
                 }
             })
 
-            doc.save(`chat-export-${programId || 'all'}-${Date.now()}.pdf`)
+            doc.save(`chat-export-${programId || team || 'all'}-${Date.now()}.pdf`)
             toast.success('Successfully downloaded PDF.')
         } catch (err) {
             console.error(err)
@@ -110,7 +116,7 @@ export function AdminChatControls({ programId, programName }: AdminChatControlsP
             const url = URL.createObjectURL(blob)
             const link = document.createElement('a')
             link.href = url
-            link.download = `chat-export-${programId || 'all'}-${Date.now()}.csv`
+            link.download = `chat-export-${programId || team || 'all'}-${Date.now()}.csv`
             document.body.appendChild(link)
             link.click()
             document.body.removeChild(link)
@@ -127,7 +133,7 @@ export function AdminChatControls({ programId, programName }: AdminChatControlsP
         if (
             !(await confirm({
                 title: 'Confirm Archive',
-                message: 'Are you sure you want to archive these chats? They will no longer appear in the main chat view.',
+                message: `Are you sure you want to archive ${contextName ? `chats in ${contextName}` : 'all chats'}? They will no longer appear in the main chat view.`,
                 variant: 'destructive',
             }))
         ) {
@@ -136,28 +142,33 @@ export function AdminChatControls({ programId, programName }: AdminChatControlsP
 
         try {
             setLoading(true)
-            let query = (supabase as any).from('chat_messages').update({ is_archived: true })
+            const response = await fetch('/api/admin/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'archive',
+                    programId: programId || undefined,
+                    team: team || undefined
+                })
+            })
 
-            if (programId) {
-                query = query.eq('program_id', programId)
-            } else {
-                query = query.neq('id', '00000000-0000-0000-0000-000000000000') // Trick to update all
+            const result = await response.json()
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to archive chats')
             }
 
-            const { error } = await query
-            if (error) throw error
             toast.success('Chats successfully archived.')
             window.location.reload()
-        } catch (err) {
+        } catch (err: any) {
             console.error(err)
-            toast.error('Failed to archive chats.')
+            toast.error(err.message || 'Failed to archive chats.')
         } finally {
             setLoading(false)
         }
     }
 
     const handleDelete = async () => {
-        const scope = programId ? `this program (${programName})` : 'ALL programs'
+        const scope = contextName ? contextName : 'ALL programs and teams'
         if (
             !(await confirm({
                 title: 'Absolute Danger Zone',
@@ -181,21 +192,27 @@ export function AdminChatControls({ programId, programName }: AdminChatControlsP
 
         try {
             setLoading(true)
-            let query = supabase.from('chat_messages').delete()
-
+            let url = '/api/admin/chat?all=true'
             if (programId) {
-                query = query.eq('program_id', programId)
-            } else {
-                query = query.neq('id', '00000000-0000-0000-0000-000000000000')
+                url = `/api/admin/chat?programId=${encodeURIComponent(programId)}`
+            } else if (team) {
+                url = `/api/admin/chat?team=${encodeURIComponent(team)}`
             }
 
-            const { error } = await query
-            if (error) throw error
-            toast.success('Chats successfully and permanently deleted.')
+            const response = await fetch(url, {
+                method: 'DELETE'
+            })
+
+            const result = await response.json()
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to delete chats')
+            }
+
+            toast.success(`Chats successfully and permanently deleted (${result.count || 0} messages removed).`)
             window.location.reload()
-        } catch (err) {
+        } catch (err: any) {
             console.error(err)
-            toast.error('Failed to delete chats.')
+            toast.error(err.message || 'Failed to delete chats.')
         } finally {
             setLoading(false)
         }
@@ -215,7 +232,7 @@ export function AdminChatControls({ programId, programName }: AdminChatControlsP
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuLabel>
-                    {programName ? `Manage "${programName}"` : 'Manage All Chats'}
+                    {contextName ? `Manage "${contextName}"` : 'Manage All Chats'}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
 

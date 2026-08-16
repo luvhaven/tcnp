@@ -217,6 +217,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       if (filterStatus === 'active' && !officer.is_active) return false
       if (filterStatus === 'inactive' && officer.is_active) return false
       if (filterStatus === 'pending' && officer.activation_status !== 'pending') return false
+      if (filterStatus === 'online' && !officer.is_online) return false
     }
     if (filterRole !== 'all' && officer.role !== filterRole) return false
     if (filterTeam !== 'all' && officer.team !== filterTeam) return false
@@ -728,6 +729,12 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="online">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" />
+                    Online
+                  </span>
+                </SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterRole} onValueChange={setFilterRole}>

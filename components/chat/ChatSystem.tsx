@@ -968,30 +968,43 @@ export default function ChatSystem({
     const isUserAdmin = isAdmin(currentUser.role)
 
     if (hardDelete && isUserAdmin) {
-      const { error } = await (supabase as any).from('chat_messages').delete().eq('id', messageId)
-      if (error) {
-        toast.error(`Could not delete message: ${error.message}`);
+      try {
+        const response = await fetch(`/api/admin/chat?messageId=${encodeURIComponent(messageId)}`, {
+          method: 'DELETE'
+        })
+        const res = await response.json()
+        if (!response.ok) throw new Error(res.error || 'Could not delete message')
+        setMessages(prev => prev.filter(m => m.id !== messageId))
+        toast.success('Message permanently deleted')
+        return
+      } catch (err: any) {
+        toast.error(err.message || 'Could not delete message')
         return
       }
-      setMessages(prev => prev.filter(m => m.id !== messageId))
-      return
     }
 
-    const deletedAt = new Date().toISOString()
     const isOwner = messages.find(m => m.id === messageId)?.sender_id === currentUser.id
 
-    if (isUserAdmin && !isOwner) {
-      // Soft delete by Admin
-      const { error } = await (supabase as any).from('chat_messages').update({ deleted_at: deletedAt, deleted_by_admin: true }).eq('id', messageId)
-      if (error) { toast.error(error.message); return }
-      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, deleted_at: deletedAt, deleted_by_admin: true } : m))
-    } else {
-      // Soft delete by User
-      const { error } = await (supabase as any).from('chat_messages').update({ deleted_at: deletedAt }).eq('id', messageId).eq('sender_id', currentUser.id)
-      if (error) { toast.error(error.message); return }
-      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, deleted_at: deletedAt } : m))
+    try {
+      const response = await fetch('/api/admin/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'soft_delete',
+          messageId
+        })
+      })
+      const res = await response.json()
+      if (!response.ok) throw new Error(res.error || 'Could not delete message')
+
+      const deletedAt = res.deleted_at || new Date().toISOString()
+      const deletedByAdmin = res.deleted_by_admin ?? (!isOwner && isUserAdmin)
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, deleted_at: deletedAt, deleted_by_admin: deletedByAdmin } : m))
+      toast.success('Message deleted')
+    } catch (err: any) {
+      toast.error(err.message || 'Could not delete message')
     }
-  }, [supabase, currentUser, messages])
+  }, [currentUser, messages])
 
   const handleReply = useCallback((message: Message) => {
     setEditingMessage(null)
