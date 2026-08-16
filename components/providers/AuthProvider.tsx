@@ -56,24 +56,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     }, [router, supabase, pathname])
 
-    // Periodic session health check - with iOS-safe error handling
+    // Periodic session health check — also detects deleted accounts
     useEffect(() => {
         const checkSession = setInterval(async () => {
+            if (isAuthenticating.current || pathname?.startsWith('/login')) return
+
             try {
                 const { data: { session }, error } = await supabase.auth.getSession()
-                if (error && !isAuthenticating.current) {
+
+                if (error) {
                     console.warn('⚠️ Session check error:', error.message)
+                    return
                 }
-                if (!session && !isAuthenticating.current && !pathname?.startsWith('/login')) {
-                    console.warn('⚠️ Session lost, user will be redirected on next auth state change')
+
+                // No session — SIGNED_OUT event will handle the redirect
+                if (!session) return
+
+                // Check whether the public user profile still exists.
+                // If an admin deleted this account, the row will be gone.
+                // We use the service-agnostic client (anon key) so it respects RLS;
+                // a missing row means the account was deleted.
+                const { data: profile, error: profileError } = await supabase
+                    .from('users')
+                    .select('id')
+                    .eq('id', session.user.id)
+                    .maybeSingle()
+
+                if (!profileError && profile === null) {
+                    // Account no longer exists — force sign out
+                    console.warn('⚠️ Account deleted — signing out.')
+                    await supabase.auth.signOut()
+                    // SIGNED_OUT event in onAuthStateChange will push to /login
                 }
-            } catch (error) {
-                // Silently handle iOS-specific session check errors
+            } catch (err) {
                 if (!isAuthenticating.current) {
-                    console.warn('Session check failed (suppressed):', error)
+                    console.warn('Session check failed (suppressed):', err)
                 }
             }
-        }, 60000) // Check every minute
+        }, 30000) // Check every 30 seconds
 
         return () => clearInterval(checkSession)
     }, [supabase, pathname])

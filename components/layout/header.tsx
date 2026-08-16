@@ -10,7 +10,6 @@ import {
   Settings,
   KeyRound,
   ChevronDown,
-  ChevronRight,
 } from "lucide-react"
 import {
   Popover,
@@ -277,12 +276,8 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
             sideOffset={8}
             className="w-[270px] rounded-2xl border border-border/70 bg-popover/95 p-3 text-popover-foreground shadow-xl backdrop-blur-md"
           >
-            {/* Header User Card (Clickable to My Profile) */}
-            <Link
-              href="/profile"
-              onClick={() => setMenuOpen(false)}
-              className="group -m-1 mb-2 flex items-center gap-3 rounded-xl p-2.5 transition-colors hover:bg-muted/70"
-            >
+            {/* Identity card — display only, not a navigation link */}
+            <div className="-m-1 mb-2 flex items-center gap-3 rounded-xl p-2.5 bg-muted/40">
               <ProfileAvatar
                 loading={userLoading}
                 photoUrl={profile?.photo_url}
@@ -291,10 +286,7 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
                 size="md"
               />
               <div className="flex min-w-0 flex-1 flex-col">
-                <div className="flex items-center justify-between gap-1">
-                  <p className="truncate text-sm font-bold leading-tight group-hover:text-primary transition-colors">{displayName}</p>
-                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
-                </div>
+                <p className="truncate text-sm font-bold leading-tight">{displayName}</p>
                 <p className="truncate text-xs text-muted-foreground mt-0.5">{user?.email}</p>
                 {profile?.role && (
                   <span className="mt-1 inline-flex w-fit items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary">
@@ -302,7 +294,7 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
                   </span>
                 )}
               </div>
-            </Link>
+            </div>
 
             <hr className="my-1.5 border-border/60" />
 

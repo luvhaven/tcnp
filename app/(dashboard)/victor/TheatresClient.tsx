@@ -165,20 +165,7 @@ export default function TheatresClient({
 
   return (
     <div className="space-y-6">
-      {/* Den Facility Checklist shown for VO roles */}
-      {userRole && ['victor_oscar', 'head_victor_oscar', 'super_admin', 'admin'].includes(userRole) && theatres.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold">Den Facility Checks</h3>
-            <Badge variant="secondary" className="text-[9px]">Run 4× per day</Badge>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            {theatres.slice(0, 1).map((t: any) => (
-              <DenChecklist key={t.id} theatreId={t.id} theatreName={t.name} />
-            ))}
-          </div>
-        </div>
-      )}
+
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
