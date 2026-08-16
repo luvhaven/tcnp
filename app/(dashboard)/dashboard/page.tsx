@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { cn, isAdmin, effectiveOscarRole } from "@/lib/utils"
+import { cn, isAdmin, effectiveOscarRole, canAccessCommandCentre } from "@/lib/utils"
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/lib/constants/tncpCallSigns"
 import {
   Users, Car, MapPin, AlertTriangle, Download, ChevronRight, ArrowRight, Radio,
@@ -295,6 +295,21 @@ export default function DashboardPage() {
   const firstName = currentUser?.full_name?.split(" ")[0]
   const officerUnit = currentUser?.oscar || (currentUser?.role ? toTitleCase(currentUser.role) : "General Duty")
   const officerTeam = currentUser?.team ? `Team ${toTitleCase(currentUser.team)}` : "Unassigned Team"
+  const canAccessCommand = Boolean(currentUser && canAccessCommandCentre(currentUser.role, currentUser.oscar))
+
+  // Dynamic quick actions for leadership
+  const leadershipQuickActions = useMemo(() => {
+    const actions = [
+      { href: "/journeys", label: "Create Journey", sub: "Plan a new Papa movement", Icon: MapPin, color: "text-violet-500", bg: "bg-violet-500/10" },
+      { href: "/papas", label: "Add Papa", sub: "Register a new guest", Icon: Users, color: "text-emerald-500", bg: "bg-emerald-500/10" },
+    ]
+    if (canAccessCommand) {
+      actions.push({ href: "/command", label: "Command Centre", sub: "Live ops & tracking", Icon: Radio, color: "text-sky-500", bg: "bg-sky-500/10" })
+    } else {
+      actions.push({ href: "/chat", label: "Team Chat", sub: "Program rooms & team channel", Icon: MessageSquare, color: "text-sky-500", bg: "bg-sky-500/10" })
+    }
+    return actions
+  }, [canAccessCommand])
 
   // Dynamic quick actions for officers
   const officerQuickActions = [
@@ -304,7 +319,7 @@ export default function DashboardPage() {
     { href: "/welfare", label: "Welfare & Dining", sub: "Officer welfare & meals", Icon: UtensilsCrossed, color: "text-emerald-500", bg: "bg-emerald-500/10" },
   ]
 
-  const quickActions = isLeadership ? ADMIN_ACTIONS : officerQuickActions
+  const quickActions = isLeadership ? leadershipQuickActions : officerQuickActions
 
   return (
     <div className="space-y-6 page-enter">

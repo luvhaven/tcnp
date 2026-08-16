@@ -126,8 +126,8 @@ const ROLE_EXTRA: Record<string, string[]> = {
   delta_oscar: [],
   alpha_oscar: ["/alpha"],
   head_alpha_oscar: ["/alpha"],
-  tango_oscar: ["/command", "/tango"],
-  head_tango_oscar: ["/command", "/tango"],
+  tango_oscar: ["/tango"],
+  head_tango_oscar: ["/tango"],
   victor_oscar: ["/victor"],
   head_victor_oscar: ["/victor"],
   november_oscar: ["/nests", "/den"],
@@ -154,20 +154,43 @@ const ADMIN_ROLES = new Set([
   "hod", "hop",
 ])
 
+const COMMAND_CENTRE_ROLES = new Set([
+  "super_admin", "dev_admin", "admin",
+  "command", "head_of_command",
+])
+
 function getVisibleNav(role: string | null, oscar?: string | null): typeof ALL_NAV {
-  if (!role) return ALL_NAV.filter(n => BASE_HREFS.includes(n.href))
-  if (ADMIN_ROLES.has(role)) return ALL_NAV
-
-  // Resolve extra pages from the assigned role (may be delta_oscar)
-  const roleExtra = ROLE_EXTRA[role] ?? []
-
-  // Resolve extra pages from the permanent Oscar unit (even when role=delta_oscar)
   const oscarRole = oscarToRole(oscar)
-  const oscarExtra = oscarRole && oscarRole !== role ? (ROLE_EXTRA[oscarRole] ?? []) : []
+  const effectiveRole = role === 'delta_oscar' ? (oscarRole || role) : (role || oscarRole)
+  const canAccessCommand = (role && COMMAND_CENTRE_ROLES.has(role)) || (effectiveRole && COMMAND_CENTRE_ROLES.has(effectiveRole))
 
-  // Union both sets so base Oscar pages are always visible
-  const allowed = new Set([...BASE_HREFS, ...roleExtra, ...oscarExtra])
-  return ALL_NAV.filter(n => allowed.has(n.href))
+  if (!role) {
+    const base = ALL_NAV.filter(n => BASE_HREFS.includes(n.href))
+    return canAccessCommand ? base : base.filter(n => n.href !== "/command")
+  }
+
+  let visibleList: typeof ALL_NAV
+
+  if (ADMIN_ROLES.has(role) || (effectiveRole && ADMIN_ROLES.has(effectiveRole))) {
+    visibleList = ALL_NAV
+  } else {
+    // Resolve extra pages from the assigned role (may be delta_oscar)
+    const roleExtra = ROLE_EXTRA[role] ?? []
+
+    // Resolve extra pages from the permanent Oscar unit (even when role=delta_oscar)
+    const oscarExtra = oscarRole && oscarRole !== role ? (ROLE_EXTRA[oscarRole] ?? []) : []
+
+    // Union both sets so base Oscar pages are always visible
+    const allowed = new Set([...BASE_HREFS, ...roleExtra, ...oscarExtra])
+    visibleList = ALL_NAV.filter(n => allowed.has(n.href))
+  }
+
+  // Command Centre is exclusively for Admin and Command
+  if (!canAccessCommand) {
+    visibleList = visibleList.filter(n => n.href !== "/command")
+  }
+
+  return visibleList
 }
 
 type SidebarProps = {

@@ -69,12 +69,12 @@ const MODULES = [
   },
 ]
 
-import { isAdmin, effectiveOscarRole } from "@/lib/utils"
+import { canAccessCommandCentre } from "@/lib/utils"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 
 export default function CommandPage() {
   const { data: currentUser, isLoading: userLoading } = useCurrentUser()
-  const hasAccess = Boolean(currentUser && (isAdmin(currentUser.role) || isAdmin(effectiveOscarRole(currentUser.role, currentUser.oscar))))
+  const hasAccess = Boolean(currentUser && canAccessCommandCentre(currentUser.role, currentUser.oscar))
   const [stats, setStats] = useState<CommandStats>({ activeJourneys: 0, onlineOfficers: 0, openIncidents: 0 })
 
   useEffect(() => {
@@ -119,7 +119,7 @@ export default function CommandPage() {
         </div>
         <h2 className="text-xl font-bold tracking-tight">Command Clearance Required</h2>
         <p className="mt-2 max-w-md text-muted-foreground text-sm">
-          Access to the Command Centre is restricted to Admin, Active Command, Captain, Vice Captain, and Operations Leadership.
+          Access to the Command Centre is restricted exclusively to Admin and Command roles.
         </p>
       </div>
     )

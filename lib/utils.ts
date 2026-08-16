@@ -104,6 +104,16 @@ export function canViewLiveTracking(role: string | null | undefined, oscar?: str
   return false
 }
 
+/**
+ * Check if a user can access Command Centre.
+ * Exclusively for Admin and Command roles.
+ */
+export function canAccessCommandCentre(role: string | null | undefined, oscar?: string | null | undefined): boolean {
+  if (!role) return false
+  const effective = effectiveOscarRole(role, oscar) || role
+  return ['super_admin', 'dev_admin', 'admin', 'command', 'head_of_command'].includes(effective)
+}
+
 
 /**
  * Check if a user can manage a journey.
