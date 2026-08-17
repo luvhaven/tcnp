@@ -33,7 +33,7 @@ export const PROFILE_FIELD_SPECS: ProfileFieldSpec[] = [
   { key: 'phone', label: 'Phone number', weight: 2, required: true, group: 'identity' },
   { key: 'oscar', label: 'Oscar unit', weight: 2, required: true, group: 'identity' },
   { key: 'team', label: 'Protocol team', weight: 2, required: true, group: 'identity' },
-  { key: 'date_of_birth', label: 'Date of birth', weight: 1, required: false, group: 'personal' },
+  { key: 'date_of_birth', label: 'Birthday', weight: 1, required: false, group: 'personal' },
   { key: 'gender', label: 'Gender', weight: 1, required: false, group: 'personal' },
   { key: 'city', label: 'City', weight: 1, required: false, group: 'personal' },
   { key: 'address', label: 'Address', weight: 1, required: false, group: 'personal' },

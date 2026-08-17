@@ -157,17 +157,32 @@ export function OfficerProfileDialog({
     toast.success(`${label} copied to clipboard`)
   }
 
-  // Calculate birthday / age
+  // Format birthday (Month + Day only, no year)
   let birthdayFormatted = null
-  let age = null
   if (mergedOfficer.date_of_birth) {
     try {
-      const dob = new Date(mergedOfficer.date_of_birth)
-      if (!isNaN(dob.getTime())) {
-        birthdayFormatted = `${MONTH_NAMES[dob.getMonth()]} ${dob.getDate()}, ${dob.getFullYear()}`
-        const diff = Date.now() - dob.getTime()
-        const ageDate = new Date(diff)
-        age = Math.abs(ageDate.getUTCFullYear() - 1970)
+      const raw = mergedOfficer.date_of_birth.trim()
+      const parts = raw.split('-')
+      if (parts.length === 3) {
+        // YYYY-MM-DD
+        const m = parseInt(parts[1], 10) - 1
+        const d = parseInt(parts[2], 10)
+        if (!isNaN(m) && !isNaN(d) && m >= 0 && m < 12 && d > 0 && d <= 31) {
+          birthdayFormatted = `${MONTH_NAMES[m]} ${d}`
+        }
+      } else if (parts.length === 2) {
+        // MM-DD
+        const m = parseInt(parts[0], 10) - 1
+        const d = parseInt(parts[1], 10)
+        if (!isNaN(m) && !isNaN(d) && m >= 0 && m < 12 && d > 0 && d <= 31) {
+          birthdayFormatted = `${MONTH_NAMES[m]} ${d}`
+        }
+      }
+      if (!birthdayFormatted) {
+        const dob = new Date(raw.includes('T') ? raw : raw + 'T00:00:00')
+        if (!isNaN(dob.getTime())) {
+          birthdayFormatted = `${MONTH_NAMES[dob.getUTCMonth()]} ${dob.getUTCDate()}`
+        }
       }
     } catch {
       birthdayFormatted = mergedOfficer.date_of_birth
@@ -549,7 +564,7 @@ export function OfficerProfileDialog({
                       ) : (
                         <Circle className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
                       )}
-                      <span>Date of Birth</span>
+                      <span>Birthday</span>
                     </div>
                     <div className="flex items-center gap-2">
                       {mergedOfficer.address || mergedOfficer.city ? (
@@ -576,15 +591,9 @@ export function OfficerProfileDialog({
                   </CardHeader>
                   <CardContent className="space-y-2.5 text-xs">
                     <div className="flex justify-between items-center py-1 border-b border-border/40">
-                      <span className="text-muted-foreground">Date of Birth:</span>
+                      <span className="text-muted-foreground">Birthday:</span>
                       <span className="font-medium">{birthdayFormatted || "Not specified"}</span>
                     </div>
-                    {age !== null && (
-                      <div className="flex justify-between items-center py-1 border-b border-border/40">
-                        <span className="text-muted-foreground">Age:</span>
-                        <span className="font-medium">{age} years old</span>
-                      </div>
-                    )}
                     <div className="flex justify-between items-center py-1 border-b border-border/40">
                       <span className="text-muted-foreground">Gender:</span>
                       <span className="font-medium capitalize">{mergedOfficer.gender || "Not specified"}</span>

@@ -65,6 +65,21 @@ const TEAMS = [
   { value: "swift", label: "Team Swift" },
 ]
 
+const MONTHS = [
+  { value: "01", label: "January" },
+  { value: "02", label: "February" },
+  { value: "03", label: "March" },
+  { value: "04", label: "April" },
+  { value: "05", label: "May" },
+  { value: "06", label: "June" },
+  { value: "07", label: "July" },
+  { value: "08", label: "August" },
+  { value: "09", label: "September" },
+  { value: "10", label: "October" },
+  { value: "11", label: "November" },
+  { value: "12", label: "December" },
+]
+
 export default function ProfilePage() {
   const { data: currentUser, isLoading } = useCurrentUser()
   const queryClient = useQueryClient()
@@ -96,6 +111,29 @@ export default function ProfilePage() {
     })
     setPhotoUrl(currentUser.photo_url)
   }, [currentUser])
+
+  let monthVal = ""
+  let dayVal = ""
+  if (form.date_of_birth) {
+    const parts = form.date_of_birth.trim().split("-")
+    if (parts.length === 3) {
+      monthVal = parts[1].padStart(2, "0")
+      dayVal = parts[2].padStart(2, "0")
+    } else if (parts.length === 2) {
+      monthVal = parts[0].padStart(2, "0")
+      dayVal = parts[1].padStart(2, "0")
+    }
+  }
+
+  const handleBirthdayChange = (newMonth: string, newDay: string) => {
+    if (!newMonth && !newDay) {
+      set("date_of_birth", null)
+      return
+    }
+    const m = (newMonth || monthVal || "01").padStart(2, "0")
+    const d = (newDay || dayVal || "01").padStart(2, "0")
+    set("date_of_birth", `2000-${m}-${d}`)
+  }
 
   // Live completion — includes the (possibly just-uploaded) headshot
   const completion = useMemo(
@@ -320,8 +358,24 @@ export default function ProfilePage() {
             <CardTitle className="flex items-center gap-2 text-base"><Cake className="h-4 w-4 text-primary" /> Personal</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
-            <Field label="Date of birth" icon={Cake}>
-              <Input type="date" value={form.date_of_birth ?? ""} onChange={e => set("date_of_birth", e.target.value)} />
+            <Field label="Birthday" icon={Cake}>
+              <div className="grid grid-cols-2 gap-2">
+                <Select value={monthVal} onValueChange={v => handleBirthdayChange(v, dayVal)}>
+                  <SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger>
+                  <SelectContent>
+                    {MONTHS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={dayVal} onValueChange={v => handleBirthdayChange(monthVal, v)}>
+                  <SelectTrigger><SelectValue placeholder="Day" /></SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 31 }, (_, i) => {
+                      const val = String(i + 1).padStart(2, "0")
+                      return <SelectItem key={val} value={val}>{i + 1}</SelectItem>
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
             </Field>
             <Field label="Gender" icon={User}>
               <Select value={form.gender ?? ""} onValueChange={v => { if (v) set("gender", v) }}>
