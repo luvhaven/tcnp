@@ -1,25 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import "leaflet/dist/leaflet.css";
 import { SafeProviders } from "@/components/providers/SafeProviders";
-
-// ─── Premium Typography ─────────────────────────────────────────────────────
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-  // Enable Inter's optical improvements for sharper, more legible text
-  // at all sizes — especially important for data-dense operations UIs
-  axes: ["opsz"],
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
-  display: "swap",
-  weight: ["400", "500"],
-});
 
 export const metadata: Metadata = {
   title: {
@@ -65,12 +47,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${jetbrainsMono.variable}`}>
-      {/* font-family itself comes from globals.css via var(--font-inter) — the
-          variable classes above are what actually define those CSS variables.
-          Without them, --font-mono never resolved and JetBrains Mono was loaded
-          but silently never rendered anywhere in the app. */}
-      <body className={inter.className}>
+    <html lang="en" suppressHydrationWarning>
+      <body>
         {/* Apply saved theme before first paint — prevents light-mode flash for dark users */}
         <script
           dangerouslySetInnerHTML={{

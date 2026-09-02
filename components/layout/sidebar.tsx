@@ -404,7 +404,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
       {!(collapsed && !isMobile) && (
         <div className="mt-auto border-t border-border/50 bg-background/50 p-4 backdrop-blur-sm">
           <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-            <span>Version 4.0.1</span>
+            <span>Version 4.0.2</span>
             <span>&copy; {new Date().getFullYear()} TCNP</span>
           </div>
         </div>
