@@ -6,7 +6,7 @@ import CheetahPrerequisites from "@/components/cheetahs/CheetahPrerequisites"
 import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import type { Database } from "@/types/supabase"
-import { canManageFleet } from "@/lib/utils"
+import { useUnitAccess } from "@/hooks/useUnitAccess"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
@@ -19,6 +19,7 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { Car, Plus, Edit, Trash2, ChevronDown, AlertTriangle, Gauge } from "lucide-react"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
+import TangoOperations from "@/components/tango/TangoOperations"
 
 type Cheetah = {
   id: string
@@ -92,15 +93,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
     mileage: 0
   })
 
-  const { data: userRole } = useQuery({
-    queryKey: ['userRole'],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return null
-      const { data } = await supabase.from('users').select('role').eq('id', user.id).single()
-      return data?.role || null
-    }
-  })
+  const tangoAccess = useUnitAccess('tango')
 
   const { data: cheetahs = [] } = useQuery({
     queryKey: ['cheetahs'],
@@ -125,7 +118,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
     }
   })
 
-  const canManage = userRole ? canManageFleet(userRole) : false
+  const canManage = tangoAccess.canManage
 
   const saveMutation = useMutation({
     mutationFn: async (payload: { isEdit: boolean, data: any }) => {
@@ -309,6 +302,12 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
           </div>
         ))}
       </div>
+
+      <TangoOperations
+        cheetahs={cheetahs}
+        programs={programs}
+        legacyCanManage={canManage}
+      />
 
       <Card>
         <CardHeader>

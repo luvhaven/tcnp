@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { CountUp } from "@/components/ui/count-up"
+import PapaFlightMonitor from "@/components/aviation/PapaFlightMonitor"
 import {
   Radar,
   Route,
@@ -217,6 +218,11 @@ export default function CommandPage() {
           </div>
         </div>
       </div>
+
+      <PapaFlightMonitor
+        title="Papa aviation watch"
+        description="All active Papa itineraries in one place, with exact OpenSky matches separated from schedule-only information."
+      />
 
       {/* Module grid */}
       <div className="grid gap-4 sm:grid-cols-2">

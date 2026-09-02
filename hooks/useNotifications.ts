@@ -3,7 +3,18 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { audioManager } from '@/lib/audio/AudioManager'
 
-export type NotificationType = 'info' | 'success' | 'warning' | 'error' | 'broken_arrow' | 'call_sign' | 'chat'
+export type NotificationType =
+  | 'info'
+  | 'success'
+  | 'warning'
+  | 'error'
+  | 'broken_arrow'
+  | 'call_sign'
+  | 'chat'
+  | 'announcement'
+  | 'birthday_reminder'
+  | 'alert'
+  | 'reminder'
 
 export interface AppNotification {
   id: string
@@ -25,8 +36,15 @@ export interface AppNotification {
 export function resolveNotificationRoute(n: AppNotification): string | null {
   const kind = n.metadata?.kind
   if (kind === 'food_ready') return '/welfare'
+  if (kind === 'birthday_0700' || n.type === 'birthday_reminder') return '/welfare'
   if (kind === 'mission_request') return '/dashboard'
   if (kind === 'mention') return '/chat'
+  if (kind === 'announcement' || n.type === 'announcement') {
+    const category = String(n.metadata?.category || '').toLowerCase()
+    if (category === 'training' || category === 'recruitment') return '/training'
+    if (category === 'birthday' || category === 'wedding' || category === 'welfare') return '/welfare'
+    return '/dashboard'
+  }
   if (n.journey_id) return `/journeys?highlight=${n.journey_id}`
   if (n.type === 'chat') return '/chat'
   if (n.type === 'broken_arrow') return '/incidents'
@@ -45,6 +63,9 @@ const NOTIFICATION_PAGE_SIZE = 10
 function resolveChimeKey(n: AppNotification): string {
   const kind = n.metadata?.kind
   if (kind === 'food_ready' || kind === 'mission_request' || kind === 'mention') return kind
+  if (kind === 'birthday_0700' || n.type === 'birthday_reminder') return 'success'
+  if (n.type === 'announcement' || n.type === 'reminder') return 'info'
+  if (n.type === 'alert') return 'warning'
   return n.type
 }
 

@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/select"
 import DenMenus from "@/components/den/DenMenus"
 import WelfareOfficerDirectory from "@/components/welfare/WelfareOfficerDirectory"
+import BirthdayReminder from "@/components/welfare/BirthdayReminder"
+import WelfareOperations from "@/components/welfare/WelfareOperations"
 import { UtensilsCrossed, BellRing, Loader2, HeartHandshake, Users } from "lucide-react"
 
 // ─── Singleton client ───
@@ -26,8 +28,17 @@ const supabase = createClient()
 
 export default function WelfarePage() {
   const { data: currentUser } = useCurrentUser()
-  const canEdit = canManageWelfare(currentUser?.role, currentUser?.oscar)
-  const canSeeDirectory = canAccessWelfareDirectory(currentUser?.role, currentUser?.oscar)
+  const { data: canManageWelfareUnit = false } = useQuery({
+    queryKey: ["can-manage-unit", "welfare", currentUser?.id],
+    enabled: Boolean(currentUser?.id),
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("can_manage_unit", { unit_slug: "welfare" })
+      if (error) return false
+      return Boolean(data)
+    },
+  })
+  const canEdit = canManageWelfare(currentUser?.role, currentUser?.oscar) || canManageWelfareUnit
+  const canSeeDirectory = canAccessWelfareDirectory(currentUser?.role, currentUser?.oscar) || canManageWelfareUnit
 
   const [alarmOpen, setAlarmOpen] = useState(false)
   const [sending, setSending] = useState(false)
@@ -67,6 +78,8 @@ export default function WelfarePage() {
 
   return (
     <div className="space-y-6 page-enter">
+      <BirthdayReminder />
+
       {/* Header */}
       <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-amber-950 via-slate-900 to-slate-900 p-6 text-white">
         <div className="absolute -left-10 -top-16 h-56 w-56 rounded-full bg-amber-500/20 blur-3xl" />
@@ -88,6 +101,8 @@ export default function WelfarePage() {
           )}
         </div>
       </div>
+
+      <WelfareOperations />
 
       {canSeeDirectory ? (
         <Tabs defaultValue="menus" className="space-y-4">

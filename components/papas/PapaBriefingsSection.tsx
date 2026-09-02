@@ -39,7 +39,7 @@ export default function PapaBriefingsSection({ role }: PapaBriefingsSectionProps
         .from('papas')
         .select(`
           id, title, full_name, profile_photo_url, organization, position,
-          mic_preference, presentation_style, has_slides, uses_stage_props, speaking_schedule,
+          mic_preference, presentation_style, has_slides, needs_clicker, uses_stage_props, stage_props_details, speaking_schedule,
           accommodation_preferences, accommodations, entourage_size, entourage_count, personal_assistants,
           food_preferences, dietary_restrictions, needs_water_on_stage, water_temperature, needs_face_towels,
           flight_number, airline, flight_provider, flight_arrival_time, flight_departure_time,

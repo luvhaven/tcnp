@@ -18,7 +18,7 @@ import { UserCircle, Plus, Edit, Trash2, UserCheck, UserX, Award, Search, Layout
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { OfficerProfileDialog } from "@/components/officers/OfficerProfileDialog"
-import { isAdmin, effectiveOscarRole } from "@/lib/utils"
+import { isPlatformAdministrator } from "@/lib/utils"
 
 type Officer = {
   id: string
@@ -41,8 +41,6 @@ type Officer = {
   address?: string | null
   city?: string | null
   bio?: string | null
-  emergency_contact_name?: string | null
-  emergency_contact_phone?: string | null
   profile_completed_at?: string | null
   last_seen?: string | null
   updated_at?: string | null
@@ -198,7 +196,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     retry: 1
   })
 
-  const canManageOfficers = Boolean(currentUser && (isAdmin(currentUser.role) || isAdmin(effectiveOscarRole(currentUser.role, currentUser.oscar))))
+  const canManageOfficers = Boolean(currentUser && isPlatformAdministrator(currentUser.role))
 
   const { data: officers = [] } = useQuery({
     queryKey: ['officers', 'directory'],

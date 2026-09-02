@@ -12,16 +12,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { MapPin, Plus, Edit, Trash2, Scan, ChevronDown, Armchair, Landmark } from "lucide-react"
+import { MapPin, Plus, Edit, Trash2, Scan, ChevronDown, Armchair, Landmark, Waypoints } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import VIPManagementPanel from "@/components/theatre/VIPManagementPanel"
 import SeatArrangements from "@/components/theatre/SeatArrangements"
+import VictorOperations from "@/components/victor/VictorOperations"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { motion, AnimatePresence } from "framer-motion"
-import { canManageVenues, canManageSeatArrangements } from "@/lib/utils"
+import { effectiveOscarRole } from "@/lib/utils"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
+import { useUnitAccess } from "@/hooks/useUnitAccess"
 
 export default function TheatresClient({
   initialTheatres,
@@ -57,25 +59,17 @@ export default function TheatresClient({
     initialData: initialTheatres
   })
 
-  const { data: userRole } = useQuery({
-    queryKey: ['userRole'],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return null
-      const { data } = await supabase.from('users').select('role').eq('id', user.id).single()
-      return data?.role || null
-    }
-  })
-
   useEffect(() => {
     if (theatres.length > 0 && !selectedTheatreId) {
       setSelectedTheatreId(theatres[0].id)
     }
   }, [theatres, selectedTheatreId])
 
-  const canManage = userRole ? canManageVenues(userRole) : false
   const { data: currentUser } = useCurrentUser()
-  const canEditSeats = canManageSeatArrangements(currentUser?.role, currentUser?.oscar)
+  const victorAccess = useUnitAccess('victor')
+  const resolvedRole = effectiveOscarRole(currentUser?.role, currentUser?.oscar)
+  const canManage = victorAccess.canManage
+  const canEditSeats = victorAccess.canManage
 
   const saveMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -196,9 +190,9 @@ export default function TheatresClient({
       </motion.div>
 
       {/* ── Papa Briefings for Victor Oscar roles ── */}
-      {userRole && ['victor_oscar', 'head_victor_oscar'].includes(userRole) && (
+      {(victorAccess.isMember || victorAccess.isPlatformAdmin) && (
         <div className="border rounded-xl p-4 bg-muted/30">
-          <PapaBriefingsSection role={userRole} />
+          <PapaBriefingsSection role={resolvedRole || 'victor_oscar'} />
         </div>
       )}
 
@@ -217,7 +211,7 @@ export default function TheatresClient({
       </div>
 
       <Tabs defaultValue="venues" className="space-y-4">
-        <TabsList>
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 lg:grid-cols-4">
           <TabsTrigger value="venues">Venues Management</TabsTrigger>
           <TabsTrigger value="seating">
             <Armchair className="mr-2 h-4 w-4" />
@@ -226,6 +220,10 @@ export default function TheatresClient({
           <TabsTrigger value="vip-access">
             <Scan className="mr-2 h-4 w-4" />
             Senior Ministers&apos; Access
+          </TabsTrigger>
+          <TabsTrigger value="operations">
+            <Waypoints className="mr-2 h-4 w-4" />
+            Victor Operations
           </TabsTrigger>
         </TabsList>
 
@@ -319,7 +317,7 @@ export default function TheatresClient({
             </div>
 
             {selectedTheatreId ? (
-              <VIPManagementPanel canManage={canManage} />
+              <VIPManagementPanel canManage={canEditSeats} theatreId={selectedTheatreId} />
             ) : (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12">
@@ -329,6 +327,14 @@ export default function TheatresClient({
               </Card>
             )}
           </div>
+        </TabsContent>
+
+        <TabsContent value="operations">
+          <VictorOperations
+            canManage={canEditSeats}
+            currentUserId={currentUser?.id ?? null}
+            selectedTheatreId={selectedTheatreId || null}
+          />
         </TabsContent>
       </Tabs>
 

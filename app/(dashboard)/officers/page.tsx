@@ -39,8 +39,6 @@ export default async function OfficersPage() {
       address,
       city,
       bio,
-      emergency_contact_name,
-      emergency_contact_phone,
       profile_completed_at
     `)
     .order('full_name')

@@ -3,7 +3,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { checkRateLimit } from '@/lib/security/rate-limit'
-import { isAdmin, effectiveOscarRole } from '@/lib/utils'
+import { isPlatformAdministrator, platformAuthorityRank } from '@/lib/utils'
 
 export async function DELETE(request: Request) {
     // Enforce strict rate limit (20 deletes per IP per minute)
@@ -40,7 +40,7 @@ export async function DELETE(request: Request) {
         .eq('id', user.id)
         .single()
 
-    const isAllowed = callerData && (isAdmin(callerData.role) || isAdmin(effectiveOscarRole(callerData.role, callerData.oscar)))
+    const isAllowed = callerData && isPlatformAdministrator(callerData.role)
     if (!isAllowed) {
         return NextResponse.json({ error: 'Forbidden: insufficient permissions' }, { status: 403 })
     }
@@ -68,9 +68,10 @@ export async function DELETE(request: Request) {
         .eq('id', targetUserId)
         .single()
 
-    // 6. Guard: prevent deleting dev_admin accounts unless caller is also dev_admin
-    if (targetUser?.role === 'dev_admin' && callerData.role !== 'dev_admin') {
-        return NextResponse.json({ error: 'Cannot delete a developer admin account' }, { status: 403 })
+    // Only Super Admin can remove any administrator-tier account. A regular
+    // Admin can remove lower-authority accounts only.
+    if (platformAuthorityRank(targetUser?.role) >= 80 && callerData.role !== 'super_admin') {
+        return NextResponse.json({ error: 'Only Super Admin can delete administrator accounts' }, { status: 403 })
     }
 
     // 7. Cascade cleanup — nullify or delete all rows referencing this user to prevent FK violations

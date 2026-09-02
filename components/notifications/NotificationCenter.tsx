@@ -16,6 +16,9 @@ import {
   AlertOctagon,
   Radio,
   MessageCircle,
+  Megaphone,
+  CakeSlice,
+  Clock3,
   ChevronRight,
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
@@ -35,6 +38,10 @@ const TYPE_META: Record<
   broken_arrow: { icon: AlertOctagon,  color: "text-red-600",   bg: "bg-red-100 dark:bg-red-950/60",   border: "border-l-red-600",   label: "BROKEN ARROW"},
   call_sign:    { icon: Radio,         color: "text-primary",   bg: "bg-primary/5",                    border: "border-l-primary",   label: "Call-Sign"   },
   chat:         { icon: MessageCircle, color: "text-violet-500",bg: "bg-violet-50 dark:bg-violet-950/40",border: "border-l-violet-500",label: "Chat"      },
+  announcement: { icon: Megaphone,     color: "text-indigo-500",bg: "bg-indigo-50 dark:bg-indigo-950/40",border: "border-l-indigo-500",label: "Announcement" },
+  birthday_reminder: { icon: CakeSlice,color: "text-pink-500",  bg: "bg-pink-50 dark:bg-pink-950/40", border: "border-l-pink-500",  label: "Birthday"    },
+  alert:        { icon: AlertTriangle, color: "text-amber-500", bg: "bg-amber-50 dark:bg-amber-950/40",border: "border-l-amber-500", label: "Alert"       },
+  reminder:     { icon: Clock3,        color: "text-sky-500",   bg: "bg-sky-50 dark:bg-sky-950/40",  border: "border-l-sky-500",   label: "Reminder"    },
 }
 
 function getTypeMeta(type: string) {

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
-import { isAdmin } from '@/lib/utils'
+import { isPlatformAdministrator, platformAuthorityRank } from '@/lib/utils'
 
 // Build the hardened service-role client right here to avoid any wrapper issues
 function buildAdminClient() {
@@ -33,8 +33,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Could not verify caller role' }, { status: 403 })
     }
 
-    if (!callerRow.role || !isAdmin(callerRow.role)) {
-      return NextResponse.json({ error: 'Forbidden: Leadership access required' }, { status: 403 })
+    if (!isPlatformAdministrator(callerRow.role)) {
+      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
     }
 
     // 2. Parse body
@@ -47,6 +47,18 @@ export async function POST(request: Request) {
 
     // 3. Perform update using service role to bypass RLS entirely
     const adminClient = buildAdminClient()
+    const { data: target } = await adminClient
+      .from('users')
+      .select('role')
+      .eq('id', officerId)
+      .single()
+
+    if (!target) {
+      return NextResponse.json({ error: 'Officer not found' }, { status: 404 })
+    }
+    if (platformAuthorityRank(target.role) >= 80 && callerRow.role !== 'super_admin') {
+      return NextResponse.json({ error: 'Only Super Admin can change an administrator account' }, { status: 403 })
+    }
     const newIsActive = !isActive
     const newStatus = newIsActive ? 'active' : 'inactive'
 

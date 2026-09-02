@@ -19,8 +19,6 @@ export type CurrentUser = {
     gender: string | null
     address: string | null
     city: string | null
-    emergency_contact_name: string | null
-    emergency_contact_phone: string | null
     profile_completed_at: string | null
 }
 
@@ -41,7 +39,7 @@ export function useCurrentUser() {
 
             const { data: profile, error } = await supabase
                 .from('users')
-                .select('id, full_name, role, oscar, photo_url, is_active, team, is_team_head, phone, job_title, bio, date_of_birth, gender, address, city, emergency_contact_name, emergency_contact_phone, profile_completed_at')
+                .select('id, full_name, role, oscar, photo_url, is_active, team, is_team_head, phone, job_title, bio, date_of_birth, gender, address, city, profile_completed_at')
                 .eq('id', user.id)
                 .single()
 
@@ -65,8 +63,6 @@ export function useCurrentUser() {
                 gender: p.gender ?? null,
                 address: p.address ?? null,
                 city: p.city ?? null,
-                emergency_contact_name: p.emergency_contact_name ?? null,
-                emergency_contact_phone: p.emergency_contact_phone ?? null,
                 profile_completed_at: p.profile_completed_at ?? null,
             }
         },

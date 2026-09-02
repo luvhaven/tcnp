@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/supabase'
 import { NextResponse } from 'next/server'
+import { isPlatformAdministrator, platformAuthorityRank } from '@/lib/utils'
 
 export async function POST(request: Request) {
   try {
@@ -9,7 +10,8 @@ export async function POST(request: Request) {
     const adminClient = createAdminClient()
     const db = adminClient as any
 
-    // Verify the requesting user is admin or dev_admin
+    // Platform account administration is deliberately narrower than legacy
+    // operational leadership. Unit heads manage memberships in their workspace.
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
@@ -24,7 +26,7 @@ export async function POST(request: Request) {
 
     const currentRole = (currentUser as { role?: string } | null)?.role
 
-    if (!currentRole || !['admin', 'dev_admin', 'super_admin', 'captain', 'vice_captain', 'command', 'head_of_command', 'head_of_operations'].includes(currentRole)) {
+    if (!isPlatformAdministrator(currentRole)) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
     }
 
@@ -34,6 +36,10 @@ export async function POST(request: Request) {
 
     if (!email || !password || !full_name || !role) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    if (platformAuthorityRank(role) >= 80 && currentRole !== 'super_admin') {
+      return NextResponse.json({ error: 'Only Super Admin can create administrator accounts' }, { status: 403 })
     }
 
     if (team && !['strength', 'wisdom', 'swift'].includes(team)) {

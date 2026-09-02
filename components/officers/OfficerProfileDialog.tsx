@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { computeProfileCompletion } from "@/lib/profile-completion"
 import { CompletionRing } from "@/components/profile/CompletionRing"
 import {
-  User, Mail, Phone, MapPin, Cake, HeartPulse, Award, Calendar,
+  User, Mail, Phone, MapPin, Cake, Award, Calendar,
   ShieldCheck, Briefcase, Activity, CheckCircle2, Circle, Clock,
   Edit, Trash2, UserCheck, UserX, Copy, ExternalLink, Sparkles, AlertCircle, Compass, X
 } from "lucide-react"
@@ -39,8 +39,6 @@ export type OfficerProfileData = {
   address?: string | null
   city?: string | null
   bio?: string | null
-  emergency_contact_name?: string | null
-  emergency_contact_phone?: string | null
   profile_completed_at?: string | null
   last_seen?: string | null
   updated_at?: string | null
@@ -111,8 +109,6 @@ export function OfficerProfileDialog({
       address: mergedOfficer.address,
       city: mergedOfficer.city,
       bio: mergedOfficer.bio,
-      emergency_contact_name: mergedOfficer.emergency_contact_name,
-      emergency_contact_phone: mergedOfficer.emergency_contact_phone
     })
   }, [mergedOfficer])
 
@@ -409,7 +405,7 @@ export function OfficerProfileDialog({
           <Tabs defaultValue="overview" className="w-full">
             <TabsList className="grid w-full grid-cols-4 mb-4">
               <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
-              <TabsTrigger value="personal" className="text-xs">Personal & Emergency</TabsTrigger>
+              <TabsTrigger value="personal" className="text-xs">Personal</TabsTrigger>
               <TabsTrigger value="titles" className="text-xs">Titles & Roles</TabsTrigger>
               <TabsTrigger value="duties" className="text-xs">Duty Operations</TabsTrigger>
             </TabsList>
@@ -551,14 +547,6 @@ export function OfficerProfileDialog({
                       <span>Phone Number</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      {mergedOfficer.emergency_contact_name && mergedOfficer.emergency_contact_phone ? (
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                      ) : (
-                        <Circle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                      )}
-                      <span>Emergency Contact Info</span>
-                    </div>
-                    <div className="flex items-center gap-2">
                       {mergedOfficer.date_of_birth ? (
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                       ) : (
@@ -579,9 +567,9 @@ export function OfficerProfileDialog({
               </Card>
             </TabsContent>
 
-            {/* TAB 2: PERSONAL & EMERGENCY */}
+            {/* TAB 2: PERSONAL */}
             <TabsContent value="personal" className="space-y-4 mt-0">
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4">
                 {/* Personal Information */}
                 <Card>
                   <CardHeader className="pb-3">
@@ -609,47 +597,6 @@ export function OfficerProfileDialog({
                   </CardContent>
                 </Card>
 
-                {/* Emergency Contact */}
-                <Card className="border-red-500/20 bg-red-500/5">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-semibold flex items-center gap-2 text-red-600 dark:text-red-400">
-                      <HeartPulse className="h-4 w-4 text-red-500" /> Emergency Contact (Next of Kin)
-                    </CardTitle>
-                    <CardDescription className="text-[11px]">
-                      Used by Command in case of urgent medical or operational incident.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3 text-xs">
-                    <div className="rounded-lg bg-background/80 p-3 border space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-muted-foreground">Contact Name:</span>
-                        <span className="font-semibold text-foreground">
-                          {mergedOfficer.emergency_contact_name || "Not provided"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-muted-foreground">Contact Phone:</span>
-                        <span className="font-semibold text-foreground">
-                          {mergedOfficer.emergency_contact_phone || "Not provided"}
-                        </span>
-                      </div>
-                    </div>
-
-                    {mergedOfficer.emergency_contact_phone && (
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        className="w-full h-8 text-xs gap-1.5 shadow-sm"
-                        asChild
-                      >
-                        <a href={`tel:${mergedOfficer.emergency_contact_phone}`}>
-                          <Phone className="h-3.5 w-3.5" />
-                          <span>Call Emergency Contact</span>
-                        </a>
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
               </div>
 
               {/* Bio */}

@@ -20,7 +20,7 @@ export default async function CheetahsPage() {
     .from('cheetahs')
     .select(`
       *,
-      current_location:cheetah_locations(latitude, longitude, heading, speed, recorded_at)
+      current_location:vehicle_locations(latitude, longitude, heading, speed, timestamp)
     `)
     .order('registration_number')
     .limit(100)

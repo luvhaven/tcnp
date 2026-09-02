@@ -32,8 +32,10 @@ type PapaFormData = {
   needs_water_on_stage: boolean
   water_temperature: string
   has_slides: boolean
+  needs_clicker: boolean
   needs_face_towels: boolean
   mic_preference: string
+  stage_props_details: string
   presentation_style: string
   special_requirements: string
 
@@ -94,8 +96,10 @@ export default function PapaFormTabs({
     needs_water_on_stage: initialData?.needs_water_on_stage || false,
     water_temperature: initialData?.water_temperature || 'Room Temperature',
     has_slides: initialData?.has_slides || false,
+    needs_clicker: initialData?.needs_clicker || false,
     needs_face_towels: initialData?.needs_face_towels || false,
     mic_preference: initialData?.mic_preference || '',
+    stage_props_details: initialData?.stage_props_details || '',
     presentation_style: initialData?.presentation_style || '',
     special_requirements: initialData?.special_requirements || '',
     food_preferences: initialData?.food_preferences || '',
@@ -378,6 +382,32 @@ export default function PapaFormTabs({
                   <Label htmlFor="has_slides">Has Slides</Label>
                 </div>
               </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="needs_clicker"
+                    checked={formData.needs_clicker}
+                    onChange={(e) => setFormData({ ...formData, needs_clicker: e.target.checked })}
+                    className="h-4 w-4"
+                  />
+                  <Label htmlFor="needs_clicker">Needs a Presentation Clicker</Label>
+                </div>
+              </div>
+
+              {formData.uses_stage_props && (
+                <div className="space-y-2">
+                  <Label htmlFor="stage_props_details">Stage Props Details</Label>
+                  <Textarea
+                    id="stage_props_details"
+                    placeholder="List every prop, placement, handling, or setup requirement..."
+                    rows={3}
+                    value={formData.stage_props_details}
+                    onChange={(e) => setFormData({ ...formData, stage_props_details: e.target.value })}
+                  />
+                </div>
+              )}
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="flex items-center space-x-2">

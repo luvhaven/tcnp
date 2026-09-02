@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase/client"
-import { cn, isAdmin, effectiveOscarRole } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -12,7 +12,7 @@ import {
   Search, Cake, Phone, Mail, HeartPulse, Loader2, Users, PartyPopper, Eye,
 } from "lucide-react"
 import { OfficerProfileDialog, type OfficerProfileData } from "@/components/officers/OfficerProfileDialog"
-import { useCurrentUser } from "@/hooks/useCurrentUser"
+import { useUnitAccess } from "@/hooks/useUnitAccess"
 
 const supabase = createClient()
 
@@ -27,8 +27,6 @@ type WelfareOfficer = {
   team: string | null
   birth_month: number | null
   birth_day: number | null
-  emergency_contact_name: string | null
-  emergency_contact_phone: string | null
   is_active: boolean
 }
 
@@ -56,25 +54,23 @@ function daysUntilBirthday(month: number, day: number, today: Date): number {
 }
 
 /**
- * Head-of-Welfare directory: names, contacts, birthdays (month/day only —
- * never the birth year) and emergency contacts for every officer. Backed by
- * the `get_welfare_directory` SECURITY DEFINER function, which returns rows
+ * Head-of-Welfare directory: names, work contacts and birthdays (month/day
+ * only — never the birth year). Emergency contacts are deliberately excluded. Backed by
+ * the `get_welfare_directory_safe` SECURITY DEFINER function, which returns rows
  * only when the caller is Head of Welfare or an admin — the RLS-equivalent
  * gate lives server-side, this page just renders what it's given.
  */
 export default function WelfareOfficerDirectory() {
   const [search, setSearch] = useState("")
   const [selectedOfficer, setSelectedOfficer] = useState<OfficerProfileData | null>(null)
-  const { data: currentUser } = useCurrentUser()
-
-  const canManage = Boolean(
-    currentUser && (isAdmin(currentUser.role) || isAdmin(effectiveOscarRole(currentUser.role, currentUser.oscar)))
-  )
+  const { canManage } = useUnitAccess('welfare')
 
   const { data: officers = [], isLoading, error } = useQuery({
     queryKey: ["welfare-officer-directory"],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_welfare_directory")
+      const { data, error } = await (supabase as any)
+        .rpc("get_welfare_directory_safe")
+        .select("id, full_name, email, phone, photo_url, oscar, role, team, birth_month, birth_day, is_active")
       if (error) throw error
       return (data ?? []) as WelfareOfficer[]
     },
@@ -116,8 +112,6 @@ export default function WelfareOfficerDirectory() {
       photo_url: officer.photo_url,
       team: officer.team,
       created_at: new Date().toISOString(),
-      emergency_contact_name: officer.emergency_contact_name,
-      emergency_contact_phone: officer.emergency_contact_phone,
     }
     setSelectedOfficer(profileData)
   }
@@ -214,14 +208,6 @@ export default function WelfareOfficerDirectory() {
                   )}
                 </div>
 
-                {(o.emergency_contact_name || o.emergency_contact_phone) && (
-                  <div className="rounded-lg bg-muted/60 p-2 text-[11px] text-muted-foreground">
-                    <p className="mb-0.5 flex items-center gap-1 font-semibold text-foreground">
-                      <HeartPulse className="h-3 w-3 text-red-500" /> Emergency Contact
-                    </p>
-                    <p>{o.emergency_contact_name ?? "—"}{o.emergency_contact_phone ? ` · ${o.emergency_contact_phone}` : ""}</p>
-                  </div>
-                )}
               </CardContent>
             </Card>
           ))}

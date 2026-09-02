@@ -159,13 +159,30 @@ const COMMAND_CENTRE_ROLES = new Set([
   "command", "head_of_command",
 ])
 
-function getVisibleNav(role: string | null, oscar?: string | null): typeof ALL_NAV {
+const UNIT_HREFS: Record<string, string[]> = {
+  alpha: ["/alpha"],
+  command: ["/command"],
+  compliance: ["/compliance"],
+  november_nest: ["/nests"],
+  tango: ["/tango"],
+  training: ["/training"],
+  victor: ["/victor"],
+  welfare: ["/welfare"],
+}
+
+function getVisibleNav(role: string | null, oscar?: string | null, unitSlugs: string[] = []): typeof ALL_NAV {
   const oscarRole = oscarToRole(oscar)
   const effectiveRole = role === 'delta_oscar' ? (oscarRole || role) : (role || oscarRole)
-  const canAccessCommand = (role && COMMAND_CENTRE_ROLES.has(role)) || (effectiveRole && COMMAND_CENTRE_ROLES.has(effectiveRole))
+  const membershipHrefs = unitSlugs.flatMap(slug => UNIT_HREFS[slug] ?? [])
+  const canAccessCommand = Boolean(
+    (role && COMMAND_CENTRE_ROLES.has(role))
+    || (effectiveRole && COMMAND_CENTRE_ROLES.has(effectiveRole))
+    || unitSlugs.includes('command')
+  )
 
   if (!role) {
-    const base = ALL_NAV.filter(n => BASE_HREFS.includes(n.href))
+    const allowed = new Set([...BASE_HREFS, ...membershipHrefs])
+    const base = ALL_NAV.filter(n => allowed.has(n.href))
     return canAccessCommand ? base : base.filter(n => n.href !== "/command")
   }
 
@@ -181,7 +198,7 @@ function getVisibleNav(role: string | null, oscar?: string | null): typeof ALL_N
     const oscarExtra = oscarRole && oscarRole !== role ? (ROLE_EXTRA[oscarRole] ?? []) : []
 
     // Union both sets so base Oscar pages are always visible
-    const allowed = new Set([...BASE_HREFS, ...roleExtra, ...oscarExtra])
+    const allowed = new Set([...BASE_HREFS, ...roleExtra, ...oscarExtra, ...membershipHrefs])
     visibleList = ALL_NAV.filter(n => allowed.has(n.href))
   }
 
@@ -215,13 +232,14 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   const { count: unreadAssignments } = useUnreadAssignments()
   const [userRole, setUserRole] = useState<string | null>(null)
   const [userOscar, setUserOscar] = useState<string | null>(null)
+  const [unitSlugs, setUnitSlugs] = useState<string[]>([])
   const [currentUser, setCurrentUser] = useState<string | null>(null)
 
   useEffect(() => {
     const loadUser = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
-        if (!user) { setCurrentUser(null); setUserRole(null); return }
+        if (!user) { setCurrentUser(null); setUserRole(null); setUnitSlugs([]); return }
         setCurrentUser(user.id)
         const { data: profile, error } = await supabase
           .from('users')
@@ -232,6 +250,15 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
           setUserRole(profile.role ?? null)
           setUserOscar(profile.oscar ?? null)
         }
+
+        // Memberships are the v4 source of truth. Keep the role/Oscar fallback
+        // above so navigation remains stable during a staged database rollout.
+        const { data: memberships } = await (supabase as any)
+          .from('unit_memberships')
+          .select('units!inner(slug)')
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+        setUnitSlugs((memberships || []).map((row: any) => row.units?.slug).filter(Boolean))
       } catch (err) {
         console.warn('Sidebar user load failed:', err)
       }
@@ -240,11 +267,11 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   }, [supabase])
 
   const visibleSections = useMemo(() => {
-    const allowed = new Set(getVisibleNav(userRole, userOscar).map(i => i.href))
+    const allowed = new Set(getVisibleNav(userRole, userOscar, unitSlugs).map(i => i.href))
     return NAV_SECTIONS
       .map(section => ({ ...section, items: section.items.filter(i => allowed.has(i.href)) }))
       .filter(section => section.items.length > 0)
-  }, [userRole, userOscar])
+  }, [userRole, userOscar, unitSlugs])
 
   return (
     <div
@@ -377,7 +404,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
       {!(collapsed && !isMobile) && (
         <div className="mt-auto border-t border-border/50 bg-background/50 p-4 backdrop-blur-sm">
           <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-            <span>Version 3.1.7</span>
+            <span>Version 4.0.1</span>
             <span>&copy; {new Date().getFullYear()} TCNP</span>
           </div>
         </div>

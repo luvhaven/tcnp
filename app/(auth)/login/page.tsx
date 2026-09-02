@@ -220,7 +220,7 @@ export default function LoginPage() {
       if (!loginSuccess) {
         const message =
           err?.message === "Failed to fetch"
-            ? "Unable to connect. Please check your connection."
+            ? "The authentication service is unavailable. Your internet connection may be fine; please contact an administrator if this continues."
             : err?.message || "Failed to login";
         toast.error(message);
       }

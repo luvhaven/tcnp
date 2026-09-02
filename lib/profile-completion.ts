@@ -14,8 +14,6 @@ export type ProfileFields = {
   address?: string | null
   city?: string | null
   bio?: string | null
-  emergency_contact_name?: string | null
-  emergency_contact_phone?: string | null
 }
 
 export type ProfileFieldSpec = {
@@ -24,7 +22,7 @@ export type ProfileFieldSpec = {
   weight: number
   /** Required fields must all be present for the profile to count as "complete" */
   required: boolean
-  group: 'identity' | 'personal' | 'emergency'
+  group: 'identity' | 'personal'
 }
 
 export const PROFILE_FIELD_SPECS: ProfileFieldSpec[] = [
@@ -38,8 +36,6 @@ export const PROFILE_FIELD_SPECS: ProfileFieldSpec[] = [
   { key: 'city', label: 'City', weight: 1, required: false, group: 'personal' },
   { key: 'address', label: 'Address', weight: 1, required: false, group: 'personal' },
   { key: 'bio', label: 'Short bio', weight: 1, required: false, group: 'personal' },
-  { key: 'emergency_contact_name', label: 'Emergency contact name', weight: 2, required: true, group: 'emergency' },
-  { key: 'emergency_contact_phone', label: 'Emergency contact phone', weight: 2, required: true, group: 'emergency' },
 ]
 
 function hasValue(v: unknown): boolean {

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import CallSignPanel from '@/components/operations/CallSignPanel'
 import DOHelpPanel from '@/components/operations/DOHelpPanel'
 import DOFeedbackForm from '@/components/operations/DOFeedbackForm'
+import DOPresentationAssets from '@/components/operations/DOPresentationAssets'
 import CheetahPrerequisites from '@/components/cheetahs/CheetahPrerequisites'
 import FlowerChecklist from '@/components/cheetahs/FlowerChecklist'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -41,12 +42,13 @@ interface Journey {
   eta: string | null
   notes: string | null
   program_id: string | null
+  papa_id: string | null
   assigned_duty_officer_id: string | null
   assigned_nest_id: string | null
   assigned_eagle_square_id: string | null
   assigned_theatre_id: string | null
   papas: { full_name: string; title: string } | null
-  cheetahs: { call_sign: string | null; registration_number: string } | null
+  cheetahs: { id: string; call_sign: string | null; registration_number: string } | null
   nests: { name: string } | null
   eagle_squares: { name: string; code: string } | null
   duty_officers?: DutyOfficer[]
@@ -166,10 +168,10 @@ export default function MyOperationsPage() {
         .select(`
           id, status, origin, destination,
           scheduled_departure, scheduled_arrival, etd, eta, notes,
-          program_id, assigned_duty_officer_id,
+          program_id, papa_id, assigned_duty_officer_id,
           assigned_nest_id, assigned_eagle_square_id, assigned_theatre_id,
           papas:papas!papa_id(full_name, title),
-          cheetahs:cheetahs!assigned_cheetah_id(call_sign, registration_number),
+          cheetahs:cheetahs!assigned_cheetah_id(id, call_sign, registration_number),
           nests:nests!assigned_nest_id(name),
           eagle_squares:eagle_squares!assigned_eagle_square_id(name, code)
         `)
@@ -642,15 +644,24 @@ function JourneyOperationsPanel({
         </CardContent>
       </Card>
 
+      {journey.papa_id && (
+        <DOPresentationAssets
+          papaId={journey.papa_id}
+          programId={journey.program_id}
+          papaName={journey.papas?.full_name || 'the Papa'}
+          canUpload={canUpdate}
+        />
+      )}
+
       {/* Pre-Op Checklists (shown when journey is planned) */}
-      {canUpdate && isPlanned && journey.cheetahs?.registration_number && (
+      {canUpdate && isPlanned && journey.cheetahs?.id && (
         <div className="grid md:grid-cols-2 gap-4 mt-4">
           <CheetahPrerequisites
-            cheetahId={journey.cheetahs.registration_number} // fallback since cheetah object might just be partial
+            cheetahId={journey.cheetahs.id}
             cheetahCallSign={journey.cheetahs.call_sign ?? journey.cheetahs.registration_number}
           />
           <FlowerChecklist
-            cheetahId={journey.cheetahs.registration_number}
+            cheetahId={journey.cheetahs.id}
             cheetahCallSign={journey.cheetahs.call_sign ?? journey.cheetahs.registration_number}
           />
         </div>

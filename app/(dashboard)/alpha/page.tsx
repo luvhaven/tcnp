@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react"
 import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
 import AOArrivalTimeline from "@/components/eagles/AOArrivalTimeline"
 import FlightSearch from "@/components/eagles/FlightSearch"
+import PapaFlightMonitor from "@/components/aviation/PapaFlightMonitor"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -26,7 +27,7 @@ import {
     storeFlightData,
     type FlightState
 } from '@/lib/opensky-api'
-import { canManageEagles } from '@/lib/utils'
+import { canManageEagles, effectiveOscarRole } from '@/lib/utils'
 
 // Dynamic imports for Map
 const MapContainer = dynamic(
@@ -54,8 +55,9 @@ export default function EaglesPage() {
         const loadRole = async () => {
             const { data: { user } } = await supabase.auth.getUser()
             if (!user) return
-            const { data } = await supabase.from('users').select('role').eq('id', user.id).single()
-            if (data?.role) setUserRole(data.role)
+            const { data } = await supabase.from('users').select('role,oscar').eq('id', user.id).single()
+            const resolvedRole = effectiveOscarRole(data?.role, data?.oscar)
+            if (resolvedRole) setUserRole(resolvedRole)
         }
         void loadRole()
     }, [])
@@ -103,7 +105,10 @@ export default function EaglesPage() {
 
                 <TabsContent value="tracking" className="space-y-6">
                     <FlightSearch />
-                    <TrackEagles />
+                    <PapaFlightMonitor
+                        title="Alpha Papa flight watch"
+                        description="Exact, itinerary-scoped OpenSky tracking for Papa arrivals. Schedule estimates are never presented as confirmed live positions."
+                    />
                 </TabsContent>
             </Tabs>
         </div>
@@ -461,12 +466,13 @@ function TrackEagles() {
                 if (user) {
                     const { data } = await supabase
                         .from('users')
-                        .select('role')
+                        .select('role,oscar')
                         .eq('id', user.id)
                         .single()
 
-                    if (data?.role) {
-                        setCurrentRole(data.role)
+                    const resolvedRole = effectiveOscarRole(data?.role, data?.oscar)
+                    if (resolvedRole) {
+                        setCurrentRole(resolvedRole)
                     }
                 }
             } catch (error) {

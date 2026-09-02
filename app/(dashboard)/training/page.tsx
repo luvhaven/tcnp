@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
-import { isAdmin } from "@/lib/utils"
+import { isPlatformAdministrator } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -18,6 +18,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
+import TrainingOperations from "@/components/training/TrainingOperations"
 import {
   GraduationCap, Plus, Pencil, Trash2, MapPin, Clock, Users, BookOpen, ArrowRight, CalendarDays, FileText, Shield
 } from "lucide-react"
@@ -38,8 +39,13 @@ type Training = {
   start_time: string | null
   end_time: string | null
   speakers: string[]
+  visibility: string
+  target_unit_id: string | null
+  session_type: string
   created_at: string
 }
+
+type TrainingUnit = { id: string; name: string; slug: string }
 
 type OscarDoc = {
   id: string
@@ -73,7 +79,16 @@ export default function TrainingPage() {
   const { data: currentUser } = useCurrentUser()
   const queryClient = useQueryClient()
   const confirm = useConfirm()
-  const canEdit = isAdmin(currentUser?.role)
+  const { data: canManageTrainingUnit = false } = useQuery({
+    queryKey: ["can-manage-unit", "training", currentUser?.id],
+    enabled: Boolean(currentUser?.id),
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("can_manage_unit", { unit_slug: "training" })
+      if (error) return false
+      return Boolean(data)
+    },
+  })
+  const canEdit = isPlatformAdministrator(currentUser?.role) || canManageTrainingUnit
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Training | null>(null)
@@ -85,6 +100,9 @@ export default function TrainingPage() {
     start_time: "",
     end_time: "",
     speakersText: "",
+    visibility: "all_members",
+    target_unit_id: "",
+    session_type: "training",
   })
 
   // Oscar Doc states
@@ -112,12 +130,22 @@ export default function TrainingPage() {
     },
   })
 
+  const { data: units = [] } = useQuery({
+    queryKey: ["units-lite", "training-schedules"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("units").select("id, name, slug").eq("is_active", true).order("name")
+      if (error) throw error
+      return (data ?? []) as TrainingUnit[]
+    },
+  })
+
   const { data: documents = [], isLoading: docsLoading } = useQuery({
     queryKey: ["oscar-documents"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("oscar_documents")
         .select("*")
+        .eq("managed_by_training", true)
         .order("created_at", { ascending: false })
       if (error) throw error
       return data as OscarDoc[]
@@ -140,13 +168,17 @@ export default function TrainingPage() {
         start_time: form.start_time || null,
         end_time: form.end_time || null,
         speakers: form.speakersText.split(",").map(s => s.trim()).filter(Boolean),
+        visibility: form.visibility,
+        target_unit_id: form.visibility === "target_unit" ? form.target_unit_id || null : null,
+        session_type: form.session_type,
         updated_at: new Date().toISOString(),
       }
+      if (form.visibility === "target_unit" && !form.target_unit_id) throw new Error("Choose the unit this session is for")
       if (editing) {
-        const { error } = await supabase.from("training_schedules").update(payload).eq("id", editing.id)
+        const { error } = await (supabase as any).from("training_schedules").update(payload).eq("id", editing.id)
         if (error) throw error
       } else {
-        const { error } = await supabase.from("training_schedules").insert({ ...payload, created_by: currentUser?.id ?? null })
+        const { error } = await (supabase as any).from("training_schedules").insert({ ...payload, created_by: currentUser?.id ?? null })
         if (error) throw error
       }
     },
@@ -173,7 +205,7 @@ export default function TrainingPage() {
 
   const openCreate = () => {
     setEditing(null)
-    setForm({ topic: "", description: "", location: "", session_date: today, start_time: "", end_time: "", speakersText: "" })
+    setForm({ topic: "", description: "", location: "", session_date: today, start_time: "", end_time: "", speakersText: "", visibility: "all_members", target_unit_id: "", session_type: "training" })
     setDialogOpen(true)
   }
 
@@ -187,6 +219,9 @@ export default function TrainingPage() {
       start_time: s.start_time?.slice(0, 5) ?? "",
       end_time: s.end_time?.slice(0, 5) ?? "",
       speakersText: s.speakers.join(", "),
+      visibility: s.visibility || "all_members",
+      target_unit_id: s.target_unit_id || "",
+      session_type: s.session_type || "training",
     })
     setDialogOpen(true)
   }
@@ -196,12 +231,12 @@ export default function TrainingPage() {
     mutationFn: async () => {
       if (!docForm.title.trim()) throw new Error("Title is required")
       if (!docForm.content.trim()) throw new Error("Content is required")
-      const payload = { ...docForm }
+      const payload = { ...docForm, managed_by_training: true }
       if (editingDoc) {
-        const { error } = await supabase.from("oscar_documents").update(payload).eq("id", editingDoc.id)
+        const { error } = await (supabase as any).from("oscar_documents").update(payload).eq("id", editingDoc.id)
         if (error) throw error
       } else {
-        const { error } = await supabase.from("oscar_documents").insert({ ...payload, created_by: currentUser?.id ?? null })
+        const { error } = await (supabase as any).from("oscar_documents").insert({ ...payload, created_by: currentUser?.id ?? null })
         if (error) throw error
       }
     },
@@ -215,7 +250,7 @@ export default function TrainingPage() {
 
   const deleteDocMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("oscar_documents").delete().eq("id", id)
+      const { error } = await (supabase as any).from("oscar_documents").delete().eq("id", id)
       if (error) throw error
     },
     onSuccess: () => {
@@ -243,6 +278,7 @@ export default function TrainingPage() {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <CardTitle className="text-base">{s.topic}</CardTitle>
+            <div className="mt-1 flex flex-wrap gap-1.5"><Badge variant="outline" className="text-[9px] capitalize">{(s.session_type || "training").replaceAll("_", " ")}</Badge>{(s.visibility || "all_members") !== "all_members" && <Badge variant="secondary" className="text-[9px]">{s.visibility === "training_unit" ? "Training Unit only" : units.find((unit) => unit.id === s.target_unit_id)?.name || "Target unit"}</Badge>}</div>
             <CardDescription className="mt-1 flex flex-wrap items-center gap-2 text-xs">
               <span className="inline-flex items-center gap-1"><CalendarDays className="h-3 w-3" /> {s.session_date}</span>
               {(s.start_time || s.end_time) && (
@@ -303,6 +339,8 @@ export default function TrainingPage() {
           )}
         </div>
       </div>
+
+      <TrainingOperations />
 
       {/* SOP manual entry */}
       <Link href="/sop" className="block">
@@ -413,7 +451,7 @@ export default function TrainingPage() {
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Session" : "Schedule Training"}</DialogTitle>
-            <DialogDescription>Visible to every protocol officer.</DialogDescription>
+            <DialogDescription>Set the session type, audience, timing and speakers.</DialogDescription>
           </DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); saveMutation.mutate() }} className="mt-2 space-y-4">
             <div className="space-y-2">
@@ -424,6 +462,41 @@ export default function TrainingPage() {
               <Label>Description</Label>
               <Textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Session type</Label>
+                <Select value={form.session_type} onValueChange={(session_type) => setForm({ ...form, session_type })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="training">Training</SelectItem>
+                    <SelectItem value="recruitment">Recruitment</SelectItem>
+                    <SelectItem value="orientation">Orientation</SelectItem>
+                    <SelectItem value="evaluation">Evaluation</SelectItem>
+                    <SelectItem value="briefing">Briefing</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Visibility</Label>
+                <Select value={form.visibility} onValueChange={(visibility) => setForm({ ...form, visibility, target_unit_id: visibility === "target_unit" ? form.target_unit_id : "" })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all_members">All members</SelectItem>
+                    <SelectItem value="training_unit">Training Unit only</SelectItem>
+                    <SelectItem value="target_unit">Specific unit</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {form.visibility === "target_unit" && (
+              <div className="space-y-2">
+                <Label>Target unit</Label>
+                <Select value={form.target_unit_id} onValueChange={(target_unit_id) => setForm({ ...form, target_unit_id })}>
+                  <SelectTrigger><SelectValue placeholder="Choose a unit" /></SelectTrigger>
+                  <SelectContent>{units.map((unit) => <SelectItem key={unit.id} value={unit.id}>{unit.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Date *</Label>

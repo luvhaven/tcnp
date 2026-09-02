@@ -31,7 +31,9 @@ const ECHO_FIELDS: PapaField[] = [
   { key: 'mic_preference',      label: 'Microphone Preference',  type: 'select',   options: MIC_PREF_OPTIONS },
   { key: 'presentation_style',  label: 'Presentation Style',     type: 'text',     hint: 'e.g. Seated, Pacing, Podium-only' },
   { key: 'has_slides',          label: 'Has Presentation Slides', type: 'boolean' },
+  { key: 'needs_clicker',       label: 'Needs Presentation Clicker', type: 'boolean' },
   { key: 'uses_stage_props',    label: 'Uses Stage Props',        type: 'boolean' },
+  { key: 'stage_props_details', label: 'Stage Props Details',     type: 'textarea' },
   { key: 'speaking_schedule',   label: 'Speaking Schedule',       type: 'jsonb' },
   { key: 'special_requirements',label: 'Special Requirements',    type: 'textarea' },
 ]
@@ -58,9 +60,15 @@ const NOSCAR_DEN_FIELDS: PapaField[] = [
 
 const VICTOR_FIELDS: PapaField[] = [
   { key: 'speaking_schedule',   label: 'Speaking Schedule',         type: 'jsonb' },
+  { key: 'mic_preference',      label: 'Microphone Preference',     type: 'select', options: MIC_PREF_OPTIONS },
+  { key: 'has_slides',          label: 'Has Presentation Slides',   type: 'boolean' },
+  { key: 'needs_clicker',       label: 'Needs Presentation Clicker',type: 'boolean' },
   { key: 'needs_water_on_stage',label: 'Water on Stage',            type: 'boolean' },
   { key: 'needs_face_towels',   label: 'Needs Face Towels',         type: 'boolean' },
   { key: 'uses_stage_props',    label: 'Uses Stage Props',          type: 'boolean' },
+  { key: 'stage_props_details', label: 'Stage Props Details',       type: 'textarea' },
+  { key: 'entourage_count',     label: 'Entourage Count',           type: 'number' },
+  { key: 'personal_assistants', label: 'Personal Assistants / PAs', type: 'jsonb' },
   { key: 'special_requirements',label: 'Special Requirements',      type: 'textarea' },
 ]
 
@@ -100,7 +108,7 @@ export const ROLE_BRIEFING_CONFIG: Record<string, RoleBriefingConfig> = {
     sectionTitle: 'Papa AV Briefings',
     description: 'Microphone, slides, and presentation preferences for each Papa',
     viewFields: ECHO_FIELDS,
-    editableFields: ['mic_preference', 'presentation_style', 'has_slides', 'uses_stage_props'],
+    editableFields: ['mic_preference', 'presentation_style', 'has_slides', 'needs_clicker', 'uses_stage_props', 'stage_props_details'],
   },
 
   // NOScar Nest — Accommodation / Hosting at the Nest
@@ -150,7 +158,7 @@ export const ROLE_BRIEFING_CONFIG: Record<string, RoleBriefingConfig> = {
     sectionTitle: 'Papa Venue Briefings',
     description: 'Stage and venue requirements for each Papa',
     viewFields: VICTOR_FIELDS,
-    editableFields: ['speaking_schedule', 'needs_water_on_stage', 'needs_face_towels'],
+    editableFields: ['speaking_schedule', 'mic_preference', 'has_slides', 'needs_clicker', 'uses_stage_props', 'stage_props_details', 'needs_water_on_stage', 'needs_face_towels'],
   },
 
   // Alpha Oscar — Airport / Eagle Square

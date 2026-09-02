@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
+import { isPlatformAdministrator, platformAuthorityRank } from '@/lib/utils'
 
 export async function POST(request: Request) {
     try {
@@ -8,7 +9,8 @@ export async function POST(request: Request) {
         const adminClient = createAdminClient()
         const db = adminClient as any
 
-        // Verify the requesting user is admin or dev_admin
+        // Verify platform authority. Operational leaders manage programmes,
+        // while unit heads manage their own membership lists.
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
@@ -23,7 +25,7 @@ export async function POST(request: Request) {
 
         const currentRole = (currentUser as { role?: string } | null)?.role
 
-        if (!currentRole || !['admin', 'dev_admin', 'super_admin', 'captain', 'vice_captain', 'command', 'head_of_command', 'head_of_operations'].includes(currentRole)) {
+        if (!isPlatformAdministrator(currentRole)) {
             return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
         }
 
@@ -33,6 +35,27 @@ export async function POST(request: Request) {
 
         if (!id) {
             return NextResponse.json({ error: 'Missing user ID' }, { status: 400 })
+        }
+
+        const { data: targetUser } = await db
+            .from('users')
+            .select('role')
+            .eq('id', id)
+            .single()
+
+        if (!targetUser) {
+            return NextResponse.json({ error: 'Officer not found' }, { status: 404 })
+        }
+
+        const targetRole = (targetUser as { role?: string }).role
+        const desiredRole = role || targetRole
+        if (currentRole !== 'super_admin' && (
+            platformAuthorityRank(targetRole) >= 80 || platformAuthorityRank(desiredRole) >= 80
+        )) {
+            return NextResponse.json({ error: 'Only Super Admin can manage administrator accounts' }, { status: 403 })
+        }
+        if (id === user.id && desiredRole !== currentRole) {
+            return NextResponse.json({ error: 'You cannot change your own authority level' }, { status: 403 })
         }
 
         if (team !== undefined && team !== null && team !== '' && !['strength', 'wisdom', 'swift'].includes(team)) {

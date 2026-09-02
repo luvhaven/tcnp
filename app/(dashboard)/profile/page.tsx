@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select"
 import {
   Camera, Loader2, CheckCircle2, Circle, ShieldCheck, KeyRound, User, Phone,
-  Mail, MapPin, Cake, Briefcase, HeartPulse, Sparkles, Save,
+  Mail, MapPin, Cake, Briefcase, Sparkles, Save,
 } from "lucide-react"
 
 // ─── Singleton client ───
@@ -42,21 +42,6 @@ const GENDERS = [
   { value: "male", label: "Male" },
   { value: "female", label: "Female" },
   { value: "prefer_not_to_say", label: "Prefer not to say" },
-]
-
-// Canonical Oscar unit names — same vocabulary as signup (oscarToRole parses these)
-const OSCAR_UNITS = [
-  "Alpha Oscar",
-  "Command",
-  "Compliance Oscar",
-  "Delta Oscar",
-  "Hospitality Oscar",
-  "November Oscar (Theatre)",
-  "November Oscar (Nest)",
-  "Serial Oscar",
-  "Tango Oscar",
-  "Victor Oscar",
-  "Welfare Oscar",
 ]
 
 const TEAMS = [
@@ -106,8 +91,6 @@ export default function ProfilePage() {
       city: currentUser.city,
       address: currentUser.address,
       bio: currentUser.bio,
-      emergency_contact_name: currentUser.emergency_contact_name,
-      emergency_contact_phone: currentUser.emergency_contact_phone,
     })
     setPhotoUrl(currentUser.photo_url)
   }, [currentUser])
@@ -192,26 +175,14 @@ export default function ProfilePage() {
       const payload: any = {
         full_name: form.full_name?.trim() || null,
         phone: form.phone?.trim() || null,
-        // Officers may re-home themselves when leadership moves them to a new unit
-        oscar: form.oscar || null,
         date_of_birth: form.date_of_birth || null,
         gender: form.gender || null,
         city: form.city?.trim() || null,
         address: form.address?.trim() || null,
         bio: form.bio?.trim() || null,
-        emergency_contact_name: form.emergency_contact_name?.trim() || null,
-        emergency_contact_phone: form.emergency_contact_phone?.trim() || null,
         profile_completed_at: result.isComplete ? new Date().toISOString() : null,
         updated_at: new Date().toISOString(),
       }
-      // Officers can move between teams at any time. Switching away from the
-      // team you currently head hands over head-of-team status — you can't
-      // moderate a team chat you're no longer a member of.
-      if (form.team && form.team !== currentUser.team) {
-        payload.team = form.team
-        if (currentUser.is_team_head) payload.is_team_head = false
-      }
-
       const { error } = await supabase.from("users").update(payload).eq("id", currentUser.id)
       if (error) throw error
 
@@ -289,7 +260,7 @@ export default function ProfilePage() {
               <CardTitle className="flex items-center gap-2 text-base">
                 <Sparkles className="h-4 w-4 text-amber-500" /> Complete your profile
               </CardTitle>
-              <CardDescription>A complete profile helps Command coordinate operations and reach you in an emergency.</CardDescription>
+              <CardDescription>A complete profile helps Command coordinate operations and assign you accurately.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -317,19 +288,10 @@ export default function ProfilePage() {
               <Input value={form.full_name ?? ""} onChange={e => set("full_name", e.target.value)} placeholder="John Doe" />
             </Field>
             <Field label="Oscar unit" icon={Briefcase} required>
-              {/* Radix's hidden native-select mirror fires a spurious onValueChange("")
-                  on mount before it has synced with our controlled value — none of our
-                  real options are ever empty, so guard against clearing on that no-op. */}
-              <Select value={form.oscar ?? ""} onValueChange={v => { if (v) set("oscar", v) }}>
-                <SelectTrigger><SelectValue placeholder="Select your Oscar…" /></SelectTrigger>
-                <SelectContent>
-                  {OSCAR_UNITS.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                  {/* Preserve a legacy/custom value so the select doesn't blank it */}
-                  {form.oscar && !OSCAR_UNITS.includes(form.oscar) && (
-                    <SelectItem value={form.oscar}>{form.oscar}</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+              <Input value={form.oscar ?? "Not assigned"} disabled className="opacity-75" />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Unit assignments are managed by your Head of Unit or an administrator.
+              </p>
             </Field>
             <Field label="Phone" icon={Phone} required>
               <Input type="tel" inputMode="tel" autoComplete="tel" value={form.phone ?? ""} onChange={e => set("phone", e.target.value)} placeholder="+234 800 000 0000" />
@@ -338,17 +300,15 @@ export default function ProfilePage() {
               <Input value={currentUser.email ?? ""} disabled className="opacity-70" />
             </Field>
             <Field label="Protocol team" icon={ShieldCheck} required>
-              <Select value={form.team ?? ""} onValueChange={v => { if (v) set("team", v) }}>
+              <Select value={form.team ?? ""} disabled>
                 <SelectTrigger><SelectValue placeholder="Select your team" /></SelectTrigger>
                 <SelectContent>
                   {TEAMS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                 </SelectContent>
               </Select>
-              {currentUser.is_team_head && form.team === currentUser.team && (
-                <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
-                  ★ You are head of this team. Switching teams will hand over your head-of-team status.
-                </p>
-              )}
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Prayer and protocol teams are assigned by Welfare or an administrator.
+              </p>
             </Field>
           </CardContent>
         </Card>
@@ -396,21 +356,6 @@ export default function ProfilePage() {
                 <Textarea rows={3} value={form.bio ?? ""} onChange={e => set("bio", e.target.value)} placeholder="A sentence or two about your protocol experience…" />
               </Field>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base"><HeartPulse className="h-4 w-4 text-primary" /> Emergency Contact</CardTitle>
-            <CardDescription>Used only by Command in a genuine emergency.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <Field label="Contact name" icon={User} required>
-              <Input value={form.emergency_contact_name ?? ""} onChange={e => set("emergency_contact_name", e.target.value)} placeholder="Next of kin" />
-            </Field>
-            <Field label="Contact phone" icon={Phone} required>
-              <Input type="tel" inputMode="tel" value={form.emergency_contact_phone ?? ""} onChange={e => set("emergency_contact_phone", e.target.value)} placeholder="+234 800 000 0000" />
-            </Field>
           </CardContent>
         </Card>
 

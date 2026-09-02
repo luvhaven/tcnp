@@ -16,9 +16,11 @@ import { Textarea } from "@/components/ui/textarea"
 import Image from "next/image"
 
 // Defaults to false so a caller that omits it gets read-only, not an open door.
-export default function VIPManagementPanel({ canManage = false }: { canManage?: boolean }) {
+export default function VIPManagementPanel({ canManage: legacyCanManage = false, theatreId = null }: { canManage?: boolean; theatreId?: string | null }) {
     const supabase = createClient()
     const confirm = useConfirm()
+    const [membershipCanManage, setMembershipCanManage] = useState(false)
+    const canManage = legacyCanManage || membershipCanManage
     const [selectedProgramId, setSelectedProgramId] = useState<string>("")
     const [programs, setPrograms] = useState<any[]>([])
     const [vips, setVips] = useState<any[]>([])
@@ -41,6 +43,14 @@ export default function VIPManagementPanel({ canManage = false }: { canManage?: 
     })
 
     useEffect(() => {
+        let active = true
+        void (supabase as any).rpc('can_manage_unit', { unit_slug: 'victor' }).then(({ data }: any) => {
+            if (active) setMembershipCanManage(data === true)
+        })
+        return () => { active = false }
+    }, [])
+
+    useEffect(() => {
         loadPrograms()
     }, [])
 
@@ -48,7 +58,7 @@ export default function VIPManagementPanel({ canManage = false }: { canManage?: 
         if (selectedProgramId) {
             loadVIPs()
         }
-    }, [selectedProgramId])
+    }, [selectedProgramId, theatreId])
 
     useEffect(() => {
         if (searchQuery.trim() === '') {
@@ -82,11 +92,12 @@ export default function VIPManagementPanel({ canManage = false }: { canManage?: 
         if (!selectedProgramId) return
 
         setLoading(true)
-        const { data, error } = await (supabase as any)
+        let request = (supabase as any)
             .from('theatre_vips')
             .select('*')
             .eq('program_id', selectedProgramId)
-            .order('full_name')
+        if (theatreId) request = request.or(`theatre_id.eq.${theatreId},theatre_id.is.null`)
+        const { data, error } = await request.order('full_name')
 
         if (error) {
             console.error("Error loading VIPs:", error)
@@ -99,6 +110,10 @@ export default function VIPManagementPanel({ canManage = false }: { canManage?: 
     }
 
     const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!canManage) {
+            toast.error('Only the Victor head or leadership can upload VIP photos.')
+            return
+        }
         const file = e.target.files?.[0]
         if (!file) return
 
@@ -143,6 +158,11 @@ export default function VIPManagementPanel({ canManage = false }: { canManage?: 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
 
+        if (!canManage) {
+            toast.error('Only the Victor head or leadership can create or edit senior-minister access.')
+            return
+        }
+
         if (!selectedProgramId) {
             toast.error("Please select a program")
             return
@@ -161,7 +181,7 @@ export default function VIPManagementPanel({ canManage = false }: { canManage?: 
             } else {
                 const { error } = await (supabase as any)
                     .from('theatre_vips')
-                    .insert([{ ...formData, program_id: selectedProgramId }])
+                    .insert([{ ...formData, program_id: selectedProgramId, theatre_id: theatreId }])
 
                 if (error) throw error
                 toast.success("VIP added successfully")
@@ -180,6 +200,10 @@ export default function VIPManagementPanel({ canManage = false }: { canManage?: 
     }
 
     const handleEdit = (vip: any) => {
+        if (!canManage) {
+            toast.error('Only the Victor head or leadership can edit senior-minister access.')
+            return
+        }
         setEditingVIP(vip)
         setFormData({
             full_name: vip.full_name || '',
@@ -233,6 +257,10 @@ export default function VIPManagementPanel({ canManage = false }: { canManage?: 
     }
 
     const openAddDialog = () => {
+        if (!canManage) {
+            toast.error('Only the Victor head or leadership can add senior ministers.')
+            return
+        }
         setEditingVIP(null)
         resetForm()
         setAddDialogOpen(true)
@@ -282,10 +310,10 @@ export default function VIPManagementPanel({ canManage = false }: { canManage?: 
                                     Manage authorized personnel for this program
                                 </CardDescription>
                             </div>
-                            <Button onClick={openAddDialog}>
+                            {canManage && <Button onClick={openAddDialog}>
                                 <Plus className="mr-2 h-4 w-4" />
                                 Add VIP
-                            </Button>
+                            </Button>}
                         </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -311,7 +339,7 @@ export default function VIPManagementPanel({ canManage = false }: { canManage?: 
                                 <p className="text-muted-foreground mb-4">
                                     {searchQuery ? 'No VIPs found matching your search' : 'No VIPs registered for this program'}
                                 </p>
-                                {!searchQuery && (
+                                {!searchQuery && canManage && (
                                     <Button variant="outline" onClick={openAddDialog}>
                                         <Plus className="mr-2 h-4 w-4" />
                                         Add First VIP
@@ -365,7 +393,7 @@ export default function VIPManagementPanel({ canManage = false }: { canManage?: 
                                         </div>
 
                                         {/* Action Buttons */}
-                                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                        {canManage && <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
@@ -388,7 +416,7 @@ export default function VIPManagementPanel({ canManage = false }: { canManage?: 
                                             >
                                                 <Trash2 className="h-3 w-3" />
                                             </Button>
-                                        </div>
+                                        </div>}
                                     </div>
                                 ))}
                             </div>
@@ -480,13 +508,13 @@ export default function VIPManagementPanel({ canManage = false }: { canManage?: 
                                 <Button variant="outline" onClick={() => setDetailDialogOpen(false)}>
                                     Close
                                 </Button>
-                                <Button onClick={() => {
+                                {canManage && <Button onClick={() => {
                                     setDetailDialogOpen(false)
                                     handleEdit(selectedVIP)
                                 }}>
                                     <Edit className="mr-2 h-4 w-4" />
                                     Edit
-                                </Button>
+                                </Button>}
                             </div>
                         </div>
                     )}
@@ -494,7 +522,7 @@ export default function VIPManagementPanel({ canManage = false }: { canManage?: 
             </Dialog>
 
             {/* Add/Edit Dialog */}
-            <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+            <Dialog open={addDialogOpen} onOpenChange={(open) => canManage && setAddDialogOpen(open)}>
                 <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>{editingVIP ? 'Edit VIP' : 'Add VIP'}</DialogTitle>

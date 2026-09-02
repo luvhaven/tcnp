@@ -21,6 +21,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
+import ComplianceInitiatives from "@/components/compliance/ComplianceInitiatives"
 import {
   Shirt, Plus, Trash2, Pencil, Sparkles, Scissors, CheckCircle2, ImageIcon, Loader2, CalendarDays,
 } from "lucide-react"
@@ -81,7 +82,16 @@ export default function CompliancePage() {
   const queryClient = useQueryClient()
   const confirm = useConfirm()
 
-  const canEdit = canManageCompliance(currentUser?.role, currentUser?.oscar)
+  const { data: canManageComplianceUnit = false } = useQuery({
+    queryKey: ["can-manage-unit", "compliance", currentUser?.id],
+    enabled: Boolean(currentUser?.id),
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("can_manage_unit", { unit_slug: "compliance" })
+      if (error) return false
+      return Boolean(data)
+    },
+  })
+  const canEdit = canManageCompliance(currentUser?.role, currentUser?.oscar) || canManageComplianceUnit
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<CompliancePost | null>(null)
@@ -268,6 +278,8 @@ export default function CompliancePage() {
           )}
         </div>
       </div>
+
+      <ComplianceInitiatives />
 
       {/* Today's outfit hero */}
       {outfitOfToday && (

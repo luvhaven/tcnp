@@ -19,11 +19,13 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Hotel, Plus, Edit, Trash2, Building, Users, UserPlus, UserCheck, ChevronDown } from "lucide-react"
 import { toast } from "sonner"
-import { canManageNests, isAdmin, effectiveOscarRole } from "@/lib/utils"
+import { effectiveOscarRole, isPlatformAdministrator } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 import PapaAccommodations from "@/components/nests/PapaAccommodations"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
+import { useUnitAccess } from "@/hooks/useUnitAccess"
 import { OfficerProfileDialog, type OfficerProfileData } from "@/components/officers/OfficerProfileDialog"
+import RoomOperations from "@/components/nests/RoomOperations"
 
 type Program = {
   id: string
@@ -78,15 +80,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
     assignment_type: 'nest' as 'theatre' | 'nest'
   })
 
-  const { data: userRole } = useQuery({
-    queryKey: ['userRole'],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return null
-      const { data } = await supabase.from('users').select('role').eq('id', user.id).single()
-      return data?.role || null
-    }
-  })
+  const nestAccess = useUnitAccess('november_nest')
 
   // Fetch this NO's assigned nest so the ETA reminder knows which nest to watch
   const { data: myNestId } = useQuery({
@@ -158,8 +152,9 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
     }
   })
 
-  const canManage = userRole ? canManageNests(userRole) : false
   const { data: currentUser } = useCurrentUser()
+  const resolvedRole = effectiveOscarRole(currentUser?.role, currentUser?.oscar)
+  const canManage = nestAccess.canManage
   const canEditAccommodations = canManage
 
   const saveNestMutation = useMutation({
@@ -402,11 +397,17 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       </motion.div>
 
       {/* ── Papa Briefings for NOScar roles ── */}
-      {userRole && ['noscar_nest', 'head_noscar_nest', 'noscar_den', 'head_noscar_den', 'november_oscar'].includes(userRole) && (
+      {(nestAccess.isMember || nestAccess.isPlatformAdmin) && (
         <div className="border rounded-xl p-4 bg-muted/30">
-          <PapaBriefingsSection role={userRole} />
+          <PapaBriefingsSection role={resolvedRole || 'noscar_nest'} />
         </div>
       )}
+
+      <RoomOperations
+        nests={filteredNests}
+        selectedProgram={selectedProgram}
+        legacyCanManage={canManage}
+      />
 
       <PapaAccommodations canEdit={canEditAccommodations} selectedProgram={selectedProgram} currentUserId={currentUser?.id ?? null} />
 
@@ -737,7 +738,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
         onOpenChange={(open) => {
           if (!open) setSelectedOfficer(null)
         }}
-        canManage={Boolean(currentUser && (isAdmin(currentUser.role) || isAdmin(currentUser.oscar)))}
+        canManage={Boolean(currentUser && isPlatformAdministrator(currentUser.role))}
       />
     </div>
   )

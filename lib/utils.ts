@@ -81,7 +81,63 @@ export function isAdmin(role: string | null | undefined): boolean {
 }
 
 /**
- * Check if a user can view an officer's full profile (including emergency contacts, personal info, titles and duty history).
+ * Explicit platform authority for new workspaces. Legacy `isAdmin` remains for
+ * existing screens, but it intentionally groups several operational leadership
+ * roles. New unit administration follows the requested hierarchy:
+ * super admin > admin > unit head > unit member.
+ */
+export function platformAuthorityRank(role: string | null | undefined): number {
+  switch (role) {
+    case 'super_admin': return 100
+    // dev_admin is a technical administrator, not a higher organisational
+    // authority. Only Super Admin outranks the Admin tier.
+    case 'dev_admin': return 80
+    case 'admin': return 80
+    case 'captain':
+    case 'vice_captain':
+    case 'head_of_operations':
+    case 'head_of_command':
+    case 'command':
+    case 'hod':
+    case 'hop':
+      return 60
+    default:
+      return 0
+  }
+}
+
+export function isSuperAdmin(role: string | null | undefined): boolean {
+  return role === 'super_admin'
+}
+
+export function isPlatformAdministrator(role: string | null | undefined): boolean {
+  return platformAuthorityRank(role) >= 80
+}
+
+export function isUnitHeadRole(
+  unit: 'alpha' | 'command' | 'compliance' | 'november_nest' | 'tango' | 'training' | 'victor' | 'welfare',
+  role: string | null | undefined,
+  oscar?: string | null,
+): boolean {
+  const resolved = effectiveOscarRole(role, oscar) ?? ''
+  const normalizedOscar = (oscar ?? '').toLowerCase()
+  const expected: Record<typeof unit, string[]> = {
+    alpha: ['head_alpha_oscar'],
+    command: ['head_of_command'],
+    compliance: ['head_compliance_oscar'],
+    november_nest: ['head_noscar_nest'],
+    tango: ['head_tango_oscar'],
+    training: ['head_training_oscar'],
+    victor: ['head_victor_oscar'],
+    welfare: ['head_welfare_oscar'],
+  }
+  return expected[unit].includes(resolved)
+    || normalizedOscar.includes(`head ${unit.replace('_', ' ')}`)
+    || normalizedOscar.includes(`head_${unit}`)
+}
+
+/**
+ * Check if a user can view an officer's full profile (personal info, titles and duty history).
  * Admins, Captain, Vice Captain, Command leadership, and Head of Welfare have full access.
  */
 export function canViewOfficerFullProfile(role: string | null | undefined, oscar?: string | null | undefined): boolean {
@@ -261,8 +317,8 @@ export function canManageWelfare(role: string | null | undefined, oscar?: string
 }
 
 /**
- * Officer welfare directory (names, contacts, birthdays, emergency contacts
- * for every officer) is a Head-of-Welfare responsibility specifically — NOT
+ * Officer welfare directory (names, approved contact details and birthdays)
+ * is a Head-of-Welfare responsibility specifically — NOT
  * extended to rank-and-file Welfare Oscars, per the "sufficient, not more"
  * access principle. Admins/command already see this via the users table.
  */

@@ -16,7 +16,7 @@ const securityHeaders = [
     value: [
       "default-src 'self'",
       // Scripts: self + inline (Next.js requires unsafe-inline for hydration)
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://s.ytimg.com",
       // Styles: self + inline + Google Fonts
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       // Fonts: self + Google Fonts CDN
@@ -24,11 +24,11 @@ const securityHeaders = [
       // Images: Allow any image host because map tiles (TomTom, Carto, OSM, OpenSky) are highly dynamic and use many varying subdomains.
       "img-src * data: blob: 'unsafe-inline'",
       // Connections: self + Supabase REST, Realtime (WSS)
-      `connect-src 'self' https://${supabaseHost} wss://${supabaseHost} https://opensky-network.org`,
+      `connect-src 'self' https://${supabaseHost} wss://${supabaseHost} https://opensky-network.org https://www.youtube.com https://www.youtube-nocookie.com`,
       // Workers: self + blob (Next.js SW, Leaflet workers)
       "worker-src 'self' blob:",
-      // Frames: none
-      "frame-src 'none'",
+      // Privacy-enhanced YouTube embeds are used by the members-only Training workspace.
+      "frame-src https://www.youtube-nocookie.com https://www.youtube.com",
       // Objects: none
       "object-src 'none'",
       // Upgrade insecure requests in production
@@ -38,6 +38,11 @@ const securityHeaders = [
 ]
 
 const nextConfig = {
+  // Development and production previously shared `.next`. Running `next
+  // build` while the dev server was open could overwrite the dev client
+  // manifest and produce "__webpack_modules__[moduleId] is not a function".
+  // Separate output directories make those workflows safe to run side by side.
+  distDir: process.env.NODE_ENV === 'development' ? '.next-dev' : '.next',
   images: {
     remotePatterns: [
       {
