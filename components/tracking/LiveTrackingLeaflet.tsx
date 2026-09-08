@@ -228,6 +228,9 @@ export default function LiveTrackingLeaflet({
       }
     })
     layer.addTo(map)
+    const tileContainer = layer.getContainer()
+    if (tileContainer) tileContainer.style.filter = resolveActiveStyle(mode) === 'dark' && layerIndex === 0
+      ? 'invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9)' : ''
     baseLayerRef.current = layer
 
     // Silence guard: hung/dropped requests fire neither tileload nor tileerror

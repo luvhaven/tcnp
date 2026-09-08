@@ -47,6 +47,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { name: "My Operations", href: "/my-operations", icon: Navigation },
+      { name: "Submission Outbox", href: "/outbox", icon: ClipboardList },
       { name: "Command", href: "/command", icon: Radar },
     ],
   },
@@ -113,7 +114,7 @@ const ALL_NAV = NAV_SECTIONS.flatMap(s => s.items)
 
 /** Pages every authenticated user always sees */
 const BASE_HREFS = [
-  "/dashboard", "/my-operations", "/chat", "/programs", "/guide",
+  "/dashboard", "/my-operations", "/outbox", "/chat", "/programs", "/guide",
   "/training", "/compliance", "/welfare", "/hospitality",
   "/profile", "/change-password",
 ]
@@ -404,7 +405,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
       {!(collapsed && !isMobile) && (
         <div className="mt-auto border-t border-border/50 bg-background/50 p-4 backdrop-blur-sm">
           <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-            <span>Version 4.0.3</span>
+            <span>Version 4.1.0</span>
             <span>&copy; {new Date().getFullYear()} TCNP</span>
           </div>
         </div>

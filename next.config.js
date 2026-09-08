@@ -89,8 +89,8 @@ const withPWA = require("@ducanh2912/next-pwa").default({
   // iOS specific settings
   extendDefaultHandler: false,
   // Cache pages navigated to on the client so they work offline later
-  cacheOnFrontEndNav: true,
-  aggressiveFrontEndNavCaching: true,
+  cacheOnFrontEndNav: false,
+  aggressiveFrontEndNavCaching: false,
   // Reload the app when connectivity returns instead of leaving stale offline UI
   reloadOnOnline: true,
   // Serve the branded offline page when a navigation misses cache while offline
@@ -112,6 +112,10 @@ const withPWA = require("@ducanh2912/next-pwa").default({
   workboxOptions: {
     disableDevLogs: true,
     runtimeCaching: [
+      {
+        urlPattern: ({ url }) => url.origin === self.location.origin && !url.pathname.startsWith('/_next/static/') && !/\.(?:png|svg|ico|woff2?)$/.test(url.pathname),
+        handler: "NetworkOnly",
+      },
       {
         // Authentication and user-scoped REST responses must never enter a
         // shared Workbox cache. Always pass Supabase requests to the network.

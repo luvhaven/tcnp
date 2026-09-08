@@ -1,6 +1,8 @@
 // Offline Queue Manager using IndexedDB
 // Stores form submissions when offline and syncs when online
 
+import { createClient } from '@/lib/supabase/client'
+
 const DB_NAME = 'tcnp_offline_queue'
 const DB_VERSION = 1
 const STORE_NAME = 'pending_submissions'
@@ -12,6 +14,7 @@ export interface QueuedSubmission {
     isEmergency?: boolean
     timestamp: number
     retries: number
+    ownerId?: string
 }
 
 class OfflineQueueManager {
@@ -71,20 +74,19 @@ class OfflineQueueManager {
     }
 
     async addToQueue(type: QueuedSubmission['type'], data: any): Promise<string> {
-        if (!this.isSupported || !this.db) {
-            console.warn('Queue not available, skipping')
-            return Promise.resolve('skipped')
-        }
-
         if (!this.db) await this.init()
-        if (!this.db) return Promise.resolve('skipped')
+        if (!this.db) throw new Error('Offline storage is unavailable. Keep this form open and retry when connected.')
+        const { data: { session } } = await createClient().auth.getSession()
+        if (!session) throw new Error('Sign in before saving an offline submission.')
 
         const isEmergency = data?.isEmergency || data?.status === 'broken_arrow' || data?.type === 'BROKEN ARROW' || data?.updates?.status === 'broken_arrow';
+        const { isEmergency: _queueOnlyFlag, ...record } = data
 
         const submission: QueuedSubmission = {
             id: `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             type,
-            data,
+            data: type === 'journey_update' ? record : { ...record, id: record.id || crypto.randomUUID() },
+            ownerId: session.user.id,
             isEmergency,
             timestamp: Date.now(),
             retries: 0
@@ -96,29 +98,31 @@ class OfflineQueueManager {
                 const store = transaction.objectStore(STORE_NAME)
                 const request = store.add(submission)
 
-                request.onsuccess = () => resolve(submission.id)
+                transaction.oncomplete = () => resolve(submission.id)
+                transaction.onabort = () => reject(new Error('Offline save was not committed.'))
                 request.onerror = () => {
                     console.warn('Failed to add to queue:', request.error)
-                    resolve('error')
+                    reject(request.error || new Error('Offline save failed.'))
                 }
             } catch (error) {
                 console.warn('Queue add error:', error)
-                resolve('error')
+                reject(error)
             }
         })
     }
 
     async getAllPending(): Promise<QueuedSubmission[]> {
-        if (!this.isSupported || !this.db) return []
         if (!this.db) await this.init()
         if (!this.db) return []
+        const { data: { session } } = await createClient().auth.getSession()
+        if (!session) return []
 
         return new Promise((resolve, reject) => {
             const transaction = this.db!.transaction([STORE_NAME], 'readonly')
             const store = transaction.objectStore(STORE_NAME)
             const request = store.getAll()
 
-            request.onsuccess = () => resolve(request.result)
+            request.onsuccess = () => resolve(request.result.filter((entry: QueuedSubmission) => entry.ownerId === session.user.id))
             request.onerror = () => reject(request.error)
         })
     }
@@ -160,16 +164,7 @@ class OfflineQueueManager {
     }
 
     async getQueueCount(): Promise<number> {
-        if (!this.db) await this.init()
-
-        return new Promise((resolve, reject) => {
-            const transaction = this.db!.transaction([STORE_NAME], 'readonly')
-            const store = transaction.objectStore(STORE_NAME)
-            const request = store.count()
-
-            request.onsuccess = () => resolve(request.result)
-            request.onerror = () => reject(request.error)
-        })
+        return (await this.getAllPending()).length
     }
 
     async clearQueue(): Promise<void> {

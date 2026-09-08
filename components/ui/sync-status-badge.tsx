@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { syncService } from '@/lib/sync-service'
 import { Badge } from '@/components/ui/badge'
 import { Cloud, CloudOff, AlertTriangle } from 'lucide-react'
+import Link from 'next/link'
 
 export function SyncStatusBadge() {
     const [pendingCount, setPendingCount] = useState(0)
@@ -62,7 +63,7 @@ export function SyncStatusBadge() {
             >
                 <AlertTriangle className="h-5 w-5" />
                 <span className="font-bold uppercase tracking-wider">
-                    PENDING EMERGENCY (OFFLINE)
+                    <Link href="/outbox">Emergency awaiting sync — review</Link>
                 </span>
             </Badge>
         )
@@ -79,7 +80,7 @@ export function SyncStatusBadge() {
                 <CloudOff className="h-4 w-4 text-orange-500" />
             )}
             <span className="font-medium">
-                {pendingCount} pending sync{pendingCount > 1 ? 's' : ''}
+                <Link href="/outbox">{pendingCount} pending sync{pendingCount > 1 ? 's' : ''} — review</Link>
             </span>
         </Badge>
     )

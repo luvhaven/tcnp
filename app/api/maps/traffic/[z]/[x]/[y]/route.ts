@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { checkRateLimit } from '@/lib/security/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,6 +11,12 @@ type RouteContext = {
 const validTileCoordinate = (value: string) => /^\d+$/.test(value)
 
 export async function GET(request: NextRequest, context: RouteContext) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Sign in to view traffic.' }, { status: 401 })
+  const { data: profile } = await supabase.from('users').select('activation_status, is_active').eq('id', user.id).single()
+  if (!profile || profile.is_active === false || profile.activation_status !== 'active') return NextResponse.json({ error: 'Account is inactive.' }, { status: 403 })
+  if (!checkRateLimit(request, 'traffic', 180, 60_000).success) return NextResponse.json({ error: 'Please wait before refreshing traffic.' }, { status: 429 })
   const apiKey = process.env.TOMTOM_API_KEY?.trim()
   if (!apiKey) {
     return NextResponse.json(

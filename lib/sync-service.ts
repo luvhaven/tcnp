@@ -36,9 +36,16 @@ class SyncService {
             console.log(`🔄 Syncing ${pending.length} queued submissions...`)
 
             const supabase = createClient()
+            const { data: { user }, error: authError } = await supabase.auth.getUser()
+            if (authError || !user) return
 
             for (const submission of pending) {
+                // Legacy entries without ownership remain recoverable but must
+                // never be replayed under an unrelated account.
+                if (submission.ownerId !== user.id) continue
                 try {
+                    const { data: { user: currentUser }, error: currentAuthError } = await supabase.auth.getUser()
+                    if (currentAuthError || currentUser?.id !== submission.ownerId) break
                     await this.syncSubmission(supabase, submission)
                     await offlineQueue.removeFromQueue(submission.id)
                     processed++
@@ -47,11 +54,7 @@ class SyncService {
                     await offlineQueue.incrementRetry(submission.id)
                     errors++
 
-                    // Remove after 3 failed attempts
-                    if (submission.retries >= 3) {
-                        await offlineQueue.removeFromQueue(submission.id)
-                        toast.error(`Failed to sync ${submission.type} after 3 attempts`)
-                    }
+                    // Preserve failed submissions for retry; never discard data.
                 }
             }
 
@@ -72,33 +75,38 @@ class SyncService {
     }
 
     private async syncSubmission(supabase: any, submission: QueuedSubmission): Promise<void> {
+        const checked = async (operation: any) => {
+            const { error } = await operation
+            if (error) throw error
+        }
         switch (submission.type) {
             case 'journey':
-                await supabase.from('journeys').insert([submission.data])
+                await checked(supabase.from('journeys').upsert([submission.data], { onConflict: 'id', ignoreDuplicates: true }))
                 break
 
             case 'incident':
-                await supabase.from('incidents').insert([submission.data])
+                await checked(supabase.from('incidents').upsert([submission.data], { onConflict: 'id', ignoreDuplicates: true }))
                 break
 
             case 'papa':
-                await supabase.from('papas').insert([submission.data])
+                await checked(supabase.from('papas').upsert([submission.data], { onConflict: 'id', ignoreDuplicates: true }))
                 break
 
             case 'program':
-                await supabase.from('programs').insert([submission.data])
+                await checked(supabase.from('programs').upsert([submission.data], { onConflict: 'id', ignoreDuplicates: true }))
                 break
 
             case 'chat_message':
-                await supabase.from('chat_messages').insert([submission.data])
+                await checked(supabase.from('chat_messages').upsert([submission.data], { onConflict: 'id', ignoreDuplicates: true }))
                 break
 
             case 'journey_update':
-                await supabase.from('journeys').update(submission.data.updates).eq('id', submission.data.id)
+                const result = await supabase.from('journeys').update(submission.data.updates).eq('id', submission.data.id).select('id').single()
+                if (result.error || !result.data) throw result.error || new Error('Journey update was not applied.')
                 break
 
             case 'journey_event':
-                await supabase.from('journey_events').insert([submission.data])
+                await checked(supabase.from('journey_events').upsert([submission.data], { onConflict: 'id', ignoreDuplicates: true }))
                 break
 
             default:

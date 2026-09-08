@@ -78,11 +78,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 // a missing row means the account was deleted.
                 const { data: profile, error: profileError } = await supabase
                     .from('users')
-                    .select('id')
+                    .select('id, is_active, activation_status')
                     .eq('id', session.user.id)
                     .maybeSingle()
 
-                if (!profileError && profile === null) {
+                if (!profileError && (profile === null || profile.is_active === false || profile.activation_status !== 'active')) {
                     // Account no longer exists — force sign out
                     console.warn('⚠️ Account deleted — signing out.')
                     await supabase.auth.signOut()

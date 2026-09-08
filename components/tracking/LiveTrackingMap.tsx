@@ -157,6 +157,9 @@ export default function LiveTrackingMap() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [locationError, setLocationError] = useState<string | null>(null)
+  const [journeyError, setJourneyError] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null)
   const [mapCenter] = useState<[number, number]>([6.5244, 3.3792])
   const [isClient, setIsClient] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -215,15 +218,16 @@ export default function LiveTrackingMap() {
 
   const handleManualRefresh = async () => {
     setRefreshing(true)
-    await Promise.all([loadUserLocations(), loadJourneys()])
+    const results = await Promise.all([loadUserLocations(), loadJourneys()])
     setRefreshing(false)
-    toast.success('Map refreshed')
+    if (results.every(Boolean)) toast.success('Map refreshed')
+    else toast.error('Some tracking data could not be refreshed. Last known positions are retained.')
   }
 
   const loadUserLocations = async () => {
     try {
       const { data, error } = await (supabase as any).rpc('get_active_user_locations')
-      if (error) { console.error('❌ Error loading user locations:', error); return }
+      if (error) throw error
 
       const { data: activeJourneys } = await supabase
         .from('journeys')
@@ -254,8 +258,13 @@ export default function LiveTrackingMap() {
       })
       setLocationTrails({ ...trails })
       setUserLocations(enrichedData)
+      setLocationError(null)
+      setLastUpdated(new Date().toLocaleTimeString())
+      return true
     } catch (err) {
       console.error('❌ Error loading user locations:', err)
+      setLocationError('Location service unavailable. Showing last known positions.')
+      return false
     }
   }
 
@@ -267,8 +276,12 @@ export default function LiveTrackingMap() {
         .order('created_at', { ascending: false })
       if (error) throw error
       setJourneys((data ?? []).map((j: any) => ({ ...j, callSignKey: j.status as CallSignKey | null })))
+      setJourneyError(null)
+      return true
     } catch (err) {
       console.error('❌ Error loading journeys:', (err as any)?.message || err)
+      setJourneyError('Journey status could not be refreshed.')
+      return false
     }
   }
 
@@ -342,7 +355,7 @@ export default function LiveTrackingMap() {
   // ─── Loading skeleton ────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex h-[calc(100vh-6rem)] flex-col gap-3 animate-pulse">
+      <div className="flex h-[calc(100dvh-6rem)] flex-col gap-3 animate-pulse">
         <div className="flex items-center justify-between">
           <div className="space-y-1.5">
             <div className="h-5 w-36 rounded-lg bg-muted" />
@@ -366,19 +379,21 @@ export default function LiveTrackingMap() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-6rem)] flex-col gap-3 animate-fade-in">
+    <div className="flex h-[calc(100dvh-6rem)] flex-col gap-3 animate-fade-in">
+      {(locationError || journeyError) && <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm">{locationError} {journeyError} <button className="underline" onClick={handleManualRefresh}>Retry</button></div>}
+      {lastUpdated && <p className="text-xs text-muted-foreground">Locations last refreshed at {lastUpdated}</p>}
 
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-lg font-bold tracking-tight sm:text-xl">Live Tracking</h1>
-          <p className="text-[11px] text-muted-foreground">Journeys, vehicles, and team members in real time.</p>
+          <p className="text-xs text-muted-foreground">Journeys, vehicles, and team members in real time.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Location sharing indicator */}
           {isTracking ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 select-none">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 select-none">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
@@ -388,7 +403,7 @@ export default function LiveTrackingMap() {
           ) : permissionStatus === 'denied' ? (
             <button
               onClick={handleEnableLocation}
-              className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 border border-destructive/30 px-3 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/20 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 border border-destructive/30 px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/20 transition-colors"
             >
               <WifiOff className="h-3 w-3" />
               Location blocked — tap to fix
@@ -396,7 +411,7 @@ export default function LiveTrackingMap() {
           ) : (
             <button
               onClick={handleEnableLocation}
-              className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/10 border border-orange-500/30 px-3 py-1 text-[11px] font-medium text-orange-700 dark:text-orange-400 hover:bg-orange-500/20 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/10 border border-orange-500/30 px-3 py-1 text-xs font-medium text-orange-700 dark:text-orange-400 hover:bg-orange-500/20 transition-colors"
             >
               <Wifi className="h-3 w-3" />
               Enable sharing
@@ -404,7 +419,7 @@ export default function LiveTrackingMap() {
           )}
 
           {/* Stat pills */}
-          <div className="hidden sm:flex items-center gap-1.5 text-[11px]">
+          <div className="hidden sm:flex items-center gap-1.5 text-xs">
             <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1">
               <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
               <span className="font-semibold text-green-600 dark:text-green-400">{stats.active}</span>
@@ -493,7 +508,7 @@ export default function LiveTrackingMap() {
               </div>
 
               {/* Empty state */}
-              {filteredLocations.length === 0 && (
+              {filteredLocations.length === 0 && !locationError && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/70 backdrop-blur-sm z-[1000] gap-3 pointer-events-none">
                   <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted shadow-sm">
                     <MapPin className="h-7 w-7 text-muted-foreground" />
@@ -557,7 +572,7 @@ export default function LiveTrackingMap() {
                       type="button"
                       onClick={() => setStatusFilter(key)}
                       className={cn(
-                        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium border transition-colors',
+                        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border transition-colors',
                         statusFilter === key
                           ? 'bg-foreground text-background border-foreground'
                           : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
@@ -565,7 +580,7 @@ export default function LiveTrackingMap() {
                     >
                       {dot && <span className={cn('h-1.5 w-1.5 rounded-full', dot)} />}
                       {key === 'all' ? 'All' : STATUS_METADATA[key as StatusCategory].label}
-                      <span className="rounded-full bg-black/10 dark:bg-white/10 px-1 py-0.5 text-[9px] font-semibold">{count}</span>
+                      <span className="rounded-full bg-black/10 dark:bg-white/10 px-1 py-0.5 text-xs font-semibold">{count}</span>
                     </button>
                   )
                 })}
@@ -594,15 +609,15 @@ export default function LiveTrackingMap() {
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <p className="text-sm font-semibold truncate">{loc.full_name}</p>
-                            <p className="text-[11px] text-muted-foreground truncate">
+                            <p className="text-xs text-muted-foreground truncate">
                               {formatRole(loc.role)}{loc.oscar ? ` · ${loc.oscar}` : ''}
                             </p>
                             {loc.papa_name && (
-                              <p className="text-[10px] mt-0.5 text-blue-600 dark:text-blue-400 font-medium">📋 {loc.papa_name}</p>
+                              <p className="text-xs mt-0.5 text-blue-600 dark:text-blue-400 font-medium">📋 {loc.papa_name}</p>
                             )}
                           </div>
                           <span
-                            className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
+                            className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold text-white"
                             style={{ backgroundColor: roleColor }}
                           >
                             {meta.label}
@@ -610,14 +625,14 @@ export default function LiveTrackingMap() {
                         </div>
 
                         {(speedKmh || accuracy || battery) && (
-                          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+                          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                             {speedKmh && <span className="flex items-center gap-1"><Gauge className="h-3 w-3" />{speedKmh}</span>}
                             {accuracy && <span className="flex items-center gap-1"><Signal className="h-3 w-3" />{accuracy}</span>}
                             {battery && <span className="flex items-center gap-1"><Battery className="h-3 w-3" />{battery}</span>}
                           </div>
                         )}
 
-                        <p className="mt-1.5 text-[10px] text-muted-foreground">
+                        <p className="mt-1.5 text-xs text-muted-foreground">
                           {formatDistanceToNow(new Date(loc.updated_at), { addSuffix: true })}
                         </p>
                       </div>
@@ -637,11 +652,11 @@ export default function LiveTrackingMap() {
                   return (
                     <span
                       key={role}
-                      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm"
+                      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
                       style={{ backgroundColor: display.color }}
                     >
                       {display.label}
-                      <span className="rounded-full bg-black/20 px-1.5 py-0.5 text-[9px]">{count}</span>
+                      <span className="rounded-full bg-black/20 px-1.5 py-0.5 text-xs">{count}</span>
                     </span>
                   )
                 })}
@@ -675,7 +690,7 @@ export default function LiveTrackingMap() {
                     <div className={cn('w-2.5 h-2.5 rounded-full', meta.colorClass)} />
                     <span className="text-xs font-medium">{meta.label}</span>
                   </div>
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     {key === 'active' ? '< 2 min' : key === 'stale' ? '2–10 min' : '> 10 min'}
                   </span>
                 </div>
@@ -698,10 +713,10 @@ export default function LiveTrackingMap() {
                   <div key={label} className="flex items-center gap-2.5">
                     <div className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: color }} />
                     <span className="text-xs font-semibold">{label}</span>
-                    <span className="text-[10px] text-muted-foreground">{desc}</span>
+                    <span className="text-xs text-muted-foreground">{desc}</span>
                   </div>
                 ))}
-                <p className="mt-1 text-[10px] text-muted-foreground border-t pt-1.5">Powered by TomTom</p>
+                <p className="mt-1 text-xs text-muted-foreground border-t pt-1.5">Powered by TomTom</p>
               </div>
             </SidebarSection>
           )}

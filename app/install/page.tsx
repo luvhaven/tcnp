@@ -135,7 +135,7 @@ export default function InstallPage() {
             </Card>
 
             <p className="mt-8 text-xs text-gray-400">
-                v4.0.3 • TCN Protocol
+                v4.1.0 • TCN Protocol
             </p>
         </div>
     )

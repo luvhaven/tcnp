@@ -16,6 +16,7 @@ import { useChatNotifications } from "@/hooks/useChatNotifications"
 
 // Core layout components - loaded normally but wrapped in error boundaries
 import { Header } from "@/components/layout/header"
+import { WorkNavigation } from '@/components/layout/WorkNavigation'
 
 // Dynamically import ALL potentially problematic components with SSR disabled
 const Sidebar = dynamic(
@@ -225,6 +226,7 @@ export default function DashboardLayout({
           >
             <div className="mx-auto max-w-6xl min-w-0 space-y-6 animate-fade-in">
               <ErrorBoundary>
+                <WorkNavigation />
                 {children}
               </ErrorBoundary>
             </div>

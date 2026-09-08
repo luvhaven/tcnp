@@ -973,6 +973,23 @@ main,
 
 /* ─── Accessibility: Reduced Motion ──────────────────────────────────────── */
 
+/* Field operations: readable controls and touch targets on phones. */
+@media (pointer: coarse) {
+  #main-content button,
+  #main-content input,
+  #main-content select,
+  #main-content [role="combobox"] {
+    min-height: 44px;
+  }
+  #main-content input,
+  #main-content select,
+  #main-content textarea { font-size: 16px; }
+}
+
+#main-content { font-variant-numeric: tabular-nums; }
+#main-content button:focus-visible,
+#main-content a:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 3px; }
+
 @media (prefers-reduced-motion: reduce) {
 
   *,
