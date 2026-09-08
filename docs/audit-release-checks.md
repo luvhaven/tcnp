@@ -1,5 +1,22 @@
 # Operational release checks
 
+## Live permission verification — 2026-09-08
+
+Run `cbb7c81b` passed all 23 checks against isolated QA accounts in the configured
+Supabase project and the local application. Verified positive admin access,
+officer/head denial, unit membership boundaries, self-promotion prevention,
+notification isolation, inactive login denial, and immediate suspension checks
+on all six admin HTTP handlers. All four accounts were disabled and banned at
+the end. Earlier diagnostic runs also disabled their accounts.
+
+The live test runner is opt-in (`node scripts/verify-live-roles.cjs
+--create-test-accounts --app-url=http://127.0.0.1:3103`) and is deliberately
+excluded from ordinary CI. It does not send invitations. It leaves disabled,
+labelled QA profiles and their isolated notification records for traceability.
+
+This verifies authorization behaviour; it does not replace the complete
+signed-in unit workflow and device checks listed below.
+
 The automated suite covers offline replay rejection, retry retention, account
 ownership and authentication expiry. Type checking and the production build are
 separate gates; neither proves a successful real-world operational workflow.

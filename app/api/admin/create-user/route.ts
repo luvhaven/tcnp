@@ -22,6 +22,8 @@ export async function POST(request: Request) {
       .from('users')
       .select('role')
       .eq('id', user.id)
+      .eq('activation_status', 'active')
+      .or('is_active.is.null,is_active.eq.true')
       .single()
 
     const currentRole = (currentUser as { role?: string } | null)?.role

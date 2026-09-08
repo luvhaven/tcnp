@@ -36,8 +36,11 @@ export async function DELETE(request: Request) {
         .from('users')
         .select('role, oscar, full_name, team, is_team_head')
         .eq('id', user.id)
+        .eq('activation_status', 'active')
+        .or('is_active.is.null,is_active.eq.true')
         .single()
 
+    if (!callerData) return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
     const isUserAdmin = callerData && (isAdmin(callerData.role) || isAdmin(effectiveOscarRole(callerData.role, callerData.oscar)))
     if (!isUserAdmin) {
         return NextResponse.json({ error: 'Forbidden: only administrators can permanently delete chats' }, { status: 403 })
@@ -150,8 +153,11 @@ export async function POST(request: Request) {
         .from('users')
         .select('role, oscar, full_name, team, is_team_head')
         .eq('id', user.id)
+        .eq('activation_status', 'active')
+        .or('is_active.is.null,is_active.eq.true')
         .single()
 
+    if (!callerData) return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
     const isUserAdmin = callerData && (isAdmin(callerData.role) || isAdmin(effectiveOscarRole(callerData.role, callerData.oscar)))
 
     const body = await request.json()

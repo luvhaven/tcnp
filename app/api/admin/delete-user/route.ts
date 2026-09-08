@@ -38,6 +38,8 @@ export async function DELETE(request: Request) {
         .from('users')
         .select('role, oscar')
         .eq('id', user.id)
+        .eq('activation_status', 'active')
+        .or('is_active.is.null,is_active.eq.true')
         .single()
 
     const isAllowed = callerData && isPlatformAdministrator(callerData.role)
