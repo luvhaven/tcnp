@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2, ChevronDown } from "lucide-react";
 
@@ -158,7 +157,6 @@ export default function LoginPage() {
   const [quoteFading, setQuoteFading] = useState(false);
 
   const router = useRouter();
-  const supabase = createClient();
 
   // Fixed: Using useCallback + functional setState to avoid stale closure
   const advanceQuote = useCallback(() => {
@@ -182,45 +180,34 @@ export default function LoginPage() {
     let loginSuccess = false;
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password,
-      });
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password,
+        }),
+      })
+      const result = await response.json().catch(() => ({}))
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to login')
+      }
 
-      if (data.user) {
-        const activationRes = await fetch("/api/auth/check-activation", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ access_token: data.session?.access_token ?? null }),
-        });
-        const activationData = await activationRes.json();
+      loginSuccess = true;
+      toast.success("Signed in securely.");
+      await new Promise((resolve) => setTimeout(resolve, 200));
 
-        if (!activationRes.ok || activationData.status !== "active") {
-          await supabase.auth.signOut();
-          throw new Error(
-            activationData.status === "pending"
-              ? "Your account is awaiting admin approval."
-              : activationData.error || "Security Clearance Denied: Account is deactivated or restricted."
-          );
-        }
-
-        loginSuccess = true;
-        toast.success("Signed in securely.");
-        await new Promise((resolve) => setTimeout(resolve, 200));
-
-        if (typeof window !== "undefined") {
-          window.location.href = "/dashboard";
-        } else {
-          router.replace("/dashboard");
-        }
+      if (typeof window !== "undefined") {
+        window.location.href = "/dashboard";
+      } else {
+        router.replace("/dashboard");
       }
     } catch (err: any) {
       if (!loginSuccess) {
         const message =
           err?.message === "Failed to fetch"
-            ? "The authentication service is unavailable. Your internet connection may be fine; please contact an administrator if this continues."
+            ? "Unable to reach the TCNP application server. Please refresh and try again."
             : err?.message || "Failed to login";
         toast.error(message);
       }

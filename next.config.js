@@ -113,7 +113,13 @@ const withPWA = require("@ducanh2912/next-pwa").default({
     disableDevLogs: true,
     runtimeCaching: [
       {
-        urlPattern: /^https:\/\/([a-d]\.basemaps\.cartocdn\.com|[a-c]\.tile\.openstreetmap\.org|cartodb-basemaps-[a-d]\.global\.ssl\.fastly\.net|server\.arcgisonline\.com|api\.tomtom\.com)\//i,
+        // Authentication and user-scoped REST responses must never enter a
+        // shared Workbox cache. Always pass Supabase requests to the network.
+        urlPattern: /^https:\/\/[a-z0-9]+\.supabase\.co\//i,
+        handler: "NetworkOnly",
+      },
+      {
+        urlPattern: /^https:\/\/([a-d]\.basemaps\.cartocdn\.com|tile\.openstreetmap\.org|[a-c]\.tile\.openstreetmap\.org)\//i,
         handler: "NetworkOnly",
       },
     ],

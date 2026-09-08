@@ -40,7 +40,7 @@ type LiveTrackingLeafletProps = {
   getUserStatus: (updatedAt: string) => { label: string; color: string }
   getRoleDisplay: (role?: string | null) => { label: string; color: string }
   showTraffic?: boolean
-  tomtomKey?: string
+  trafficTileUrl?: string
 }
 
 const LiveTrackingLeaflet = dynamic<LiveTrackingLeafletProps>(
@@ -161,7 +161,7 @@ export default function LiveTrackingMap() {
   const [isClient, setIsClient] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showTraffic, setShowTraffic] = useState(false)
-  const tomtomKey = process.env.NEXT_PUBLIC_TOMTOM_API_KEY ?? ''
+  const [trafficAvailable, setTrafficAvailable] = useState<boolean | null>(null)
   const locationTrailsRef = useRef<Record<string, [number, number][]>>({})
   const [locationTrails, setLocationTrails] = useState<Record<string, [number, number][]>>({})
 
@@ -169,6 +169,15 @@ export default function LiveTrackingMap() {
     useLocationTracking({ enableTracking: true, updateInterval: 10000, highAccuracy: true })
 
   useEffect(() => { setIsClient(true) }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/maps/traffic-status', { cache: 'no-store' })
+      .then(response => response.ok ? response.json() : { available: false })
+      .then(result => { if (!cancelled) setTrafficAvailable(result.available === true) })
+      .catch(() => { if (!cancelled) setTrafficAvailable(false) })
+    return () => { cancelled = true }
+  }, [])
 
   const handleEnableLocation = async () => {
     const granted = await requestPermission()
@@ -420,9 +429,14 @@ export default function LiveTrackingMap() {
             size="sm"
             className="h-8 gap-1.5 text-xs"
             onClick={() => {
-              if (!tomtomKey) { toast.error('Traffic overlay needs a TomTom API key.'); return }
+              if (!trafficAvailable) {
+                toast.info('Live traffic is temporarily unavailable. Map tracking remains active.')
+                return
+              }
               setShowTraffic(v => !v)
             }}
+            disabled={trafficAvailable === null}
+            title={trafficAvailable === false ? 'Live traffic is not configured' : 'Toggle live TomTom traffic'}
           >
             <Radio className="h-3.5 w-3.5" />
             Traffic
@@ -473,7 +487,7 @@ export default function LiveTrackingMap() {
                     getUserStatus={getUserStatus}
                     getRoleDisplay={getRoleDisplayMeta}
                     showTraffic={showTraffic}
-                    tomtomKey={tomtomKey}
+                    trafficTileUrl="/api/maps/traffic/{z}/{x}/{y}"
                   />
                 )}
               </div>

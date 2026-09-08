@@ -28,8 +28,8 @@ export type LiveTrackingLeafletProps = {
   getRoleDisplay: (role?: string | null) => { label: string; color: string }
   /** Show TomTom traffic flow overlay */
   showTraffic?: boolean
-  /** TomTom API key — read from NEXT_PUBLIC_TOMTOM_API_KEY */
-  tomtomKey?: string
+  /** Same-origin traffic tile URL; the TomTom key remains server-side. */
+  trafficTileUrl?: string
 }
 
 // Using completely native SVG DivIcons to guarantee offline/PWA rendering without cross-origin image blockades.
@@ -90,7 +90,7 @@ const buildPopupContent = (
 // Distinct trail colours for up to 8 simultaneous tracked users
 const TRAIL_COLORS = ['#2563EB', '#16A34A', '#D97706', '#9333EA', '#DB2777', '#0891B2', '#DC2626', '#65A30D']
 
-type BasemapId = 'auto' | 'streets' | 'dark' | 'satellite'
+type BasemapId = 'auto' | 'streets' | 'dark'
 
 type TileSource = { url: string; attribution: string; subdomains?: string; maxZoom: number }
 
@@ -103,18 +103,17 @@ const BASEMAPS: Record<Exclude<BasemapId, 'auto'>, { label: string; layers: Tile
     label: 'Streets',
     layers: [
       {
-        // CARTO Voyager — production-friendly, no API key
+        // Official, keyless OpenStreetMap tiles. Browser caching and visible
+        // attribution keep this within OSM's public tile usage policy.
+        url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19,
+      },
+      {
         url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
         attribution: '© OpenStreetMap contributors © CARTO',
         subdomains: 'abcd',
         maxZoom: 20,
-      },
-      {
-        // Fallback: raw OSM tiles — independent infrastructure from CARTO
-        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        attribution: '© OpenStreetMap contributors',
-        subdomains: 'abc',
-        maxZoom: 19,
       },
     ],
   },
@@ -122,27 +121,15 @@ const BASEMAPS: Record<Exclude<BasemapId, 'auto'>, { label: string; layers: Tile
     label: 'Dark',
     layers: [
       {
+        url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19,
+      },
+      {
         url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
         attribution: '© OpenStreetMap contributors © CARTO',
         subdomains: 'abcd',
         maxZoom: 20,
-      },
-      {
-        // Fallback: CARTO dark via the direct (non-lettered) host
-        url: 'https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/{z}/{x}/{y}{r}.png',
-        attribution: '© OpenStreetMap contributors © CARTO',
-        maxZoom: 20,
-      },
-    ],
-  },
-  satellite: {
-    label: 'Satellite',
-    layers: [
-      {
-        // Esri World Imagery — free, no API key required
-        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        attribution: 'Esri, Maxar, Earthstar Geographics',
-        maxZoom: 19,
       },
     ],
   },
@@ -161,7 +148,7 @@ export default function LiveTrackingLeaflet({
   getUserStatus,
   getRoleDisplay,
   showTraffic = false,
-  tomtomKey,
+  trafficTileUrl,
 }: LiveTrackingLeafletProps) {
   const mapRef = useRef<L.Map | null>(null)
   const markersRef = useRef<Record<string, L.Marker>>({})
@@ -175,7 +162,8 @@ export default function LiveTrackingLeaflet({
   const [basemap, setBasemap] = useState<BasemapId>(() => {
     if (typeof window === 'undefined') return 'auto'
     try {
-      return (localStorage.getItem(BASEMAP_STORAGE_KEY) as BasemapId) || 'auto'
+      const stored = localStorage.getItem(BASEMAP_STORAGE_KEY)
+      return stored === 'streets' || stored === 'dark' || stored === 'auto' ? stored : 'auto'
     } catch {
       return 'auto'
     }
@@ -340,10 +328,10 @@ export default function LiveTrackingLeaflet({
     const map = mapRef.current
     if (!map) return
 
-    if (showTraffic && tomtomKey) {
+    if (showTraffic && trafficTileUrl) {
       if (!trafficRef.current) {
         trafficRef.current = L.tileLayer(
-          `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${tomtomKey}`,
+          trafficTileUrl,
           { attribution: '© TomTom', maxZoom: 19, opacity: 0.75 }
         ).addTo(map)
       }
@@ -351,7 +339,7 @@ export default function LiveTrackingLeaflet({
       trafficRef.current?.remove()
       trafficRef.current = null
     }
-  }, [showTraffic, tomtomKey])
+  }, [showTraffic, trafficTileUrl])
 
   useEffect(() => {
     if (mapRef.current) mapRef.current.setView(center, mapRef.current.getZoom() ?? 12)
@@ -543,7 +531,6 @@ export default function LiveTrackingLeaflet({
                 { id: 'auto' as BasemapId, label: 'Auto (theme)' },
                 { id: 'streets' as BasemapId, label: 'Streets' },
                 { id: 'dark' as BasemapId, label: 'Dark' },
-                { id: 'satellite' as BasemapId, label: 'Satellite' },
               ]).map((opt) => (
                 <button
                   key={opt.id}
