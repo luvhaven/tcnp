@@ -552,7 +552,7 @@ export default function PapaFormTabs({
 
               {formData.speaking_schedule.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
-                  No speaking schedule added yet. Click "Add Schedule" to add speaking days and times.
+                  No speaking schedule added yet. Click &quot;Add Schedule&quot; to add speaking days and times.
                 </p>
               ) : (
                 <div className="space-y-3">
@@ -621,7 +621,7 @@ export default function PapaFormTabs({
 
               {formData.personal_assistants.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
-                  No personal assistants added yet. Click "Add PA" to add personal assistants.
+                  No personal assistants added yet. Click &quot;Add PA&quot; to add personal assistants.
                 </p>
               ) : (
                 <div className="space-y-3">

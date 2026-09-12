@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { useBrowserSnapshot } from './useBrowserSnapshot'
 
 export type PWAPlatform =
   | 'android'
@@ -32,45 +33,21 @@ export interface UsePWAInstallReturn {
 }
 
 export function usePWAInstall(): UsePWAInstallReturn {
-  const [isInstalled, setIsInstalled] = useState(false)
+  const [installedThisSession, setIsInstalled] = useState(false)
+  const standalone = useBrowserSnapshot(() => ['standalone', 'window-controls-overlay', 'minimal-ui', 'fullscreen'].some(mode => window.matchMedia(`(display-mode: ${mode})`).matches) || (navigator as any).standalone === true, false)
+  const isInstalled = standalone || installedThisSession
   const [canNativeInstall, setCanNativeInstall] = useState(false)
-  const [platform, setPlatform] = useState<PWAPlatform | null>(null)
+  const platform = useBrowserSnapshot<PWAPlatform | null>(() => {
+    const ua = navigator.userAgent
+    if (/iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return 'ios'
+    if (/Android/.test(ua)) return 'android'
+    if (/Macintosh/.test(ua) && /Safari/.test(ua) && !/Chrome|Firefox|Edg/.test(ua)) return 'mac-safari'
+    return /Chrome|Edg/.test(ua) ? 'desktop-chrome' : 'desktop-other'
+  }, null)
   const deferredPrompt = useRef<BeforeInstallPromptEvent | null>(null)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-
-    // ── Already running as installed PWA ────────────────────────────────────
-    const isStandalone =
-      window.matchMedia('(display-mode: standalone)').matches ||
-      window.matchMedia('(display-mode: window-controls-overlay)').matches ||
-      window.matchMedia('(display-mode: minimal-ui)').matches ||
-      window.matchMedia('(display-mode: fullscreen)').matches ||
-      (window.navigator as any).standalone === true
-
-    if (isStandalone) {
-      setIsInstalled(true)
-      return
-    }
-
-    // ── Detect platform ──────────────────────────────────────────────────────
-    const ua = navigator.userAgent
-    const isIOS =
-      /iPad|iPhone|iPod/.test(ua) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-    const isAndroid = /Android/.test(ua)
-    const isMac = /Macintosh/.test(ua) && !isIOS
-    const isSafariOnly =
-      /Safari/.test(ua) &&
-      !/Chrome/.test(ua) &&
-      !/Firefox/.test(ua) &&
-      !/Edg/.test(ua)
-
-    if (isIOS) setPlatform('ios')
-    else if (isAndroid) setPlatform('android')
-    else if (isMac && isSafariOnly) setPlatform('mac-safari')
-    else if (/Chrome/.test(ua) || /Edg/.test(ua)) setPlatform('desktop-chrome')
-    else setPlatform('desktop-other')
 
     // ── Listen for native install event ──────────────────────────────────────
     const handleBIP = (e: Event) => {

@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useSyncExternalStore } from 'react'
 
 export type AppTheme = 'light' | 'dark' | 'auto'
 
@@ -15,9 +15,11 @@ const ThemeContext = createContext<ThemeContextValue>({
 })
 
 const THEME_KEY = 'tcnp-theme'
+let memoryTheme: AppTheme = 'auto'
 
 function applyTheme(next: AppTheme) {
   if (typeof document === 'undefined') return
+  memoryTheme = next
 
   const root = document.documentElement
   root.classList.remove('dark')
@@ -33,36 +35,34 @@ function applyTheme(next: AppTheme) {
     root.classList.add('dark')
   }
 
+}
+
+function readTheme(): AppTheme {
   try {
-    window.localStorage.setItem(THEME_KEY, next)
-  } catch {
-    // ignore storage errors
-  }
+    const stored = localStorage.getItem(THEME_KEY)
+    if (stored === 'dark' || stored === 'light') return stored
+  } catch { return memoryTheme }
+  return 'auto'
+}
+function subscribeTheme(notify: () => void) {
+  window.addEventListener('storage', notify)
+  window.addEventListener('tcnp-theme-change', notify)
+  return () => { window.removeEventListener('storage', notify); window.removeEventListener('tcnp-theme-change', notify) }
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<AppTheme>('auto')
-
+  const theme = useSyncExternalStore(subscribeTheme, readTheme, () => 'auto' as AppTheme)
   useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    let initial: AppTheme = 'auto'
-    try {
-      const stored = window.localStorage.getItem(THEME_KEY) as AppTheme | null
-      if (stored && ['light', 'dark', 'auto'].includes(stored)) {
-        initial = stored
-      }
-    } catch {
-      // ignore
-    }
-
-    applyTheme(initial)
-    setThemeState(initial)
-  }, [])
-
+    applyTheme(theme)
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const update = () => applyTheme(theme)
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [theme])
   const setTheme = (next: AppTheme) => {
     applyTheme(next)
-    setThemeState(next)
+    try { window.localStorage.setItem(THEME_KEY, next) } catch { /* Keep in-memory choice when storage is blocked. */ }
+    window.dispatchEvent(new Event('tcnp-theme-change'))
   }
 
   return (

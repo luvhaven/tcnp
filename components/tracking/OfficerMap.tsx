@@ -34,6 +34,69 @@ type OfficerMapProps = {
   height?: string
 }
 
+function createPopupContent(location: OfficerLocation) {
+  const timeDiff = new Date().getTime() - new Date(location.timestamp).getTime()
+  const minutesAgo = Math.floor(timeDiff / 60000)
+  const timeText = minutesAgo < 1 ? 'Just now' : minutesAgo < 60 ? `${minutesAgo}m ago` : `${Math.floor(minutesAgo / 60)}h ago`
+
+  return `
+    <div style="min-width: 220px;">
+      <div style="display: flex; align-items: center; margin-bottom: 8px;">
+        <div style="
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          background: ${location.is_online ? '#10B981' : '#6B7280'};
+          margin-right: 8px;
+        "></div>
+        <h3 style="font-weight: bold; margin: 0; color: #8B5CF6;">
+          ${location.users.full_name}
+        </h3>
+      </div>
+      <p style="font-size: 12px; color: #666; margin-bottom: 4px;">
+        ${location.users.oscar} • ${location.users.role.replace(/_/g, ' ').toUpperCase()}
+      </p>
+      <div style="border-top: 1px solid #e5e7eb; padding-top: 8px; margin-top: 8px;">
+        ${location.speed > 0 ? `
+          <p style="font-size: 11px; color: #888; margin-bottom: 4px;">
+            🚗 Speed: ${Math.round(location.speed)} km/h
+          </p>
+        ` : ''}
+        ${location.battery_level ? `
+          <p style="font-size: 11px; color: #888; margin-bottom: 4px;">
+            🔋 Battery: ${location.battery_level}%
+          </p>
+        ` : ''}
+        <p style="font-size: 11px; color: #888; margin-bottom: 4px;">
+          📍 Accuracy: ±${Math.round(location.accuracy)}m
+        </p>
+        <p style="font-size: 11px; color: #888; margin-bottom: 8px;">
+          🕐 Updated: ${timeText}
+        </p>
+      </div>
+      <p style="font-size: 10px; color: #999; margin-bottom: 8px;">
+        ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}
+      </p>
+      <a 
+        href="https://www.google.com/maps?q=${location.latitude},${location.longitude}" 
+        target="_blank"
+        style="
+          display: inline-block;
+          padding: 6px 12px;
+          background: #8B5CF6;
+          color: white;
+          text-decoration: none;
+          border-radius: 4px;
+          font-size: 11px;
+          font-weight: 500;
+        "
+      >
+        Open in Google Maps
+      </a>
+    </div>
+  `
+}
+
 export default function OfficerMap({ locations, height = '600px' }: OfficerMapProps) {
   const mapRef = useRef<L.Map | null>(null)
   const markersRef = useRef<{ [key: string]: L.Marker }>({})
@@ -147,72 +210,10 @@ export default function OfficerMap({ locations, height = '600px' }: OfficerMapPr
       if (mapRef.current) {
         mapRef.current.remove()
         mapRef.current = null
+        markersRef.current = {}
       }
     }
   }, [locations])
-
-  const createPopupContent = (location: OfficerLocation) => {
-    const timeDiff = new Date().getTime() - new Date(location.timestamp).getTime()
-    const minutesAgo = Math.floor(timeDiff / 60000)
-    const timeText = minutesAgo < 1 ? 'Just now' : minutesAgo < 60 ? `${minutesAgo}m ago` : `${Math.floor(minutesAgo / 60)}h ago`
-
-    return `
-      <div style="min-width: 220px;">
-        <div style="display: flex; align-items: center; margin-bottom: 8px;">
-          <div style="
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: ${location.is_online ? '#10B981' : '#6B7280'};
-            margin-right: 8px;
-          "></div>
-          <h3 style="font-weight: bold; margin: 0; color: #8B5CF6;">
-            ${location.users.full_name}
-          </h3>
-        </div>
-        <p style="font-size: 12px; color: #666; margin-bottom: 4px;">
-          ${location.users.oscar} • ${location.users.role.replace(/_/g, ' ').toUpperCase()}
-        </p>
-        <div style="border-top: 1px solid #e5e7eb; padding-top: 8px; margin-top: 8px;">
-          ${location.speed > 0 ? `
-            <p style="font-size: 11px; color: #888; margin-bottom: 4px;">
-              🚗 Speed: ${Math.round(location.speed)} km/h
-            </p>
-          ` : ''}
-          ${location.battery_level ? `
-            <p style="font-size: 11px; color: #888; margin-bottom: 4px;">
-              🔋 Battery: ${location.battery_level}%
-            </p>
-          ` : ''}
-          <p style="font-size: 11px; color: #888; margin-bottom: 4px;">
-            📍 Accuracy: ±${Math.round(location.accuracy)}m
-          </p>
-          <p style="font-size: 11px; color: #888; margin-bottom: 8px;">
-            🕐 Updated: ${timeText}
-          </p>
-        </div>
-        <p style="font-size: 10px; color: #999; margin-bottom: 8px;">
-          ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}
-        </p>
-        <a 
-          href="https://www.google.com/maps?q=${location.latitude},${location.longitude}" 
-          target="_blank"
-          style="
-            display: inline-block;
-            padding: 6px 12px;
-            background: #8B5CF6;
-            color: white;
-            text-decoration: none;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 500;
-          "
-        >
-          Open in Google Maps
-        </a>
-      </div>
-    `
-  }
 
   return (
     <div 

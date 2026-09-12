@@ -88,6 +88,14 @@ async function main() {
       assert.deepEqual(rows.map(r => r.id), [notificationIds[0]])
     })
     const base = process.argv.find(arg => arg.startsWith('--app-url='))?.slice(10) || process.env.QA_APP_URL || 'http://127.0.0.1:3100'
+    await check('active officer can load the dashboard document', async () => {
+      const r = await fetch(`${base}/dashboard`, { headers: { Cookie: officer.cookie() },
+        redirect: 'manual', signal: AbortSignal.timeout(60000) })
+      assert.equal(r.status, 200)
+      const html = await r.text()
+      assert.ok(html.includes('<html'))
+      assert.ok(!html.includes('NEXT_REDIRECT'))
+    })
     await check('active admin can use application administration', async () => {
       const r = await fetch(`${base}/api/admin/update-user`, { method: 'POST', headers: {
         'Content-Type': 'application/json', Cookie: platformAdmin.cookie() },

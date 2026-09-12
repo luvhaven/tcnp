@@ -8,6 +8,25 @@ import { ShieldAlert, CheckCircle2, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 
+  function playAlarm() {
+      try {
+          const audio = new Audio('/alarm.mp3') // Ensure this file exists in public directory
+          audio.play().catch((e) => console.log('Audio autoplay blocked', e))
+
+          // Also request browser notification permission if available
+          if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification("TCNP Mission Assignment", {
+                  body: "You have a new Delta Oscar mission assignment requiring your acceptance.",
+                  icon: "/favicon.ico"
+              })
+          } else if ('Notification' in window && Notification.permission !== 'denied') {
+              Notification.requestPermission()
+          }
+      } catch (e) {
+          // Ignore errors for devices that don't support audio
+      }
+  }
+
 export default function MissionNotificationHandler() {
     const supabase = createClient()
     const queryClient = useQueryClient()
@@ -83,25 +102,6 @@ export default function MissionNotificationHandler() {
     }, [session?.user?.id])
 
     // Play a loud ringing alarm for assignments
-    const playAlarm = () => {
-        try {
-            const audio = new Audio('/alarm.mp3') // Ensure this file exists in public directory
-            audio.play().catch((e) => console.log('Audio autoplay blocked', e))
-
-            // Also request browser notification permission if available
-            if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification("TCNP Mission Assignment", {
-                    body: "You have a new Delta Oscar mission assignment requiring your acceptance.",
-                    icon: "/favicon.ico"
-                })
-            } else if ('Notification' in window && Notification.permission !== 'denied') {
-                Notification.requestPermission()
-            }
-        } catch (e) {
-            // Ignore errors for devices that don't support audio
-        }
-    }
-
     // Play alarm instantly if pending assignments exist on load and we haven't played it yet
     useEffect(() => {
         if (pendingAssignments.length > 0) {

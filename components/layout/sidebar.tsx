@@ -230,9 +230,10 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
     if (typeof window === 'undefined') return false
     try { return window.localStorage.getItem('sidebar-collapsed') === 'true' } catch { return false }
   })
-  const [search, setSearch] = useState('')
+  const [searchState, setSearchState] = useState({ pathname, value: '' })
+  const search = searchState.pathname === pathname ? searchState.value : ''
+  const setSearch = (value: string) => setSearchState({ pathname, value })
   const searchInput = useRef<HTMLInputElement>(null)
-  useEffect(() => { setSearch('') }, [pathname])
   const setCollapsed = (value: boolean) => {
     setCollapsedState(value)
     try { window.localStorage.setItem('sidebar-collapsed', String(value)) } catch (_) { }

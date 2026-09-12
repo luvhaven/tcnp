@@ -836,7 +836,7 @@ export default function JourneyStatusTable() {
                     <DialogHeader>
                         <DialogTitle>Update Call Sign</DialogTitle>
                         <DialogDescription>
-                            Select the new call sign for {selectedJourney?.papas?.full_name}'s journey
+                            Select the new call sign for {selectedJourney?.papas?.full_name}&apos;s journey
                         </DialogDescription>
                     </DialogHeader>
 

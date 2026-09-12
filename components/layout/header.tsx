@@ -1,4 +1,5 @@
 "use client"
+import { useIsClient } from "@/hooks/useIsClient"
 
 import Link from "next/link"
 import {
@@ -176,14 +177,10 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
   const user = currentUser ? { email: currentUser.email } : null
   const profile = currentUser
   const [menuOpen, setMenuOpen] = useState(false)
-  const [headerDate, setHeaderDate] = useState("")
-  const [headerDateShort, setHeaderDateShort] = useState("")
-
-  useEffect(() => {
-    const now = new Date()
-    setHeaderDate(formatHeaderDate(now))
-    setHeaderDateShort(formatHeaderDateShort(now))
-  }, [])
+  const [now] = useState(() => new Date())
+  const dateReady = useIsClient()
+  const headerDate = dateReady ? formatHeaderDate(now) : ""
+  const headerDateShort = dateReady ? formatHeaderDateShort(now) : ""
 
   const displayName = profile?.full_name || user?.email?.split("@")[0] || "User"
   const firstName = profile?.full_name ? profile.full_name.split(" ")[0] : displayName

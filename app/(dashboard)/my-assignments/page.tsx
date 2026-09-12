@@ -551,7 +551,7 @@ export default function MyAssignmentsPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg">Call-Sign History</CardTitle>
-                    <CardDescription>Recent updates you've made on this journey</CardDescription>
+                    <CardDescription>Recent updates you&apos;ve made on this journey</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm">
                     {journeyEvents[journey.id]?.length ? (

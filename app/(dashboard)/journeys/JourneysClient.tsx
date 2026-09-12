@@ -1071,7 +1071,7 @@ export default function JourneysClient({
 
               <div className="space-y-2 md:col-span-2">
                 <Label>Duty Officer(s) — DO Team</Label>
-                <p className="text-[11px] text-muted-foreground">Only officers working or available for the selected Program are eligible. They'll be notified and must accept before starting the journey.</p>
+                <p className="text-[11px] text-muted-foreground">Only officers working or available for the selected Program are eligible. They&apos;ll be notified and must accept before starting the journey.</p>
                 {!formData.program_id ? (
                   <p className="text-xs text-muted-foreground bg-muted rounded-md px-3 py-2">Select a Program above to load eligible officers.</p>
                 ) : loadingOfficers ? (

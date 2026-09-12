@@ -11,16 +11,14 @@ export default function NotificationPermissionBanner() {
     const [permission, setPermission] = useState<NotificationPermission>('default')
 
     useEffect(() => {
-        if (typeof window !== 'undefined' && 'Notification' in window) {
-            const currentPermission = Notification.permission
-            setPermission(currentPermission)
-
-            // Show banner if permission is not granted
-            if (currentPermission === 'default') {
-                // Wait 3 seconds before showing to not overwhelm user
-                setTimeout(() => setShow(true), 3000)
-            }
-        }
+        if (!('Notification' in window)) return
+        const timer = window.setTimeout(() => {
+            setPermission(Notification.permission)
+            let dismissed = false
+            try { dismissed = localStorage.getItem('notification-banner-dismissed') === 'true' } catch {}
+            setShow(Notification.permission === 'default' && !dismissed)
+        }, 3000)
+        return () => window.clearTimeout(timer)
     }, [])
 
     const handleEnableNotifications = async () => {
@@ -49,17 +47,6 @@ export default function NotificationPermissionBanner() {
         }
     }
 
-    // Don't show if already dismissed
-    useEffect(() => {
-        try {
-            const dismissed = localStorage.getItem('notification-banner-dismissed')
-            if (dismissed === 'true') {
-                setShow(false)
-            }
-        } catch (error) {
-            // localStorage can fail in iOS private mode - ignore
-        }
-    }, [])
 
     if (!show || permission !== 'default') {
         return null

@@ -34,6 +34,48 @@ type CheetahMapProps = {
   height?: string
 }
 
+function createPopupContent(location: VehicleLocation) {
+  return `
+    <div style="min-width: 200px;">
+      <h3 style="font-weight: bold; margin-bottom: 8px; color: #8B5CF6;">
+        ${location.cheetahs.call_sign}
+      </h3>
+      <p style="font-size: 12px; color: #666; margin-bottom: 4px;">
+        ${location.cheetahs.registration_number}
+      </p>
+      ${location.users ? `
+        <p style="font-size: 11px; color: #888; margin-bottom: 4px;">
+          Driver: ${location.users.full_name} (${location.users.oscar})
+        </p>
+      ` : ''}
+      ${location.speed > 0 ? `
+        <p style="font-size: 11px; color: #888; margin-bottom: 4px;">
+          Speed: ${Math.round(location.speed)} km/h
+        </p>
+      ` : ''}
+      <p style="font-size: 11px; color: #888;">
+        Coordinates: ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}
+      </p>
+      <a 
+        href="https://www.google.com/maps?q=${location.latitude},${location.longitude}" 
+        target="_blank"
+        style="
+          display: inline-block;
+          margin-top: 8px;
+          padding: 4px 12px;
+          background: #8B5CF6;
+          color: white;
+          text-decoration: none;
+          border-radius: 4px;
+          font-size: 11px;
+        "
+      >
+        Open in Google Maps
+      </a>
+    </div>
+  `
+}
+
 export default function CheetahMap({ locations, height = '600px' }: CheetahMapProps) {
   const mapRef = useRef<L.Map | null>(null)
   const markersRef = useRef<{ [key: string]: L.Marker }>({})
@@ -123,51 +165,10 @@ export default function CheetahMap({ locations, height = '600px' }: CheetahMapPr
       if (mapRef.current) {
         mapRef.current.remove()
         mapRef.current = null
+        markersRef.current = {}
       }
     }
   }, [locations])
-
-  const createPopupContent = (location: VehicleLocation) => {
-    return `
-      <div style="min-width: 200px;">
-        <h3 style="font-weight: bold; margin-bottom: 8px; color: #8B5CF6;">
-          ${location.cheetahs.call_sign}
-        </h3>
-        <p style="font-size: 12px; color: #666; margin-bottom: 4px;">
-          ${location.cheetahs.registration_number}
-        </p>
-        ${location.users ? `
-          <p style="font-size: 11px; color: #888; margin-bottom: 4px;">
-            Driver: ${location.users.full_name} (${location.users.oscar})
-          </p>
-        ` : ''}
-        ${location.speed > 0 ? `
-          <p style="font-size: 11px; color: #888; margin-bottom: 4px;">
-            Speed: ${Math.round(location.speed)} km/h
-          </p>
-        ` : ''}
-        <p style="font-size: 11px; color: #888;">
-          Coordinates: ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}
-        </p>
-        <a 
-          href="https://www.google.com/maps?q=${location.latitude},${location.longitude}" 
-          target="_blank"
-          style="
-            display: inline-block;
-            margin-top: 8px;
-            padding: 4px 12px;
-            background: #8B5CF6;
-            color: white;
-            text-decoration: none;
-            border-radius: 4px;
-            font-size: 11px;
-          "
-        >
-          Open in Google Maps
-        </a>
-      </div>
-    `
-  }
 
   return (
     <div 

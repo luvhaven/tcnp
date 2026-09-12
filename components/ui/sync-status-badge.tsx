@@ -5,14 +5,14 @@ import { syncService } from '@/lib/sync-service'
 import { Badge } from '@/components/ui/badge'
 import { Cloud, CloudOff, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
+import { useOnlineStatus } from '@/hooks/useBrowserSnapshot'
 
 export function SyncStatusBadge() {
     const [pendingCount, setPendingCount] = useState(0)
     const [hasEmergency, setHasEmergency] = useState(false)
-    const [isOnline, setIsOnline] = useState(true)
+    const isOnline = useOnlineStatus()
 
     useEffect(() => {
-        setIsOnline(navigator.onLine)
 
         const updateCount = async () => {
             const count = await syncService.getPendingCount()
@@ -28,12 +28,10 @@ export function SyncStatusBadge() {
         updateCount()
 
         const handleOnline = () => {
-            setIsOnline(true)
             updateCount()
         }
 
         const handleOffline = () => {
-            setIsOnline(false)
             updateCount()
         }
 

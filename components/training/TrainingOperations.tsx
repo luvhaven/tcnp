@@ -465,12 +465,12 @@ export default function TrainingOperations() {
     return !query || `${person?.full_name || ""} ${person?.email || ""}`.toLowerCase().includes(query)
   })
 
-  const courseStats = useMemo(() => {
+  const courseStats = (() => {
     const published = courses.filter((course) => course.status === "published").length
     const totalLessons = lessons.length
     const completed = progress.filter((item) => item.completed_at || item.percent_complete >= 100).length
     return { published, totalLessons, completed }
-  }, [courses, lessons, progress])
+  })()
 
   const createCourse = useMutation({
     mutationFn: async () => {

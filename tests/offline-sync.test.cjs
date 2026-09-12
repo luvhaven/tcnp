@@ -19,17 +19,17 @@ function setup({ entries, databaseError = null, userId = 'officer-a' }) {
       return { error: databaseError }
     } }),
   }
-  const module = { exports: {} }
+  const testModule = { exports: {} }
   const source = ts.transpileModule(fs.readFileSync('lib/sync-service.ts', 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText
   vm.runInNewContext(source, {
-    module, exports: module.exports, navigator: { onLine: true }, console,
+    module: testModule, exports: testModule.exports, navigator: { onLine: true }, console,
     require: name => name === '@/lib/supabase/client' ? { createClient: () => client }
       : name === './offline-queue' ? { offlineQueue: queue }
       : { toast: { success() {}, error() {} } },
   })
-  return { service: module.exports.syncService, removed, retried, writes }
+  return { service: testModule.exports.syncService, removed, retried, writes }
 }
 const entry = { id: 'queue-1', ownerId: 'officer-a', type: 'incident', data: { id: 'stable-id' }, retries: 12 }
 test('database rejection retains the queued submission even after many retries', async () => {
@@ -59,13 +59,13 @@ test('expired authentication cannot consume the outbox', async () => {
 })
 
 test('unavailable device storage rejects saving instead of reporting success', async () => {
-  const module = { exports: {} }
+  const testModule = { exports: {} }
   const source = ts.transpileModule(fs.readFileSync('lib/offline-queue.ts', 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText
   vm.runInNewContext(source, {
-    module, exports: module.exports, window: {}, console,
+    module: testModule, exports: testModule.exports, window: {}, console,
     require: () => ({ createClient: () => { throw new Error('Should not authenticate without storage') } }),
   })
-  await assert.rejects(module.exports.offlineQueue.addToQueue('incident', {}), /Offline storage is unavailable/)
+  await assert.rejects(testModule.exports.offlineQueue.addToQueue('incident', {}), /Offline storage is unavailable/)
 })

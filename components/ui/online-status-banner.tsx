@@ -2,19 +2,18 @@
 
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
+import { useOnlineStatus } from '@/hooks/useBrowserSnapshot'
 import { Wifi, WifiOff, RefreshCw } from 'lucide-react'
 
 export function OnlineStatusBanner() {
-    const [isOnline, setIsOnline] = useState(true)
+    const isOnline = useOnlineStatus()
     const [wasOffline, setWasOffline] = useState(false)
     const [showReconnected, setShowReconnected] = useState(false)
 
     useEffect(() => {
         // Check initial status
-        setIsOnline(navigator.onLine)
 
         const handleOnline = () => {
-            setIsOnline(true)
             if (wasOffline) {
                 setShowReconnected(true)
                 // Auto-hide "reconnected" message after 3 seconds
@@ -24,7 +23,6 @@ export function OnlineStatusBanner() {
         }
 
         const handleOffline = () => {
-            setIsOnline(false)
             setWasOffline(true)
             setShowReconnected(false)
         }
@@ -51,7 +49,7 @@ export function OnlineStatusBanner() {
             {!isOnline && (
                 <div className="bg-yellow-500 text-white px-4 py-2 text-sm flex items-center justify-center gap-2 shadow-lg">
                     <WifiOff className="h-4 w-4" />
-                    <span className="font-medium">You're offline</span>
+                    <span className="font-medium">You&apos;re offline</span>
                     <span className="hidden sm:inline">- App running in offline mode. Changes will sync when reconnected.</span>
                 </div>
             )}

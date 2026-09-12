@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { MapPin, Settings } from 'lucide-react'
@@ -18,15 +17,7 @@ export function LocationPermissionModal({
     onDeny,
     permissionStatus
 }: LocationPermissionModalProps) {
-    const [isDenied, setIsDenied] = useState(false)
-
-    useEffect(() => {
-        if (permissionStatus === 'denied') {
-            setIsDenied(true)
-        } else {
-            setIsDenied(false)
-        }
-    }, [permissionStatus])
+    const isDenied = permissionStatus === 'denied'
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onDeny()}>
@@ -62,7 +53,7 @@ export function LocationPermissionModal({
                                 Click the lock icon 🔒 or settings icon in your address bar to reset permissions.
                             </div>
                             <Button onClick={onAllow} className="w-full">
-                                I've Enabled It, Try Again
+                                I&apos;ve Enabled It, Try Again
                             </Button>
                         </div>
                     ) : (

@@ -3,7 +3,7 @@
 import { useState, Suspense, useEffect } from "react"
 import dynamic from "next/dynamic"
 import { AnimatePresence, motion } from "framer-motion"
-import { useIsClient } from "@/hooks/useIsClient"
+import { useIsIOS, useIsClient } from "@/hooks/useIsClient"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { PresenceHeartbeat } from "@/components/utils/PresenceHeartbeat"
 import { BrokenArrowAlert } from "@/components/operations/BrokenArrowAlert"
@@ -93,7 +93,7 @@ export default function DashboardLayout({
 }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const isClient = useIsClient()
-  const [isIOS, setIsIOS] = useState(false)
+  const isIOS = useIsIOS()
   const [canMountExtras, setCanMountExtras] = useState(false)
   const [canMountTracker, setCanMountTracker] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -107,7 +107,6 @@ export default function DashboardLayout({
       const ua = navigator.userAgent
       const isIOSDevice = /iPad|iPhone|iPod/.test(ua) ||
         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-      setIsIOS(isIOSDevice)
 
       // LocationTracker uses native geolocation + has try/catch for every iOS-risky API
       const trackerTimer = setTimeout(() => setCanMountTracker(true), 2000)

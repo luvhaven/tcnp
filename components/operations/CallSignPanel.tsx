@@ -151,7 +151,7 @@ export default function CallSignPanel({
                 Protocol Call Signs
               </CardTitle>
               <CardDescription className="text-xs">
-                Click any sign to update Papa's journey status
+                Click any sign to update Papa&apos;s journey status
               </CardDescription>
             </CardHeader>
             <CardContent>

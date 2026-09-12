@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
+import { useBrowserSnapshot } from './useBrowserSnapshot'
 
 /**
  * Hook to safely detect if we're running on the client.
@@ -8,13 +9,7 @@ import { useState, useEffect } from 'react'
  * This is the FOUNDATION of iOS safety - all browser-specific code should wait for this.
  */
 export function useIsClient(): boolean {
-    const [isClient, setIsClient] = useState(false)
-
-    useEffect(() => {
-        setIsClient(true)
-    }, [])
-
-    return isClient
+    return useBrowserSnapshot(() => true, false)
 }
 
 /**
@@ -23,18 +18,8 @@ export function useIsClient(): boolean {
  */
 export function useIsIOS(): boolean {
     const isClient = useIsClient()
-    const [isIOS, setIsIOS] = useState(false)
-
-    useEffect(() => {
-        if (isClient && typeof navigator !== 'undefined') {
-            const ua = navigator.userAgent
-            const isIOSDevice = /iPad|iPhone|iPod/.test(ua) ||
-                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-            setIsIOS(isIOSDevice)
-        }
-    }, [isClient])
-
-    return isIOS
+    return isClient && (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1))
 }
 
 /**

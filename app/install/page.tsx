@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useBrowserSnapshot } from '@/hooks/useBrowserSnapshot'
+import { useIsClient, useIsIOS } from '@/hooks/useIsClient'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Download, Share, PlusSquare, CheckCircle, Smartphone, Info } from 'lucide-react'
@@ -14,29 +16,12 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export default function InstallPage() {
-    const [isIOS, setIsIOS] = useState(false)
-    const [isStandalone, setIsStandalone] = useState(false)
+    const isIOS = useIsIOS()
+    const isStandalone = useBrowserSnapshot(() => window.matchMedia('(display-mode: standalone)').matches || Boolean((navigator as any).standalone) || document.referrer.includes('android-app'), false)
     const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
-    const [mounted, setMounted] = useState(false)
+    const mounted = useIsClient()
 
     useEffect(() => {
-        setMounted(true)
-
-        // Check if already installed
-        if (
-            window.matchMedia('(display-mode: standalone)').matches ||
-            (navigator as any).standalone ||
-            document.referrer.includes('android-app')
-        ) {
-            setIsStandalone(true)
-        }
-
-        // Platform detection
-        const ua = navigator.userAgent.toLowerCase()
-        if (/iphone|ipad|ipod/.test(ua)) {
-            setIsIOS(true)
-        }
-
         // Listen for install prompt
         const handleBeforeInstallPrompt = (e: Event) => {
             e.preventDefault()
@@ -111,7 +96,7 @@ export default function InstallPage() {
                             <div className="bg-gray-100 text-gray-700 p-4 rounded-lg text-sm text-center">
                                 <p className="font-medium mb-2">Install from Browser</p>
                                 <p className="text-xs opacity-75">
-                                    Use your browser's menu to "Install App" or "Add to Home Screen".
+                                    Use your browser&apos;s menu to &quot;Install App&quot; or &quot;Add to Home Screen&quot;.
                                 </p>
                             </div>
                         )}

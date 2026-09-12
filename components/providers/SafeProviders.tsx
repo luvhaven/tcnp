@@ -7,7 +7,7 @@ import { ConfirmProvider } from "@/components/providers/ConfirmProvider"
 import { CelebrateProvider } from "@/components/providers/CelebrateProvider"
 import QueryProvider from "@/components/providers/QueryProvider"
 import { Toaster } from "sonner"
-import { useEffect, useState } from "react"
+import { useIsClient } from "@/hooks/useIsClient"
 
 /** Sonner wired to the app theme — otherwise toasts stay light-styled in dark
  *  mode. closeButton lets users dismiss long-duration operational toasts. */
@@ -28,11 +28,7 @@ function ThemedToaster() {
 }
 
 export function SafeProviders({ children }: { children: React.ReactNode }) {
-    const [mounted, setMounted] = useState(false)
-
-    useEffect(() => {
-        setMounted(true)
-    }, [])
+    const mounted = useIsClient()
 
     return (
         <ErrorBoundary>

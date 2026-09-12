@@ -1,4 +1,5 @@
 "use client"
+import { useBrowserSnapshot } from "@/hooks/useBrowserSnapshot"
 
 import { useEffect, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
@@ -39,7 +40,7 @@ function initials(name: string | null) {
 
 export default function BirthdayReminder() {
   const { data: currentUser } = useCurrentUser()
-  const [open, setOpen] = useState(false)
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null)
   const [today, setToday] = useState(lagosNow)
 
   useEffect(() => {
@@ -79,20 +80,16 @@ export default function BirthdayReminder() {
 
   const storageKey = currentUser?.id ? `tcnp:welfare-birthday-reminder:${currentUser.id}:${today.dateKey}` : null
 
-  useEffect(() => {
-    if (!storageKey || !birthdaysQuery.isSuccess || birthdaysQuery.data.length === 0) return
-    try {
-      if (window.localStorage.getItem(storageKey) !== "shown") setOpen(true)
-    } catch {
-      setOpen(true)
-    }
-  }, [birthdaysQuery.data, birthdaysQuery.isSuccess, storageKey])
+  const previouslyShown = useBrowserSnapshot(() => {
+    try { return storageKey ? localStorage.getItem(storageKey) === 'shown' : true } catch { return false }
+  }, true)
+  const open = Boolean(storageKey && storageKey !== dismissedKey && !previouslyShown && birthdaysQuery.isSuccess && birthdaysQuery.data.length > 0)
 
   const acknowledge = () => {
     if (storageKey) {
       try { window.localStorage.setItem(storageKey, "shown") } catch { /* The reminder can still close when storage is unavailable. */ }
     }
-    setOpen(false)
+    setDismissedKey(storageKey)
   }
 
   const openCelebrations = () => {
@@ -104,7 +101,7 @@ export default function BirthdayReminder() {
   const birthdays = birthdaysQuery.data ?? []
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) acknowledge(); else setOpen(true) }}>
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) acknowledge() }}>
       <DialogContent className="overflow-hidden border-amber-500/20 p-0 sm:max-w-lg">
         <div className="relative bg-[linear-gradient(135deg,rgba(245,158,11,0.16),rgba(244,63,94,0.08),transparent)] px-6 pb-5 pt-7">
           <div className="pointer-events-none absolute -right-8 -top-12 h-36 w-36 rounded-full bg-amber-400/20 blur-3xl" />

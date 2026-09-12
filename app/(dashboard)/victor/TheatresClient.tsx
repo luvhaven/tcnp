@@ -46,7 +46,7 @@ export default function TheatresClient({
     venue_type: '',
     facilities: ''
   })
-  const [selectedTheatreId, setSelectedTheatreId] = useState<string>("")
+  const [theatreChoice, setSelectedTheatreId] = useState<string>("")
   const [expandedDen, setExpandedDen] = useState<string | null>(null)
 
   const { data: theatres = [] } = useQuery({
@@ -59,11 +59,7 @@ export default function TheatresClient({
     initialData: initialTheatres
   })
 
-  useEffect(() => {
-    if (theatres.length > 0 && !selectedTheatreId) {
-      setSelectedTheatreId(theatres[0].id)
-    }
-  }, [theatres, selectedTheatreId])
+  const selectedTheatreId = theatreChoice || theatres[0]?.id || ""
 
   const { data: currentUser } = useCurrentUser()
   const victorAccess = useUnitAccess('victor')

@@ -28,7 +28,7 @@ async function run() {
     WHERE ccu.table_name = 'users' OR ccu.table_name = 'users' AND tc.table_schema = 'public';
   `
 
-    const { data, error } = await (supabase as any).rpc('run_sql_query', { query_text: query })
+    const { data, error } = await supabase.rpc('run_sql_query', { query_text: query })
 
     if (error) {
         // Fallback: If run_sql_query RPC doesn't exist, we can't run raw SQL from client.

@@ -22,11 +22,11 @@ function Celebration({ message }: { message?: string }) {
     () =>
       Array.from({ length: PARTICLE_COUNT }, (_, i) => ({
         id: i,
-        angle: (i / PARTICLE_COUNT) * Math.PI * 2 + Math.random() * 0.4,
-        distance: 60 + Math.random() * 40,
+        angle: (i / PARTICLE_COUNT) * Math.PI * 2 + (i % 3) * 0.13,
+        distance: 60 + (i * 17 % 40),
         color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-        size: 5 + Math.random() * 4,
-        rotate: Math.random() * 360,
+        size: 5 + (i % 4),
+        rotate: (i * 137 % 360),
       })),
     []
   )
