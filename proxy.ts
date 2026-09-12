@@ -10,7 +10,7 @@ import { NextResponse, type NextRequest } from 'next/server'
  * protected server routes and Supabase RLS. The cookie check below is only a
  * fast navigation guard; it is not an authorization boundary.
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   if (pathname === '/') {
