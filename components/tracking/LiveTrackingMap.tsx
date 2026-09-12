@@ -509,14 +509,12 @@ export default function LiveTrackingMap() {
 
               {/* Empty state */}
               {filteredLocations.length === 0 && !locationError && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/70 backdrop-blur-sm z-[1000] gap-3 pointer-events-none">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted shadow-sm">
-                    <MapPin className="h-7 w-7 text-muted-foreground" />
-                  </div>
-                  <div className="text-center px-6">
-                    <p className="text-sm font-semibold">No active locations</p>
-                    <p className="mt-1 text-xs text-muted-foreground max-w-xs">
-                      Ask your team to enable location sharing on their devices. Active officers will appear here automatically.
+                <div role="status" className="absolute bottom-16 left-3 right-16 z-[450] flex max-w-sm items-start gap-2 rounded-lg border border-border bg-background/95 p-3 shadow-sm pointer-events-none">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-semibold">No matching locations</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      The map is ready to explore. Check your filters or ask your team to enable location sharing.
                     </p>
                   </div>
                 </div>
