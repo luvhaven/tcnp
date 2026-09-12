@@ -197,7 +197,10 @@ export default function LiveTrackingLeaflet({
     }
 
     if (tileTimeoutRef.current) clearTimeout(tileTimeoutRef.current)
-    if (baseLayerRef.current) baseLayerRef.current.remove()
+    if (baseLayerRef.current) {
+      baseLayerRef.current.off()
+      baseLayerRef.current.remove()
+    }
 
     tileErrorCountRef.current = 0
     loadedTileCountRef.current = 0
@@ -211,7 +214,10 @@ export default function LiveTrackingLeaflet({
       errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7',
     })
 
-    layer.on('tileerror', () => {
+    const failedTiles = new WeakSet<HTMLElement>()
+    layer.on('tileerror', (event: L.TileErrorEvent) => {
+      if (baseLayerRef.current !== layer) return
+      failedTiles.add(event.tile)
       tileErrorCountRef.current += 1
       // A flood of explicit errors (not just silence) — advance immediately
       // rather than waiting out the full timeout
@@ -219,7 +225,10 @@ export default function LiveTrackingLeaflet({
         attachTileSource(map, mode, layerIndex + 1)
       }
     })
-    layer.on('tileload', () => {
+    layer.on('tileload', (event: L.TileEvent) => {
+      // Leaflet may emit tileload after loading errorTileUrl. A transparent
+      // error placeholder is not evidence that the basemap is available.
+      if (baseLayerRef.current !== layer || failedTiles.has(event.tile)) return
       loadedTileCountRef.current += 1
       setTilesFailing(false)
       if (tileTimeoutRef.current) {
@@ -227,11 +236,11 @@ export default function LiveTrackingLeaflet({
         tileTimeoutRef.current = null
       }
     })
+    baseLayerRef.current = layer
     layer.addTo(map)
     const tileContainer = layer.getContainer()
     if (tileContainer) tileContainer.style.filter = resolveActiveStyle(mode) === 'dark' && layerIndex === 0
       ? 'invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9)' : ''
-    baseLayerRef.current = layer
 
     // Silence guard: hung/dropped requests fire neither tileload nor tileerror
     tileTimeoutRef.current = setTimeout(() => {
@@ -299,6 +308,11 @@ export default function LiveTrackingLeaflet({
         if (tileTimeoutRef.current) clearTimeout(tileTimeoutRef.current)
         mapRef.current.remove()
         mapRef.current = null
+        baseLayerRef.current = null
+        markersRef.current = {}
+        polylinesRef.current = {}
+        trafficRef.current = null
+        hasFitBoundsRef.current = false
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
