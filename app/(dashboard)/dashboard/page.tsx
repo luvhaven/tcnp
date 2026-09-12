@@ -157,6 +157,7 @@ function getUnitActionForRole(role?: string | null, oscar?: string | null) {
 function DashboardSkeleton() {
   return (
     <div className="space-y-6 page-enter">
+
       <div className="space-y-1.5">
         <div className="h-3.5 w-32 rounded skeleton" />
         <div className="h-8 w-56 rounded skeleton" />
@@ -196,6 +197,8 @@ export default function DashboardPage() {
   const [activeProgram, setActiveProgram] = useState<{ id: string; name: string } | null>(null)
   const [myAssignment, setMyAssignment] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const { isInstalled, install, platform: pwaplatform } = usePWAInstall()
   const [showInstallModal, setShowInstallModal] = useState(false)
   const { data: currentUser, isLoading: userLoading } = useCurrentUser()
@@ -212,31 +215,36 @@ export default function DashboardPage() {
   }
 
   const loadDashboardData = useCallback(async () => {
+    setLoading(true)
+    setLoadError(false)
     try {
       // 1. Fetch active program (everyone sees current program)
-      const { data: programData } = await supabase
+      const { data: programData, error: programError } = await supabase
         .from("programs")
         .select("id, name")
         .eq("status", "active")
         .order("created_at", { ascending: false })
         .limit(1)
 
+      if (programError) throw programError
       setActiveProgram((programData?.[0] as any) ?? null)
 
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) throw authError || new Error("Session unavailable")
 
       // 2. Fetch officer-specific assigned duties
       if (user) {
-        const { data: myDORows } = await (supabase as any)
+        const { data: myDORows, error: assignmentError } = await (supabase as any)
           .from("journey_duty_officers")
           .select("journey_id")
           .eq("user_id", user.id)
 
+        if (assignmentError) throw assignmentError
         const doIds: string[] = (myDORows || []).map((r: any) => r.journey_id)
         const orParts = [`assigned_duty_officer_id.eq.${user.id}`, `assigned_do_id.eq.${user.id}`]
         if (doIds.length > 0) orParts.push(`id.in.(${doIds.join(",")})`)
 
-        const { data: myJourneysList, count: myCount } = await (supabase as any)
+        const { data: myJourneysList, count: myCount, error: journeyError } = await (supabase as any)
           .from("journeys")
           .select("*, papas(full_name, title), cheetahs(call_sign, registration_number)", { count: "exact" })
           .not("status", "in", "(completed,cancelled)")
@@ -245,6 +253,7 @@ export default function DashboardPage() {
           .order("etd", { ascending: true, nullsFirst: false })
           .limit(5)
 
+        if (journeyError) throw journeyError
         setMyScheduledJourneys(myJourneysList || [])
         setMyAssignmentsCount(myCount || 0)
         setMyAssignment(myJourneysList?.[0] ?? null)
@@ -261,6 +270,10 @@ export default function DashboardPage() {
           supabase.from("incidents").select("id", { count: "exact", head: true }).eq("status", "open"),
         ])
 
+        for (const result of [papasRes, cheetahsRes, journeysRes, incidentsRes]) {
+          if (result.error) throw result.error
+          if (result.count === null) throw new Error("Metric unavailable")
+        }
         setStats({
           totalPapas: papasRes.count || 0,
           totalCheetahs: cheetahsRes.count || 0,
@@ -268,16 +281,19 @@ export default function DashboardPage() {
           incidents: incidentsRes.count || 0,
         })
 
-        const { data: journeys } = await (supabase as any)
+        const { data: journeys, error: recentError } = await (supabase as any)
           .from("journeys")
           .select("*, papas(full_name, title), cheetahs(call_sign, registration_number)")
           .or("is_deleted.is.null,is_deleted.eq.false")
           .order("created_at", { ascending: false })
           .limit(5)
 
+        if (recentError) throw recentError
         setRecentJourneys(journeys || [])
       }
+      setUpdatedAt(new Date())
     } catch (err) {
+      setLoadError(true)
       console.error("Dashboard load failed:", err)
     } finally {
       setLoading(false)
@@ -306,6 +322,8 @@ export default function DashboardPage() {
   }, [currentUser])
 
   if (loading || userLoading) return <DashboardSkeleton />
+
+  if (loadError) return <section role="alert" className="mx-auto max-w-xl space-y-4 rounded-xl border p-6"><h1 className="text-xl font-semibold">Dashboard data unavailable</h1><p className="text-sm text-muted-foreground">We could not verify the latest operational data. Counts and assignments are hidden to avoid showing incomplete information.</p><Button onClick={() => void loadDashboardData()}>Retry dashboard</Button></section>
 
   const firstName = currentUser?.full_name?.split(" ")[0]
   const officerUnit = currentUser?.oscar || (currentUser?.role ? toTitleCase(currentUser.role) : "General Duty")
@@ -336,7 +354,7 @@ export default function DashboardPage() {
               {activeProgram && (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  {activeProgram.name}
+                  Latest active program: {activeProgram.name}
                 </span>
               )}
             </div>

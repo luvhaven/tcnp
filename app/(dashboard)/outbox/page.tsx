@@ -5,6 +5,7 @@ import { offlineQueue, type QueuedSubmission } from '@/lib/offline-queue'
 import { syncService } from '@/lib/sync-service'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
+import { SubmissionSummary } from '@/components/ui/submission-summary'
 import { ArrowLeft, CheckCheck, Inbox, RefreshCw, WifiOff } from 'lucide-react'
 
 const labels: Record<QueuedSubmission['type'], string> = {
@@ -50,7 +51,7 @@ export default function OutboxPage() {
         <CheckCheck aria-hidden="true" className="mx-auto mb-5 h-9 w-9 text-muted-foreground" />
         <h2 className="text-xl font-semibold tracking-tight">Nothing waiting to send</h2>
         <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">There are no pending submissions for your account on this device.</p>
-        <Button asChild variant="outline" className="mt-6"><Link href="/my-operations"><ArrowLeft aria-hidden="true" />Back to my assignments</Link></Button>
+        <Button asChild variant="outline" className="mt-6"><Link href="/my-operations"><ArrowLeft aria-hidden="true" />Back to My Operations</Link></Button>
       </div> : entries.length > 0 && <div className="overflow-hidden rounded-xl border bg-card">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b bg-muted/30 p-4 sm:px-6">
           <p role="status" className="text-sm font-medium">{entries.length} pending {entries.length === 1 ? 'submission' : 'submissions'}</p>
@@ -60,7 +61,8 @@ export default function OutboxPage() {
           <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">{labels[entry.type] || 'Saved submission'}</h2><span className={`rounded-md px-2 py-1 text-xs font-medium ${entry.isEmergency ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}`}>{entry.isEmergency ? 'Emergency' : entry.retries ? 'Retry needed' : 'Waiting to send'}</span></div>
           <p className="text-sm leading-6 text-muted-foreground">Saved <time dateTime={new Date(entry.timestamp).toISOString()}>{new Date(entry.timestamp).toLocaleString()}</time>{entry.retries > 0 && ` · ${entry.retries} unsuccessful ${entry.retries === 1 ? 'attempt' : 'attempts'}`}</p>
           {entry.retries > 0 && <p className="text-sm leading-6">This submission hasn’t been sent. Retry when connected; if it keeps failing, contact your administrator.</p>}
-          <details><summary className="w-fit cursor-pointer rounded py-2 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">View saved data</summary><pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted/50 p-4 text-xs leading-5">{JSON.stringify(entry.data, null, 2)}</pre></details>
+          <SubmissionSummary data={entry.data} />
+          <details><summary className="w-fit cursor-pointer rounded py-2 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Technical details</summary><pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted/50 p-4 text-xs leading-5">{JSON.stringify(entry.data, null, 2)}</pre></details>
         </li>)}</ul>
       </div>}
   </section>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
+import { safeDestination } from "@/lib/safe-destination";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2, ChevronDown } from "lucide-react";
@@ -41,7 +42,7 @@ function FieldLabel({ htmlFor, children }: { htmlFor: string; children: React.Re
   return (
     <label
       htmlFor={htmlFor}
-      className="block text-[10px] font-semibold text-gray-400 mb-1.5 uppercase tracking-[0.15em]"
+      className="block text-xs font-semibold text-gray-300 mb-1.5 uppercase tracking-[0.15em]"
     >
       {children}
     </label>
@@ -49,7 +50,7 @@ function FieldLabel({ htmlFor, children }: { htmlFor: string; children: React.Re
 }
 
 const INPUT_CLS =
-  "w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-600 text-sm " +
+  "w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-400 text-base " +
   "focus:outline-none focus:ring-2 focus:ring-orange-500/60 focus:border-orange-500/40 focus:bg-white/8 " +
   "transition-all duration-200 shadow-inner";
 
@@ -143,6 +144,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [formNotice, setFormNotice] = useState("");
   const [mode, setMode] = useState<"login" | "signup">("login");
 
   // Signup fields
@@ -176,6 +179,8 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError("");
+    setFormNotice("");
     setLoading(true);
     let loginSuccess = false;
 
@@ -199,7 +204,7 @@ export default function LoginPage() {
       await new Promise((resolve) => setTimeout(resolve, 200));
 
       if (typeof window !== "undefined") {
-        window.location.href = "/dashboard";
+        window.location.href = safeDestination(new URLSearchParams(window.location.search).get("next"));
       } else {
         router.replace("/dashboard");
       }
@@ -209,6 +214,7 @@ export default function LoginPage() {
           err?.message === "Failed to fetch"
             ? "Unable to reach the TCNP application server. Please refresh and try again."
             : err?.message || "Failed to login";
+        setFormError(message);
         toast.error(message);
       }
     } finally {
@@ -219,9 +225,11 @@ export default function LoginPage() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password.length < 6) {
-      toast.error("Password must be at least 6 characters.");
+      setFormError("Password must be at least 6 characters.");
       return;
     }
+    setFormError("");
+    setFormNotice("");
     setLoading(true);
     try {
       const res = await fetch("/api/auth/signup", {
@@ -243,16 +251,16 @@ export default function LoginPage() {
       if (ct?.includes("application/json")) {
         data = await res.json();
       } else {
-        const text = await res.text();
-        throw new Error(`Server returned ${res.status}: ${text}`);
+
+        throw new Error("The server could not process your request. Your entries are still here; please try again.");
       }
 
       if (!res.ok) throw new Error(data.error || "Failed to sign up");
-      toast.success("Clearance requested. Awaiting admin approval.");
+      setFormNotice("Access requested. An administrator must approve your account before you can sign in.");
       setMode("login");
       setPassword("");
     } catch (err: any) {
-      toast.error(err.message || "An error occurred during sign up.");
+      setFormError(err.message === "Failed to fetch" ? "Unable to reach the server. Your entries are still here; please try again." : err.message || "Registration failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -435,7 +443,7 @@ export default function LoginPage() {
                 aria-busy={loading}
                 className="relative w-full flex items-center justify-center gap-2.5 overflow-hidden text-white font-bold py-3.5 px-4 rounded-xl transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/60"
                 style={{
-                  background: "linear-gradient(135deg, #ea580c 0%, #f97316 60%, #fb923c 100%)",
+                  background: "linear-gradient(135deg, #9a3412 0%, #c2410c 100%)",
                   boxShadow: loading ? "none" : "0 0 24px rgba(234,88,12,0.35), 0 4px 12px rgba(0,0,0,0.3)",
                 }}
               >
@@ -446,6 +454,10 @@ export default function LoginPage() {
               </button>
             </form>
           )}
+
+          {formError && <p role="alert" className="mt-4 rounded-lg border border-red-400/40 bg-red-950/40 p-3 text-sm leading-6 text-red-100">{formError}</p>}
+          {formNotice && <p role="status" className="mt-4 rounded-lg border border-white/20 p-3 text-sm leading-6 text-white">{formNotice}</p>}
+          <details className="mt-4 text-sm text-gray-300"><summary className="cursor-pointer rounded py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-400">Forgot your password or need access help?</summary><p className="mt-2 leading-6">Contact your unit head or a TCNP administrator to request password or account-access assistance. Give them your registered email address. Never share your password. Password-reset emails are not available from this screen.</p></details>
 
           {/* ── Signup Form ────────────────────────────────────────── */}
           {mode === "signup" && (

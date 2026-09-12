@@ -319,6 +319,7 @@ export default function TrainingPage() {
 
   return (
     <div className="space-y-6 page-enter">
+      {(deleteMutation.isError || deleteDocMutation.isError) && <p role="alert" className="rounded-lg border border-destructive/30 p-4 text-sm">The record could not be deleted. It has not been removed from this view. Refresh and try again, or contact an administrator.</p>}
       {/* Header */}
       <div className="relative overflow-hidden rounded-2xl border bg-card p-6">
         <div className="absolute -left-10 -top-16 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
@@ -454,19 +455,20 @@ export default function TrainingPage() {
             <DialogDescription>Set the session type, audience, timing and speakers.</DialogDescription>
           </DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); saveMutation.mutate() }} className="mt-2 space-y-4">
+            {saveMutation.isError && <p role="alert" className="rounded-lg border border-destructive/30 p-3 text-sm">Could not save this session. Your entries are retained. {(saveMutation.error as Error)?.message}</p>}
             <div className="space-y-2">
-              <Label>Topic *</Label>
-              <Input value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })} placeholder="e.g. Advanced Convoy Protocol" required />
+              <Label htmlFor="training-field-1">Topic *</Label>
+              <Input id="training-field-1" value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })} placeholder="e.g. Advanced Convoy Protocol" required />
             </div>
             <div className="space-y-2">
-              <Label>Description</Label>
-              <Textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+              <Label htmlFor="training-field-2">Description</Label>
+              <Textarea id="training-field-2" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Session type</Label>
+                <Label id="training-field-3-label">Session type</Label>
                 <Select value={form.session_type} onValueChange={(session_type) => setForm({ ...form, session_type })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-labelledby="training-field-3-label"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="training">Training</SelectItem>
                     <SelectItem value="recruitment">Recruitment</SelectItem>
@@ -477,9 +479,9 @@ export default function TrainingPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Visibility</Label>
+                <Label id="training-field-4-label">Visibility</Label>
                 <Select value={form.visibility} onValueChange={(visibility) => setForm({ ...form, visibility, target_unit_id: visibility === "target_unit" ? form.target_unit_id : "" })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-labelledby="training-field-4-label"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all_members">All members</SelectItem>
                     <SelectItem value="training_unit">Training Unit only</SelectItem>
@@ -490,36 +492,36 @@ export default function TrainingPage() {
             </div>
             {form.visibility === "target_unit" && (
               <div className="space-y-2">
-                <Label>Target unit</Label>
+                <Label id="training-field-5-label">Target unit</Label>
                 <Select value={form.target_unit_id} onValueChange={(target_unit_id) => setForm({ ...form, target_unit_id })}>
-                  <SelectTrigger><SelectValue placeholder="Choose a unit" /></SelectTrigger>
+                  <SelectTrigger aria-labelledby="training-field-5-label"><SelectValue placeholder="Choose a unit" /></SelectTrigger>
                   <SelectContent>{units.map((unit) => <SelectItem key={unit.id} value={unit.id}>{unit.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Date *</Label>
-                <Input type="date" value={form.session_date} onChange={(e) => setForm({ ...form, session_date: e.target.value })} required />
+                <Label htmlFor="training-field-6">Date *</Label>
+                <Input id="training-field-6" type="date" value={form.session_date} onChange={(e) => setForm({ ...form, session_date: e.target.value })} required />
               </div>
               <div className="space-y-2">
-                <Label>Location</Label>
-                <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="e.g. The Den, Iganmu" />
+                <Label htmlFor="training-field-7">Location</Label>
+                <Input id="training-field-7" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="e.g. The Den, Iganmu" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Start time</Label>
-                <Input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} />
+                <Label htmlFor="training-field-8">Start time</Label>
+                <Input id="training-field-8" type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label>End time</Label>
-                <Input type="time" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} />
+                <Label htmlFor="training-field-9">End time</Label>
+                <Input id="training-field-9" type="time" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} />
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Speakers (comma separated)</Label>
-              <Input value={form.speakersText} onChange={(e) => setForm({ ...form, speakersText: e.target.value })} placeholder="Capt. A. Doe, Head of Command" />
+              <Label htmlFor="training-field-10">Speakers (comma separated)</Label>
+              <Input id="training-field-10" value={form.speakersText} onChange={(e) => setForm({ ...form, speakersText: e.target.value })} placeholder="Capt. A. Doe, Head of Command" />
             </div>
             <div className="flex gap-2 pt-1">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setDialogOpen(false)}>Cancel</Button>
@@ -534,6 +536,7 @@ export default function TrainingPage() {
       {/* Doc Create / Edit Dialog */}
       <Dialog open={docDialogOpen} onOpenChange={setDocDialogOpen}>
         <DialogContent className="max-w-xl max-h-[90vh] flex flex-col">
+          {saveDocMutation.isError && <p role="alert" className="rounded-lg border p-3 text-sm">Document not saved. Your entries are retained. {(saveDocMutation.error as Error)?.message}</p>}
           <DialogHeader>
             <DialogTitle>{editingDoc ? "Edit Unit Document" : "Add Unit Document"}</DialogTitle>
             <DialogDescription>Assign a specialized SOP or Code of Conduct to an Oscar.</DialogDescription>
@@ -541,18 +544,18 @@ export default function TrainingPage() {
           <form onSubmit={(e) => { e.preventDefault(); saveDocMutation.mutate() }} className="mt-2 space-y-4 overflow-y-auto pr-2 pb-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Target Oscar Unit</Label>
+                <Label id="training-field-11-label">Target Oscar Unit</Label>
                 <Select value={docForm.oscar} onValueChange={(val) => setDocForm({ ...docForm, oscar: val })}>
-                  <SelectTrigger><SelectValue placeholder="Select Unit..." /></SelectTrigger>
+                  <SelectTrigger aria-labelledby="training-field-11-label"><SelectValue placeholder="Select Unit..." /></SelectTrigger>
                   <SelectContent>
                     {TARGET_OSCARS.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Document Type</Label>
+                <Label id="training-field-12-label">Document Type</Label>
                 <Select value={docForm.doc_type} onValueChange={(val: any) => setDocForm({ ...docForm, doc_type: val })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-labelledby="training-field-12-label"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="sop">SOP Fragment</SelectItem>
                     <SelectItem value="code_of_conduct">Code of Conduct</SelectItem>
@@ -561,12 +564,12 @@ export default function TrainingPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Title</Label>
-              <Input value={docForm.title} onChange={(e) => setDocForm({ ...docForm, title: e.target.value })} placeholder="e.g. Serial Oscar Dress Protocol" required />
+              <Label htmlFor="training-field-13">Title</Label>
+              <Input id="training-field-13" value={docForm.title} onChange={(e) => setDocForm({ ...docForm, title: e.target.value })} placeholder="e.g. Serial Oscar Dress Protocol" required />
             </div>
             <div className="space-y-2 flex-1 flex flex-col">
-              <Label>Content (Markdown supported)</Label>
-              <Textarea
+              <Label htmlFor="training-field-14">Content (Markdown supported)</Label>
+              <Textarea id="training-field-14"
                 className="min-h-[250px] font-mono text-sm leading-relaxed whitespace-pre-wrap resize-y"
                 value={docForm.content}
                 onChange={(e) => setDocForm({ ...docForm, content: e.target.value })}

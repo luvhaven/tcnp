@@ -11,6 +11,12 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
     },
   }))
   const [ready, setReady] = useState(false)
+  const [delayed, setDelayed] = useState(false)
+  useEffect(() => {
+    if (ready) return
+    const timer = window.setTimeout(() => setDelayed(true), 12000)
+    return () => window.clearTimeout(timer)
+  }, [ready])
   useEffect(() => {
     try { localStorage.removeItem('REACT_QUERY_OFFLINE_CACHE') } catch { /* Storage may be disabled. */ }
     const clearRuntimeData = async () => {
@@ -32,5 +38,5 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
     })
     return () => subscription.unsubscribe()
   }, [queryClient])
-  return <QueryClientProvider client={queryClient}>{ready ? children : <div role="status" className="p-6 text-sm">Loading your workspace…</div>}</QueryClientProvider>
+  return <QueryClientProvider client={queryClient}>{ready ? children : <div role="status" className="mx-auto max-w-lg space-y-4 p-6 text-sm"><p>{delayed ? 'Your workspace is taking longer than expected to connect.' : 'Loading your workspace…'}</p>{delayed && <><p>Check your connection and retry. Your saved device submissions will not be removed.</p><button type="button" onClick={() => window.location.reload()} className="rounded-lg border px-4 py-3 font-medium focus-visible:outline focus-visible:outline-2">Retry connection</button></>}</div>}</QueryClientProvider>
 }

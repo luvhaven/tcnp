@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { ClipboardList, CircleAlert, Inbox } from 'lucide-react'
 
 const destinations = [
-  ['/my-operations', 'My assignments', ClipboardList],
+  ['/my-operations', 'My Operations', ClipboardList],
   ['/incidents', 'Incidents', CircleAlert],
   ['/outbox', 'Submission outbox', Inbox],
 ] as const

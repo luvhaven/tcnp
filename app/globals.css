@@ -16,7 +16,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
     /* TCNP Brand Orange — the vivid fill colour, used for buttons/backgrounds */
-    --primary: 24 100% 50%;
+    --primary: 20 85% 35%;
     --primary-foreground: 0 0% 100%;
     /* Brand orange is NOT legible as text: rgb(255,102,0) on white measures
        2.94:1, well under the 4.5:1 WCAG AA needs. Measured on the live
@@ -87,7 +87,7 @@
     --popover: 224 18% 10%;
     --popover-foreground: 210 40% 98%;
     /* TCNP Brand Orange for dark mode */
-    --primary: 24 100% 50%;
+    --primary: 20 85% 35%;
     --primary-foreground: 0 0% 100%;
     /* On the dark ground the full-strength orange already measures 6.58:1,
        so text keeps the vivid value here — darkening it would hurt. */
