@@ -1,6 +1,9 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import packageInfo from '@/package.json'
+import { filterNavigation } from '@/lib/navigation-search'
+import { Input } from '@/components/ui/input'
 import Link from "next/link"
 import Image from "next/image"
 import { motion } from "framer-motion"
@@ -36,6 +39,8 @@ import {
   Banknote,
   GraduationCap,
   Radar,
+  Search,
+  X,
 } from "lucide-react"
 
 type NavItem = { name: string; href: string; icon: React.ComponentType<{ className?: string }> }
@@ -223,8 +228,11 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   const pathname = usePathname()
   const [collapsed, setCollapsedState] = useState(() => {
     if (typeof window === 'undefined') return false
-    return window.localStorage.getItem('sidebar-collapsed') === 'true'
+    try { return window.localStorage.getItem('sidebar-collapsed') === 'true' } catch { return false }
   })
+  const [search, setSearch] = useState('')
+  const searchInput = useRef<HTMLInputElement>(null)
+  useEffect(() => { setSearch('') }, [pathname])
   const setCollapsed = (value: boolean) => {
     setCollapsedState(value)
     try { window.localStorage.setItem('sidebar-collapsed', String(value)) } catch (_) { }
@@ -273,6 +281,8 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
       .map(section => ({ ...section, items: section.items.filter(i => allowed.has(i.href)) }))
       .filter(section => section.items.length > 0)
   }, [userRole, userOscar, unitSlugs])
+  const filteredSections = filterNavigation(visibleSections, collapsed && !isMobile ? '' : search)
+  const resultCount = filteredSections.reduce((count, section) => count + section.items.length, 0)
 
   return (
     <div
@@ -286,8 +296,9 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
         <button
           type="button"
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!collapsed}
           onClick={() => setCollapsed(!collapsed)}
-          className="absolute -right-3 top-[5.75rem] z-50 hidden h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-md transition-colors hover:bg-accent hover:text-foreground nav:flex"
+          className="absolute -right-3 top-[5.75rem] z-50 hidden h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-md transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 nav:flex"
         >
           <ChevronLeft
             className={cn(
@@ -319,8 +330,19 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="sidebar-scroll flex-1 overflow-y-auto p-2">
-        {visibleSections.map((section, sectionIndex) => (
+      {(!collapsed || isMobile) && <div className="px-3 pt-4 pb-2">
+        <div className="relative">
+          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Input ref={searchInput} type="search" aria-label="Find a page" placeholder="Find a page…" value={search}
+            onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Escape' && search) { event.stopPropagation(); setSearch('') } }}
+            className="pl-9 pr-10 bg-muted/40 shadow-none [&::-webkit-search-cancel-button]:appearance-none" />
+          {search && <button type="button" aria-label="Clear page search" onClick={() => { setSearch(''); searchInput.current?.focus() }} className="absolute right-0 top-0 flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"><X aria-hidden="true" className="h-4 w-4" /></button>}
+        </div>
+        {search.trim() && <p role="status" className="px-1 pt-2 text-xs text-muted-foreground">{resultCount} {resultCount === 1 ? 'page' : 'pages'} found</p>}
+      </div>}
+      <nav aria-label="Main navigation" className="sidebar-scroll flex-1 overflow-y-auto p-2">
+        {filteredSections.length === 0 && <div className="px-3 py-6 text-sm leading-6"><p className="font-medium">No matching pages</p><p className="mt-1 text-muted-foreground">Try a page or unit name, such as Training.</p><button type="button" className="mt-3 rounded text-primary underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setSearch(''); searchInput.current?.focus() }}>Show all available pages</button></div>}
+        {filteredSections.map((section, sectionIndex) => (
           <div key={section.label} className={cn(sectionIndex > 0 && "mt-3")}>
             {/* Section label — divider line when collapsed */}
             {collapsed && !isMobile ? (
@@ -334,7 +356,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
             )}
             <div className="space-y-1">
               {section.items.map((item, index) => {
-                const isActive = pathname === item.href
+                const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
                 const isChat = item.name === "Team Chat"
                 const isOps = item.name === "My Operations"
                 return (
@@ -346,9 +368,11 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
                   >
                     <Link
                       href={item.href}
+                      aria-current={isActive ? 'page' : undefined}
+                      aria-label={collapsed && !isMobile ? item.name : undefined}
                       onClick={isMobile ? onClose : undefined}
                       className={cn(
-                        "relative flex items-center justify-start px-3 py-2 text-sm font-medium rounded-r-lg rounded-l-none gap-3 mr-1 transition-colors duration-150 border-l-[3px] border-transparent",
+                        "relative flex min-h-11 items-center justify-start px-3 py-2 text-sm font-medium rounded-r-lg rounded-l-none gap-3 mr-1 transition-colors duration-150 border-l-[3px] border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                         isActive
                           ? "text-primary"
                           : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
@@ -405,7 +429,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
       {!(collapsed && !isMobile) && (
         <div className="mt-auto border-t border-border/50 bg-background/50 p-4 backdrop-blur-sm">
           <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-            <span>Version 4.1.1</span>
+            <span>Version {packageInfo.version}</span>
             <span>&copy; {new Date().getFullYear()} TCNP</span>
           </div>
         </div>
