@@ -1,4 +1,5 @@
 "use client"
+import { DASHBOARD_JOURNEY_SELECT } from '@/lib/dashboard-queries'
 
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { JourneyAlerts } from "@/components/dashboard/JourneyAlerts"
@@ -246,7 +247,7 @@ export default function DashboardPage() {
 
         const { data: myJourneysList, count: myCount, error: journeyError } = await (supabase as any)
           .from("journeys")
-          .select("*, papas(full_name, title), cheetahs(call_sign, registration_number)", { count: "exact" })
+          .select(DASHBOARD_JOURNEY_SELECT, { count: "exact" })
           .not("status", "in", "(completed,cancelled)")
           .or("is_deleted.is.null,is_deleted.eq.false")
           .or(orParts.join(","))
@@ -283,7 +284,7 @@ export default function DashboardPage() {
 
         const { data: journeys, error: recentError } = await (supabase as any)
           .from("journeys")
-          .select("*, papas(full_name, title), cheetahs(call_sign, registration_number)")
+          .select(DASHBOARD_JOURNEY_SELECT)
           .or("is_deleted.is.null,is_deleted.eq.false")
           .order("created_at", { ascending: false })
           .limit(5)

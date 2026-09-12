@@ -37,7 +37,7 @@ export function JourneyAlerts() {
                 .select(`
                     id, status, 
                     etd, eta,
-                    papas(full_name, title),
+                    papas!journeys_papa_id_fkey(full_name, title),
                     cheetahs(call_sign)
                 `)
                 .or('status.eq.planned,status.eq.active')
