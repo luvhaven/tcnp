@@ -2,6 +2,12 @@ import type { Config } from "tailwindcss";
 
 const config: Config = {
   darkMode: ["class"],
+  // Compiles every `hover:` utility inside @media (hover: hover). Without it a
+  // tap on touch leaves the hover state stuck until you tap somewhere else —
+  // which reads as "this row is selected" on a table the user only scrolled past.
+  future: {
+    hoverOnlyWhenSupported: true,
+  },
   content: [
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -77,17 +83,52 @@ const config: Config = {
   				'5': 'hsl(var(--chart-5))'
   			}
   		},
+  		/* Radius steps come from the token scale so nested surfaces can be made
+  		   concentric: an inner control inside a `rounded-lg` card with p-4 wants
+  		   the next step down, not a radius picked by eye. */
   		borderRadius: {
-  			lg: 'var(--radius)',
-  			md: 'calc(var(--radius) - 2px)',
-  			sm: 'calc(var(--radius) - 4px)'
+  			sm: 'var(--radius-sm)',
+  			md: 'var(--radius-md)',
+  			lg: 'var(--radius-lg)',
+  			xl: 'var(--radius-xl)',
+  			'2xl': 'var(--radius-2xl)',
+  			full: 'var(--radius-full)'
   		},
+  		/* One easing and four durations, named by what they're for. Everything
+  		   in the app transitions with these rather than a fresh cubic-bezier. */
   		transitionTimingFunction: {
+  			out: 'var(--ease-out)',
   			// Slight overshoot — used for toggles/thumbs so they land with a
   			// little physicality. Named here rather than written inline as an
   			// arbitrary value, because commas inside ease-[...] make Tailwind
   			// treat the class as ambiguous and emit a build warning.
-  			spring: 'cubic-bezier(0.34, 1.3, 0.64, 1)',
+  			spring: 'var(--ease-spring)'
+  		},
+  		transitionDuration: {
+  			instant: 'var(--duration-instant)',
+  			fast: 'var(--duration-fast)',
+  			base: 'var(--duration-base)',
+  			slow: 'var(--duration-slow)'
+  		},
+  		/* Type scale, named by role rather than by size. Each step carries its own
+  		   line-height and tracking, so a heading can't be set to 24px without also
+  		   getting the 1.15 leading and the negative tracking that size needs.
+  		   Roles: display/title for headings, body for prose, label for controls,
+  		   caption for secondary text. Tailwind's text-xs..text-2xl still work. */
+  		fontSize: {
+  			'display': ['2rem', { lineHeight: '1.15', letterSpacing: '-0.025em', fontWeight: '600' }],
+  			'title-lg': ['1.5rem', { lineHeight: '1.2', letterSpacing: '-0.02em', fontWeight: '600' }],
+  			'title': ['1.25rem', { lineHeight: '1.25', letterSpacing: '-0.015em', fontWeight: '600' }],
+  			'title-sm': ['1.0625rem', { lineHeight: '1.3', letterSpacing: '-0.01em', fontWeight: '600' }],
+  			'body-lg': ['1rem', { lineHeight: '1.6' }],
+  			'body': ['0.875rem', { lineHeight: '1.55' }],
+  			'label': ['0.875rem', { lineHeight: '1.3', fontWeight: '500' }],
+  			'caption': ['0.8125rem', { lineHeight: '1.45' }],
+  			'overline': ['0.6875rem', { lineHeight: '1.3', letterSpacing: '0.06em', fontWeight: '600' }]
+  		},
+  		/* Caps the measure on long-form text at ~65 characters */
+  		maxWidth: {
+  			prose: '65ch'
   		},
   		boxShadow: {
   			xs: 'var(--shadow-xs)',
