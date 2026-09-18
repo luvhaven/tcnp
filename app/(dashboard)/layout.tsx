@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, Suspense, useEffect } from "react"
+import { useState, useRef, Suspense, useEffect } from "react"
 import dynamic from "next/dynamic"
 import { AnimatePresence, motion } from "framer-motion"
 import { useIsIOS, useIsClient } from "@/hooks/useIsClient"
@@ -92,6 +92,8 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const drawerRef = useRef<HTMLDivElement>(null)
+  const drawerTriggerRef = useRef<HTMLElement | null>(null)
   const isClient = useIsClient()
   const isIOS = useIsIOS()
   const [canMountExtras, setCanMountExtras] = useState(false)
@@ -100,6 +102,52 @@ export default function DashboardLayout({
 
   // Mount global chat notification listener (supabase singleton defined at module level)
   useChatNotifications(currentUserId)
+
+  // The drawer covers the whole viewport but was pointer-only: no Escape, and
+  // Tab walked straight out of it into the page underneath. Close on Escape,
+  // keep Tab inside while it's open, and hand focus back to the hamburger.
+  useEffect(() => {
+    if (!mobileSidebarOpen) return
+
+    drawerTriggerRef.current = document.activeElement as HTMLElement | null
+
+    const focusable = () =>
+      Array.from(
+        drawerRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ) ?? []
+      ).filter((el) => el.offsetParent !== null)
+
+    focusable()[0]?.focus()
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileSidebarOpen(false)
+        return
+      }
+      if (event.key !== "Tab") return
+
+      const items = focusable()
+      if (items.length === 0) return
+
+      const first = items[0]
+      const last = items[items.length - 1]
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.removeEventListener("keydown", onKeyDown)
+      drawerTriggerRef.current?.focus?.()
+    }
+  }, [mobileSidebarOpen])
 
   // Detect iOS on client side only
   useEffect(() => {
@@ -183,13 +231,21 @@ export default function DashboardLayout({
         {/* Mobile / tablet off-canvas drawer (below 860px) */}
         <AnimatePresence>
           {mobileSidebarOpen && (
-            <div className="fixed inset-0 z-40 flex pointer-events-auto nav:hidden">
+            <div
+              ref={drawerRef}
+              id="app-sidebar-drawer"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Navigation menu"
+              className="fixed inset-0 z-40 flex overscroll-contain pointer-events-auto nav:hidden"
+            >
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2, ease: "easeOut" }}
                 className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                aria-hidden="true"
                 onClick={() => setMobileSidebarOpen(false)}
               />
               <motion.div
@@ -221,7 +277,7 @@ export default function DashboardLayout({
           <main
             id="main-content"
             tabIndex={-1}
-            className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain bg-gradient-to-br from-orange-50 via-background to-slate-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-900 px-3 py-4 sm:px-4 sm:py-6"
+            className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain bg-gradient-to-br from-primary/[0.04] via-background to-muted/40 px-3 py-4 sm:px-4 sm:py-6"
           >
             <div className="mx-auto max-w-6xl min-w-0 space-y-6 animate-fade-in">
               <ErrorBoundary>

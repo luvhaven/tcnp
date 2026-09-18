@@ -216,6 +216,11 @@ function getVisibleNav(role: string | null, oscar?: string | null, unitSlugs: st
   return visibleList
 }
 
+/** Stable DOM id for a nav section, so its heading and list can be linked. */
+function sectionId(label: string) {
+  return label.replace(/\s+/g, "-").toLowerCase()
+}
+
 type SidebarProps = {
   isMobile?: boolean
   onClose?: () => void
@@ -288,7 +293,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   return (
     <div
       className={cn(
-        "relative flex h-full flex-col border-r border-border/60 bg-gradient-to-b from-background via-card/95 to-background/95 shadow-xl backdrop-blur-sm transition-[width] duration-300 ease-in-out",
+        "relative flex h-full flex-col border-r border-border/60 bg-gradient-to-b from-background via-card/95 to-background/95 shadow-xl backdrop-blur-sm transition-[width] duration-slow ease-out",
         isMobile ? "w-64" : collapsed ? "w-[76px]" : "w-[248px]"
       )}
     >
@@ -299,11 +304,11 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           aria-expanded={!collapsed}
           onClick={() => setCollapsed(!collapsed)}
-          className="absolute -right-3 top-[5.75rem] z-50 hidden h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-md transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 nav:flex"
+          className="hit-area absolute -right-3 top-[5.75rem] z-50 hidden h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-md transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 nav:flex"
         >
           <ChevronLeft
             className={cn(
-              "h-3.5 w-3.5 transition-transform duration-300",
+              "h-3.5 w-3.5 transition-transform duration-slow ease-out",
               collapsed && "rotate-180"
             )}
           />
@@ -321,7 +326,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
             <Image src="/tcnp_logo.png" alt="The Covenant Nation" fill sizes="32px" className="object-contain" priority />
           </div>
           <div className={cn(
-            "flex flex-col transition-all duration-300 overflow-hidden whitespace-nowrap",
+            "flex flex-col transition-[width,opacity] duration-slow ease-out overflow-hidden whitespace-nowrap",
             collapsed && !isMobile ? "w-0 opacity-0" : "w-auto opacity-100"
           )}>
             <span className="text-sm font-semibold truncate leading-tight">TCN Protocol</span>
@@ -345,28 +350,31 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
         {filteredSections.length === 0 && <div className="px-3 py-6 text-sm leading-6"><p className="font-medium">No matching pages</p><p className="mt-1 text-muted-foreground">Try a page or unit name, such as Training.</p><button type="button" className="mt-3 rounded text-primary underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setSearch(''); searchInput.current?.focus() }}>Show all available pages</button></div>}
         {filteredSections.map((section, sectionIndex) => (
           <div key={section.label} className={cn(sectionIndex > 0 && "mt-3")}>
-            {/* Section label — divider line when collapsed */}
-            {collapsed && !isMobile ? (
-              sectionIndex > 0 && <div className="mx-3 mb-2 border-t border-border/60" />
-            ) : (
-              // 10px at muted-foreground/70 measured 2.72:1 — under AA. Full
-              // muted-foreground at 11px clears it while staying a quiet label.
-              <p className="select-none px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {section.label}
-              </p>
+            {/* A rule stands in for the label when collapsed, but the heading
+                itself stays in the accessibility tree so the group keeps its
+                name. 10px at muted-foreground/70 measured 2.72:1, under AA;
+                text-overline is 11px at full muted-foreground, which clears it. */}
+            {collapsed && !isMobile && sectionIndex > 0 && (
+              <div className="mx-3 mb-2 border-t border-border/60" aria-hidden="true" />
             )}
-            <div className="space-y-1">
+            <h2
+              id={`nav-section-${sectionId(section.label)}`}
+              className={cn(
+                "select-none",
+                collapsed && !isMobile
+                  ? "sr-only"
+                  : "px-3 pb-1 pt-2 text-overline uppercase text-muted-foreground"
+              )}
+            >
+              {section.label}
+            </h2>
+            <ul aria-labelledby={`nav-section-${sectionId(section.label)}`} className="space-y-1">
               {section.items.map((item, index) => {
                 const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
                 const isChat = item.name === "Team Chat"
                 const isOps = item.name === "My Operations"
                 return (
-                  <motion.div
-                    key={item.href}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: (sectionIndex * 2 + index) * 0.03, duration: 0.2, ease: "easeOut" }}
-                  >
+                  <li key={item.href}>
                     <Link
                       href={item.href}
                       aria-current={isActive ? 'page' : undefined}
@@ -393,14 +401,20 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
                         <item.icon className="h-5 w-5" />
                         {/* Collapsed badge dots */}
                         {isChat && unreadChat > 0 && collapsed && !isMobile && (
-                          <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive motion-safe:animate-pulse" />
+                          <>
+                            <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive motion-safe:animate-pulse" aria-hidden="true" />
+                            <span className="sr-only">{unreadChat} unread</span>
+                          </>
                         )}
                         {isOps && unreadAssignments > 0 && collapsed && !isMobile && (
-                          <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+                          <>
+                            <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-info motion-safe:animate-pulse" aria-hidden="true" />
+                            <span className="sr-only">{unreadAssignments} unread</span>
+                          </>
                         )}
                       </div>
                       <span className={cn(
-                        "relative z-10 flex items-center justify-between w-full transition-all duration-300 overflow-hidden whitespace-nowrap",
+                        "relative z-10 flex items-center justify-between w-full transition-[width,opacity] duration-slow ease-out overflow-hidden whitespace-nowrap",
                         collapsed && !isMobile ? "w-0 opacity-0" : "w-auto opacity-100"
                       )}>
                         <span>{item.name}</span>
@@ -418,10 +432,10 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
                         </span>
                       </span>
                     </Link>
-                  </motion.div>
+                  </li>
                 )
               })}
-            </div>
+            </ul>
           </div>
         ))}
       </nav>
