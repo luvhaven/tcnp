@@ -33,21 +33,21 @@ function HamburgerIcon({ isOpen }: { isOpen: boolean }) {
       {/* Top bar */}
       <span
         className={cn(
-          "block h-[2.5px] w-5 bg-current transition-all duration-300 ease-in-out origin-center",
+          "block h-[2.5px] w-5 rounded-full bg-current transition-[transform,opacity] duration-base ease-out origin-center",
           isOpen ? "translate-y-[7.5px] rotate-45" : ""
         )}
       />
       {/* Middle bar */}
       <span
         className={cn(
-          "block h-[2.5px] w-5 rounded-full bg-current transition-all duration-300 ease-in-out",
+          "block h-[2.5px] w-5 rounded-full bg-current transition-[transform,opacity] duration-base ease-out",
           isOpen ? "scale-x-0 opacity-0" : ""
         )}
       />
       {/* Bottom bar */}
       <span
         className={cn(
-          "block h-[2.5px] w-5 rounded-full bg-current transition-all duration-300 ease-in-out origin-center",
+          "block h-[2.5px] w-5 rounded-full bg-current transition-[transform,opacity] duration-base ease-out origin-center",
           isOpen ? "-translate-y-[7.5px] -rotate-45" : ""
         )}
       />
@@ -78,10 +78,11 @@ function ThemeSegmented() {
               key={value}
               type="button"
               aria-label={`${label} mode`}
+              aria-pressed={isSelected}
               title={`${label} mode`}
               onClick={() => setTheme(value)}
               className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-150",
+                "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-[background-color,color,box-shadow] duration-fast ease-out",
                 isSelected
                   ? "bg-background text-foreground shadow-xs font-semibold"
                   : "text-muted-foreground hover:text-foreground hover:bg-background/40"
@@ -192,27 +193,32 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
   }
 
   return (
-    <header className="app-header sticky top-0 z-40 flex h-16 min-w-0 items-center justify-between gap-2 border-b bg-background/80 px-4 shadow-xs backdrop-blur-md transition-all duration-200 nav:px-8">
+    <header className="app-header sticky top-0 z-40 flex h-16 min-w-0 items-center justify-between gap-2 border-b bg-background/80 px-4 shadow-xs backdrop-blur-md nav:px-8">
       {/* Left: hamburger + date & role */}
       <div className="flex min-w-0 items-center gap-3">
         <button
           type="button"
           aria-label={sidebarOpen ? "Close navigation sidebar" : "Open navigation sidebar"}
           onClick={onOpenSidebar}
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center text-foreground nav:hidden"
+          aria-expanded={sidebarOpen}
+          aria-controls="app-sidebar-drawer"
+          className="hit-area inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-foreground nav:hidden"
         >
           <HamburgerIcon isOpen={sidebarOpen} />
         </button>
         <div className="flex min-w-0 flex-col gap-1">
           <p
-            className="truncate text-sm font-semibold tracking-tight text-black dark:text-white sm:text-base md:text-lg"
+            className="truncate text-sm font-semibold tracking-tight text-foreground sm:text-base md:text-lg"
             suppressHydrationWarning
           >
             <span className="sm:hidden">{headerDateShort || "\u00a0"}</span>
             <span className="hidden sm:inline">{headerDate || "\u00a0"}</span>
           </p>
           {profile?.role && (
-            <span className="inline-flex w-fit max-w-[10.5rem] items-center truncate rounded-[8px] bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+            <span
+              title={formatRole(profile.role)}
+              className="inline-flex w-fit max-w-[10.5rem] items-center truncate rounded-lg bg-primary/10 px-2 py-0.5 text-overline uppercase text-primary"
+            >
               {formatRole(profile.role)}
             </span>
           )}
@@ -233,7 +239,7 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
               aria-expanded={menuOpen}
               disabled={userLoading}
               className={cn(
-                "group flex shrink-0 items-center gap-2 rounded-full border border-border/70 bg-card/70 p-1 pl-1 pr-2.5 transition-all duration-200 shadow-2xs",
+                "group flex shrink-0 items-center gap-2 rounded-full border border-border/70 bg-card/70 p-1 pl-1 pr-2.5 shadow-2xs transition-[border-color,background-color,box-shadow] duration-base ease-out",
                 "hover:border-primary/40 hover:bg-muted/80 hover:shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                 menuOpen && "border-primary/50 bg-muted/90 ring-2 ring-primary/20 shadow-xs"
               )}
@@ -286,7 +292,10 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
                 <p className="truncate text-sm font-bold leading-tight">{displayName}</p>
                 <p className="truncate text-xs text-muted-foreground mt-0.5">{user?.email}</p>
                 {profile?.role && (
-                  <span className="mt-1 inline-flex w-fit items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary">
+                  <span
+                    title={formatRole(profile.role)}
+                    className="mt-1 inline-flex w-fit max-w-full items-center truncate rounded-md bg-primary/10 px-1.5 py-0.5 text-overline uppercase text-primary-text"
+                  >
                     {formatRole(profile.role)}
                   </span>
                 )}
@@ -334,7 +343,7 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
             <button
               type="button"
               onClick={handleLogout}
-              className="flex w-full items-center gap-2 rounded-xl bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20"
+              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-foreground transition-colors duration-fast ease-out hover:bg-muted"
             >
               <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
               Log out

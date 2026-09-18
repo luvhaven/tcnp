@@ -770,7 +770,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search name, oscar, email..."
-                  className="pl-8 h-9 bg-background border-primary/20 focus-visible:ring-primary/50 text-sm"
+                  className="pl-8 h-9 bg-background border-primary/20 text-sm"
                   value={globalSearch}
                   onChange={(e) => setGlobalSearch(e.target.value)}
                 />
