@@ -573,20 +573,21 @@ function JourneyOperationsPanel({
       {/* Journey summary */}
       <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
         <CardContent className="pt-4 pb-4">
-          <div className="flex items-center justify-between mb-3">
+          {/* One row of peer badges, grouped at the leading edge. justify-between
+              split them to opposite ends of the card, so status and role read as
+              belonging to different things rather than to the same journey. */}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
             <CallSignChip callSign={journey.status} />
-            <div className="flex gap-2 items-center">
-              {isLead && (
-                <Badge className="bg-amber-400/20 text-amber-600 dark:text-amber-400 border-amber-400/30 border text-xs">
-                  <Crown className="h-3 w-3 mr-1" />Team Lead
-                </Badge>
-              )}
-              {isAdmin && !isAssignedDO && (
-                <Badge variant="outline" className="text-xs border-primary/40 text-primary">
-                  <Shield className="h-3 w-3 mr-1" />Admin View
-                </Badge>
-              )}
-            </div>
+            {isLead && (
+              <Badge className="bg-amber-400/20 text-amber-600 dark:text-amber-400 border-amber-400/30 border text-xs">
+                <Crown className="h-3 w-3 mr-1" />Team Lead
+              </Badge>
+            )}
+            {isAdmin && !isAssignedDO && (
+              <Badge variant="outline" className="text-xs border-primary/40 text-primary">
+                <Shield className="h-3 w-3 mr-1" />Admin View
+              </Badge>
+            )}
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -738,14 +739,18 @@ function JourneyFeedCard({ journey, showCountdown = false }: { journey: Journey;
   const depTime = journey.scheduled_departure ? new Date(journey.scheduled_departure) : null
 
   return (
-    <Card className="transition-all hover:shadow-md">
-      <CardContent className="pt-4 pb-4">
-        <div className="flex items-start justify-between mb-3">
-          <div>
+    <Card>
+      <CardContent>
+        {/* Status sits beside the name it describes. justify-between pushed it to
+            the far card edge, which on a wide screen left a screen's width of
+            empty space between a journey and its own status — two related facts
+            reading as two unrelated ones. Wraps to its own line when narrow. */}
+        <div className="mb-3 min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <p className="font-semibold text-sm">{journey.papas?.title} {journey.papas?.full_name ?? 'Unknown Papa'}</p>
-            <p className="text-xs text-muted-foreground">{journey.origin} → {journey.destination}</p>
+            <CallSignChip callSign={journey.status} size="sm" />
           </div>
-          <CallSignChip callSign={journey.status} size="sm" />
+          <p className="text-xs text-muted-foreground">{journey.origin} → {journey.destination}</p>
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
           {lead && (
