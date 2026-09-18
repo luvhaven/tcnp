@@ -270,7 +270,7 @@ export default function AuditLogsPage() {
                     <div className="flex flex-col gap-1">
                       <span className="font-semibold text-[11px] text-muted-foreground">Filter by user</span>
                       <input
-                        className="h-7 w-44 rounded border bg-background px-2 text-[11px] outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                        className="h-7 w-44 rounded border bg-background px-2 text-[11px]"
                         placeholder="Name, email, or ID"
                         value={userFilter}
                         onChange={(e) => setUserFilter(e.target.value)}
@@ -279,7 +279,7 @@ export default function AuditLogsPage() {
                     <div className="flex flex-col gap-1">
                       <span className="font-semibold text-[11px] text-muted-foreground">Action</span>
                       <select
-                        className="h-7 rounded border bg-background px-2 text-[11px] outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                        className="h-7 rounded border bg-background px-2 text-[11px]"
                         value={actionFilter}
                         onChange={(e) => setActionFilter(e.target.value)}
                       >
@@ -294,7 +294,7 @@ export default function AuditLogsPage() {
                     <div className="flex flex-col gap-1">
                       <span className="font-semibold text-[11px] text-muted-foreground">Entity</span>
                       <select
-                        className="h-7 rounded border bg-background px-2 text-[11px] outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                        className="h-7 rounded border bg-background px-2 text-[11px]"
                         value={entityFilter}
                         onChange={(e) => setEntityFilter(e.target.value)}
                       >
