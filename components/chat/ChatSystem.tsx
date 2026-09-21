@@ -9,7 +9,7 @@ import { useConfirm } from '@/components/providers/ConfirmProvider'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { MessageCircle, Send, Users, AtSign, Lock, Loader2, ChevronDown, Trash2, CornerUpLeft, Pencil, X, Smile, Search } from 'lucide-react'
+import { AlertCircle, MessageCircle, Send, Users, AtSign, Lock, Loader2, ChevronDown, Trash2, CornerUpLeft, Pencil, X, Smile, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, formatDistanceToNow, isToday, isYesterday, isSameDay } from 'date-fns'
 import { MessageBubble } from './MessageBubble'
@@ -186,6 +186,7 @@ export default function ChatSystem({
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [newMessage, setNewMessage] = useState(initialMessage || '')
   const [loadingMessages, setLoadingMessages] = useState(true)
+  const [messageLoadError, setMessageLoadError] = useState<string | null>(null)
   const [showUserList, setShowUserList] = useState(false)
   const [selectedMentions, setSelectedMentions] = useState<string[]>([])
   const [showMentionSuggestions, setShowMentionSuggestions] = useState(false)
@@ -193,7 +194,6 @@ export default function ChatSystem({
   const [mentionType, setMentionType] = useState<'@' | '@@'>('@')
   const [cursorPosition, setCursorPosition] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
   const channelRef = useRef<RealtimeChannel | null>(null)
   const markedMessagesRef = useRef<Set<string>>(new Set())
   const missingUsersRef = useRef<Set<string>>(new Set())
@@ -246,7 +246,7 @@ export default function ChatSystem({
         .maybeSingle()
 
       if (error) {
-        console.error('âŒ Failed to fetch user profile for message sender:', { userId, error })
+        console.error('Failed to fetch user profile for message sender:', { userId, error })
         return
       }
 
@@ -280,7 +280,7 @@ export default function ChatSystem({
         })
       }
     } catch (error) {
-      console.error('âŒ Unexpected error fetching user profile:', { userId, error })
+      console.error('Unexpected error fetching user profile:', { userId, error })
     } finally {
       missingUsersRef.current.delete(userId)
     }
@@ -315,13 +315,13 @@ export default function ChatSystem({
         .eq('program_id', programId)
 
       if (error) {
-        console.error('âŒ Error checking program chat access:', error)
+        console.error('Error checking program chat access:', error)
         setCanChatInProgram(false)
       } else {
         setCanChatInProgram(Array.isArray(data) && data.length > 0)
       }
     } catch (error) {
-      console.error('âŒ Unexpected error checking program chat access:', error)
+      console.error('Unexpected error checking program chat access:', error)
       setCanChatInProgram(false)
     } finally {
       setProgramAccessChecked(true)
@@ -352,7 +352,7 @@ export default function ChatSystem({
         navigator.vibrate(120)
       }
     } catch (error) {
-      console.error('âŒ Notification playback failed:', error)
+      console.error('Notification playback failed:', error)
     }
   }, [])
 
@@ -464,7 +464,7 @@ export default function ChatSystem({
 
   const loadParticipants = useCallback(async () => {
     try {
-      // Query users directly â€” get full_name, oscar, role, last_seen, is_online
+      // Query users directly to get profile and presence metadata.
       const { data, error } = await supabase
         .from('users')
         .select('id, full_name, oscar, role, last_seen, is_online')
@@ -700,9 +700,9 @@ export default function ChatSystem({
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          console.log('âœ… Chat realtime subscription active')
+          console.log('Chat realtime subscription active')
         } else if (status === 'CHANNEL_ERROR') {
-          console.warn('âŒ Chat subscription error')
+          console.warn('Chat subscription error')
         }
       })
 
@@ -711,7 +711,7 @@ export default function ChatSystem({
     return () => {
       mounted = false
       if (channelRef.current) {
-        console.log('ðŸ§¹ Cleaning up chat subscription')
+        console.log('Cleaning up chat subscription')
         supabase.removeChannel(channelRef.current)
         channelRef.current = null
       }
@@ -801,20 +801,21 @@ export default function ChatSystem({
           .single()
 
         if (error) {
-          console.error('âŒ Error loading current user:', error)
+          console.error('Error loading current user:', error)
           return
         }
 
-        console.log('âœ… Current user loaded:', data)
+        console.log('Current user loaded:', data)
         setCurrentUser(data)
       }
     } catch (error) {
-      console.error('âŒ Error in loadCurrentUser:', error)
+      console.error('Error in loadCurrentUser:', error)
     }
   }
 
   const loadMessages = async () => {
     setLoadingMessages(true)
+    setMessageLoadError(null)
 
     try {
       let query = supabase
@@ -859,7 +860,7 @@ export default function ChatSystem({
       setMessages(transformedMessages)
     } catch (error: any) {
       const supabaseError = error || {}
-      console.error('âŒ Error loading messages:', {
+      console.error('Error loading messages:', {
         error: supabaseError,
         message: supabaseError.message,
         details: supabaseError.details,
@@ -875,7 +876,7 @@ export default function ChatSystem({
         supabaseError.hint ||
         'Failed to load messages'
 
-      toast.error(friendlyMessage)
+      setMessageLoadError(friendlyMessage)
     } finally {
       setLoadingMessages(false)
     }
@@ -1116,7 +1117,7 @@ export default function ChatSystem({
         setNewMessage('')
         setSelectedMentions([])
         setReplyTo(null)
-        toast.success('Message sent!')
+        toast.success('Message sent')
       }
     } catch (error: any) {
       console.error('Error sending/editing message:', error)
@@ -1212,12 +1213,12 @@ export default function ChatSystem({
       setShowMentionSuggestions(false)
       setMentionSearch('')
 
-      // Focus back on input
+      // Restore focus and the caret to the composer.
       setTimeout(() => {
-        if (inputRef.current) {
+        if (textareaRef.current) {
           const newCursorPos = beforeAt.length + mentionText.length
-          inputRef.current.focus()
-          inputRef.current.setSelectionRange(newCursorPos, newCursorPos)
+          textareaRef.current.focus()
+          textareaRef.current.setSelectionRange(newCursorPos, newCursorPos)
         }
       }, 0)
     }
@@ -1330,12 +1331,12 @@ export default function ChatSystem({
           <div className="flex items-center gap-2">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <input type="search" placeholder="Search..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              <input type="search" aria-label="Search messages" placeholder="Search messages…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                 className="h-8 w-36 pl-8 pr-3 text-xs rounded-lg border bg-background/80 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-all focus:w-48" />
             </div>
-            <Button variant="outline" size="sm" onClick={() => setShowUserList(!showUserList)} className="gap-1.5 h-8 text-xs">
-              <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-              <Users className="h-3.5 w-3.5" />
+            <Button aria-label={`${users.filter(u => u.is_online).length} team members online`} aria-expanded={showUserList} variant="outline" size="sm" onClick={() => setShowUserList(!showUserList)} className="gap-1.5 h-8 text-xs">
+              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-green-500 motion-safe:animate-pulse" />
+              <Users aria-hidden="true" className="h-3.5 w-3.5" />
               {users.filter(u => u.is_online).length}
             </Button>
           </div>
@@ -1366,10 +1367,19 @@ export default function ChatSystem({
             </div>
           )}
 
-          {!loadingMessages && visibleMessages.length === 0 && (
+          {!loadingMessages && !messageLoadError && visibleMessages.length === 0 && (
             <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
               <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center"><MessageCircle className="h-8 w-8 text-primary/50" /></div>
               <div><p className="font-semibold text-muted-foreground">No messages yet</p><p className="text-sm text-muted-foreground/60 mt-1">Be the first to start the conversation</p></div>
+            </div>
+          )}
+
+          {!loadingMessages && messageLoadError && (
+            <div role="alert" className="mx-auto my-8 max-w-md rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-center">
+              <AlertCircle aria-hidden="true" className="mx-auto h-5 w-5 text-destructive" />
+              <p className="mt-2 text-sm font-medium">Unable to load messages</p>
+              <p className="mt-1 text-xs text-muted-foreground">{messageLoadError}</p>
+              <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => void loadMessages()}>Try again</Button>
             </div>
           )}
 
@@ -1384,7 +1394,7 @@ export default function ChatSystem({
             if (item.kind === 'unread') return (
               <div key={item.id} className="flex items-center gap-3 py-2">
                 <div className="flex-1 h-px bg-primary/40" />
-                <span className="text-[11px] text-primary font-semibold px-3 py-1 rounded-full bg-primary/10 whitespace-nowrap">â†“ New messages</span>
+                <span className="text-[11px] text-primary font-semibold px-3 py-1 rounded-full bg-primary/10 whitespace-nowrap">New messages below</span>
                 <div className="flex-1 h-px bg-primary/40" />
               </div>
             )
@@ -1459,10 +1469,10 @@ export default function ChatSystem({
           <div className="absolute bottom-[5.5rem] right-4 w-72 bg-background border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in slide-in-from-bottom-4 duration-200">
             <div className="bg-muted/50 px-4 py-3 border-b flex items-center justify-between">
               <div><h3 className="text-sm font-semibold">Team Members</h3><p className="text-xs text-muted-foreground">{users.filter(u => u.is_online).length} online · {users.length} total</p></div>
-              <button onClick={() => setShowUserList(false)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+              <button type="button" aria-label="Close team members" onClick={() => setShowUserList(false)} className="hit-area text-muted-foreground hover:text-foreground"><X aria-hidden="true" className="h-4 w-4" /></button>
             </div>
             <div className="max-h-72 overflow-y-auto">
-              {users.sort((a, b) => (b.is_online ? 1 : 0) - (a.is_online ? 1 : 0)).map(user => (
+              {[...users].sort((a, b) => (b.is_online ? 1 : 0) - (a.is_online ? 1 : 0)).map(user => (
                 <div key={user.id} className="flex items-center justify-between px-3 py-2.5 hover:bg-muted/40 transition-colors border-b last:border-0">
                   <div className="flex items-center gap-2.5">
                     <div className="relative">
@@ -1475,8 +1485,8 @@ export default function ChatSystem({
                     </div>
                   </div>
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { handleMention(user.id); setShowUserList(false) }} title="Mention"><AtSign className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { handleDoubleMention(user.id); setShowUserList(false) }} title="Private"><Lock className="h-3.5 w-3.5" /></Button>
+                    <Button aria-label={`Mention ${user.full_name}`} variant="ghost" size="icon" className="h-7 w-7" onClick={() => { handleMention(user.id); setShowUserList(false) }}><AtSign aria-hidden="true" className="h-3.5 w-3.5" /></Button>
+                    <Button aria-label={`Privately mention ${user.full_name}`} variant="ghost" size="icon" className="h-7 w-7" onClick={() => { handleDoubleMention(user.id); setShowUserList(false) }}><Lock aria-hidden="true" className="h-3.5 w-3.5" /></Button>
                   </div>
                 </div>
               ))}
@@ -1509,7 +1519,7 @@ export default function ChatSystem({
               return u ? (
                 <Badge key={uid} variant="secondary" className="gap-1 text-xs pr-1">
                   <AtSign className="h-3 w-3" />{u.full_name}
-                  <button onClick={() => setSelectedMentions(selectedMentions.filter(id => id !== uid))} className="ml-0.5 hover:text-destructive">Ã—</button>
+                  <button type="button" aria-label={`Remove ${u.full_name} mention`} onClick={() => setSelectedMentions(selectedMentions.filter(id => id !== uid))} className="ml-0.5 hover:text-destructive">×</button>
                 </Badge>
               ) : null
             })}
@@ -1519,9 +1529,16 @@ export default function ChatSystem({
           <div className="relative flex-1">
             <textarea
               ref={textareaRef}
+              aria-label="Message the team"
               placeholder={isReadOnlyProgramChat ? 'Read-only: not assigned to this program' : editingMessage ? 'Edit message...' : 'Message the team...'}
               value={newMessage}
               onChange={handleMessageChange}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                  event.preventDefault()
+                  void handleSendMessage()
+                }
+              }}
               disabled={isReadOnlyProgramChat}
               rows={1}
               className="block w-full resize-none rounded-xl border border-border/50 bg-background/50 shadow-inner px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-background transition-all placeholder:text-muted-foreground/60 max-h-32 disabled:opacity-50"
@@ -1544,12 +1561,14 @@ export default function ChatSystem({
             )}
           </div>
           <Button
+            type="button"
+            aria-label={editingMessage ? 'Save edited message' : 'Send message'}
             onClick={() => void handleSendMessage()}
             disabled={isReadOnlyProgramChat || !newMessage.trim()}
             className="rounded-xl flex-shrink-0 shadow-sm p-0 self-end"
             style={{ height: '40px', width: '40px', minHeight: '40px', minWidth: '40px' }}
           >
-            <Send className="h-4 w-4" />
+            <Send aria-hidden="true" className="h-4 w-4" />
           </Button>
         </div>
         <p className="text-[10px] text-muted-foreground/40 mt-1.5 text-right select-none">Click send to post · Shift+Enter for new line</p>

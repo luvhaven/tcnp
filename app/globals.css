@@ -782,8 +782,6 @@ body {
   }
 }
 
-user-select
-
 /* Momentum scrolling for all scroll panes on iOS */
 main,
 .overflow-y-auto,
@@ -793,7 +791,18 @@ main,
 
 /* ─── BrokenArrow Alert Extras ───────────────────────────────────────────── */
 
-pulse-slow tokens
+@keyframes pulse-slow {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 40px rgb(239 68 68 / 0.6);
+  }
+
+  50% {
+    opacity: 0.9;
+    box-shadow: 0 0 80px rgb(239 68 68 / 0.9);
+  }
+}
 
 .animate-pulse-slow {
   animation: pulse-slow 2s ease-in-out infinite;

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, useMemo, useState, Suspense } from 'react'
 import { Card } from '@/components/ui/card'
 import ChatSystem from '@/components/chat/ChatSystem'
 import TeamChatRoom from '@/components/chat/TeamChatRoom'
@@ -24,7 +24,7 @@ type ChatPapa = {
 }
 
 function ChatContent() {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const searchParams = useSearchParams()
   const initialMessage = searchParams.get('message') || undefined
 
@@ -112,7 +112,7 @@ function ChatContent() {
     }
 
     void loadContext()
-  }, [])
+  }, [supabase])
 
   useEffect(() => {
     const loadPapasForProgram = async () => {
@@ -147,11 +147,9 @@ function ChatContent() {
     }
 
     void loadPapasForProgram()
-  }, [program?.id])
+  }, [program?.id, supabase])
 
   const title = program?.name ? `TCNP - ${program.name}` : 'TCNP'
-
-  const activePapa = papaId ? papas.find((p) => p.id === papaId) || null : null
 
   const handleProgramChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const next = programs.find((p) => p.id === event.target.value) || null
@@ -200,11 +198,12 @@ function ChatContent() {
         {programs.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Program</span>
+              <label htmlFor="chat-program" className="text-overline uppercase text-muted-foreground">Program</label>
               <select
+                id="chat-program"
                 value={program?.id || ''}
                 onChange={handleProgramChange}
-                className="max-w-[150px] rounded border bg-background px-1.5 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-primary/60"
+                className="h-9 max-w-[12rem] rounded-md border bg-background px-2.5 text-sm shadow-xs focus-visible:outline-none"
               >
                 {programs.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -216,11 +215,12 @@ function ChatContent() {
 
             {program && papas.length > 0 && (
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Room</span>
+                <label htmlFor="chat-room" className="text-overline uppercase text-muted-foreground">Room</label>
                 <select
+                  id="chat-room"
                   value={papaId || ''}
                   onChange={handlePapaChange}
-                  className="max-w-[150px] rounded border bg-background px-1.5 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-primary/60"
+                  className="h-9 max-w-[12rem] rounded-md border bg-background px-2.5 text-sm shadow-xs focus-visible:outline-none"
                 >
                   <option value="">Program team room</option>
                   {papas.map((papa) => (

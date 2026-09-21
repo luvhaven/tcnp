@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { createClient } from "@/lib/supabase/client"
 import { useUnreadChatCount } from '@/hooks/useUnreadChatCount'
 import { useUnreadAssignments } from '@/hooks/useUnreadAssignments'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
 import {
   LayoutDashboard,
   Users,
@@ -245,48 +246,38 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   }
   const { count: unreadChat } = useUnreadChatCount()
   const { count: unreadAssignments } = useUnreadAssignments()
-  const [userRole, setUserRole] = useState<string | null>(null)
-  const [userOscar, setUserOscar] = useState<string | null>(null)
+  const { data: currentUser, isLoading: isLoadingCurrentUser } = useCurrentUser()
   const [unitSlugs, setUnitSlugs] = useState<string[]>([])
-  const [currentUser, setCurrentUser] = useState<string | null>(null)
 
   useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) { setCurrentUser(null); setUserRole(null); setUnitSlugs([]); return }
-        setCurrentUser(user.id)
-        const { data: profile, error } = await supabase
-          .from('users')
-          .select('role, oscar')
-          .eq('id', user.id)
-          .single<{ role: string | null; oscar: string | null }>()
-        if (!error && profile) {
-          setUserRole(profile.role ?? null)
-          setUserOscar(profile.oscar ?? null)
-        }
+    const loadMemberships = async () => {
+      if (!currentUser?.id) {
+        if (!isLoadingCurrentUser) setUnitSlugs([])
+        return
+      }
 
-        // Memberships are the v4 source of truth. Keep the role/Oscar fallback
-        // above so navigation remains stable during a staged database rollout.
-        const { data: memberships } = await (supabase as any)
+      try {
+        const { data: memberships, error } = await (supabase as any)
           .from('unit_memberships')
           .select('units!inner(slug)')
-          .eq('user_id', user.id)
+          .eq('user_id', currentUser.id)
           .eq('status', 'active')
+        if (error) throw error
         setUnitSlugs((memberships || []).map((row: any) => row.units?.slug).filter(Boolean))
       } catch (err) {
-        console.warn('Sidebar user load failed:', err)
+        console.warn('Sidebar membership load failed:', err)
+        setUnitSlugs([])
       }
     }
-    void loadUser()
-  }, [supabase])
+    void loadMemberships()
+  }, [currentUser?.id, isLoadingCurrentUser])
 
   const visibleSections = useMemo(() => {
-    const allowed = new Set(getVisibleNav(userRole, userOscar, unitSlugs).map(i => i.href))
+    const allowed = new Set(getVisibleNav(currentUser?.role ?? null, currentUser?.oscar ?? null, unitSlugs).map(i => i.href))
     return NAV_SECTIONS
       .map(section => ({ ...section, items: section.items.filter(i => allowed.has(i.href)) }))
       .filter(section => section.items.length > 0)
-  }, [userRole, userOscar, unitSlugs])
+  }, [currentUser?.role, currentUser?.oscar, unitSlugs])
   const filteredSections = filterNavigation(visibleSections, collapsed && !isMobile ? '' : search)
   const resultCount = filteredSections.reduce((count, section) => count + section.items.length, 0)
 
