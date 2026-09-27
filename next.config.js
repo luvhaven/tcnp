@@ -23,8 +23,10 @@ const securityHeaders = [
       "font-src 'self' https://fonts.gstatic.com",
       // Images: Allow any image host because map tiles (TomTom, Carto, OSM, OpenSky) are highly dynamic and use many varying subdomains.
       "img-src * data: blob: 'unsafe-inline'",
-      // Connections: self + Supabase REST, Realtime (WSS)
-      `connect-src 'self' https://${supabaseHost} wss://${supabaseHost} https://opensky-network.org https://www.youtube.com https://www.youtube-nocookie.com`,
+      // Leaflet loads basemap and traffic tiles as cross-origin image requests.
+      // Explicitly allow the tile hosts here so a production CSP does not
+      // silently block the live map even though img-src permits their images.
+      `connect-src 'self' https://${supabaseHost} wss://${supabaseHost} https://tile.openstreetmap.org https://*.basemaps.cartocdn.com https://opensky-network.org https://www.youtube.com https://www.youtube-nocookie.com`,
       // Workers: self + blob (Next.js SW, Leaflet workers)
       "worker-src 'self' blob:",
       // Privacy-enhanced YouTube embeds are used by the members-only Training workspace.
