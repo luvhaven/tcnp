@@ -16,23 +16,15 @@ export default async function TheatresPage() {
     }
   )
 
-  const { data: initialTheatres } = await supabase
+  const { data: initialTheatres, error: theatresError } = await supabase
     .from('theatres')
-    .select(`
-      *,
-      eagle_squares(name)
-    `)
-    .order('name')
-
-  const { data: initialEagleSquares } = await supabase
-    .from('eagle_squares')
-    .select('*')
+    .select('id, name, address, city, capacity, venue_type, facilities')
     .order('name')
 
   return (
     <TheatresClient 
       initialTheatres={initialTheatres || []} 
-      initialEagleSquares={initialEagleSquares || []}
+      initialTheatresError={Boolean(theatresError)}
     />
   )
 }

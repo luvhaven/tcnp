@@ -140,16 +140,17 @@ export default function WelfareOfficerDirectory() {
             </p>
             <div className="flex flex-wrap gap-2">
               {upcomingBirthdays.map(o => (
-                <Badge
+                <button
+                  type="button"
                   key={o.id}
-                  variant="outline"
-                  className="gap-1 border-amber-400/50 text-xs cursor-pointer hover:bg-amber-500/10 transition"
+                  className="inline-flex items-center gap-1 rounded-full border border-amber-400/50 px-2.5 py-0.5 text-xs transition hover:bg-amber-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  aria-label={`View ${o.full_name || "officer"}'s profile${o.daysUntil === 0 ? ", birthday today" : ""}`}
                   onClick={() => handleOpenOfficer(o)}
                 >
                   <Cake className="h-3 w-3" />
                   {o.full_name} — {MONTH_NAMES[o.birth_month! - 1]} {o.birth_day}
                   {o.daysUntil === 0 && <span className="font-semibold text-amber-600 dark:text-amber-400">· Today!</span>}
-                </Badge>
+                </button>
               ))}
             </div>
           </CardContent>
@@ -176,11 +177,20 @@ export default function WelfareOfficerDirectory() {
           {filtered.map(o => (
             <Card
               key={o.id}
+              role="button"
+              tabIndex={0}
+              aria-label={`View profile for ${o.full_name || "unnamed officer"}`}
               className={cn(
-                "card-hover cursor-pointer transition-all hover:border-primary/50 hover:shadow-md relative group",
+                "card-hover group relative cursor-pointer transition-all hover:border-primary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
                 !o.is_active && "opacity-60"
               )}
               onClick={() => handleOpenOfficer(o)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault()
+                  handleOpenOfficer(o)
+                }
+              }}
             >
               <CardContent className="space-y-2 p-4">
                 <div className="flex items-center gap-3">

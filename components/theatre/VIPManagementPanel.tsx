@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useMemo, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -10,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import { ShieldCheck, Loader2, Search, Plus, Edit, Trash2, User, Upload, Eye, X } from "lucide-react"
+import { ShieldCheck, Loader2, Search, Plus, Edit, Trash2, User, Upload, Eye, X, RotateCw } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import Image from "next/image"
@@ -19,19 +20,16 @@ import Image from "next/image"
 export default function VIPManagementPanel({ canManage: legacyCanManage = false, theatreId = null }: { canManage?: boolean; theatreId?: string | null }) {
     const supabase = createClient()
     const confirm = useConfirm()
-    const [membershipCanManage, setMembershipCanManage] = useState(false)
-    const canManage = legacyCanManage || membershipCanManage
+    const queryClient = useQueryClient()
+    const canManage = legacyCanManage
     const [selectedProgramId, setSelectedProgramId] = useState<string>("")
-    const [programs, setPrograms] = useState<any[]>([])
-    const [vips, setVips] = useState<any[]>([])
-    const [filteredVips, setFilteredVips] = useState<any[]>([])
-    const [loading, setLoading] = useState(false)
     const [searchQuery, setSearchQuery] = useState("")
     const [addDialogOpen, setAddDialogOpen] = useState(false)
     const [detailDialogOpen, setDetailDialogOpen] = useState(false)
     const [selectedVIP, setSelectedVIP] = useState<any>(null)
     const [editingVIP, setEditingVIP] = useState<any>(null)
     const [uploading, setUploading] = useState(false)
+    const [saving, setSaving] = useState(false)
     const [formData, setFormData] = useState({
         full_name: '',
         title: '',
@@ -42,72 +40,59 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
         photo_url: ''
     })
 
-    useEffect(() => {
-        let active = true
-        void (supabase as any).rpc('can_manage_unit', { unit_slug: 'victor' }).then(({ data }: any) => {
-            if (active) setMembershipCanManage(data === true)
-        })
-        return () => { active = false }
-    }, [])
+    const {
+        data: programs = [],
+        isLoading: programsLoading,
+        isError: programsError,
+        refetch: refetchPrograms,
+    } = useQuery<any[]>({
+        queryKey: ['victor', 'vip-programs'],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from('programs')
+                .select('id, name, status, created_at')
+                .order('created_at', { ascending: false })
+            if (error) throw error
+            return data || []
+        },
+        staleTime: 5 * 60_000,
+        retry: 1,
+    })
 
-    useEffect(() => {
-        loadPrograms()
-    }, [])
+    const effectiveProgramId = selectedProgramId || programs.find((program: any) => program.status === 'active')?.id || programs[0]?.id || ''
+    const {
+        data: vips = [],
+        isLoading: vipsLoading,
+        isError: vipsError,
+        refetch: refetchVIPs,
+    } = useQuery<any[]>({
+        queryKey: ['victor', 'vip-access', effectiveProgramId, theatreId],
+        enabled: Boolean(effectiveProgramId),
+        queryFn: async () => {
+            let request = (supabase as any)
+                .from('theatre_vips')
+                .select('id, full_name, title, access_level, notes, organization, contact_info, photo_url, program_id, theatre_id')
+                .eq('program_id', effectiveProgramId)
+            if (theatreId) request = request.or(`theatre_id.eq.${theatreId},theatre_id.is.null`)
+            const { data, error } = await request.order('full_name')
+            if (error) throw error
+            return data || []
+        },
+        staleTime: 30_000,
+        retry: 1,
+    })
 
-    useEffect(() => {
-        if (selectedProgramId) {
-            loadVIPs()
-        }
-    }, [selectedProgramId, theatreId])
-
-    useEffect(() => {
-        if (searchQuery.trim() === '') {
-            setFilteredVips(vips)
-        } else {
-            const query = searchQuery.toLowerCase()
-            const filtered = vips.filter(vip =>
-                vip.full_name?.toLowerCase().includes(query) ||
-                vip.title?.toLowerCase().includes(query) ||
-                vip.organization?.toLowerCase().includes(query)
-            )
-            setFilteredVips(filtered)
-        }
+    const filteredVips = useMemo(() => {
+        const query = searchQuery.trim().toLocaleLowerCase()
+        if (!query) return vips
+        return vips.filter((vip: any) =>
+            vip.full_name?.toLocaleLowerCase().includes(query) ||
+            vip.title?.toLocaleLowerCase().includes(query) ||
+            vip.organization?.toLocaleLowerCase().includes(query)
+        )
     }, [searchQuery, vips])
-
-    const loadPrograms = async () => {
-        const { data, error } = await supabase
-            .from('programs')
-            .select('*')
-            .order('created_at', { ascending: false })
-
-        if (error) {
-            console.error("Error loading programs:", error)
-            toast.error("Failed to load programs")
-        } else {
-            setPrograms(data || [])
-        }
-    }
-
-    const loadVIPs = async () => {
-        if (!selectedProgramId) return
-
-        setLoading(true)
-        let request = (supabase as any)
-            .from('theatre_vips')
-            .select('*')
-            .eq('program_id', selectedProgramId)
-        if (theatreId) request = request.or(`theatre_id.eq.${theatreId},theatre_id.is.null`)
-        const { data, error } = await request.order('full_name')
-
-        if (error) {
-            console.error("Error loading VIPs:", error)
-            toast.error("Failed to load VIPs")
-        } else {
-            setVips(data || [])
-            setFilteredVips(data || [])
-        }
-        setLoading(false)
-    }
+    const loading = vipsLoading
+    const reloadVIPs = () => queryClient.invalidateQueries({ queryKey: ['victor', 'vip-access', effectiveProgramId, theatreId] })
 
     const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!canManage) {
@@ -145,7 +130,7 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
                 .from('vip-photos')
                 .getPublicUrl(filePath)
 
-            setFormData({ ...formData, photo_url: publicUrl })
+            setFormData((current) => ({ ...current, photo_url: publicUrl }))
             toast.success("Photo uploaded successfully")
         } catch (error: any) {
             console.error("Error uploading photo:", error)
@@ -163,12 +148,12 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
             return
         }
 
-        if (!selectedProgramId) {
+        if (!effectiveProgramId) {
             toast.error("Please select a program")
             return
         }
 
-        setLoading(true)
+        setSaving(true)
         try {
             if (editingVIP) {
                 const { error } = await (supabase as any)
@@ -181,7 +166,7 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
             } else {
                 const { error } = await (supabase as any)
                     .from('theatre_vips')
-                    .insert([{ ...formData, program_id: selectedProgramId, theatre_id: theatreId }])
+                    .insert([{ ...formData, program_id: effectiveProgramId, theatre_id: theatreId }])
 
                 if (error) throw error
                 toast.success("VIP added successfully")
@@ -190,12 +175,12 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
             setAddDialogOpen(false)
             setEditingVIP(null)
             resetForm()
-            loadVIPs()
+            reloadVIPs()
         } catch (error: any) {
             console.error("Error saving VIP:", error)
             toast.error(error.message || "Failed to save VIP")
         } finally {
-            setLoading(false)
+            setSaving(false)
         }
     }
 
@@ -237,7 +222,7 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
 
             if (error) throw error
             toast.success("VIP removed successfully")
-            loadVIPs()
+            reloadVIPs()
         } catch (error: any) {
             console.error("Error deleting VIP:", error)
             toast.error(error.message || "Failed to remove VIP")
@@ -278,26 +263,28 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
         <div className="space-y-6">
             <Card>
                 <CardHeader>
-                    <CardTitle>Select Program</CardTitle>
-                    <CardDescription>Choose the program to manage VIP access</CardDescription>
+                    <CardTitle>Senior Minister Access</CardTitle>
+                    <CardDescription>Choose a program to view its theatre access directory</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <Select value={selectedProgramId} onValueChange={setSelectedProgramId}>
-                        <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select a program..." />
+                    <Select value={effectiveProgramId} onValueChange={setSelectedProgramId}>
+                        <SelectTrigger id="vip-program" aria-label="Select program" className="w-full">
+                            <SelectValue placeholder={programsLoading ? "Loading programs…" : "Select a program..."} />
                         </SelectTrigger>
                         <SelectContent>
-                            {programs.map((program) => (
+                            {programs.map((program: any) => (
                                 <SelectItem key={program.id} value={program.id}>
                                     {program.name} ({program.status})
                                 </SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
+                    {programsError && <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-destructive"><span>Programs could not be loaded.</span><Button type="button" variant="outline" size="sm" onClick={() => void refetchPrograms()}><RotateCw className="mr-2 h-4 w-4" aria-hidden="true" />Retry</Button></div>}
+                    {!programsLoading && !programsError && programs.length === 0 && <p className="mt-3 text-sm text-muted-foreground">No programs are available yet.</p>}
                 </CardContent>
             </Card>
 
-            {selectedProgramId && (
+            {effectiveProgramId && (
                 <Card>
                     <CardHeader>
                         <div className="flex items-center justify-between">
@@ -317,6 +304,7 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
                         </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
+                        {vipsError && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm"><span>Senior minister access could not be loaded.</span><Button type="button" variant="outline" size="sm" onClick={() => void refetchVIPs()}><RotateCw className="mr-2 h-4 w-4" aria-hidden="true" />Retry</Button></div>}
                         {/* Search Bar */}
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -333,11 +321,11 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
                             <div className="flex items-center justify-center py-12">
                                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                             </div>
-                        ) : filteredVips.length === 0 ? (
+                        ) : vipsError ? null : filteredVips.length === 0 ? (
                             <div className="text-center py-12">
                                 <User className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
                                 <p className="text-muted-foreground mb-4">
-                                    {searchQuery ? 'No VIPs found matching your search' : 'No VIPs registered for this program'}
+                                    {searchQuery ? 'No senior ministers match your search.' : 'No senior ministers are registered for this program and theatre.'}
                                 </p>
                                 {!searchQuery && canManage && (
                                     <Button variant="outline" onClick={openAddDialog}>
@@ -351,10 +339,14 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
                                 {filteredVips.map((vip) => (
                                     <div
                                         key={vip.id}
-                                        className="group relative rounded-lg border bg-card p-4 hover:bg-accent/50 transition-all cursor-pointer hover:shadow-md"
-                                        onClick={() => handleViewDetails(vip)}
+                                        className="group relative min-w-0 rounded-lg border bg-card p-4 transition-colors hover:border-primary/30 hover:bg-accent/40"
                                     >
-                                        <div className="flex gap-3">
+                                        <button
+                                            type="button"
+                                            className={`flex w-full min-w-0 gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${canManage ? 'pr-20 sm:pr-24' : ''}`}
+                                            aria-label={`View access details for ${vip.full_name}`}
+                                            onClick={() => handleViewDetails(vip)}
+                                        >
                                             {/* Photo */}
                                             <div className="flex-shrink-0">
                                                 {vip.photo_url ? (
@@ -374,10 +366,10 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
                                             </div>
 
                                             {/* Info */}
-                                            <div className="flex-1 min-w-0">
+                                            <div className="min-w-0 flex-1">
                                                 <div className="flex items-start justify-between gap-2 mb-1">
                                                     <h4 className="font-semibold truncate">{vip.full_name}</h4>
-                                                    <Badge variant={getAccessLevelColor(vip.access_level)} className="text-xs">
+                                                    <Badge variant={getAccessLevelColor(vip.access_level)} className="shrink-0 text-xs">
                                                         {vip.access_level?.toUpperCase()}
                                                     </Badge>
                                                 </div>
@@ -390,14 +382,15 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
                                                     </p>
                                                 )}
                                             </div>
-                                        </div>
+                                        </button>
 
                                         {/* Action Buttons */}
-                                        {canManage && <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                        {canManage && <div className="absolute right-2 top-2 flex gap-1 rounded-md bg-card/95 p-0.5 opacity-100 shadow-sm transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-7 w-7"
+                                                aria-label={`Edit access for ${vip.full_name}`}
+                                                className="h-8 w-8"
                                                 onClick={(e) => {
                                                     e.stopPropagation()
                                                     handleEdit(vip)
@@ -408,7 +401,8 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-7 w-7 text-destructive hover:text-destructive"
+                                                aria-label={`Remove access for ${vip.full_name}`}
+                                                className="h-8 w-8 text-destructive hover:text-destructive"
                                                 onClick={(e) => {
                                                     e.stopPropagation()
                                                     handleDelete(vip.id)
@@ -428,7 +422,7 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
                                 <span>
                                     Showing {filteredVips.length} of {vips.length} VIP{vips.length !== 1 ? 's' : ''}
                                 </span>
-                                <div className="flex gap-4">
+                                <div className="flex flex-wrap gap-x-4 gap-y-1">
                                     <span>VVIP: {vips.filter(v => v.access_level === 'vvip').length}</span>
                                     <span>VIP: {vips.filter(v => v.access_level === 'vip').length}</span>
                                     <span>Standard: {vips.filter(v => v.access_level === 'standard').length}</span>
@@ -654,8 +648,8 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
                             >
                                 Cancel
                             </Button>
-                            <Button type="submit" disabled={loading || uploading}>
-                                {loading || uploading ? (
+                            <Button type="submit" disabled={saving || uploading}>
+                                {saving || uploading ? (
                                     <>
                                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                         {uploading ? 'Uploading...' : 'Saving...'}

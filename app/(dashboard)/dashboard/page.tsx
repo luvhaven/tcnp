@@ -8,12 +8,12 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { cn, isAdmin, effectiveOscarRole, canAccessCommandCentre, oscarToRole } from "@/lib/utils"
+import { cn, canAccessCommandCentre, oscarToRole } from "@/lib/utils"
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/lib/constants/tncpCallSigns"
 import {
   Users, Car, MapPin, AlertTriangle, Download, ChevronRight, ArrowRight, Radio,
   MessageSquare, Zap, Shield, Plane, Landmark, Hotel, Home, Camera,
-  UtensilsCrossed, Calendar, CheckCircle,
+  UtensilsCrossed, CheckCircle, BookOpen,
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
@@ -85,12 +85,6 @@ const EXECUTIVE_STATS = [
   },
 ] as const
 
-const ADMIN_ACTIONS = [
-  { href: "/journeys", label: "Create Journey", sub: "Plan a new Papa movement", Icon: MapPin, color: "text-violet-500", bg: "bg-violet-500/10" },
-  { href: "/papas", label: "Add Papa", sub: "Register a new guest", Icon: Users, color: "text-emerald-500", bg: "bg-emerald-500/10" },
-  { href: "/command", label: "Command Centre", sub: "Live ops & tracking", Icon: Radio, color: "text-sky-500", bg: "bg-sky-500/10" },
-]
-
 const FALLBACK_STATUS_COLORS: Record<string, string> = {
   planned: "bg-blue-500 text-white",
   in_progress: "bg-yellow-500 text-white",
@@ -144,10 +138,16 @@ function getUnitActionForRole(role?: string | null, oscar?: string | null) {
   if (r.includes("serial") || r.includes("sierra")) {
     return { href: "/serial", label: "Serial Media", sub: "Social media & press coverage", Icon: Camera, color: "text-pink-500", bg: "bg-pink-500/10" }
   }
+  if (r.includes("training")) {
+    return { href: "/training", label: "Training Hub", sub: "Courses, resources & attendance", Icon: BookOpen, color: "text-blue-500", bg: "bg-blue-500/10" }
+  }
+  if (r.includes("compliance")) {
+    return { href: "/compliance", label: "Compliance", sub: "Dress code & team standards", Icon: Shield, color: "text-violet-500", bg: "bg-violet-500/10" }
+  }
   if (r.includes("welfare")) {
     return { href: "/welfare", label: "Welfare Portal", sub: "Officer welfare & meals", Icon: UtensilsCrossed, color: "text-emerald-500", bg: "bg-emerald-500/10" }
   }
-  return { href: "/compliance", label: "Outfit of the Day", sub: "Today's dress code & grooming", Icon: Shield, color: "text-violet-500", bg: "bg-violet-500/10" }
+  return null
 }
 
 // ─── Loading skeleton ─────────────────────────────────────────────────────────
@@ -201,9 +201,11 @@ export default function DashboardPage() {
   const [showInstallModal, setShowInstallModal] = useState(false)
   const { data: currentUser, isLoading: userLoading } = useCurrentUser()
 
-  const isLeadership = useMemo(() => {
+  // Global operational summaries contain sensitive journey, Papa, fleet and
+  // incident information. Keep them strictly within Command/Admin scope.
+  const canViewGlobalDashboard = useMemo(() => {
     if (!currentUser) return false
-    return isAdmin(currentUser.role) || isAdmin(effectiveOscarRole(currentUser.role, currentUser.oscar))
+    return canAccessCommandCentre(currentUser.role, currentUser.oscar)
   }, [currentUser])
 
   const handleInstallClick = async () => {
@@ -219,7 +221,7 @@ export default function DashboardPage() {
       // 1. Fetch active program (everyone sees current program)
       const { data: programData, error: programError } = await supabase
         .from("programs")
-        .select("id, name")
+        .select(canViewGlobalDashboard ? "id, name" : "id")
         .eq("status", "active")
         .order("created_at", { ascending: false })
         .limit(1)
@@ -234,20 +236,31 @@ export default function DashboardPage() {
       if (user) {
         const { data: myDORows, error: assignmentError } = await (supabase as any)
           .from("journey_duty_officers")
-          .select("journey_id")
+          .select("journey_id, status")
           .eq("user_id", user.id)
 
         if (assignmentError) throw assignmentError
-        const doIds: string[] = (myDORows || []).map((r: any) => r.journey_id)
+        const activeDutyRows = (myDORows || []).filter((row: any) =>
+          row.status == null || ["pending", "acknowledged"].includes(row.status),
+        )
+        const doIds: string[] = activeDutyRows.map((row: any) => row.journey_id).filter(Boolean)
+        const rejectedJourneyIds: string[] = (myDORows || [])
+          .filter((row: any) => row.status === "rejected")
+          .map((row: any) => row.journey_id)
+          .filter(Boolean)
         const orParts = [`assigned_duty_officer_id.eq.${user.id}`, `assigned_do_id.eq.${user.id}`]
         if (doIds.length > 0) orParts.push(`id.in.(${doIds.join(",")})`)
 
-        const { data: myJourneysList, count: myCount, error: journeyError } = await (supabase as any)
+        let myJourneysQuery = (supabase as any)
           .from("journeys")
           .select(DASHBOARD_JOURNEY_SELECT, { count: "exact" })
           .not("status", "in", "(completed,cancelled)")
           .or("is_deleted.is.null,is_deleted.eq.false")
           .or(orParts.join(","))
+        if (rejectedJourneyIds.length > 0) {
+          myJourneysQuery = myJourneysQuery.not("id", "in", `(${rejectedJourneyIds.join(",")})`)
+        }
+        const { data: myJourneysList, count: myCount, error: journeyError } = await myJourneysQuery
           .order("etd", { ascending: true, nullsFirst: false })
           .limit(5)
 
@@ -257,8 +270,8 @@ export default function DashboardPage() {
         setMyAssignment(myJourneysList?.[0] ?? null)
       }
 
-      // 3. If leadership, fetch global metrics & VIP fleet journeys
-      if (isLeadership) {
+      // 3. Only Command/Admin receive cross-program metrics or journey details.
+      if (canViewGlobalDashboard) {
         const [papasRes, cheetahsRes, journeysRes, incidentsRes] = await Promise.all([
           supabase.from("papas").select("id", { count: "exact", head: true }),
           supabase.from("cheetahs").select("id", { count: "exact", head: true }),
@@ -296,7 +309,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [supabase, isLeadership])
+  }, [supabase, canViewGlobalDashboard])
 
   useEffect(() => {
     if (!userLoading) {
@@ -328,14 +341,14 @@ export default function DashboardPage() {
   const officerTeam = currentUser?.team ? `Team ${toTitleCase(currentUser.team)}` : "Unassigned Team"
 
   // Dynamic quick actions for officers (plain const — no hooks needed)
+  const officerUnitAction = getUnitActionForRole(currentUser?.role, currentUser?.oscar)
   const officerQuickActions = [
     { href: "/my-operations", label: "My Operations", sub: "Your assignments & call-sign", Icon: Zap, color: "text-orange-500", bg: "bg-orange-500/10" },
     { href: "/chat", label: "Team Chat", sub: "Program rooms & team channel", Icon: MessageSquare, color: "text-sky-500", bg: "bg-sky-500/10" },
-    getUnitActionForRole(currentUser?.role, currentUser?.oscar),
-    { href: "/welfare", label: "Welfare & Dining", sub: "Officer welfare & meals", Icon: UtensilsCrossed, color: "text-emerald-500", bg: "bg-emerald-500/10" },
+    ...(officerUnitAction ? [officerUnitAction] : []),
   ]
 
-  const quickActions = isLeadership ? leadershipQuickActions : officerQuickActions
+  const quickActions = canViewGlobalDashboard ? leadershipQuickActions : officerQuickActions
 
   return (
     <div className="space-y-6 page-enter">
@@ -347,20 +360,20 @@ export default function DashboardPage() {
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {isLeadership ? "Executive Overview" : "Officer Portal"}
+                {canViewGlobalDashboard ? "Command Overview" : `${officerUnit} Portal`}
               </span>
               {activeProgram && (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Latest active program: {activeProgram.name}
+                  {canViewGlobalDashboard && activeProgram.name ? `Latest active program: ${activeProgram.name}` : "Active program"}
                 </span>
               )}
             </div>
             <h1 className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-              {firstName ? `Welcome back, ${firstName}` : isLeadership ? "Command Dashboard" : "Operations Dashboard"}
+              {firstName ? `Welcome back, ${firstName}` : canViewGlobalDashboard ? "Command Dashboard" : "Operations Dashboard"}
             </h1>
             <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
-              {isLeadership ? (
+              {canViewGlobalDashboard ? (
                 activeProgram ? (
                   <>Active operational protocol is currently engaged for <span className="font-semibold text-foreground">{activeProgram.name}</span>.</>
                 ) : (
@@ -433,10 +446,10 @@ export default function DashboardPage() {
       )}
 
       {/* ── Leadership Only: Live alerts ─────────────────────────────────── */}
-      {isLeadership && <JourneyAlerts />}
+      {canViewGlobalDashboard && <JourneyAlerts />}
 
       {/* ── Stat cards ────────────────────────────────────────────────────── */}
-      {isLeadership ? (
+      {canViewGlobalDashboard ? (
         <div className="grid gap-4 grid-cols-2 nav:grid-cols-4">
           {EXECUTIVE_STATS.map(({ key, label, sub, Icon, color, bg, ring, glow }, idx) => (
             <div
@@ -527,7 +540,7 @@ export default function DashboardPage() {
               <div>
                 <p className="text-xs font-medium text-muted-foreground">Active Program</p>
                 <p className="mt-2 text-base font-bold tracking-tight text-foreground truncate max-w-[140px]">
-                  {activeProgram?.name || "Standby"}
+                  {activeProgram?.name || (activeProgram ? "Active" : "Standby")}
                 </p>
                 <p className="mt-1 text-[11px] text-muted-foreground">
                   {activeProgram ? "Protocol engaged" : "Awaiting activation"}
@@ -542,7 +555,7 @@ export default function DashboardPage() {
       )}
 
       {/* ── Leadership Only: Analytics Charts ─────────────────────────────── */}
-      {isLeadership && (
+      {canViewGlobalDashboard && (
         <ErrorBoundary>
           <DashboardCharts />
         </ErrorBoundary>
@@ -553,23 +566,23 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <div>
             <h2 className="text-sm font-semibold">
-              {isLeadership ? "Recent VIP Journeys" : "My Scheduled Journeys"}
+              {canViewGlobalDashboard ? "Recent VIP Journeys" : "My Scheduled Journeys"}
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {isLeadership ? "Latest convoy activities across the program" : "Journeys where you are assigned on duty"}
+              {canViewGlobalDashboard ? "Latest convoy activities across the program" : "Your assigned missions and schedule"}
             </p>
           </div>
           <Button
             variant="ghost"
             size="sm"
             className="gap-1 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => router.push(isLeadership ? "/journeys" : "/my-operations")}
+            onClick={() => router.push(canViewGlobalDashboard ? "/journeys" : "/my-operations")}
           >
-            {isLeadership ? "View all" : "My Operations"} <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            {canViewGlobalDashboard ? "View all" : "My Operations"} <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
           </Button>
         </div>
 
-        {isLeadership ? (
+        {canViewGlobalDashboard ? (
           // Leadership View: Global Journeys
           recentJourneys.length === 0 ? (
             <div className="empty-state py-12">
@@ -683,7 +696,7 @@ export default function DashboardPage() {
       {/* ── Quick Actions ─────────────────────────────────────────────────── */}
       <div>
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-3">
-          {isLeadership ? "Command Actions" : "Officer Quick Actions"}
+          {canViewGlobalDashboard ? "Command Actions" : `${officerUnit} Quick Actions`}
         </h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {quickActions.map(({ href, label, sub, Icon, color, bg }) => (

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
 import DenChecklist from "@/components/theatre/DenChecklist"
 import { createClient } from "@/lib/supabase/client"
@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { MapPin, Plus, Edit, Trash2, Scan, ChevronDown, Armchair, Landmark, Waypoints } from "lucide-react"
+import { MapPin, Plus, Edit, Trash2, Scan, Armchair, Landmark, Waypoints, Loader2, RotateCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -27,10 +27,10 @@ import { useUnitAccess } from "@/hooks/useUnitAccess"
 
 export default function TheatresClient({
   initialTheatres,
-  initialEagleSquares
+  initialTheatresError = false,
 }: {
   initialTheatres: any[]
-  initialEagleSquares: any[]
+  initialTheatresError?: boolean
 }) {
   const supabase = createClient()
   const confirm = useConfirm()
@@ -49,14 +49,24 @@ export default function TheatresClient({
   const [theatreChoice, setSelectedTheatreId] = useState<string>("")
   const [expandedDen, setExpandedDen] = useState<string | null>(null)
 
-  const { data: theatres = [] } = useQuery({
+  const {
+    data: theatres = [],
+    error: theatresError,
+    isLoading: theatresLoading,
+    refetch: refetchTheatres,
+  } = useQuery({
     queryKey: ['theatres'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('theatres').select('*').order('name')
+      const { data, error } = await supabase
+        .from('theatres')
+        .select('id, name, address, city, capacity, venue_type, facilities')
+        .order('name')
       if (error) throw error
       return data || []
     },
-    initialData: initialTheatres
+    initialData: initialTheatresError ? undefined : initialTheatres,
+    staleTime: 60_000,
+    retry: 1,
   })
 
   const selectedTheatreId = theatreChoice || theatres[0]?.id || ""
@@ -103,13 +113,16 @@ export default function TheatresClient({
       }
       return { previousTheatres }
     },
-    onError: (err, newTodo, context) => {
-      queryClient.setQueryData(['theatres'], context?.previousTheatres)
+    onError: (_err, _deletedId, context) => {
+      if (context?.previousTheatres) queryClient.setQueryData(['theatres'], context.previousTheatres)
       toast.error('Failed to delete venue')
+    },
+    onSuccess: (deletedId) => {
+      if (theatreChoice === deletedId) setSelectedTheatreId("")
+      toast.success('Venue deleted')
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['theatres'] })
-      toast.success('Venue deleted!')
     }
   })
 
@@ -188,16 +201,16 @@ export default function TheatresClient({
       {/* ── Papa Briefings for Victor Oscar roles ── */}
       {(victorAccess.isMember || victorAccess.isPlatformAdmin) && (
         <div className="border rounded-xl p-4 bg-muted/30">
-          <PapaBriefingsSection role={resolvedRole || 'victor_oscar'} />
+          <PapaBriefingsSection role={resolvedRole || 'victor_oscar'} userId={currentUser?.id ?? null} />
         </div>
       )}
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-3">
         {[
-          { label: 'Total Venues', value: theatres.length, color: 'text-foreground', ring: 'ring-border' },
-          { label: 'Total Capacity', value: theatres.reduce((sum, t) => sum + (t.capacity || 0), 0).toLocaleString(), color: 'text-[hsl(var(--success))]', ring: 'ring-[hsl(var(--success)/0.2)]' },
-          { label: 'Average Capacity', value: theatres.length > 0 ? Math.round(theatres.reduce((sum, t) => sum + (t.capacity || 0), 0) / theatres.length).toLocaleString() : 0, color: 'text-purple-500', ring: 'ring-purple-500/20' },
+          { label: 'Total Venues', value: theatresLoading ? '—' : theatres.length, color: 'text-foreground', ring: 'ring-border' },
+          { label: 'Total Capacity', value: theatresLoading ? '—' : theatres.reduce((sum, t) => sum + (t.capacity || 0), 0).toLocaleString(), color: 'text-[hsl(var(--success))]', ring: 'ring-[hsl(var(--success)/0.2)]' },
+          { label: 'Average Capacity', value: theatresLoading ? '—' : theatres.length > 0 ? Math.round(theatres.reduce((sum, t) => sum + (t.capacity || 0), 0) / theatres.length).toLocaleString() : 0, color: 'text-purple-500', ring: 'ring-purple-500/20' },
         ].map(({ label, value, color, ring }) => (
           <div key={label} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
             <p className="text-xs font-medium text-muted-foreground">{label}</p>
@@ -205,6 +218,15 @@ export default function TheatresClient({
           </div>
         ))}
       </div>
+
+      {theatresError && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+          <span>Unable to load venues. Check your connection and try again.</span>
+          <Button variant="outline" size="sm" onClick={() => void refetchTheatres()}>
+            <RotateCw className="mr-2 h-4 w-4" aria-hidden="true" /> Retry
+          </Button>
+        </div>
+      )}
 
       <Tabs defaultValue="venues" className="space-y-4">
         <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 lg:grid-cols-4">
@@ -233,7 +255,11 @@ export default function TheatresClient({
               <CardDescription>All registered venues</CardDescription>
             </CardHeader>
             <CardContent>
-              {theatres.length === 0 ? (
+              {theatresLoading && theatres.length === 0 ? (
+                <div role="status" className="flex min-h-40 items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" /> Loading venues…
+                </div>
+              ) : theatres.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <MapPin className="h-12 w-12 text-muted-foreground/50" />
                   <p className="mt-4 text-sm font-medium">No venues yet</p>
@@ -273,11 +299,11 @@ export default function TheatresClient({
                         </div>
                         {canManage && (
                           <div className="flex shrink-0 items-center gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => handleEdit(theatre)} className="hover:bg-primary/10">
-                              <Edit className="h-4 w-4" />
+                            <Button variant="ghost" size="icon" aria-label={`Edit ${theatre.name}`} onClick={() => handleEdit(theatre)} className="hover:bg-primary/10">
+                              <Edit className="h-4 w-4" aria-hidden="true" />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDelete(theatre.id)} className="hover:bg-destructive/10">
-                              <Trash2 className="h-4 w-4 text-destructive" />
+                            <Button variant="ghost" size="icon" aria-label={`Delete ${theatre.name}`} onClick={() => handleDelete(theatre.id)} className="hover:bg-destructive/10">
+                              <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
                             </Button>
                           </div>
                         )}

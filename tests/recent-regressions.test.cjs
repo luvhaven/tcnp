@@ -70,3 +70,48 @@ test('OpenSky polling defaults to its anonymous free quota and supports OAuth re
   assert.match(source, /OPENSKY_CLIENT_ID/)
   assert.match(source, /OPENSKY_CLIENT_SECRET/)
 })
+
+test('dashboard global-sensitive view is limited to Command/Admin and rejected missions are excluded', () => {
+  const source = fs.readFileSync('app/(dashboard)/dashboard/page.tsx', 'utf8')
+  assert.match(source, /canViewGlobalDashboard = useMemo[\s\S]*?canAccessCommandCentre\(currentUser\.role, currentUser\.oscar\)/)
+  assert.doesNotMatch(source, /import \{[^}]*\bisAdmin\b/)
+  assert.match(source, /if \(canViewGlobalDashboard\) \{[\s\S]*?setStats\(/)
+  assert.match(source, /canViewGlobalDashboard && \(\s*<ErrorBoundary>/)
+  assert.match(source, /row\.status === "rejected"/)
+  assert.match(source, /myJourneysQuery\.not\("id", "in"/)
+  assert.match(source, /select\(canViewGlobalDashboard \? "id, name" : "id"\)/)
+})
+
+test('dialogs escape clipped page containers and respect the dynamic viewport', () => {
+  const dialog = fs.readFileSync('components/ui/dialog.tsx', 'utf8')
+  const profile = fs.readFileSync('components/officers/OfficerProfileDialog.tsx', 'utf8')
+  const directory = fs.readFileSync('components/welfare/WelfareOfficerDirectory.tsx', 'utf8')
+  assert.match(dialog, /createPortal\([\s\S]*?document\.body/)
+  assert.match(dialog, /max-h-\[calc\(100dvh-/)
+  assert.match(dialog, /overflow-y-auto overscroll-contain/)
+  assert.match(profile, /max-h-\[calc\(100dvh-/)
+  assert.match(profile, /min-h-0 flex-1[\s\S]*?overflow-y-auto/)
+  assert.match(profile, /grid-cols-2 sm:grid-cols-4/)
+  assert.match(directory, /role="button"[\s\S]*?event\.key === "Enter" \|\| event\.key === " "/)
+  assert.match(directory, /aria-label=\{`View \$\{o\.full_name/)
+})
+
+test('Victor access directory reserves card space for actions and supports keyboard activation', () => {
+  const source = fs.readFileSync('components/theatre/VIPManagementPanel.tsx', 'utf8')
+  assert.match(source, /pr-20 sm:pr-24/)
+  assert.match(source, /aria-label=\{`Edit access for \$\{vip\.full_name\}`\}/)
+  assert.match(source, /aria-label=\{`Remove access for \$\{vip\.full_name\}`\}/)
+  assert.match(source, /<button[\s\S]*?aria-label=\{`View access details for \$\{vip\.full_name\}`\}/)
+  assert.match(source, /select\('id, name, status, created_at'\)/)
+  assert.match(source, /staleTime: 5 \* 60_000/)
+  assert.match(source, /queryKey: \['victor', 'vip-access', effectiveProgramId, theatreId\]/)
+})
+
+test('Victor page briefings only request role-visible Papa fields and do not refetch auth serially', () => {
+  const source = fs.readFileSync('components/papas/PapaBriefingsSection.tsx', 'utf8')
+  assert.match(source, /\.map\(\(field\) => field\.key\)/)
+  assert.match(source, /\.select\(papaFields\.join\(', '\)\)/)
+  assert.match(source, /queryKey: \['papa-briefings', providedUserId \|\| 'session-user', role\]/)
+  assert.doesNotMatch(source, /passport_number/)
+  assert.match(source, /if \(!userId\) \{/)
+})

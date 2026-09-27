@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { createPortal } from "react-dom"
 import { cn } from "@/lib/utils"
 
 /**
@@ -41,6 +42,11 @@ const Dialog = ({ open, onOpenChange, children }: DialogProps) => {
   const reactId = React.useId()
   const containerRef = React.useRef<HTMLDivElement>(null)
   const [hasDescription, setHasDescription] = React.useState(false)
+  const [mounted, setMounted] = React.useState(false)
+
+  // Render overlays under document.body so fixed positioning is not captured
+  // by animated/scrolling page containers (which otherwise clip tall dialogs).
+  React.useEffect(() => setMounted(true), [])
 
   const close = React.useCallback(() => onOpenChange?.(false), [onOpenChange])
 
@@ -49,7 +55,7 @@ const Dialog = ({ open, onOpenChange, children }: DialogProps) => {
   const registerDescription = React.useCallback(() => setHasDescription(true), [])
 
   React.useEffect(() => {
-    if (!open) return
+    if (!open || !mounted) return
 
     // Remember who opened this so focus can go back there on close. Without it,
     // dismissing a dialog drops the keyboard user at the top of the document.
@@ -106,11 +112,11 @@ const Dialog = ({ open, onOpenChange, children }: DialogProps) => {
       document.body.style.overflow = previousOverflow
       previouslyFocused?.focus?.()
     }
-  }, [open, close])
+  }, [open, close, mounted])
 
-  if (!open) return null
+  if (!open || !mounted) return null
 
-  return (
+  return createPortal(
     <DialogContext.Provider
       value={{
         titleId: `${reactId}-title`,
@@ -120,7 +126,7 @@ const Dialog = ({ open, onOpenChange, children }: DialogProps) => {
         onClose: close,
       }}
     >
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overscroll-contain p-3 sm:p-4">
         <div
           className="dialog-overlay-in fixed inset-0 bg-black/50 backdrop-blur-sm"
           onClick={close}
@@ -128,12 +134,13 @@ const Dialog = ({ open, onOpenChange, children }: DialogProps) => {
         />
         <div
           ref={containerRef}
-          className="dialog-content-in relative z-50 max-h-full overscroll-contain"
+          className="dialog-content-in relative z-50 max-h-[calc(100dvh-1.5rem)] max-w-full overscroll-contain sm:max-h-[calc(100dvh-2rem)]"
         >
           {children}
         </div>
       </div>
-    </DialogContext.Provider>
+    </DialogContext.Provider>,
+    document.body,
   )
 }
 
@@ -152,7 +159,7 @@ const DialogContent = React.forwardRef<
       aria-describedby={ctx?.hasDescription ? ctx.descriptionId : undefined}
       tabIndex={-1}
       className={cn(
-        "relative w-full max-w-lg overflow-y-auto overscroll-contain rounded-xl border bg-background p-6 shadow-elevation-xl outline-none",
+        "relative max-h-[calc(100dvh-1.5rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-xl border bg-background p-6 shadow-elevation-xl outline-none sm:max-h-[calc(100dvh-2rem)]",
         className
       )}
       {...props}

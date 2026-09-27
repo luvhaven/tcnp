@@ -217,7 +217,7 @@ export function OfficerProfileDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden sm:rounded-2xl border-primary/20 shadow-2xl">
+      <DialogContent className="max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] max-w-2xl flex flex-col gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)] sm:rounded-2xl border-primary/20 shadow-2xl">
         {/* Header Cover Banner */}
         <div className="relative p-6 bg-gradient-to-br from-primary/20 via-primary/5 to-background border-b shrink-0 overflow-hidden">
           <div className="absolute -right-12 -top-12 h-44 w-44 rounded-full bg-primary/15 blur-2xl pointer-events-none" />
@@ -253,7 +253,7 @@ export function OfficerProfileDialog({
                 />
               </div>
 
-              <div className="space-y-1">
+              <div className="min-w-0 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-xl font-bold tracking-tight text-foreground">
                     {mergedOfficer.full_name || "Unnamed Officer"}
@@ -273,9 +273,9 @@ export function OfficerProfileDialog({
                   )}
                 </div>
 
-                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                   <Mail className="h-3.5 w-3.5 shrink-0" />
-                  <span>{mergedOfficer.email}</span>
+                  <span className="min-w-0 break-all">{mergedOfficer.email}</span>
                 </p>
 
                 <div className="flex flex-wrap items-center gap-1.5 pt-1">
@@ -411,9 +411,9 @@ export function OfficerProfileDialog({
         </div>
 
         {/* Modal Body / Tabs */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-6">
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="grid w-full grid-cols-4 mb-4">
+            <TabsList className="mb-4 grid w-full grid-cols-2 sm:grid-cols-4">
               <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
               <TabsTrigger value="personal" className="text-xs">Personal</TabsTrigger>
               <TabsTrigger value="titles" className="text-xs">Titles & Roles</TabsTrigger>

@@ -1,78 +1,63 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent } from '@/components/ui/card'
-import { Loader2, BookOpen } from 'lucide-react'
+import { Loader2, BookOpen, RotateCw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import PapaBriefingCard, { type PapaBriefingPapa } from './PapaBriefingCard'
 import { getBriefingConfig, canEditBriefing } from '@/lib/constants/papaBriefingFields'
 
 interface PapaBriefingsSectionProps {
   /** The viewing user's role — determines which fields to show */
   role: string
+  userId?: string | null
 }
 
-export default function PapaBriefingsSection({ role }: PapaBriefingsSectionProps) {
+export default function PapaBriefingsSection({ role, userId: providedUserId }: PapaBriefingsSectionProps) {
   const supabase = createClient()
-  const [papas, setPapas] = useState<PapaBriefingPapa[]>([])
-  const [loading, setLoading] = useState(true)
 
   const config = getBriefingConfig(role)
   const canEdit = canEditBriefing(role)
-
-  const loadPapas = useCallback(async () => {
-    try {
-      // Get user's assigned program IDs
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: assignments } = await (supabase as any)
+  const papaFields = [...new Set([
+    'id', 'program_id', 'title', 'full_name', 'profile_photo_url', 'organization', 'position',
+    ...((config?.viewFields ?? []).map((field) => field.key)),
+  ])]
+  const { data: papas = [], isLoading, isError, refetch } = useQuery<PapaBriefingPapa[]>({
+    queryKey: ['papa-briefings', providedUserId || 'session-user', role],
+    enabled: Boolean(config) && providedUserId !== null,
+    queryFn: async () => {
+      let userId = providedUserId
+      if (!userId) {
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        if (authError) throw authError
+        userId = user?.id
+      }
+      if (!userId) return []
+      const { data: assignments, error: assignmentsError } = await (supabase as any)
         .from('current_title_assignments')
         .select('program_id')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('is_active', true)
+      if (assignmentsError) throw assignmentsError
+      const programIds = [...new Set((assignments || []).map((assignment: any) => assignment.program_id).filter(Boolean))]
+      if (programIds.length === 0) return [] as PapaBriefingPapa[]
 
-      const programIds = (assignments || []).map((a: any) => a.program_id).filter(Boolean)
-
-      // Fetch papas in those programs (active only — not cancelled/completed)
-      let query = (supabase as any)
+      const { data, error } = await (supabase as any)
         .from('papas')
-        .select(`
-          id, title, full_name, profile_photo_url, organization, position,
-          mic_preference, presentation_style, has_slides, needs_clicker, uses_stage_props, stage_props_details, speaking_schedule,
-          accommodation_preferences, accommodations, entourage_size, entourage_count, personal_assistants,
-          food_preferences, dietary_restrictions, needs_water_on_stage, water_temperature, needs_face_towels,
-          flight_number, airline, flight_provider, flight_arrival_time, flight_departure_time,
-          arrival_country, arrival_city, arrival_date, departure_date, passport_number,
-          special_requirements, notes
-        `)
+        .select(papaFields.join(', '))
+        .in('program_id', programIds)
         .order('full_name')
-
-      if (programIds.length > 0) {
-        query = query.in('program_id', programIds)
-      } else {
-        // No program assignment — show nothing
-        setPapas([])
-        return
-      }
-
-      const { data, error } = await query
       if (error) throw error
-      setPapas(data || [])
-    } catch (err) {
-      console.error('PapaBriefingsSection load error:', err)
-    } finally {
-      setLoading(false)
-    }
-  }, [supabase])
-
-  useEffect(() => {
-    void loadPapas()
-  }, [loadPapas])
+      return (data || []) as PapaBriefingPapa[]
+    },
+    staleTime: 60_000,
+    retry: 1,
+  })
 
   if (!config) return null // role has no briefing config
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -99,7 +84,16 @@ export default function PapaBriefingsSection({ role }: PapaBriefingsSectionProps
       </div>
 
       {/* Papa cards */}
-      {papas.length === 0 ? (
+      {isError ? (
+        <Card role="alert">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-6 text-sm">
+            <span>Unable to load Papa briefings. Please try again.</span>
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+              <RotateCw className="mr-2 h-4 w-4" aria-hidden="true" /> Retry
+            </Button>
+          </CardContent>
+        </Card>
+      ) : papas.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
             <BookOpen className="h-8 w-8 mx-auto mb-3 opacity-30" />
