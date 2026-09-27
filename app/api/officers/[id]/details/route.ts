@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { canViewOfficerFullProfile } from '@/lib/utils'
 
 export async function GET(
   request: Request,
@@ -13,13 +14,25 @@ export async function GET(
     }
 
     const supabase = await createClient()
-    const adminClient = createAdminClient()
-    const db = adminClient as any
-
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const { data: caller, error: callerError } = await supabase
+      .from('users')
+      .select('role, oscar, activation_status, is_active')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (callerError || !caller || caller.activation_status !== 'active' || caller.is_active === false) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    if (user.id !== id && !canViewOfficerFullProfile(caller.role, caller.oscar)) {
+      return NextResponse.json({ error: 'Forbidden: You cannot view this officer profile' }, { status: 403 })
+    }
+
+    const adminClient = createAdminClient()
+    const db = adminClient as any
 
     // Fetch officer user details
     const { data: officer, error: officerError } = await db
@@ -110,7 +123,7 @@ export async function GET(
       officer,
       titleAssignments: titleAssignments || [],
       dutyAssignments: dutyAssignments || []
-    })
+    }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error: any) {
     console.error('Error in /api/officers/[id]/details:', error)
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 })

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { isAdmin } from '@/lib/utils'
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,7 +12,40 @@ export async function GET(req: NextRequest) {
     const programId = req.nextUrl.searchParams.get('program_id')
     if (!programId) return NextResponse.json({ error: 'program_id is required' }, { status: 400 })
 
+    const { data: caller, error: callerError } = await supabase
+      .from('users')
+      .select('role, activation_status, is_active')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (callerError || !caller || caller.activation_status !== 'active' || caller.is_active === false) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const adminClient = createAdminClient()
+    const db = adminClient as any
+
+    // The roster contains officer identities. A caller may inspect it only
+    // when they administer the platform or belong to this program (including
+    // an explicit availability response for this program).
+    if (!isAdmin(caller.role)) {
+      const [{ data: titleAssignment, error: titleError }, { data: programRequests, error: requestsAccessError }] = await Promise.all([
+        db.from('current_title_assignments').select('id').eq('program_id', programId).eq('user_id', user.id).eq('is_active', true).limit(1),
+        db.from('mission_requests').select('id').eq('program_id', programId),
+      ])
+      if (titleError || requestsAccessError) throw titleError || requestsAccessError
+
+      let hasResponded = false
+      const requestIdsForCaller = (programRequests || []).map((request: { id: string }) => request.id)
+      if (requestIdsForCaller.length) {
+        const { data: responses, error: responseError } = await db
+          .from('mission_responses').select('id').in('request_id', requestIdsForCaller).eq('user_id', user.id).limit(1)
+        if (responseError) throw responseError
+        hasResponded = Boolean(responses?.length)
+      }
+      if (!titleAssignment?.length && !hasResponded) {
+        return NextResponse.json({ error: 'You are not assigned to this program' }, { status: 403 })
+      }
+    }
 
     // An officer is eligible to be a DO for this program if they are either
     // (a) formally assigned a title for it, or (b) marked themselves
@@ -20,12 +54,12 @@ export async function GET(req: NextRequest) {
     // who already said yes. Either way, eligibility is scoped to THIS
     // program only, never "any officer in the system."
     const [assignmentsRes, requestsRes] = await Promise.all([
-      (adminClient as any)
+      db
         .from('current_title_assignments')
         .select('user_id, full_name, title_name, title_code, unit')
         .eq('program_id', programId)
         .eq('is_active', true),
-      (adminClient as any)
+      db
         .from('mission_requests')
         .select('id')
         .eq('program_id', programId),
@@ -40,7 +74,7 @@ export async function GET(req: NextRequest) {
     let availableUserIds: string[] = []
     const requestIds = (requestsRes.data || []).map((r: any) => r.id)
     if (requestIds.length > 0) {
-      const { data: responses, error: responsesError } = await (adminClient as any)
+      const { data: responses, error: responsesError } = await db
         .from('mission_responses')
         .select('user_id')
         .in('request_id', requestIds)
@@ -64,10 +98,12 @@ export async function GET(req: NextRequest) {
     ]))
 
     if (eligibleUserIds.length === 0) {
-      return NextResponse.json({ officers: [] })
+      return NextResponse.json({ officers: [] }, {
+        headers: { 'Cache-Control': 'private, no-store' },
+      })
     }
 
-    const { data: usersData, error: usersError } = await (adminClient as any)
+    const { data: usersData, error: usersError } = await db
       .from('users')
       .select('id, full_name, role, oscar, photo_url, activation_status')
       .in('id', eligibleUserIds)
@@ -95,7 +131,9 @@ export async function GET(req: NextRequest) {
       })
       .sort((a: any, b: any) => (a.full_name ?? '').localeCompare(b.full_name ?? ''))
 
-    return NextResponse.json({ officers })
+    return NextResponse.json({ officers }, {
+      headers: { 'Cache-Control': 'private, no-store' },
+    })
   } catch (err: any) {
     console.error('Error in /api/officers/by-program:', err)
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 })

@@ -1,20 +1,22 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import { isPlatformAdministrator } from '@/lib/utils'
 import OfficersClient from './OfficersClient'
 
 export default async function OfficersPage() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    }
-  )
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login?next=%2Fofficers')
+
+  const { data: caller } = await supabase
+    .from('users')
+    .select('role, activation_status, is_active')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (!caller || caller.activation_status !== 'active' || caller.is_active === false || !isPlatformAdministrator(caller.role)) {
+    redirect('/dashboard')
+  }
 
   const { data: initialOfficers, error } = await supabase
     .from('users')

@@ -1,17 +1,33 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { isPlatformAdministrator } from '@/lib/utils'
 
 export async function GET() {
   try {
     const supabase = await createClient()
-    const adminClient = createAdminClient()
-
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    // Directory data includes contact and profile information. Keep the
+    // service-role read behind an active platform-administrator check.
+    const { data: caller, error: callerError } = await supabase
+      .from('users')
+      .select('role, activation_status, is_active')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (callerError || !caller || caller.activation_status !== 'active' || caller.is_active === false) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    if (!isPlatformAdministrator(caller.role)) {
+      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
+    }
+
+    const adminClient = createAdminClient()
 
     // Fetch all officers via admin client (bypasses RLS)
     const { data: officers, error } = await adminClient
@@ -57,7 +73,9 @@ export async function GET() {
       is_online: officer.last_seen != null && officer.last_seen >= fiveMinutesAgo,
     }))
 
-    return NextResponse.json({ officers: enrichedOfficers })
+    return NextResponse.json({ officers: enrichedOfficers }, {
+      headers: { 'Cache-Control': 'private, no-store' },
+    })
   } catch (error: any) {
     console.error('Unexpected error in /api/officers/list:', error)
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 })

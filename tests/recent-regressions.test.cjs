@@ -29,3 +29,28 @@ test('critical alert animation has a valid keyframe definition', () => {
   assert.doesNotMatch(source, /^pulse-slow tokens$/m)
   assert.doesNotMatch(source, /^user-select$/m)
 })
+
+test('officer directory service-role reads require an active platform administrator', () => {
+  const source = fs.readFileSync('app/api/officers/list/route.ts', 'utf8')
+  const guard = source.indexOf('!isPlatformAdministrator(caller.role)')
+  const serviceRead = source.indexOf('const adminClient = createAdminClient()')
+  assert.ok(guard >= 0 && serviceRead > guard)
+  assert.match(source, /caller\.activation_status !== 'active'/)
+  assert.match(source, /caller\.is_active === false/)
+})
+
+test('officer full-profile endpoint limits access to self or approved profile viewers', () => {
+  const source = fs.readFileSync('app/api/officers/[id]/details/route.ts', 'utf8')
+  const guard = source.indexOf('user.id !== id && !canViewOfficerFullProfile')
+  const serviceRead = source.indexOf('const adminClient = createAdminClient()')
+  assert.ok(guard >= 0 && serviceRead > guard)
+  assert.match(source, /caller\.activation_status !== 'active'/)
+})
+
+test('program officer roster is restricted to journey managers or program participants', () => {
+  const source = fs.readFileSync('app/api/officers/by-program/route.ts', 'utf8')
+  assert.match(source, /if \(!isAdmin\(caller\.role\)\)/)
+  assert.match(source, /current_title_assignments[\s\S]*?user\.id/)
+  assert.match(source, /mission_responses[\s\S]*?user\.id/)
+  assert.match(source, /You are not assigned to this program/)
+})
