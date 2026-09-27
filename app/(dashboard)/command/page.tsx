@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { CountUp } from "@/components/ui/count-up"
 import PapaFlightMonitor from "@/components/aviation/PapaFlightMonitor"
+import CommandFlightMap from "@/components/aviation/CommandFlightMap"
 import {
   Radar,
   Route,
@@ -218,6 +219,8 @@ export default function CommandPage() {
           </div>
         </div>
       </div>
+
+      <CommandFlightMap />
 
       <PapaFlightMonitor
         title="Papa aviation watch"

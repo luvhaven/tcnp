@@ -54,3 +54,19 @@ test('program officer roster is restricted to journey managers or program partic
   assert.match(source, /mission_responses[\s\S]*?user\.id/)
   assert.match(source, /You are not assigned to this program/)
 })
+
+test('Command flight watch is active-account and Command/Admin gated', () => {
+  const source = fs.readFileSync('app/api/flights/watch/route.ts', 'utf8')
+  assert.match(source, /supabase\.auth\.getUser\(\)/)
+  assert.match(source, /caller\.activation_status !== 'active'/)
+  assert.match(source, /canAccessCommandCentre\(caller\.role, caller\.oscar\)/)
+  assert.match(source, /Cache-Control': 'private, no-store'/)
+})
+
+test('OpenSky polling defaults to its anonymous free quota and supports OAuth refresh', () => {
+  const source = fs.readFileSync('app/api/flights/watch/route.ts', 'utf8')
+  assert.match(source, /ANONYMOUS_REFRESH_SECONDS = 15 \* 60/)
+  assert.match(source, /AUTHENTICATED_REFRESH_SECONDS = 2 \* 60/)
+  assert.match(source, /OPENSKY_CLIENT_ID/)
+  assert.match(source, /OPENSKY_CLIENT_SECRET/)
+})

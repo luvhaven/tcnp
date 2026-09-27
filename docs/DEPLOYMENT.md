@@ -158,13 +158,17 @@ TWILIO_PHONE_NUMBER=your-twilio-phone
 ### 5.3 Flight Tracking (OpenSky Network)
 
 ```env
-OPENSKY_USERNAME=your-opensky-username
-OPENSKY_PASSWORD=your-opensky-password
+OPENSKY_CLIENT_ID=your-opensky-oauth-client-id
+OPENSKY_CLIENT_SECRET=your-opensky-oauth-client-secret
 ```
 
-1. Register at [opensky-network.org](https://opensky-network.org)
-2. Free tier available
-3. Optional feature
+1. Register at [opensky-network.org](https://opensky-network.org) and create an OAuth API client.
+2. Add the client ID and secret to local environment variables and Vercel Project Settings → Environment Variables. Keep both server-only; never prefix them with `NEXT_PUBLIC_`.
+3. Authenticated OpenSky access lets the Command flight map refresh its provider snapshot every two minutes. Without these credentials, it uses anonymous access and refreshes every 15 minutes to stay within OpenSky's published anonymous daily quota.
+4. Flight positions depend on ADS-B receiver coverage and are informational, not guaranteed continuous or certified real-time tracking.
+5. OpenSky describes its live API as intended for research and non-commercial use. Confirm your organization's intended operational use against its current terms; contact OpenSky if you need commercial/service-level access.
+
+OpenSky uses OAuth client credentials; username/password API authentication is no longer supported. See the [official REST API documentation](https://openskynetwork.github.io/opensky-api/rest.html) for authentication and quota details.
 
 ## Step 6: Monitoring & Maintenance
 

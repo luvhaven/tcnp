@@ -1,24 +1,51 @@
 import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { canAccessCommandCentre, canManageEagles } from '@/lib/utils'
+import { checkRateLimit } from '@/lib/security/rate-limit'
 
-// Cache responses for 60 seconds to respect OpenSky rate limits and improve performance
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 const OPENSKY_BASE_URL = 'https://opensky-network.org/api'
 
 export async function GET(request: Request) {
+    const rateLimit = checkRateLimit(request, 'flight-search', 30, 60_000)
+    if (!rateLimit.success) {
+        return NextResponse.json({ error: 'Too many flight searches. Try again shortly.' }, {
+            status: 429,
+            headers: { 'Cache-Control': 'private, no-store' },
+        })
+    }
+
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: { 'Cache-Control': 'private, no-store' } })
+    }
+    const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('role, oscar, activation_status, is_active')
+        .eq('id', user.id)
+        .maybeSingle()
+    if (profileError || !profile || profile.activation_status !== 'active' || profile.is_active === false) {
+        return NextResponse.json({ error: 'Active account required' }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } })
+    }
+    if (!canAccessCommandCentre(profile.role, profile.oscar) && !canManageEagles(profile.role, profile.oscar)) {
+        return NextResponse.json({ error: 'Alpha, Command, or administrator access required' }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } })
+    }
+
     const { searchParams } = new URL(request.url)
     const icao24 = searchParams.get('icao24')
     const callsign = searchParams.get('callsign')
     const bounds = searchParams.get('bounds') // lamin,lomin,lamax,lomax
-    if (icao24 && !/^[a-f0-9]{6}$/i.test(icao24)) return NextResponse.json({ error: 'Invalid aircraft address.' }, { status: 400 })
-    if (callsign && !/^[a-z0-9\s]{2,12}$/i.test(callsign)) return NextResponse.json({ error: 'Invalid callsign.' }, { status: 400 })
+    if (icao24 && !/^[a-f0-9]{6}$/i.test(icao24)) return NextResponse.json({ error: 'Invalid aircraft address.' }, { status: 400, headers: { 'Cache-Control': 'private, no-store' } })
+    if (callsign && !/^[a-z0-9\s]{2,12}$/i.test(callsign)) return NextResponse.json({ error: 'Invalid callsign.' }, { status: 400, headers: { 'Cache-Control': 'private, no-store' } })
     if (bounds) {
         const coordinates = bounds.split(',').map(Number)
         if (coordinates.length !== 4 || coordinates.some(value => !Number.isFinite(value)) ||
             Math.abs(coordinates[0]) > 90 || Math.abs(coordinates[2]) > 90 ||
             Math.abs(coordinates[1]) > 180 || Math.abs(coordinates[3]) > 180 ||
             coordinates[0] >= coordinates[2] || coordinates[1] >= coordinates[3]) {
-            return NextResponse.json({ error: 'Invalid map bounds.' }, { status: 400 })
+            return NextResponse.json({ error: 'Invalid map bounds.' }, { status: 400, headers: { 'Cache-Control': 'private, no-store' } })
         }
     }
 
@@ -46,7 +73,7 @@ export async function GET(request: Request) {
             console.warn(`OpenSky API error (Route Handler): ${response.status} - ${response.statusText}`)
             return NextResponse.json(
                 { error: `OpenSky API error: ${response.status}`, states: null },
-                { status: response.status }
+                { status: response.status, headers: { 'Cache-Control': 'private, no-store' } }
             )
         }
 
@@ -61,15 +88,15 @@ export async function GET(request: Request) {
             return NextResponse.json({
                 time: data.time,
                 states: matchingStates
-            })
+            }, { headers: { 'Cache-Control': 'private, no-store' } })
         }
 
-        return NextResponse.json(data)
+        return NextResponse.json(data, { headers: { 'Cache-Control': 'private, no-store' } })
     } catch (error) {
         console.error('Failed to fetch from OpenSky:', error)
         return NextResponse.json(
             { error: 'Failed to fetch flight data', states: null },
-            { status: 500 }
+            { status: 500, headers: { 'Cache-Control': 'private, no-store' } }
         )
     }
 }
