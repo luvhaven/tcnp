@@ -22,8 +22,6 @@ export type LiveTrackingLeafletLocation = {
 export type LiveTrackingLeafletProps = {
   center: [number, number]
   locations: LiveTrackingLeafletLocation[]
-  /** Route trails: map of user_id -> ordered [lat, lng] history points */
-  trails?: Record<string, [number, number][]>
   getUserStatus: (updatedAt: string) => { label: string; color: string }
   getRoleDisplay: (role?: string | null) => { label: string; color: string }
   /** Show TomTom traffic flow overlay */
@@ -87,9 +85,6 @@ const buildPopupContent = (
     </div>`
 }
 
-// Distinct trail colours for up to 8 simultaneous tracked users
-const TRAIL_COLORS = ['#2563EB', '#16A34A', '#D97706', '#9333EA', '#DB2777', '#0891B2', '#DC2626', '#65A30D']
-
 type BasemapId = 'auto' | 'streets' | 'dark'
 
 type TileSource = { url: string; attribution: string; subdomains?: string; maxZoom: number }
@@ -144,7 +139,6 @@ const TILE_TIMEOUT_MS = 7000
 export default function LiveTrackingLeaflet({
   center,
   locations,
-  trails,
   getUserStatus,
   getRoleDisplay,
   showTraffic = false,
@@ -152,7 +146,6 @@ export default function LiveTrackingLeaflet({
 }: LiveTrackingLeafletProps) {
   const mapRef = useRef<L.Map | null>(null)
   const markersRef = useRef<Record<string, L.Marker>>({})
-  const polylinesRef = useRef<Record<string, L.Polyline>>({})
   const trafficRef = useRef<L.TileLayer | null>(null)
   const baseLayerRef = useRef<L.TileLayer | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -310,7 +303,6 @@ export default function LiveTrackingLeaflet({
         mapRef.current = null
         baseLayerRef.current = null
         markersRef.current = {}
-        polylinesRef.current = {}
         trafficRef.current = null
         hasFitBoundsRef.current = false
       }
@@ -409,43 +401,7 @@ export default function LiveTrackingLeaflet({
     map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 })
   }
 
-  // ── Route trails (polylines) ──────────────────────────────────────────────
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map) return
-
-    const lines = polylinesRef.current
-
-    // Remove stale lines
-    Object.keys(lines).forEach((uid) => {
-      if (!trails || !trails[uid] || trails[uid].length < 2) {
-        lines[uid].remove()
-        delete lines[uid]
-      }
-    })
-
-    if (!trails) return
-
-    Object.entries(trails).forEach(([uid, points], idx) => {
-      if (points.length < 2) return
-      const color = TRAIL_COLORS[idx % TRAIL_COLORS.length]
-      const latlngs: L.LatLngExpression[] = points.map(([lat, lng]) => [lat, lng])
-
-      if (lines[uid]) {
-        lines[uid].setLatLngs(latlngs)
-      } else {
-        lines[uid] = L.polyline(latlngs, {
-          color,
-          weight: 3,
-          opacity: 0.65,
-          dashArray: '6,6',
-          lineCap: 'round',
-        }).addTo(map)
-      }
-    })
-  }, [trails])
-
-  // ── Markers ───────────────────────────────────────────────────────────────
+  // ── Markers ─
   useEffect(() => {
     const map = mapRef.current
     if (!map) return

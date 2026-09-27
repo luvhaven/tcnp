@@ -99,7 +99,7 @@ const sections = [
       },
       {
         heading: 'Map Features',
-        body: '• **Blue markers** — Active officers (updated < 2 min ago)\n• **Pulsing red dots** — Stale locations (> 5 min since update)\n• **Dashed coloured lines** — Route trails showing recent movement path of each officer\n• **Popup on click** — Shows full name, OSCAR, role, battery %, speed, and last update time',
+        body: '• **Blue markers** — Active officers (updated < 2 min ago)\n• **Pulsing red dots** — Stale locations (> 5 min since update)\n• **Popup on click** — Shows full name, OSCAR, role, battery %, speed, and last update time',
       },
       {
         heading: 'Filters',

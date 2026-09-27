@@ -36,7 +36,6 @@ type UserLocation = {
 type LiveTrackingLeafletProps = {
   center: [number, number]
   locations: UserLocation[]
-  trails?: Record<string, [number, number][]>
   getUserStatus: (updatedAt: string) => { label: string; color: string }
   getRoleDisplay: (role?: string | null) => { label: string; color: string }
   showTraffic?: boolean
@@ -165,8 +164,6 @@ export default function LiveTrackingMap() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showTraffic, setShowTraffic] = useState(false)
   const [trafficAvailable, setTrafficAvailable] = useState<boolean | null>(null)
-  const locationTrailsRef = useRef<Record<string, [number, number][]>>({})
-  const [locationTrails, setLocationTrails] = useState<Record<string, [number, number][]>>({})
 
   const { permissionStatus, requestPermission, isTracking, startTracking } =
     useLocationTracking({ enableTracking: true, updateInterval: 10000, highAccuracy: true })
@@ -247,16 +244,6 @@ export default function LiveTrackingMap() {
           : null
       }))
 
-      const trails = locationTrailsRef.current
-      enrichedData.forEach((loc: UserLocation) => {
-        const point: [number, number] = [loc.latitude, loc.longitude]
-        const existing = trails[loc.user_id] ?? []
-        const last = existing[existing.length - 1]
-        if (!last || Math.abs(last[0] - point[0]) > 0.00005 || Math.abs(last[1] - point[1]) > 0.00005) {
-          trails[loc.user_id] = [...existing, point].slice(-10)
-        }
-      })
-      setLocationTrails({ ...trails })
       setUserLocations(enrichedData)
       setLocationError(null)
       setLastUpdated(new Date().toLocaleTimeString())
@@ -498,7 +485,6 @@ export default function LiveTrackingMap() {
                   <LiveTrackingLeaflet
                     center={mapCenter}
                     locations={filteredLocations}
-                    trails={locationTrails}
                     getUserStatus={getUserStatus}
                     getRoleDisplay={getRoleDisplayMeta}
                     showTraffic={showTraffic}
