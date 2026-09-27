@@ -6,7 +6,7 @@ To ensure seamless coordination between technology and protocol operations, this
 
 *   **Alpha Oscar (AO):** Protocol officer stationed at the "Eagle Square" (Airport).
 *   **Delta Oscar (DO):** The primary duty officer assigned to a specific "Papa" for duration of their visit.
-*   **November Oscar (NO):** Hospitality officer managing the "Nest" (Hotel) and the "Theatre" (Venue) entertainment.
+*   **November Oscar (NO):** Officer managing Papa accommodation and guest experiences at the Nest (hotel), plus reception support at the Den.
 *   **Papa:** A code name for a High-Profile Guest or Principal minister.
 *   **Tango Oscar (TO):** Transport officer managing the fleet and drivers.
 *   **Victor Oscar (VO):** Venue officer stationed at the "Theatre."

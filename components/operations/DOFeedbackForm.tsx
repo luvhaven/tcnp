@@ -33,6 +33,7 @@ const FEEDBACK_FIELDS = [
 export default function DOFeedbackForm({ journeyId, papaNme, onSubmit }: DOFeedbackFormProps) {
     const supabase = createClient()
     const [saving, setSaving] = useState(false)
+    const [submitted, setSubmitted] = useState(false)
     const [rating, setRating] = useState('')
     const [fields, setFields] = useState<Record<string, string>>({
         principal_wellbeing: '',
@@ -56,7 +57,7 @@ export default function DOFeedbackForm({ journeyId, papaNme, onSubmit }: DOFeedb
             if (!user) throw new Error('Not authenticated')
             const { data: ud } = await supabase.from('users').select('full_name').eq('id', user.id).single()
 
-            await (supabase as any).from('do_feedback_forms').insert([{
+            const { error } = await (supabase as any).from('do_feedback_forms').insert([{
                 journey_id: journeyId,
                 submitted_by: user.id,
                 submitted_by_name: ud?.full_name || user.email,
@@ -64,7 +65,9 @@ export default function DOFeedbackForm({ journeyId, papaNme, onSubmit }: DOFeedb
                 ...fields,
                 submitted_at: new Date().toISOString(),
             }])
+            if (error) throw error
 
+            setSubmitted(true)
             toast.success('Post-operation feedback submitted', { description: 'Report has been logged to Command Centre.' })
             onSubmit?.()
         } catch (err: any) {
@@ -87,7 +90,9 @@ export default function DOFeedbackForm({ journeyId, papaNme, onSubmit }: DOFeedb
                 </p>
             </CardHeader>
             <CardContent className="p-4">
-                <form onSubmit={handleSubmit} className="space-y-4">
+                {submitted ? (
+                    <p role="status" className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm text-emerald-700">Your report has been submitted successfully.</p>
+                ) : <form onSubmit={handleSubmit} className="space-y-4">
                     {/* Overall Rating */}
                     <div className="space-y-1.5">
                         <Label className="text-xs flex items-center gap-1.5">
@@ -127,7 +132,7 @@ export default function DOFeedbackForm({ journeyId, papaNme, onSubmit }: DOFeedb
                         <Send className="h-3 w-3" />
                         {saving ? 'Submitting…' : 'Submit Post-Op Report'}
                     </Button>
-                </form>
+                </form>}
             </CardContent>
         </Card>
     )

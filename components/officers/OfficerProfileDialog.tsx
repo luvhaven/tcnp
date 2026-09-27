@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { computeProfileCompletion } from "@/lib/profile-completion"
+import { normalizeOscarLabel } from "@/lib/utils"
 import { CompletionRing } from "@/components/profile/CompletionRing"
 import {
   User, Mail, Phone, MapPin, Cake, Award, Calendar,
@@ -124,6 +125,15 @@ export function OfficerProfileDialog({
 
   const formatRole = (role?: string | null) => {
     if (!role) return "Officer"
+    const unitLabels: Record<string, string> = {
+      noscar_den: "November (Den)",
+      head_noscar_den: "Head, November (Den)",
+      noscar_nest: "November (Nest)",
+      head_noscar_nest: "Head, November (Nest)",
+      hospitality_oscar: "November (Nest)",
+      head_hospitality_oscar: "Head, November (Nest)",
+    }
+    if (unitLabels[role]) return unitLabels[role]
     return role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
   }
 
@@ -275,7 +285,7 @@ export function OfficerProfileDialog({
 
                   {mergedOfficer.oscar && (
                     <Badge variant="secondary" className="text-[10px] font-medium">
-                      {mergedOfficer.oscar}
+                      {normalizeOscarLabel(mergedOfficer.oscar)}
                     </Badge>
                   )}
 
@@ -426,7 +436,7 @@ export function OfficerProfileDialog({
                     </div>
                     <div className="flex justify-between items-center py-1 border-b border-border/40">
                       <span className="text-muted-foreground">Oscar Unit:</span>
-                      <span className="font-medium">{mergedOfficer.oscar || "—"}</span>
+                      <span className="font-medium">{normalizeOscarLabel(mergedOfficer.oscar) || "—"}</span>
                     </div>
                     <div className="flex justify-between items-center py-1 border-b border-border/40">
                       <span className="text-muted-foreground">Protocol Team:</span>
@@ -653,7 +663,7 @@ export function OfficerProfileDialog({
                       <Award className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
                       <p className="font-medium text-foreground">No specific program titles assigned</p>
                       <p className="text-muted-foreground text-[11px] mt-0.5">
-                        Operating under general call sign: {mergedOfficer.oscar || formatRole(mergedOfficer.role)}
+                        Operating under general call sign: {normalizeOscarLabel(mergedOfficer.oscar) || formatRole(mergedOfficer.role)}
                       </p>
                     </div>
                   ) : (

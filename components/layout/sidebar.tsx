@@ -36,7 +36,6 @@ import {
   Camera,
   Shirt,
   UtensilsCrossed,
-  Compass,
   Banknote,
   GraduationCap,
   Radar,
@@ -71,11 +70,10 @@ const NAV_SECTIONS: NavSection[] = [
       { name: "Tango", href: "/tango", icon: Car },
       { name: "Victor", href: "/victor", icon: Landmark },
       { name: "November (Nest)", href: "/nests", icon: Hotel },
-      { name: "November (Theatre)", href: "/den", icon: Home },
+      { name: "November (Den)", href: "/den", icon: Home },
       { name: "Serial", href: "/serial", icon: Camera },
       { name: "Compliance", href: "/compliance", icon: Shirt },
       { name: "Welfare", href: "/welfare", icon: UtensilsCrossed },
-      { name: "Hospitality", href: "/hospitality", icon: Compass },
     ],
   },
   {
@@ -121,7 +119,7 @@ const ALL_NAV = NAV_SECTIONS.flatMap(s => s.items)
 /** Pages every authenticated user always sees */
 const BASE_HREFS = [
   "/dashboard", "/my-operations", "/outbox", "/chat", "/programs", "/guide",
-  "/training", "/compliance", "/welfare", "/hospitality",
+  "/training", "/compliance", "/welfare",
   "/profile", "/change-password",
 ]
 
@@ -148,8 +146,6 @@ const ROLE_EXTRA: Record<string, string[]> = {
   head_compliance_oscar: ["/compliance"],
   welfare_oscar: ["/welfare"],
   head_welfare_oscar: ["/welfare"],
-  hospitality_oscar: ["/hospitality"],
-  head_hospitality_oscar: ["/hospitality"],
   // Echo is no longer a standalone unit — legacy echo officers keep base access only
   echo_oscar: [],
   head_echo_oscar: [],

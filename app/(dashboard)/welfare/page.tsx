@@ -143,7 +143,7 @@ export default function WelfarePage() {
             </Select>
           </div>
 
-          {/* Menus (shared with November (Theatre)) */}
+          {/* Menus (shared with November (Den)) */}
           <DenMenus canEdit={canEdit} selectedProgram={filterProgram} currentUserId={currentUser?.id ?? null} />
         </>
       )}

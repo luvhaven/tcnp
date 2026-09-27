@@ -7,7 +7,7 @@ import { motion } from "framer-motion"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
-import { cn } from "@/lib/utils"
+import { cn, normalizeOscarLabel } from "@/lib/utils"
 import { computeProfileCompletion, type ProfileFields } from "@/lib/profile-completion"
 import { CompletionRing } from "@/components/profile/CompletionRing"
 import { useCelebrate } from "@/components/providers/CelebrateProvider"
@@ -84,7 +84,7 @@ export default function ProfilePage() {
     setForm({
       full_name: currentUser.full_name,
       phone: currentUser.phone,
-      oscar: currentUser.oscar,
+      oscar: normalizeOscarLabel(currentUser.oscar),
       team: currentUser.team,
       date_of_birth: currentUser.date_of_birth,
       gender: currentUser.gender,
@@ -204,7 +204,15 @@ export default function ProfilePage() {
     return <div className="flex items-center justify-center py-24"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
   }
 
-  const roleLabel = (currentUser.role ?? "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
+  const ROLE_LABELS: Record<string, string> = {
+    noscar_den: "November (Den)",
+    head_noscar_den: "Head, November (Den)",
+    noscar_nest: "November (Nest)",
+    head_noscar_nest: "Head, November (Nest)",
+    hospitality_oscar: "November (Nest)",
+    head_hospitality_oscar: "Head, November (Nest)",
+  }
+  const roleLabel = ROLE_LABELS[currentUser.role ?? ""] ?? (currentUser.role ?? "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
 
   return (
     <div className="space-y-6 page-enter">
@@ -234,7 +242,7 @@ export default function ProfilePage() {
               <p className="text-sm text-muted-foreground">{currentUser.email}</p>
               <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
                 {currentUser.role && <Badge className="border-0 bg-primary/15 text-primary uppercase text-[10px] tracking-wide">{roleLabel}</Badge>}
-                {currentUser.oscar && <Badge variant="outline" className="text-[10px]">{currentUser.oscar}</Badge>}
+                {normalizeOscarLabel(currentUser.oscar) && <Badge variant="outline" className="text-[10px]">{normalizeOscarLabel(currentUser.oscar)}</Badge>}
                 {currentUser.team && <Badge variant="outline" className="text-[10px] uppercase">{currentUser.is_team_head ? '★ ' : ''}{currentUser.team}</Badge>}
               </div>
             </div>

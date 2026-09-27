@@ -61,10 +61,10 @@ function journeyMatchesRole(journey: Journey, role: string, userId: string, osca
   const effectiveRole = (role !== 'delta_oscar' ? role : null) ?? oscarToRole(oscar) ?? role
 
   // Anyone assigned as DO to this specific journey always sees it
-  const isAssignedToDO = !!(
-    journey.duty_officers?.some(d => d.user_id === userId) ||
-    journey.assigned_duty_officer_id === userId
-  )
+  const ownAssignment = journey.duty_officers?.find(d => d.user_id === userId)
+  const isAssignedToDO = !!(ownAssignment
+    ? ['pending', 'acknowledged'].includes(ownAssignment.status ?? 'acknowledged')
+    : journey.assigned_duty_officer_id === userId)
   if (isAssignedToDO) return true
 
   // Base Oscar access — governs which journey types are in scope
@@ -112,6 +112,7 @@ const getStatusColor = (status: string) => {
 export default function MyOperationsPage() {
   const supabase = createClient()
   const [journeys, setJourneys] = useState<Journey[]>([])
+  const [completedAssignments, setCompletedAssignments] = useState<Journey[]>([])
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
@@ -157,10 +158,10 @@ export default function MyOperationsPage() {
       // Step 1: Get all journey_ids where this user is a DO (lead or not)
       const { data: myDORows } = await (supabase as any)
         .from('journey_duty_officers')
-        .select('journey_id')
+        .select('journey_id, status')
         .eq('user_id', user.id)
 
-      const myDOJourneyIds: string[] = (myDORows || []).map((r: any) => r.journey_id).filter(Boolean)
+      const myDOJourneyIds: string[] = (myDORows || []).filter((r: any) => ['pending', 'acknowledged'].includes(r.status ?? 'acknowledged')).map((r: any) => r.journey_id).filter(Boolean)
 
       // Build journey query: admin sees all; others see program journeys OR own DO assignments
       let query = (supabase as any)
@@ -217,6 +218,35 @@ export default function MyOperationsPage() {
       // Filter by role (oscar-aware)
       const filtered = incoming.filter(j => journeyMatchesRole(j, role, user.id, oscar))
 
+      // Completed journeys stay available for the required after-operation report,
+      // but never re-enter the active operations controls.
+      if (myDOJourneyIds.length > 0) {
+        const { data: completedRows, error: completedError } = await (supabase as any)
+          .from('journeys')
+          .select(`id, status, origin, destination, scheduled_departure, scheduled_arrival, etd, eta, notes,
+            program_id, papa_id, assigned_duty_officer_id, assigned_nest_id, assigned_eagle_square_id, assigned_theatre_id,
+            papas:papas!papa_id(full_name, title), cheetahs:cheetahs!assigned_cheetah_id(id, call_sign, registration_number),
+            nests:nests!assigned_nest_id(name), eagle_squares:eagle_squares!assigned_eagle_square_id(name, code)`)
+          .eq('status', 'completed')
+          .in('id', myDOJourneyIds)
+          .or('is_deleted.is.null,is_deleted.eq.false')
+        if (completedError) throw completedError
+        const completedIds = (completedRows || []).map((j: any) => j.id)
+        let completedDOs: any[] = []
+        if (completedIds.length) {
+          const { data } = await (supabase as any).from('journey_duty_officers')
+            .select('journey_id, user_id, is_lead, status, acknowledged_at, users:user_id(full_name, role, oscar, photo_url)')
+            .in('journey_id', completedIds)
+          completedDOs = data || []
+        }
+        const completedMap: Record<string, DutyOfficer[]> = {}
+        for (const row of completedDOs) (completedMap[row.journey_id] ??= []).push(row)
+        setCompletedAssignments((completedRows || []).map((j: any) => ({ ...j, duty_officers: completedMap[j.id] || [] }))
+          .filter((j: Journey) => journeyMatchesRole(j, role, user.id, oscar)))
+      } else {
+        setCompletedAssignments([])
+      }
+
       // Detect new assignments
       if (!isInitial && knownIds.current.size > 0) {
         for (const j of filtered) {
@@ -252,10 +282,10 @@ export default function MyOperationsPage() {
   const checkReminders = useCallback(() => {
     if (!userId || !userRole) return
     const now = Date.now()
-    const myJourneys = journeys.filter(j =>
-      j.duty_officers?.some(d => d.user_id === userId) ||
-      j.assigned_duty_officer_id === userId
-    )
+  const myJourneys = journeys.filter(j => {
+      const own = j.duty_officers?.find(d => d.user_id === userId)
+      return own ? ['pending', 'acknowledged'].includes(own.status ?? 'acknowledged') : j.assigned_duty_officer_id === userId
+    })
 
     for (const j of myJourneys) {
       const fireReminder = async (key: string, title: string, body: string) => {
@@ -290,16 +320,22 @@ export default function MyOperationsPage() {
   }, [journeys, userId, userRole])
 
   useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | undefined
+    let active = true
     const init = async () => {
       await loadJourneys(true)
-      const channel = supabase
+      if (!active) return
+      channel = supabase
         .channel('my-ops-realtime')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'journeys' }, () => void loadJourneys(false))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'journey_duty_officers' }, () => void loadJourneys(false))
         .subscribe()
-      return () => { supabase.removeChannel(channel) }
     }
     void init()
+    return () => {
+      active = false
+      if (channel) void supabase.removeChannel(channel)
+    }
   }, [loadJourneys, supabase])
 
   useEffect(() => {
@@ -317,10 +353,10 @@ export default function MyOperationsPage() {
   }
 
   const isAdminUser = Boolean(userRole && (isAdmin(userRole) || isAdmin(effectiveOscarRole(userRole, userOscar))))
-  const myAssigned = journeys.filter(j =>
-    j.duty_officers?.some(d => d.user_id === userId) ||
-    j.assigned_duty_officer_id === userId
-  )
+  const myAssigned = journeys.filter(j => {
+    const own = j.duty_officers?.find(d => d.user_id === userId)
+    return own ? ['pending', 'acknowledged'].includes(own.status ?? 'acknowledged') : j.assigned_duty_officer_id === userId
+  })
   const programFeed = journeys.filter(j => !myAssigned.some(a => a.id === j.id))
   const upcoming = journeys.filter(j => j.status === 'planned').sort((a, b) =>
     new Date(a.scheduled_departure ?? 0).getTime() - new Date(b.scheduled_departure ?? 0).getTime()
@@ -389,10 +425,10 @@ export default function MyOperationsPage() {
                 <Badge variant="outline" className="ml-1 h-5 px-1.5 text-xs">{upcoming.length}</Badge>
               </TabsTrigger>
             )}
-            {myAssigned.length > 0 && (
+            {completedAssignments.length > 0 && (
               <TabsTrigger value="postop" className="flex items-center gap-1.5">
                 Post-Op Report
-                <Badge variant="outline" className="ml-1 h-5 px-1.5 text-xs text-amber-600 border-amber-500/40">{myAssigned.length}</Badge>
+                <Badge variant="outline" className="ml-1 h-5 px-1.5 text-xs text-amber-600 border-amber-500/40">{completedAssignments.length}</Badge>
               </TabsTrigger>
             )}
           </TabsList>
@@ -444,14 +480,14 @@ export default function MyOperationsPage() {
           {/* ── Post-Op Reports (DO only) ────────────────────────── */}
           <TabsContent value="postop" className="space-y-4">
             <p className="text-xs text-muted-foreground">Submit your post-operation report after each journey is complete. Required per SOP TCNP.01.08.</p>
-            {myAssigned.length === 0 ? (
+            {completedAssignments.length === 0 ? (
               <Card>
                 <CardContent className="py-8 text-center text-sm text-muted-foreground">
                   No assigned journeys to report on.
                 </CardContent>
               </Card>
             ) : (
-              myAssigned.map(j => (
+              completedAssignments.map(j => (
                 <DOFeedbackForm
                   key={j.id}
                   journeyId={j.id}
@@ -480,7 +516,9 @@ function JourneyOperationsPanel({
   const supabase = createClient()
   const celebrate = useCelebrate()
   const myDORecord = journey.duty_officers?.find(d => d.user_id === currentUserId)
-  const isAssignedDO = !!(myDORecord || journey.assigned_duty_officer_id === currentUserId)
+  const isAssignedDO = !!(myDORecord
+    ? ['pending', 'acknowledged'].includes(myDORecord.status ?? 'acknowledged')
+    : journey.assigned_duty_officer_id === currentUserId)
   const isLead = !!(myDORecord?.is_lead || journey.assigned_duty_officer_id === currentUserId)
   const isPendingAcknowledge = myDORecord?.status === 'pending'
   const canUpdate = isAssignedDO || isAdmin
@@ -570,6 +608,11 @@ function JourneyOperationsPanel({
 
   return (
     <div className="space-y-4">
+      {myDORecord?.status === 'rejected' && (
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="py-3 text-sm text-destructive">You declined this mission. Operational access has been removed.</CardContent>
+        </Card>
+      )}
       {/* Journey summary */}
       <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
         <CardContent className="pt-4 pb-4">

@@ -194,7 +194,7 @@ const SOP_SECTIONS: SOPSection[] = [
             },
             {
                 heading: 'NO — November Oscar (Nest Officer)',
-                body: 'Responsible for ensuring hotel keys are collected, rooms pre-checked and correctly assigned, and that Papas are checked into appropriately reserved rooms. November Oscars also serve as the welcoming team at the Nest and provide refreshment and hospitality at the Theatre.',
+                body: 'Responsible for ensuring hotel keys are collected, rooms pre-checked and correctly assigned, and that Papas are checked into appropriately reserved rooms. November (Nest) officers welcome guests and coordinate hospitality needs during operations, including at the Den.',
             },
             {
                 heading: 'VO — Victor Oscar (Venue Officer)',
@@ -230,7 +230,7 @@ const SOP_SECTIONS: SOPSection[] = [
                 ],
             },
             {
-                heading: 'Hospitality Routine (Nest Reception)',
+                heading: 'November (Nest) Guest Reception Routine',
                 list: [
                     'NOs must be at the Nest at least 30 minutes to ETA of Eagle',
                     'NO confirms with School on Nest arrangements',

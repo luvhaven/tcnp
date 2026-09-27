@@ -61,7 +61,6 @@ const TARGET_OSCARS = [
   { id: "compliance_oscar", name: "Compliance Oscar" },
   { id: "delta_oscar", name: "Delta Oscar" },
   { id: "echo_oscar", name: "Echo Oscar" },
-  { id: "hospitality_oscar", name: "Hospitality Oscar" },
   { id: "november_oscar", name: "November Oscar" },
   { id: "serial_oscar", name: "Serial Oscar" },
   { id: "tango_oscar", name: "Tango Oscar" },

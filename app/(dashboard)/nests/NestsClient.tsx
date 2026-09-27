@@ -26,6 +26,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { useUnitAccess } from "@/hooks/useUnitAccess"
 import { OfficerProfileDialog, type OfficerProfileData } from "@/components/officers/OfficerProfileDialog"
 import RoomOperations from "@/components/nests/RoomOperations"
+import GuestExperiences from "@/components/nests/GuestExperiences"
 
 type Program = {
   id: string
@@ -360,7 +361,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
               </Badge>
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Papa hotel accommodations, suite comfort checklists, and assigned Nest officers.
+              Papa accommodation, room readiness, guest experiences, and assigned Nest officers.
             </p>
           </div>
         </div>
@@ -410,6 +411,8 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       />
 
       <PapaAccommodations canEdit={canEditAccommodations} selectedProgram={selectedProgram} currentUserId={currentUser?.id ?? null} />
+
+      <GuestExperiences />
 
       <Card>
         <CardHeader>

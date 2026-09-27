@@ -55,7 +55,11 @@ export async function POST(request: Request) {
             return `OSCAR-${initials}-${roleCode}`
         }
 
-        const oscar = custom_oscar || generateOscar(full_name, role)
+        const submittedOscar = typeof custom_oscar === 'string' ? custom_oscar.trim() : ''
+        // Hospitality is a November (Nest) responsibility, never a selectable Oscar.
+        const oscar = /hospitality/i.test(submittedOscar)
+            ? 'November (Nest)'
+            : submittedOscar || generateOscar(full_name, role)
 
         const insertData: any = {
             id: authData.user.id,

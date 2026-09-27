@@ -123,10 +123,10 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     { value: 'tango_oscar', label: 'Tango Oscar (TO)' },
     { value: 'head_alpha_oscar', label: 'Head, Alpha Oscar' },
     { value: 'alpha_oscar', label: 'Alpha Oscar (AO)' },
-    { value: 'head_noscar_den', label: 'Head, NOscar Theatre' },
-    { value: 'noscar_den', label: 'NOscar Theatre' },
-    { value: 'head_noscar_nest', label: 'Head, NOscar Nest' },
-    { value: 'noscar_nest', label: 'NOscar Nest' },
+    { value: 'head_noscar_den', label: 'Head, November (Den)' },
+    { value: 'noscar_den', label: 'November (Den)' },
+    { value: 'head_noscar_nest', label: 'Head, November (Nest)' },
+    { value: 'noscar_nest', label: 'November (Nest)' },
     { value: 'november_oscar', label: 'November Oscar (Legacy)' },
     { value: 'head_victor_oscar', label: 'Head, Victor Oscar' },
     { value: 'victor_oscar', label: 'Victor Oscar (VO)' },
@@ -137,8 +137,6 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     { value: 'compliance_oscar', label: 'Compliance Oscar (CO)' },
     { value: 'head_welfare_oscar', label: 'Head, Welfare Oscar' },
     { value: 'welfare_oscar', label: 'Welfare Oscar (WO)' },
-    { value: 'head_hospitality_oscar', label: 'Head, Hospitality Oscar' },
-    { value: 'hospitality_oscar', label: 'Hospitality Oscar (HO)' },
     { value: 'viewer', label: 'Viewer' }
   ]
 
@@ -148,12 +146,11 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     { id: 'alpha', label: 'Alpha Oscar (AO)', roles: ['head_alpha_oscar', 'alpha_oscar'] },
     { id: 'tango', label: 'Tango Oscar (TO)', roles: ['head_tango_oscar', 'tango_oscar'] },
     { id: 'victor', label: 'Victor Oscar (VO)', roles: ['head_victor_oscar', 'victor_oscar'] },
-    { id: 'november', label: 'November Oscar (NO)', roles: ['november_oscar', 'head_noscar_den', 'noscar_den', 'head_noscar_nest', 'noscar_nest'] },
+    { id: 'november', label: 'November', roles: ['november_oscar', 'head_noscar_den', 'noscar_den', 'head_noscar_nest', 'noscar_nest'] },
     { id: 'delta', label: 'Delta Oscar (DO)', roles: ['delta_oscar'] },
     { id: 'serial', label: 'Serial Oscar (SO)', roles: ['head_serial_oscar', 'serial_oscar'] },
     { id: 'compliance', label: 'Compliance Oscar (CO)', roles: ['head_compliance_oscar', 'compliance_oscar'] },
     { id: 'welfare', label: 'Welfare Oscar (WO)', roles: ['head_welfare_oscar', 'welfare_oscar'] },
-    { id: 'hospitality', label: 'Hospitality Oscar (HO)', roles: ['head_hospitality_oscar', 'hospitality_oscar'] },
     { id: 'legacy_echo', label: 'Echo (Legacy)', roles: ['head_echo_oscar', 'echo_oscar'] },
     { id: 'others', label: 'Administration & Viewers', roles: ['admin', 'dev_admin', 'viewer'] }
   ]

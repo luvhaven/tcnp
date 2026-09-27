@@ -8,12 +8,12 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { cn, isAdmin, effectiveOscarRole, canAccessCommandCentre } from "@/lib/utils"
+import { cn, isAdmin, effectiveOscarRole, canAccessCommandCentre, oscarToRole } from "@/lib/utils"
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/lib/constants/tncpCallSigns"
 import {
   Users, Car, MapPin, AlertTriangle, Download, ChevronRight, ArrowRight, Radio,
   MessageSquare, Zap, Shield, Plane, Landmark, Hotel, Home, Camera,
-  UtensilsCrossed, Compass, Calendar, CheckCircle,
+  UtensilsCrossed, Calendar, CheckCircle,
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
@@ -125,7 +125,7 @@ const getStatusLabel = (status: string) =>
   getCallSignLabel(status) || FALLBACK_STATUS_LABELS[status] || toTitleCase(status)
 
 function getUnitActionForRole(role?: string | null, oscar?: string | null) {
-  const r = (oscar || role || "").toLowerCase()
+  const r = (oscarToRole(oscar) || oscarToRole(role) || oscar || role || "").toLowerCase()
   if (r.includes("alpha")) {
     return { href: "/alpha", label: "Alpha Aviation Hub", sub: "Eagle Squares & Flights", Icon: Plane, color: "text-purple-500", bg: "bg-purple-500/10" }
   }
@@ -146,9 +146,6 @@ function getUnitActionForRole(role?: string | null, oscar?: string | null) {
   }
   if (r.includes("welfare")) {
     return { href: "/welfare", label: "Welfare Portal", sub: "Officer welfare & meals", Icon: UtensilsCrossed, color: "text-emerald-500", bg: "bg-emerald-500/10" }
-  }
-  if (r.includes("hospitality")) {
-    return { href: "/hospitality", label: "Hospitality Hub", sub: "Guest hospitality & amenities", Icon: Compass, color: "text-sky-500", bg: "bg-sky-500/10" }
   }
   return { href: "/compliance", label: "Outfit of the Day", sub: "Today's dress code & grooming", Icon: Shield, color: "text-violet-500", bg: "bg-violet-500/10" }
 }

@@ -28,7 +28,7 @@ export function oscarToRole(oscar: string | null | undefined): string | null {
   if (norm.includes('head_sierra') || norm.includes('head sierra') || norm.includes('head_serial') || norm.includes('head serial')) return 'head_serial_oscar'
   if (norm.includes('head_compliance') || norm.includes('head compliance')) return 'head_compliance_oscar'
   if (norm.includes('head_welfare') || norm.includes('head welfare')) return 'head_welfare_oscar'
-  if (norm.includes('head_hospitality') || norm.includes('head hospitality')) return 'head_hospitality_oscar'
+  if (norm.includes('head_hospitality') || norm.includes('head hospitality')) return 'head_noscar_nest'
 
   // Tango Oscar — Transport
   if (['to', 'tango', 'tango_oscar', 'tango oscar'].includes(norm)) return 'tango_oscar'
@@ -36,7 +36,8 @@ export function oscarToRole(oscar: string | null | undefined): string | null {
   if (['eo', 'echo', 'echo_oscar', 'echo oscar'].includes(norm)) return 'echo_oscar'
   // Victor Oscar — Venue / Theatre
   if (['vo', 'victor', 'victor_oscar', 'victor oscar'].includes(norm)) return 'victor_oscar'
-  // November Oscar — split into Theatre/Den (private lounge / menus) and Nest (hotels) sub-units
+  // November — split into Den (private lounge / menus) and Nest (accommodation / guest experience).
+  // Theatre spellings are retained only as aliases for older stored profile values.
   if (norm.includes('november') && (norm.includes('den') || norm.includes('theatre') || norm.includes('theater'))) return 'noscar_den'
   if (norm.includes('november') && norm.includes('nest')) return 'noscar_nest'
   if (['no', 'november', 'november_oscar', 'november oscar'].includes(norm)) return 'november_oscar'
@@ -48,8 +49,8 @@ export function oscarToRole(oscar: string | null | undefined): string | null {
   if (['co', 'compliance', 'compliance_oscar', 'compliance oscar'].includes(norm)) return 'compliance_oscar'
   // Welfare Oscar — Meals / Officer welfare
   if (['wo', 'welfare', 'welfare_oscar', 'welfare oscar'].includes(norm)) return 'welfare_oscar'
-  // Hospitality Oscar — Papa experiences
-  if (['ho', 'hospitality', 'hospitality_oscar', 'hospitality oscar'].includes(norm)) return 'hospitality_oscar'
+  // Legacy Hospitality profile values resolve to November (Nest); Hospitality is not a standalone Oscar.
+  if (['ho', 'hospitality', 'hospitality_oscar', 'hospitality oscar'].includes(norm)) return 'noscar_nest'
   // Command — HQ/leadership staff (not a phonetic Oscar, but selectable at signup/profile)
   if (['command', 'command centre', 'command center'].includes(norm)) return 'command'
 
@@ -78,6 +79,26 @@ export function effectiveOscarRole(role: string | null | undefined, oscar: strin
 export function isAdmin(role: string | null | undefined): boolean {
   if (!role) return false
   return ['admin', 'dev_admin', 'super_admin', 'captain', 'vice_captain', 'head_of_operations', 'head_of_command', 'command', 'hod', 'hop'].includes(role)
+}
+
+/** Normalize legacy profile display values to the current unit names. */
+export function normalizeOscarLabel(oscar: string | null | undefined): string | null {
+  if (!oscar?.trim()) return null
+  const value = oscar.trim()
+  const norm = value.toLowerCase()
+  const isHead = norm.includes('head')
+
+  if (norm.includes('hospitality') || ['ho', 'hospitality_oscar'].includes(norm)) {
+    return isHead ? 'Head, November (Nest)' : 'November (Nest)'
+  }
+  if ((norm.includes('november') || norm.includes('noscar')) && (norm.includes('theatre') || norm.includes('theater'))) {
+    return isHead ? 'Head, November (Den)' : 'November (Den)'
+  }
+  if (norm.includes('november') || norm.includes('noscar')) {
+    if (norm.includes('den')) return isHead ? 'Head, November (Den)' : 'November (Den)'
+    if (norm.includes('nest')) return isHead ? 'Head, November (Nest)' : 'November (Nest)'
+  }
+  return value
 }
 
 /**
@@ -231,7 +252,7 @@ export function canManageNoscarNest(role: string | null | undefined, oscar?: str
 }
 
 /**
- * Check if a user can manage the November (Theatre) page — private lounge
+ * Check if a user can manage the November (Den) page — private lounge
  * locations and Lounge/Den menus. Legacy `november_oscar` officers (not yet
  * split into a specific sub-unit) retain access to both Den and Nest.
  */
@@ -327,16 +348,6 @@ export function canAccessWelfareDirectory(role: string | null | undefined, oscar
   if (isAdmin(role)) return true
   const effective = effectiveOscarRole(role, oscar)
   return effective === 'head_welfare_oscar'
-}
-
-/**
- * Hospitality — places and experiences for Papas.
- */
-export function canManageHospitality(role: string | null | undefined, oscar?: string | null): boolean {
-  if (!role) return false
-  if (isAdmin(role)) return true
-  const effective = effectiveOscarRole(role, oscar)
-  return ['hospitality_oscar', 'head_hospitality_oscar'].includes(effective ?? '')
 }
 
 /**

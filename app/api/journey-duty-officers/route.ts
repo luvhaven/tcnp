@@ -30,69 +30,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'journey_id and officers[] are required' }, { status: 400 })
     }
 
-    const adminClient = createAdminClient()
-
-    // Remove existing DO assignments for this journey
-    await (adminClient as any).from('journey_duty_officers').delete().eq('journey_id', journey_id)
-
-    // Insert new assignments
-    if (officers.length > 0) {
-      const rows = officers.map(o => ({
-        journey_id,
-        user_id: o.user_id,
-        is_lead: o.is_lead,
-        status: o.user_id === user.id ? 'acknowledged' : 'pending',
-        acknowledged_at: o.user_id === user.id ? new Date().toISOString() : null
-      }))
-
-      const { error: insertError } = await (adminClient as any)
-        .from('journey_duty_officers')
-        .insert(rows)
-
-      if (insertError) throw insertError
-
-      // Notify each newly-assigned officer (other than the assigner themself,
-      // who is auto-acknowledged above) — surfaces in their bell alongside the
-      // MissionNotificationHandler accept/reject card, and routes straight
-      // back to this journey when clicked.
-      const { data: journeyMeta } = await (adminClient as any)
-        .from('journeys')
-        .select('origin, destination, papas(full_name, title)')
-        .eq('id', journey_id)
-        .single()
-      const papaName = journeyMeta?.papas ? `${journeyMeta.papas.title ?? ''} ${journeyMeta.papas.full_name ?? ''}`.trim() : null
-      const routeLabel = journeyMeta ? `${journeyMeta.origin ?? '?'} → ${journeyMeta.destination ?? '?'}` : 'a journey'
-
-      const notifyRows = officers
-        .filter(o => o.user_id !== user.id)
-        .map(o => ({
-          user_id: o.user_id,
-          title: o.is_lead ? 'New DO assignment — Team Lead' : 'New DO assignment',
-          message: papaName
-            ? `You've been assigned as Duty Officer for ${papaName} (${routeLabel}). Please accept in My Operations.`
-            : `You've been assigned as Duty Officer for ${routeLabel}. Please accept in My Operations.`,
-          type: 'call_sign',
-          journey_id,
-          metadata: { kind: 'do_assignment' },
-        }))
-      if (notifyRows.length > 0) {
-        await (adminClient as any).from('notifications').insert(notifyRows)
-      }
+    if (officers.some(o => !o.user_id || typeof o.is_lead !== 'boolean')) {
+      return NextResponse.json({ error: 'Each officer needs a user_id and is_lead value' }, { status: 400 })
+    }
+    if (officers.length > 0 && officers.filter(o => o.is_lead).length !== 1) {
+      return NextResponse.json({ error: 'Select exactly one team lead' }, { status: 400 })
+    }
+    if (new Set(officers.map(o => o.user_id)).size !== officers.length) {
+      return NextResponse.json({ error: 'An officer can only be assigned once' }, { status: 400 })
     }
 
-    // Mirror team lead to journeys.assigned_duty_officer_id for backwards compat
-    const lead = officers.find(o => o.is_lead)
-    if (lead) {
-      await (adminClient as any)
-        .from('journeys')
-        .update({ assigned_duty_officer_id: lead.user_id, assigned_do_id: lead.user_id })
-        .eq('id', journey_id)
-    } else if (officers.length === 0) {
-      await (adminClient as any)
-        .from('journeys')
-        .update({ assigned_duty_officer_id: null, assigned_do_id: null })
-        .eq('id', journey_id)
-    }
+    const { error: replaceError } = await (supabase as any).rpc('replace_journey_duty_officers', {
+      target_journey_id: journey_id,
+      assignments: officers,
+    })
+    if (replaceError) throw replaceError
 
     return NextResponse.json({ success: true })
   } catch (err: any) {
@@ -109,6 +61,21 @@ export async function GET(req: NextRequest) {
 
     const journeyId = req.nextUrl.searchParams.get('journey_id')
     if (!journeyId) return NextResponse.json({ error: 'journey_id required' }, { status: 400 })
+
+    const { data: currentUser } = await supabase.from('users').select('role').eq('id', user.id).single()
+    const canManage = !!currentUser && isAdmin(currentUser.role)
+    if (!canManage) {
+      const { data: ownAssignment, error: assignmentError } = await (supabase as any)
+        .from('journey_duty_officers')
+        .select('status')
+        .eq('journey_id', journeyId)
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (assignmentError) throw assignmentError
+      if (!ownAssignment || !['pending', 'acknowledged'].includes(ownAssignment.status ?? 'acknowledged')) {
+        return NextResponse.json({ error: 'You are not assigned to this journey' }, { status: 403 })
+      }
+    }
 
     const adminClient = createAdminClient()
 

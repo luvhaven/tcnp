@@ -50,6 +50,7 @@ const SITREP_BY_DB_CODE: Record<string, (typeof SITREP_CODES)[number]> = Object.
 interface DutyOfficerRow {
     user_id: string
     is_lead: boolean
+    status?: string | null
     users: { full_name: string; oscar: string | null } | null
 }
 
@@ -320,7 +321,7 @@ export default function JourneyStatusTable() {
             if (ids.length > 0) {
                 const { data: doData } = await (supabase as any)
                     .from('journey_duty_officers')
-                    .select('journey_id, user_id, is_lead, users:user_id(full_name, oscar)')
+                    .select('journey_id, user_id, is_lead, status, users:user_id(full_name, oscar)')
                     .in('journey_id', ids)
                 for (const row of doData || []) {
                     if (!doMap[row.journey_id]) doMap[row.journey_id] = []
@@ -727,6 +728,9 @@ export default function JourneyStatusTable() {
                                                         >
                                                             {d.is_lead && <span className="text-yellow-500" title="Team Lead">⭐</span>}
                                                             <span className={cn(d.is_lead ? 'font-semibold' : '', "group-hover:underline")}>{d.users?.full_name ?? '—'}</span>
+                                                            <Badge variant={d.status === 'rejected' ? 'destructive' : d.status === 'acknowledged' ? 'secondary' : 'outline'} className="ml-1 h-4 px-1 text-[9px] leading-none">
+                                                                {d.status === 'rejected' ? 'Declined' : d.status === 'acknowledged' ? 'Accepted' : 'Pending'}
+                                                            </Badge>
                                                         </button>
                                                     ))}
                                                 </div>

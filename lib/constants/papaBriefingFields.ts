@@ -125,16 +125,16 @@ export const ROLE_BRIEFING_CONFIG: Record<string, RoleBriefingConfig> = {
     editableFields: ['accommodation_preferences', 'accommodations', 'entourage_size', 'special_requirements'],
   },
 
-  // NOScar Theatre/Den — Food & hospitality at the Theatre
+  // November (Den) — food, dietary, and guest-experience needs at the Den.
   noscar_den: {
-    sectionTitle: 'Papa Hospitality Briefings',
-    description: 'Food, dietary and stage hospitality needs for each Papa',
+    sectionTitle: 'November (Den) Guest Briefing',
+    description: 'Food, dietary and guest-experience needs for each Papa at the Den',
     viewFields: NOSCAR_DEN_FIELDS,
     editableFields: [],
   },
   head_noscar_den: {
-    sectionTitle: 'Papa Hospitality Briefings',
-    description: 'Food, dietary and stage hospitality needs for each Papa',
+    sectionTitle: 'November (Den) Guest Briefing',
+    description: 'Food, dietary and guest-experience needs for each Papa at the Den',
     viewFields: NOSCAR_DEN_FIELDS,
     editableFields: ['food_preferences', 'dietary_restrictions', 'needs_water_on_stage', 'water_temperature', 'needs_face_towels'],
   },

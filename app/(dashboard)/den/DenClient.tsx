@@ -334,7 +334,7 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">November (Theatre)</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">November (Den)</h1>
               <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20">
                 VIP Lounge & Den
               </Badge>
