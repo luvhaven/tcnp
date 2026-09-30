@@ -159,12 +159,27 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
         updated_at: new Date().toISOString(),
       }
       if (!payload.title) throw new Error("Menu title is required")
+      const schemaNotReady = (error: { code?: string } | null) =>
+        !!error && ["PGRST200", "PGRST204", "PGRST205", "42703", "42P01"].includes(error.code ?? "")
       if (editing) {
         const { error } = await supabase.from("program_menus").update(payload).eq("id", editing.id)
-        if (error) throw error
+        if (schemaNotReady(error) && !payload.vendor_id) {
+          const { vendor_id: _vendorId, ...legacyPayload } = payload
+          const legacyResult = await supabase.from("program_menus").update(legacyPayload).eq("id", editing.id)
+          if (legacyResult.error) throw legacyResult.error
+        } else if (schemaNotReady(error)) {
+          throw new Error("Vendor assignment is unavailable until the vendor database migration is applied.")
+        } else if (error) throw error
       } else {
-        const { error } = await supabase.from("program_menus").insert({ ...payload, created_by: currentUserId ?? null })
-        if (error) throw error
+        const insertPayload = { ...payload, created_by: currentUserId ?? null }
+        const { error } = await supabase.from("program_menus").insert(insertPayload)
+        if (schemaNotReady(error) && !payload.vendor_id) {
+          const { vendor_id: _vendorId, ...legacyPayload } = insertPayload
+          const legacyResult = await supabase.from("program_menus").insert(legacyPayload)
+          if (legacyResult.error) throw legacyResult.error
+        } else if (schemaNotReady(error)) {
+          throw new Error("Vendor assignment is unavailable until the vendor database migration is applied.")
+        } else if (error) throw error
       }
     },
     onSuccess: () => {
