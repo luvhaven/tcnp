@@ -1403,6 +1403,13 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
         onAssignTitle={(officer) => handleAssignTitleClick(officer as Officer)}
         onToggleActivation={(officer) => toggleActivationMutation.mutate(officer as Officer)}
         onDelete={(officer) => handleDelete(officer as Officer)}
+        onAssignmentUpdated={(officerId, assignment) => {
+          setViewingOfficer((current) => current?.id === officerId ? { ...current, ...assignment } : current)
+          queryClient.setQueryData(['officers', 'directory'], (current: Officer[] | undefined) =>
+            current?.map((officer) => officer.id === officerId ? { ...officer, ...assignment } : officer)
+          )
+          queryClient.invalidateQueries({ queryKey: ['officer-details', officerId] })
+        }}
       />
     </div>
   )
