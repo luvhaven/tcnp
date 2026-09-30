@@ -19,7 +19,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
-import { UtensilsCrossed, Plus, Pencil, Trash2, Star, CalendarDays } from "lucide-react"
+import { UtensilsCrossed, Plus, Pencil, Trash2, Star, CalendarDays, Store } from "lucide-react"
 
 // ─── Singleton client ───
 const supabase = createClient()
@@ -33,9 +33,16 @@ export type ProgramMenu = {
   items: string[]
   notes: string | null
   is_menu_of_day: boolean
+  vendor_id: string | null
   created_by: string | null
   programs?: { name: string } | null
+  vendors?: { id: string; name: string; is_active: boolean } | null
 }
+
+type VendorOption = { id: string; name: string; is_active: boolean }
+
+// Sentinel for "no vendor" — Radix Select cannot hold an empty string value.
+const NO_VENDOR = "none"
 
 const MEAL_TYPES = [
   { value: "breakfast", label: "Breakfast" },
@@ -64,7 +71,9 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
     itemsText: "",
     notes: "",
     is_menu_of_day: false,
+    vendor_id: "",
   })
+  const [vendorFilter, setVendorFilter] = useState<string>("all")
 
   const { data: programs = [] } = useQuery({
     queryKey: ["programs-lite"],
@@ -74,15 +83,45 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
     },
   })
 
-  const { data: menus = [], isLoading } = useQuery({
+  const { data: vendors = [], error: vendorsError } = useQuery({
+    queryKey: ["vendors", "lite"],
+    queryFn: async () => {
+      // `vendors` postdates types/supabase.ts — same cast as training/page.tsx:136.
+      const { data, error } = await (supabase as any)
+        .from("vendors")
+        .select("id, name, is_active")
+        .order("name")
+      if (error) throw error
+      return (data ?? []) as VendorOption[]
+    },
+  })
+
+  const { data: menus = [], isLoading, isError: menusError, error: menuQueryError } = useQuery({
     queryKey: ["program-menus"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("program_menus")
-        .select("*, programs(name)")
+        .select("*, programs(name), vendors(id, name, is_active)")
         .order("menu_date", { ascending: false })
         .limit(200)
-      if (error) throw error
+      if (error) {
+        // Keep existing menus readable during a staged rollout where this
+        // client is deployed before the vendor migration reaches the database.
+        const schemaNotReady = ["PGRST200", "PGRST204", "PGRST205", "42703", "42P01"].includes(error.code ?? "")
+        if (!schemaNotReady) throw error
+        const legacyResult = await supabase
+          .from("program_menus")
+          .select("*, programs(name)")
+          .order("menu_date", { ascending: false })
+          .limit(200)
+        if (legacyResult.error) throw legacyResult.error
+        return (legacyResult.data ?? []).map((m: any) => ({
+          ...m,
+          vendor_id: null,
+          vendors: null,
+          items: Array.isArray(m.items) ? m.items : [],
+        })) as ProgramMenu[]
+      }
       return (data ?? []).map((m: any) => ({
         ...m,
         items: Array.isArray(m.items) ? m.items : [],
@@ -92,8 +131,12 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
 
   const today = new Date().toISOString().slice(0, 10)
   const filtered = useMemo(
-    () => menus.filter(m => selectedProgram === "all" || m.program_id === selectedProgram),
-    [menus, selectedProgram]
+    () => menus.filter(m =>
+      (selectedProgram === "all" || m.program_id === selectedProgram) &&
+      (vendorFilter === "all" ||
+        (vendorFilter === NO_VENDOR ? !m.vendor_id : m.vendor_id === vendorFilter))
+    ),
+    [menus, selectedProgram, vendorFilter]
   )
   const menuOfDay = useMemo(
     () => filtered.filter(m => m.menu_date === today && (m.is_menu_of_day || true)).sort((a, b) => Number(b.is_menu_of_day) - Number(a.is_menu_of_day)),
@@ -112,15 +155,31 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
         items,
         notes: form.notes.trim() || null,
         is_menu_of_day: form.is_menu_of_day,
+        vendor_id: form.vendor_id || null,
         updated_at: new Date().toISOString(),
       }
       if (!payload.title) throw new Error("Menu title is required")
+      const schemaNotReady = (error: { code?: string } | null) =>
+        !!error && ["PGRST200", "PGRST204", "PGRST205", "42703", "42P01"].includes(error.code ?? "")
       if (editing) {
         const { error } = await supabase.from("program_menus").update(payload).eq("id", editing.id)
-        if (error) throw error
+        if (schemaNotReady(error) && !payload.vendor_id) {
+          const { vendor_id: _vendorId, ...legacyPayload } = payload
+          const legacyResult = await supabase.from("program_menus").update(legacyPayload).eq("id", editing.id)
+          if (legacyResult.error) throw legacyResult.error
+        } else if (schemaNotReady(error)) {
+          throw new Error("Vendor assignment is unavailable until the vendor database migration is applied.")
+        } else if (error) throw error
       } else {
-        const { error } = await supabase.from("program_menus").insert({ ...payload, created_by: currentUserId ?? null })
-        if (error) throw error
+        const insertPayload = { ...payload, created_by: currentUserId ?? null }
+        const { error } = await supabase.from("program_menus").insert(insertPayload)
+        if (schemaNotReady(error) && !payload.vendor_id) {
+          const { vendor_id: _vendorId, ...legacyPayload } = insertPayload
+          const legacyResult = await supabase.from("program_menus").insert(legacyPayload)
+          if (legacyResult.error) throw legacyResult.error
+        } else if (schemaNotReady(error)) {
+          throw new Error("Vendor assignment is unavailable until the vendor database migration is applied.")
+        } else if (error) throw error
       }
     },
     onSuccess: () => {
@@ -154,6 +213,7 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
       itemsText: "",
       notes: "",
       is_menu_of_day: false,
+      vendor_id: "",
     })
     setDialogOpen(true)
   }
@@ -168,6 +228,7 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
       itemsText: menu.items.join("\n"),
       notes: menu.notes ?? "",
       is_menu_of_day: menu.is_menu_of_day,
+      vendor_id: menu.vendor_id ?? "",
     })
     setDialogOpen(true)
   }
@@ -184,6 +245,12 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
             <CardDescription className="mt-1 flex flex-wrap items-center gap-1">
               <Badge variant="secondary" className="text-[10px] uppercase">{MEAL_TYPES.find(m => m.value === menu.meal_type)?.label ?? menu.meal_type}</Badge>
               {menu.programs?.name && <Badge variant="outline" className="text-[10px]">{menu.programs.name}</Badge>}
+              {menu.vendors?.name && (
+                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <Store className="h-3 w-3" />{menu.vendors.name}
+                  {menu.vendors.is_active === false && " (retired)"}
+                </span>
+              )}
               <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                 <CalendarDays className="h-3 w-3" />{menu.menu_date}
               </span>
@@ -225,23 +292,45 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="flex items-center gap-2 text-lg font-semibold">
             <UtensilsCrossed className="h-5 w-5 text-primary" /> Den Menus
           </h3>
           <p className="text-sm text-muted-foreground">Menu of the day and per-program meal plans, curated with Welfare.</p>
         </div>
-        {canEdit && (
-          <Button size="sm" onClick={openCreate} className="gap-1">
-            <Plus className="h-4 w-4" /> Add Menu
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {vendors.length > 0 && (
+            <Select value={vendorFilter} onValueChange={setVendorFilter}>
+              <SelectTrigger className="h-9 w-[160px] sm:w-[190px]" aria-label="Filter menus by vendor">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All vendors</SelectItem>
+                <SelectItem value={NO_VENDOR}>No vendor set</SelectItem>
+                {vendors.map(v => (
+                  <SelectItem key={v.id} value={v.id}>
+                    {v.name}{v.is_active ? "" : " (retired)"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {canEdit && (
+            <Button size="sm" onClick={openCreate} className="gap-1">
+              <Plus className="h-4 w-4" /> Add Menu
+            </Button>
+          )}
+        </div>
       </div>
 
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton h-44 rounded-xl" />)}
+        </div>
+      ) : menusError ? (
+        <div role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm text-destructive">
+          Unable to load menus: {menuQueryError instanceof Error ? menuQueryError.message : "Please try again."}
         </div>
       ) : (
         <>
@@ -277,6 +366,10 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
             </div>
           )}
         </>
+      )}
+
+      {vendorsError && !["PGRST200", "PGRST204", "PGRST205", "42703", "42P01"].includes((vendorsError as any)?.code ?? "") && (
+        <p role="status" className="text-xs text-muted-foreground">Vendor filters are unavailable right now.</p>
       )}
 
       {/* Create / edit dialog */}
@@ -316,6 +409,27 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
                 <SelectContent>
                   <SelectItem value="none">General (no program)</SelectItem>
                   {programs.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Vendor</Label>
+              <Select
+                value={form.vendor_id || NO_VENDOR}
+                onValueChange={(v) => setForm({ ...form, vendor_id: v === NO_VENDOR ? "" : v })}
+              >
+                <SelectTrigger><SelectValue placeholder="No vendor" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_VENDOR}>No vendor</SelectItem>
+                  {vendors
+                    // A retired vendor stays selected on the menu it already supplies,
+                    // but must not be pickable for a new one.
+                    .filter(v => v.is_active || v.id === form.vendor_id)
+                    .map(v => (
+                      <SelectItem key={v.id} value={v.id}>
+                        {v.name}{v.is_active ? "" : " (retired)"}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>

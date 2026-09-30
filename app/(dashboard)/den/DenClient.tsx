@@ -20,6 +20,7 @@ import { toast } from "sonner"
 import { canManageNoscarDen, canManageWelfare, isAdmin, effectiveOscarRole } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 import DenMenus from "@/components/den/DenMenus"
+import VendorDirectory from "@/components/den/VendorDirectory"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { OfficerProfileDialog, type OfficerProfileData } from "@/components/officers/OfficerProfileDialog"
 
@@ -382,6 +383,8 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
           <PapaBriefingsSection role={userRole} />
         </div>
       )}
+
+      <VendorDirectory canEdit={canEditMenus} currentUserId={currentUser?.id ?? null} />
 
       <DenMenus canEdit={canEditMenus} selectedProgram={selectedProgram} currentUserId={currentUser?.id ?? null} />
 
