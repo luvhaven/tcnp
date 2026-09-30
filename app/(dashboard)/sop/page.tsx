@@ -270,7 +270,7 @@ const SOP_SECTIONS: SOPSection[] = [
                 heading: 'Operational Level Agreements',
                 list: [
                     'All Cheetahs must have a mileage not exceeding 35,000 miles',
-                    'Situation reports must be given every 15 minutes',
+                    'Situation reports must be given every 5 minutes',
                     'Delta Oscars shall obtain confirmation of vehicle inspection before each operation',
                 ],
             },
@@ -310,7 +310,7 @@ const SOP_SECTIONS: SOPSection[] = [
             },
             {
                 heading: 'Situation Report Script',
-                highlight: 'Send SITREP to Command Centre every 15 minutes during transit',
+                highlight: 'Send SITREP to Command Centre every 5 minutes during transit',
                 script: [
                     'DEPARTURE FROM NEST:',
                     '"Delta [Principal\'s Name] — First Course, ETA [TIME]"',
@@ -457,7 +457,7 @@ const SOP_SECTIONS: SOPSection[] = [
                 ],
             },
             {
-                heading: 'Situation Report (SITREP) — DO obligation every 15 mins',
+                heading: 'Situation Report (SITREP) — DO obligation every 5 mins',
                 highlight: 'Send via Command Centre chat / radio during ALL transits',
                 script: [
                     'First Course (Nest → Theatre):',

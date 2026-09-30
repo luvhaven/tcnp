@@ -17,7 +17,7 @@ function SitrepTimer() {
     const [seconds, setSeconds] = useState(0)
     const [running, setRunning] = useState(false)
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-    const SITREP_INTERVAL = 15 * 60 // 15 minutes
+    const SITREP_INTERVAL = 5 * 60 // 5 minutes
 
     useEffect(() => {
         if (running) {
@@ -28,7 +28,7 @@ function SitrepTimer() {
                         // Play a gentle alert by utilizing the browser notification API
                         if (typeof window !== 'undefined' && 'Notification' in window) {
                             try {
-                                new Notification('SITREP Due', { body: '15 minutes elapsed — send your SITREP now.', icon: '/icon-192.png' })
+                                new Notification('SITREP Due', { body: '5 minutes elapsed — send your SITREP now.', icon: '/icon-192.png' })
                             } catch (_) { /* ignore */ }
                         }
                         return 0 // reset
@@ -51,7 +51,7 @@ function SitrepTimer() {
     return (
         <div className="space-y-3">
             <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">15-Min SITREP Timer</span>
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">5-Min SITREP Timer</span>
                 <Badge variant="outline" className="text-[9px] font-mono">SOP § SITREP</Badge>
             </div>
 
@@ -208,7 +208,7 @@ export default function DOHelpPanel() {
                         </div>
                         <Badge variant="outline" className="text-[9px] font-mono">SOP TCNP.01.05</Badge>
                     </div>
-                    <p className="text-[10px] text-muted-foreground">Report to Command every 15 minutes in transit.</p>
+                    <p className="text-[10px] text-muted-foreground">Report to Command every 5 minutes in transit.</p>
                     <div className="grid grid-cols-2 gap-1.5">
                         {SITREP_CODES.map(({ code, meaning, kind }) => (
                             <div

@@ -172,6 +172,26 @@ export function AvailabilityRosterButton({ programId, programName }: { programId
     refetchInterval: open ? 15000 : false,
   })
 
+  const {
+    data: assignedUserIds = [],
+    isLoading: isLoadingAssignments,
+    isError: assignmentsFailed,
+  } = useQuery({
+    queryKey: ["program-assignments", programId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("current_title_assignments")
+        .select("user_id")
+        .eq("program_id", programId)
+        .eq("is_active", true)
+      if (error) throw error
+      return (data ?? []).map((assignment: { user_id: string }) => assignment.user_id)
+    },
+    enabled: open,
+    refetchInterval: open ? 15000 : false,
+  })
+  const assignedUserIdSet = useMemo(() => new Set(assignedUserIds), [assignedUserIds])
+
   const filtered = useMemo(() => responses.filter(r => {
     if (filter !== "all" && r.response !== filter) return false
     if (!search.trim()) return true
@@ -198,9 +218,26 @@ export function AvailabilityRosterButton({ programId, programName }: { programId
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Assignment failed")
-      toast.success(`${selected.length} officer${selected.length > 1 ? "s" : ""} assigned to ${programName}`)
-      setSelected([])
+      const assignedCount = Number(data.assigned_count ?? selected.length)
+      const alreadyAssignedCount = Number(data.already_assigned_count ?? 0)
+      const confirmedAssignedIds = [...(data.assigned_ids ?? []), ...(data.already_assigned_ids ?? [])]
+      if (confirmedAssignedIds.length > 0) {
+        queryClient.setQueryData<string[]>(["program-assignments", programId], previous =>
+          Array.from(new Set([...(previous ?? []), ...confirmedAssignedIds]))
+        )
+      }
+      if (assignedCount > 0) {
+        toast.success(`${assignedCount} officer${assignedCount === 1 ? "" : "s"} assigned to ${programName}`)
+      } else if (alreadyAssignedCount > 0) {
+        toast.info(`Selected officer${alreadyAssignedCount === 1 ? " is" : "s are"} already assigned to ${programName}`)
+      }
+      if (data.failed_count > 0) {
+        toast.error(`${data.failed_count} officer${data.failed_count === 1 ? " was" : "s were"} not assigned. You can retry the failed assignments.`)
+      }
+      setSelected(Array.isArray(data.failed_ids) ? data.failed_ids : [])
       queryClient.invalidateQueries({ queryKey: ["officers"] })
+      queryClient.invalidateQueries({ queryKey: ["program-assignments", programId] })
+      queryClient.invalidateQueries({ queryKey: ["mission-responses", latestRequest?.id] })
     } catch (err: any) {
       toast.error(err.message || "Assignment failed")
     } finally {
@@ -261,22 +298,35 @@ export function AvailabilityRosterButton({ programId, programName }: { programId
                 </p>
               ) : (
                 <div className="max-h-[320px] space-y-1.5 overflow-y-auto pr-1">
-                  {filtered.map(r => (
-                    <label
+                  {filtered.map(r => {
+                    const alreadyAssigned = assignedUserIdSet.has(r.user_id)
+                    const canSelect = r.response === "yes" && !alreadyAssigned && !isLoadingAssignments && !assignmentsFailed
+                    return (
+                      <label
                       key={r.id}
                       className={cn(
-                        "flex cursor-pointer items-center gap-3 rounded-lg border p-2.5 transition-colors",
+                        "flex items-center gap-3 rounded-lg border p-2.5 transition-colors",
+                        canSelect && "cursor-pointer",
                         selected.includes(r.user_id) ? "border-primary bg-primary/5" : "hover:bg-muted/50",
                         r.response === "no" && "opacity-60"
                       )}
                     >
-                      {r.response === "yes" && (
+                      {canSelect && (
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-orange-500"
                           checked={selected.includes(r.user_id)}
                           onChange={(e) => setSelected(prev => e.target.checked ? [...prev, r.user_id] : prev.filter(id => id !== r.user_id))}
                         />
+                      )}
+                      {r.response === "yes" && alreadyAssigned && (
+                        <Badge variant="outline" className="shrink-0 border-emerald-500/40 text-emerald-700 dark:text-emerald-400">Already assigned</Badge>
+                      )}
+                      {r.response === "yes" && !alreadyAssigned && isLoadingAssignments && (
+                        <span className="shrink-0 text-xs text-muted-foreground">Checking assignment…</span>
+                      )}
+                      {r.response === "yes" && !alreadyAssigned && assignmentsFailed && (
+                        <span className="shrink-0 text-xs text-destructive">Assignment check failed</span>
                       )}
                       <Avatar className="h-9 w-9">
                         {r.users?.photo_url ? <AvatarImage src={r.users.photo_url} /> : <AvatarFallback className="text-xs">{initials(r.users?.full_name)}</AvatarFallback>}
@@ -292,8 +342,9 @@ export function AvailabilityRosterButton({ programId, programName }: { programId
                       <Badge className={cn("border-0 text-[10px]", r.response === "yes" ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-red-500/15 text-red-600 dark:text-red-400")}>
                         {r.response === "yes" ? "Available" : "Unavailable"}
                       </Badge>
-                    </label>
-                  ))}
+                      </label>
+                    )
+                  })}
                 </div>
               )}
 

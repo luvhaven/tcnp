@@ -31,8 +31,34 @@ export async function POST(request: Request) {
         const body = await request.json()
         const { officer_ids, program_id } = body as { officer_ids?: string[], program_id?: string }
 
-        if (!officer_ids || !Array.isArray(officer_ids) || officer_ids.length === 0) {
+        if (!officer_ids || !Array.isArray(officer_ids) || officer_ids.length === 0 || typeof program_id !== 'string' || !program_id) {
             return NextResponse.json({ error: 'Missing or invalid officer_ids' }, { status: 400 })
+        }
+
+        const uniqueOfficerIds = [...new Set(officer_ids.filter((id): id is string => typeof id === 'string' && id.length > 0))]
+        if (uniqueOfficerIds.length === 0) {
+            return NextResponse.json({ error: 'No valid officers were selected' }, { status: 400 })
+        }
+
+        const { data: existingAssignments, error: assignmentLookupError } = await (adminClient as any)
+            .from('current_title_assignments')
+            .select('user_id')
+            .eq('program_id', program_id)
+            .eq('is_active', true)
+            .in('user_id', uniqueOfficerIds)
+        if (assignmentLookupError) {
+            console.error('Failed to check existing program assignments:', assignmentLookupError)
+            return NextResponse.json({ error: 'Could not verify existing program assignments' }, { status: 500 })
+        }
+        const alreadyAssignedIds = new Set((existingAssignments || []).map((assignment: { user_id: string }) => assignment.user_id))
+        const pendingOfficerIds = uniqueOfficerIds.filter(id => !alreadyAssignedIds.has(id))
+        if (pendingOfficerIds.length === 0) {
+            return NextResponse.json({
+                success: true,
+                assigned_count: 0,
+                already_assigned_count: alreadyAssignedIds.size,
+                already_assigned_ids: [...alreadyAssignedIds],
+            })
         }
 
         // Load available official titles to map fallbacks
@@ -40,12 +66,19 @@ export async function POST(request: Request) {
         const fallbackTitleCode = titles && titles.length > 0 ? titles[0].code : 'COMMAND'
 
         // Load selected users
-        const { data: usersData } = await (adminClient as any)
+        const { data: usersData, error: usersError } = await (adminClient as any)
             .from('users')
             .select('id, current_title_id, role, is_active, activation_status')
-            .in('id', officer_ids)
+            .in('id', pendingOfficerIds)
+        if (usersError) {
+            console.error('Failed to load selected officers:', usersError)
+            return NextResponse.json({ error: 'Could not load the selected officers' }, { status: 500 })
+        }
 
         const mappedUsers = usersData || []
+        if (mappedUsers.length === 0) {
+            return NextResponse.json({ error: 'None of the selected officers could be found' }, { status: 404 })
+        }
 
         // Fetch the program to ensure auto-activation happens if it is active
         let isProgramActive = false
@@ -69,6 +102,9 @@ export async function POST(request: Request) {
             'vice_captain': 'VICE_CAPTAIN'
         }
 
+        let assignedCount = 0
+        const assignedIds: string[] = []
+        const failedIds: string[] = []
         for (const u of mappedUsers) {
             let titleCode = fallbackTitleCode
 
@@ -93,8 +129,11 @@ export async function POST(request: Request) {
 
             if (rpcError) {
                 console.error(`Failed to assign title [${titleCode}] to user ${u.id}:`, rpcError)
-                continue // Skip to next, do not crash the entire batch
+                failedIds.push(u.id)
+                continue
             }
+            assignedCount += 1
+            assignedIds.push(u.id)
 
             // Manually sync `current_title_id` & `unit` because `assign_title` RPC 
             // skips it when a program is explicitly assigned (`p_program_id != null`)
@@ -121,7 +160,15 @@ export async function POST(request: Request) {
             }
         }
 
-        return NextResponse.json({ success: true })
+        return NextResponse.json({
+            success: failedIds.length === 0,
+            assigned_count: assignedCount,
+            assigned_ids: assignedIds,
+            already_assigned_count: alreadyAssignedIds.size,
+            already_assigned_ids: [...alreadyAssignedIds],
+            failed_count: failedIds.length,
+            failed_ids: failedIds,
+        }, { status: failedIds.length > 0 ? 207 : 200 })
     } catch (error: any) {
         console.error('Unexpected error in bulk-assign-program:', error)
         return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 })
