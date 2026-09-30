@@ -92,9 +92,20 @@ Public self-registration now ignores any submitted role and always creates an in
 - **Browser role smoke:** Alpha Oscar workspace loaded; an Alpha role received the expected “Command Clearance Required” state on the Command route. Data-creating buttons were not submitted.
 - **Responsive review:** Alpha workspace checked at 320, 390, 768, 1024, and 1440 CSS pixels. At 320px, “Airport Management” overlapped its action button and the first tab label was clipped. Fixed by stacking the header on narrow screens and allowing the tab label to wrap. Rechecked at 320px; the heading, full-width action, and both tab labels now fit.
 - **Production and device scope:** Production build and unauthenticated login page smoke passed. Responsive screenshots were taken in browser emulation, not on physical iOS/Android devices. Other unit pages, operational mutations, push notifications, and the owner self-removal workflow were not exercised against production data to avoid changing real records or removing the owner profile.
+## Release checks
+
+- `npm test`: 36/36 passed.
+- `npm run type-check`: passed.
+- `npm run lint`: 0 errors; 36 existing warnings remain.
+- `npm run build`: passed; all 62 app pages/routes compiled.
+- Production-mode local login smoke: passed; no browser console errors in a fresh tab.
+- `git diff --check`: passed.
+
+**Readiness assessment:** Build- and authentication-ready for a controlled canary, but not fully production-certified. This pass did not cover all operational write workflows, all unit pages in an authenticated browser, live notification delivery, or physical iOS/Android devices. Lint warnings also remain. Review those limits before treating the app as fully production-ready.
+
 ## Outcome log
 
 | Date | Role/persona | Route and scenario | Expected | Actual | Status / fix |
 | --- | --- | --- | --- | --- | --- |
 | 2026-09-30 | Public signup | Submit a client-supplied privileged role to `/api/auth/signup` | Request remains pending Viewer until an administrator assigns a role | Signup now hard-codes `viewer`; regression test passes | Fixed and verified by regression test |
-| — | — | — | — | — | Role API checks passed (26/26); production build passed; GitHub push pending. |
+| — | — | — | — | — | Commit `c230f9b` was pushed to GitHub `main` on 2026-09-30. |
