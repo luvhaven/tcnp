@@ -19,6 +19,7 @@ import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { OfficerProfileDialog } from "@/components/officers/OfficerProfileDialog"
 import { isPlatformAdministrator } from "@/lib/utils"
+import { isPermanentOwnerEmail } from "@/lib/platform-owner"
 
 type Officer = {
   id: string
@@ -140,6 +141,12 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     { value: 'viewer', label: 'Viewer' }
   ]
 
+  const getRoleLabel = (role?: string | null) => {
+    if (!role) return ''
+    if (role === 'super_admin') return 'Super Admin'
+    return roles.find((item) => item.value === role)?.label || role
+  }
+
   const CATEGORIES = [
     { id: 'leadership', label: 'Leadership', roles: ['captain', 'vice_captain'] },
     { id: 'command', label: 'Command Centre', roles: ['head_of_command', 'command', 'head_of_operations'] },
@@ -236,7 +243,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
         `"${o.email || ''}"`,
         `"${o.phone || ''}"`,
         `"${o.oscar || ''}"`,
-        `"${roles.find(r => r.value === o.role)?.label || o.role}"`,
+        `"${getRoleLabel(o.role)}"`,
         `"${o.unit || ''}"`,
         `"${o.activation_status === 'pending' ? 'Pending' : o.is_active ? 'Active' : 'Inactive'}"`
       ].join(','))
@@ -548,8 +555,37 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
   }
 
   const handleDelete = async (officer: Officer) => {
-    if (officer.role === 'dev_admin') return toast.error('Cannot delete Super Admin account')
-    if (officer.id === currentUser?.id) return toast.error('Cannot delete your own account')
+    const isPermanentOwner = isPermanentOwnerEmail(officer.email) || officer.role === 'super_admin'
+    if (isPermanentOwner) {
+      if (officer.id !== currentUser?.id || !isPermanentOwnerEmail(currentUser?.email)) {
+        return toast.error('Only the permanent owner can remove this officer profile')
+      }
+
+      const confirmed = await confirm({
+        title: 'Remove Your Officer Profile',
+        message: 'This removes your profile from the Officers directory. Your login, Super Admin authority, ownership, and access to the app will remain active. You will disappear from other users’ directories.',
+        confirmText: 'Remove My Profile',
+        cancelText: 'Keep My Profile',
+        variant: 'destructive',
+        requireInput: 'REMOVE'
+      })
+      if (!confirmed) return
+
+      try {
+        const response = await fetch('/api/officers/remove-my-profile', { method: 'POST' })
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error || 'Failed to remove officer profile')
+        queryClient.setQueryData(['officers', 'directory'], (current: Officer[] | undefined) =>
+          current?.filter((item) => item.id !== officer.id)
+        )
+        setViewingOfficer(null)
+        toast.success('Your officer profile was removed. Your Super Admin account remains active.')
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to remove officer profile')
+      }
+      return
+    }
+    if (officer.id === currentUser?.id) return toast.error('You cannot delete your own account')
     const name = officer.full_name || officer.email
     const oscar = officer.oscar ? ` (${officer.oscar})` : ''
     const confirmed = await confirm({
@@ -817,7 +853,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                         <div className="mt-2 flex min-w-0 items-center justify-between gap-2">
                           <div className="flex min-w-0 flex-wrap items-center gap-1">
                             <Badge className={`max-w-full truncate text-[10px] uppercase tracking-wide ${getRoleBadgeColor(officer.role)}`}>
-                              {roles.find(r => r.value === officer.role)?.label || officer.role}
+                              {getRoleLabel(officer.role)}
                             </Badge>
                             {officer.team && (
                               <Badge variant="outline" className="text-[10px] uppercase tracking-wide border-primary/40 text-primary">
@@ -937,7 +973,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                         </TableCell>
                         <TableCell>
                           <Badge className={`text-[10px] uppercase tracking-wide ${getRoleBadgeColor(officer.role)}`}>
-                            {roles.find(r => r.value === officer.role)?.label || officer.role}
+                            {getRoleLabel(officer.role)}
                           </Badge>
                           {officer.oscar && <span className="ml-2 text-xs text-muted-foreground">{officer.oscar}</span>}
                         </TableCell>
@@ -1020,7 +1056,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                           <div className="flex items-center justify-between">
                             <span className="text-muted-foreground">Role:</span>
                             <Badge className={getRoleBadgeColor(officer.role)}>
-                              {roles.find(r => r.value === officer.role)?.label || officer.role}
+                              {getRoleLabel(officer.role)}
                             </Badge>
                           </div>
                           {officer.phone && (
@@ -1120,7 +1156,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                             <div className="flex items-center justify-between">
                               <span className="text-muted-foreground">Requested Role:</span>
                               <Badge className={getRoleBadgeColor(officer.role)}>
-                                {roles.find(r => r.value === officer.role)?.label || officer.role}
+                                {getRoleLabel(officer.role)}
                               </Badge>
                             </div>
                             {officer.phone && (
@@ -1360,7 +1396,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                         <div className="flex flex-col">
                           <span className="text-sm font-medium leading-none mb-1">{officer.full_name || officer.email}</span>
                           <span className="text-[10px] text-muted-foreground flex gap-1 items-center">
-                            {roles.find(r => r.value === officer.role)?.label}
+                            {getRoleLabel(officer.role)}
                             {officer.oscar && <span className="opacity-50">• {officer.oscar}</span>}
                             {!officer.is_active && <span className="text-orange-500 font-medium">• Pending</span>}
                           </span>
@@ -1403,6 +1439,13 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
         onAssignTitle={(officer) => handleAssignTitleClick(officer as Officer)}
         onToggleActivation={(officer) => toggleActivationMutation.mutate(officer as Officer)}
         onDelete={(officer) => handleDelete(officer as Officer)}
+        onAssignmentUpdated={(officerId, assignment) => {
+          setViewingOfficer((current) => current?.id === officerId ? { ...current, ...assignment } : current)
+          queryClient.setQueryData(['officers', 'directory'], (current: Officer[] | undefined) =>
+            current?.map((officer) => officer.id === officerId ? { ...officer, ...assignment } : officer)
+          )
+          queryClient.invalidateQueries({ queryKey: ['officer-details', officerId] })
+        }}
       />
     </div>
   )

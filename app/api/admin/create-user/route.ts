@@ -40,6 +40,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
+    if (role === 'super_admin') {
+      return NextResponse.json({ error: 'The permanent platform owner is the only Super Admin' }, { status: 403 })
+    }
+
     if (platformAuthorityRank(role) >= 80 && currentRole !== 'super_admin') {
       return NextResponse.json({ error: 'Only Super Admin can create administrator accounts' }, { status: 403 })
     }

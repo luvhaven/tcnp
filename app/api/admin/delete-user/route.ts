@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { checkRateLimit } from '@/lib/security/rate-limit'
 import { isPlatformAdministrator, platformAuthorityRank } from '@/lib/utils'
+import { isPermanentOwnerEmail } from '@/lib/platform-owner'
 
 export async function DELETE(request: Request) {
     // Enforce strict rate limit (20 deletes per IP per minute)
@@ -65,10 +66,17 @@ export async function DELETE(request: Request) {
 
     // 5. Get target user details before deletion (for the audit log)
     const { data: targetUser } = await supabaseAdmin
-        .from('users')
-        .select('email, full_name, role, oscar')
-        .eq('id', targetUserId)
-        .single()
+      .from('users')
+      .select('email, full_name, role, oscar, is_directory_hidden')
+      .eq('id', targetUserId)
+      .single()
+
+    if (targetUser?.is_directory_hidden) {
+        return NextResponse.json({ error: 'Officer not found' }, { status: 404 })
+    }
+    if (targetUser && (isPermanentOwnerEmail(targetUser.email) || targetUser.role === 'super_admin')) {
+        return NextResponse.json({ error: 'The permanent platform owner account cannot be deleted' }, { status: 403 })
+    }
 
     // Only Super Admin can remove any administrator-tier account. A regular
     // Admin can remove lower-authority accounts only.

@@ -1,7 +1,8 @@
 "use client"
 
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
@@ -54,7 +55,15 @@ interface OfficerProfileDialogProps {
   onAssignTitle?: (officer: OfficerProfileData) => void
   onToggleActivation?: (officer: OfficerProfileData) => void
   onDelete?: (officer: OfficerProfileData) => void
+  onAssignmentUpdated?: (officerId: string, assignment: { oscar: string; team: string | null }) => void
 }
+
+const OSCAR_UNITS = ["Command", "Alpha Oscar", "Compliance Oscar", "November (Den)", "November (Nest)", "Serial Oscar", "Tango Oscar", "Victor Oscar", "Welfare Oscar"]
+const PROTOCOL_TEAMS = [
+  { value: "strength", label: "Team Strength" },
+  { value: "wisdom", label: "Team Wisdom" },
+  { value: "swift", label: "Team Swift" },
+]
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -69,8 +78,35 @@ export function OfficerProfileDialog({
   onEdit,
   onAssignTitle,
   onToggleActivation,
-  onDelete
+  onDelete,
+  onAssignmentUpdated
 }: OfficerProfileDialogProps) {
+  const [assignmentDraft, setAssignmentDraft] = useState({ oscar: "", team: "" })
+  const [savingAssignment, setSavingAssignment] = useState(false)
+
+  useEffect(() => {
+    setAssignmentDraft({ oscar: officer?.oscar || "", team: officer?.team || "" })
+  }, [officer?.id, officer?.oscar, officer?.team])
+
+  const saveAssignment = async () => {
+    if (!officer || !assignmentDraft.oscar) return
+    setSavingAssignment(true)
+    try {
+      const response = await fetch(`/api/officers/${officer.id}/assignment`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ oscar: assignmentDraft.oscar, team: assignmentDraft.team || null }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || "Failed to update officer assignment")
+      onAssignmentUpdated?.(officer.id, result.officer)
+      toast.success("Officer assignment updated")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update officer assignment")
+    } finally {
+      setSavingAssignment(false)
+    }
+  }
   // Query full assignment and operational data when dialog is opened
   const { data: details, isLoading: loadingDetails } = useQuery({
     queryKey: ['officer-details', officer?.id],
@@ -436,11 +472,24 @@ export function OfficerProfileDialog({
                     </div>
                     <div className="flex justify-between items-center py-1 border-b border-border/40">
                       <span className="text-muted-foreground">Oscar Unit:</span>
-                      <span className="font-medium">{normalizeOscarLabel(mergedOfficer.oscar) || "—"}</span>
+                      {canManage ? (
+                        <Select value={assignmentDraft.oscar} onValueChange={(oscar) => setAssignmentDraft((draft) => ({ ...draft, oscar }))}>
+                          <SelectTrigger className="h-8 w-44 text-xs"><SelectValue placeholder="Select unit" /></SelectTrigger>
+                          <SelectContent>{OSCAR_UNITS.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}</SelectContent>
+                        </Select>
+                      ) : <span className="font-medium">{normalizeOscarLabel(mergedOfficer.oscar) || "—"}</span>}
                     </div>
                     <div className="flex justify-between items-center py-1 border-b border-border/40">
                       <span className="text-muted-foreground">Protocol Team:</span>
-                      <span className="font-medium capitalize">
+                      {canManage ? (
+                        <Select value={assignmentDraft.team || "unassigned"} onValueChange={(team) => setAssignmentDraft((draft) => ({ ...draft, team: team === "unassigned" ? "" : team }))}>
+                          <SelectTrigger className="h-8 w-44 text-xs"><SelectValue placeholder="Select team" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="unassigned">Unassigned</SelectItem>
+                            {PROTOCOL_TEAMS.map((team) => <SelectItem key={team.value} value={team.value}>{team.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      ) : <span className="font-medium capitalize">
                         {mergedOfficer.team ? (
                           <>
                             {mergedOfficer.is_team_head ? "★ " : ""}Team {mergedOfficer.team}
@@ -448,8 +497,15 @@ export function OfficerProfileDialog({
                         ) : (
                           "Unassigned"
                         )}
-                      </span>
+                      </span>}
                     </div>
+                    {canManage && (
+                      <div className="flex justify-end pt-1">
+                        <Button size="sm" onClick={saveAssignment} disabled={savingAssignment || !assignmentDraft.oscar || (assignmentDraft.oscar === (mergedOfficer.oscar || "") && (assignmentDraft.team || "") === (mergedOfficer.team || ""))}>
+                          {savingAssignment ? "Saving…" : "Save assignment"}
+                        </Button>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center py-1">
                       <span className="text-muted-foreground">System Role:</span>
                       <Badge variant="secondary" className="text-[10px]">

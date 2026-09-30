@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { isPlatformAdministrator, platformAuthorityRank } from '@/lib/utils'
+import { isPermanentOwnerEmail } from '@/lib/platform-owner'
 
 export async function POST(request: Request) {
     try {
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
 
         const { data: targetUser } = await db
             .from('users')
-            .select('role')
+            .select('role, email, is_directory_hidden')
             .eq('id', id)
             .single()
 
@@ -51,6 +52,23 @@ export async function POST(request: Request) {
 
         const targetRole = (targetUser as { role?: string }).role
         const desiredRole = role || targetRole
+        const targetIsPermanentOwner = isPermanentOwnerEmail((targetUser as { email?: string }).email)
+        if ((targetUser as { is_directory_hidden?: boolean }).is_directory_hidden && id !== user.id) {
+            return NextResponse.json({ error: 'Officer not found' }, { status: 404 })
+        }
+        if (targetRole === 'super_admin' && !targetIsPermanentOwner) {
+            return NextResponse.json({ error: 'Only the permanent platform owner may hold Super Admin' }, { status: 403 })
+        }
+        if (targetIsPermanentOwner && (
+            id !== user.id ||
+            !isPermanentOwnerEmail(email) ||
+            desiredRole !== 'super_admin'
+        )) {
+            return NextResponse.json({ error: 'The permanent owner identity and authority cannot be changed' }, { status: 403 })
+        }
+        if (desiredRole === 'super_admin' && !targetIsPermanentOwner) {
+            return NextResponse.json({ error: 'Only the permanent platform owner may hold Super Admin' }, { status: 403 })
+        }
         if (currentRole !== 'super_admin' && (
             platformAuthorityRank(targetRole) >= 80 || platformAuthorityRank(desiredRole) >= 80
         )) {

@@ -39,6 +39,49 @@ test('officer directory service-role reads require an active platform administra
   assert.match(source, /caller\.is_active === false/)
 })
 
+test('officer activation service-role writes require an active platform administrator', () => {
+  const source = fs.readFileSync('app/api/officers/toggle-activation/route.ts', 'utf8')
+  const accountGuard = source.indexOf("callerRow.activation_status !== 'active' || callerRow.is_active === false")
+  const platformGuard = source.indexOf('!isPlatformAdministrator(callerRow.role)')
+  const serviceWrite = source.indexOf('const adminClient = buildAdminClient()')
+  assert.ok(accountGuard >= 0 && platformGuard > accountGuard && serviceWrite > platformGuard)
+  assert.match(source, /\.select\('role, activation_status, is_active'\)/)
+})
+
+test('elevated operational writes reject inactive sessions before using service credentials', () => {
+  const protectedRoutes = [
+    ['app/api/missions/request-availability/route.ts', "profile.activation_status !== 'active' || profile.is_active === false", '.from(\'notifications\').insert'],
+    ['app/api/welfare/food-ready/route.ts', "profile.activation_status !== 'active' || profile.is_active === false", '.from(\'notifications\').insert'],
+    ['app/api/teams/remove-member/route.ts', "me.activation_status !== 'active' || me.is_active === false", "db.from('users').update"],
+    ['app/api/journey-duty-officers/route.ts', "currentUser.activation_status !== 'active' || currentUser.is_active === false", "rpc('replace_journey_duty_officers'"],
+    ['app/api/papas/[id]/role-update/route.ts', "userData.activation_status !== 'active' || userData.is_active === false", 'const adminClient = createAdminClient()'],
+  ]
+  for (const [path, guard, privilegedWrite] of protectedRoutes) {
+    const source = fs.readFileSync(path, 'utf8')
+    assert.ok(source.indexOf(guard) >= 0, `${path} must verify account activation`)
+    assert.ok(source.indexOf(privilegedWrite) > source.indexOf(guard), `${path} must check activation before writing`)
+  }
+})
+
+test('journey reminders are rate limited, active-account and assignment scoped, and idempotent', () => {
+  const source = fs.readFileSync('app/api/notifications/journey-reminder/route.ts', 'utf8')
+  assert.match(source, /checkRateLimit\(req, 'journey-reminder'/)
+  assert.match(source, /rateLimit\(`journey-reminder-user:\$\{user\.id\}`/)
+  assert.match(source, /profile\.activation_status !== 'active' \|\| profile\.is_active === false/)
+  assert.match(source, /journey_duty_officers[\s\S]*?\.eq\('user_id', user\.id\)/)
+  assert.match(source, /assigned_duty_officer_id === user\.id/)
+  assert.match(source, /\.contains\('metadata', \{ reminder_key: type \}\)/)
+  assert.match(source, /\(dep\|arr\):\(15\|5\)/)
+})
+
+test('public signup always creates a pending Viewer request regardless of submitted role', () => {
+  const source = fs.readFileSync('app/api/auth/signup/route.ts', 'utf8')
+  assert.match(source, /const \{ email, password, full_name, phone, oscar: custom_oscar, team \} = body/)
+  assert.match(source, /const role = 'viewer'/)
+  assert.match(source, /activation_status: 'pending'/)
+  assert.match(source, /is_active: false/)
+})
+
 test('officer full-profile endpoint limits access to self or approved profile viewers', () => {
   const source = fs.readFileSync('app/api/officers/[id]/details/route.ts', 'utf8')
   const guard = source.indexOf('user.id !== id && !canViewOfficerFullProfile')

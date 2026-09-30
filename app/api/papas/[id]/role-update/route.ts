@@ -24,12 +24,15 @@ export async function PATCH(
     // Get requesting user's role
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('role, oscar, full_name')
+      .select('role, oscar, full_name, activation_status, is_active')
       .eq('id', user.id)
       .single()
 
     if (userError || !userData) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+    if (userData.activation_status !== 'active' || userData.is_active === false) {
+      return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
     }
 
     const role = userData.role as string

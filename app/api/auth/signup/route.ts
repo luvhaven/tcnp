@@ -15,7 +15,10 @@ export async function POST(request: Request) {
         const db = adminClient as any
 
         const body = await request.json()
-        const { email, password, full_name, phone, role, oscar: custom_oscar, team } = body
+        const { email, password, full_name, phone, oscar: custom_oscar, team } = body
+        // Public registration is always a least-privilege request. Platform or
+        // unit roles can only be assigned later by an authorized administrator.
+        const role = 'viewer'
 
         if (!email || !password || !full_name || !role) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })

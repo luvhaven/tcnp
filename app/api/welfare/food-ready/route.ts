@@ -31,7 +31,10 @@ export async function POST(req: NextRequest) {
         const adminClient = createAdminClient()
         const db = adminClient as any
 
-        const { data: profile } = await db.from('users').select('role, full_name').eq('id', user.id).single()
+        const { data: profile } = await db.from('users').select('role, full_name, activation_status, is_active').eq('id', user.id).single()
+        if (!profile || profile.activation_status !== 'active' || profile.is_active === false) {
+            return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
+        }
         if (!profile?.role || !ALLOWED_ROLES.includes(profile.role)) {
             return NextResponse.json({ error: 'Forbidden: Welfare or leadership access required' }, { status: 403 })
         }
@@ -58,7 +61,16 @@ export async function POST(req: NextRequest) {
                 .from('users')
                 .select('id')
                 .eq('is_active', true)
+                .eq('is_directory_hidden', false)
             recipientIds = (activeUsers ?? []).map((u: any) => u.id)
+        } else {
+            const { data: visibleRecipients } = await db
+                .from('users')
+                .select('id')
+                .in('id', recipientIds)
+                .eq('is_directory_hidden', false)
+            const visibleIds = new Set((visibleRecipients ?? []).map((u: any) => u.id))
+            recipientIds = recipientIds.filter((id) => visibleIds.has(id))
         }
 
         if (recipientIds.length === 0) {

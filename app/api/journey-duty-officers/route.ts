@@ -12,11 +12,14 @@ export async function POST(req: NextRequest) {
     // Only admins/captains/command can assign DOs
     const { data: currentUser } = await supabase
       .from('users')
-      .select('role')
+      .select('role, activation_status, is_active')
       .eq('id', user.id)
       .single()
 
-    if (!currentUser || !isAdmin(currentUser.role)) {
+    if (!currentUser || currentUser.activation_status !== 'active' || currentUser.is_active === false) {
+      return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
+    }
+    if (!isAdmin(currentUser.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -62,7 +65,14 @@ export async function GET(req: NextRequest) {
     const journeyId = req.nextUrl.searchParams.get('journey_id')
     if (!journeyId) return NextResponse.json({ error: 'journey_id required' }, { status: 400 })
 
-    const { data: currentUser } = await supabase.from('users').select('role').eq('id', user.id).single()
+    const { data: currentUser } = await supabase
+      .from('users')
+      .select('role, activation_status, is_active')
+      .eq('id', user.id)
+      .single()
+    if (!currentUser || currentUser.activation_status !== 'active' || currentUser.is_active === false) {
+      return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
+    }
     const canManage = !!currentUser && isAdmin(currentUser.role)
     if (!canManage) {
       const { data: ownAssignment, error: assignmentError } = await (supabase as any)
@@ -81,8 +91,9 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await (adminClient as any)
       .from('journey_duty_officers')
-      .select('id, user_id, is_lead, status, acknowledged_at, created_at, users:user_id(full_name, role, oscar, photo_url)')
+      .select('id, user_id, is_lead, status, acknowledged_at, created_at, users:user_id!inner(full_name, role, oscar, photo_url, is_directory_hidden)')
       .eq('journey_id', journeyId)
+      .eq('users.is_directory_hidden', false)
       .order('is_lead', { ascending: false })
 
     if (error) throw error
