@@ -33,6 +33,7 @@ export async function GET() {
     const { data: officers, error } = await adminClient
       .from('users')
       .select('id, full_name, email, phone, role, oscar, activation_status, unit, current_title_id, last_seen, created_at, photo_url, team, is_team_head, date_of_birth, gender, address, city, bio, profile_completed_at, updated_at')
+      .eq('is_directory_hidden', false)
       .order('full_name')
 
     if (error) {

@@ -95,7 +95,7 @@ export default function EaglesPage() {
 
             <Tabs defaultValue="squares" className="space-y-6">
                 <TabsList className="grid w-full grid-cols-2 max-w-md">
-                    <TabsTrigger value="squares">Eagle Squares (Airports)</TabsTrigger>
+                    <TabsTrigger value="squares" className="min-w-0 whitespace-normal text-center text-xs sm:text-sm">Eagle Squares (Airports)</TabsTrigger>
                     <TabsTrigger value="tracking">Flight Tracking</TabsTrigger>
                 </TabsList>
 
@@ -249,12 +249,12 @@ function ManageSquares() {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold">Airport Management</h2>
+                    <h2 className="text-xl font-bold sm:text-2xl">Airport Management</h2>
                     <p className="text-sm text-muted-foreground">Manage Eagle Square locations</p>
                 </div>
-                <Button onClick={() => { resetForm(); setEditing(null); setDialogOpen(true) }}>
+                <Button className="w-full shrink-0 sm:w-auto" onClick={() => { resetForm(); setEditing(null); setDialogOpen(true) }}>
                     <Plus className="mr-2 h-4 w-4" />
                     Add Airport
                 </Button>

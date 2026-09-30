@@ -108,6 +108,7 @@ export async function GET(req: NextRequest) {
       .select('id, full_name, role, oscar, photo_url, activation_status')
       .in('id', eligibleUserIds)
       .eq('activation_status', 'active')
+      .eq('is_directory_hidden', false)
 
     if (usersError) {
       console.error('by-program users error:', usersError)

@@ -39,6 +39,14 @@ test('officer directory service-role reads require an active platform administra
   assert.match(source, /caller\.is_active === false/)
 })
 
+test('public signup always creates a pending Viewer request regardless of submitted role', () => {
+  const source = fs.readFileSync('app/api/auth/signup/route.ts', 'utf8')
+  assert.match(source, /const \{ email, password, full_name, phone, oscar: custom_oscar, team \} = body/)
+  assert.match(source, /const role = 'viewer'/)
+  assert.match(source, /activation_status: 'pending'/)
+  assert.match(source, /is_active: false/)
+})
+
 test('officer full-profile endpoint limits access to self or approved profile viewers', () => {
   const source = fs.readFileSync('app/api/officers/[id]/details/route.ts', 'utf8')
   const guard = source.indexOf('user.id !== id && !canViewOfficerFullProfile')

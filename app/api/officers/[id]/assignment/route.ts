@@ -49,6 +49,14 @@ export async function PATCH(
 
     const { id } = await context.params
     const adminClient = createAdminClient()
+    const { data: target, error: targetError } = await adminClient
+      .from('users')
+      .select('id, is_directory_hidden')
+      .eq('id', id)
+      .maybeSingle()
+    if (targetError || !target || (target.is_directory_hidden && id !== user.id)) {
+      return NextResponse.json({ error: 'Officer not found' }, { status: 404 })
+    }
     const { data: officer, error } = await adminClient
       .from('users')
       .update({ oscar, team, updated_at: new Date().toISOString() })

@@ -58,7 +58,16 @@ export async function POST(req: NextRequest) {
                 .from('users')
                 .select('id')
                 .eq('is_active', true)
+                .eq('is_directory_hidden', false)
             recipientIds = (activeUsers ?? []).map((u: any) => u.id)
+        } else {
+            const { data: visibleRecipients } = await db
+                .from('users')
+                .select('id')
+                .in('id', recipientIds)
+                .eq('is_directory_hidden', false)
+            const visibleIds = new Set((visibleRecipients ?? []).map((u: any) => u.id))
+            recipientIds = recipientIds.filter((id) => visibleIds.has(id))
         }
 
         if (recipientIds.length === 0) {

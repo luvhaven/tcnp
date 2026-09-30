@@ -44,6 +44,9 @@ export async function GET(
     if (officerError || !officer) {
       return NextResponse.json({ error: 'Officer not found' }, { status: 404 })
     }
+    if (officer.is_directory_hidden && user.id !== id) {
+      return NextResponse.json({ error: 'Officer not found' }, { status: 404 })
+    }
 
     // Fetch all title assignments (past and present) with title & program names
     const { data: titleAssignments, error: titleError } = await db

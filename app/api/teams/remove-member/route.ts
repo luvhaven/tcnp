@@ -27,7 +27,8 @@ export async function POST(req: NextRequest) {
         if (!user_id) return NextResponse.json({ error: 'user_id is required' }, { status: 400 })
         if (user_id === user.id) return NextResponse.json({ error: 'You cannot remove yourself from your own team here' }, { status: 400 })
 
-        const { data: target } = await db.from('users').select('id, team, full_name').eq('id', user_id).single()
+        const { data: target } = await db.from('users').select('id, team, full_name, is_directory_hidden').eq('id', user_id).single()
+        if (target?.is_directory_hidden) return NextResponse.json({ error: 'Officer not found' }, { status: 404 })
         if (!target?.team) return NextResponse.json({ error: 'Officer is not in a team' }, { status: 400 })
 
         const isPlatformAdmin = ADMIN_ROLES.includes(me.role ?? '')

@@ -81,8 +81,9 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await (adminClient as any)
       .from('journey_duty_officers')
-      .select('id, user_id, is_lead, status, acknowledged_at, created_at, users:user_id(full_name, role, oscar, photo_url)')
+      .select('id, user_id, is_lead, status, acknowledged_at, created_at, users:user_id!inner(full_name, role, oscar, photo_url, is_directory_hidden)')
       .eq('journey_id', journeyId)
+      .eq('users.is_directory_hidden', false)
       .order('is_lead', { ascending: false })
 
     if (error) throw error

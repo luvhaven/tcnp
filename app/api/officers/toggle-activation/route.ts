@@ -49,12 +49,16 @@ export async function POST(request: Request) {
     const adminClient = buildAdminClient()
     const { data: target } = await adminClient
       .from('users')
-      .select('role')
+      .select('role, email, is_directory_hidden')
       .eq('id', officerId)
       .single()
 
     if (!target) {
       return NextResponse.json({ error: 'Officer not found' }, { status: 404 })
+    }
+    if (target.is_directory_hidden) return NextResponse.json({ error: 'Officer not found' }, { status: 404 })
+    if (target.role === 'super_admin' || target.email?.toLowerCase() === 'doriazowan@gmail.com') {
+      return NextResponse.json({ error: 'The permanent owner account cannot be deactivated' }, { status: 403 })
     }
     if (platformAuthorityRank(target.role) >= 80 && callerRow.role !== 'super_admin') {
       return NextResponse.json({ error: 'Only Super Admin can change an administrator account' }, { status: 403 })

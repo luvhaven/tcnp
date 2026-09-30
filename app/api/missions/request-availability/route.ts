@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
         if (reqError) throw reqError
 
         // Broadcast to every active officer
-        const { data: officers } = await db.from('users').select('id').eq('is_active', true)
+        const { data: officers } = await db.from('users').select('id').eq('is_active', true).eq('is_directory_hidden', false)
         const recipientIds: string[] = (officers ?? []).map((o: any) => o.id)
 
         const rows = recipientIds.map((id) => ({
