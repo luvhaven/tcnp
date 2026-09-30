@@ -20,8 +20,11 @@ export async function POST(req: NextRequest) {
         const adminClient = createAdminClient()
         const db = adminClient as any
 
-        const { data: me } = await db.from('users').select('role, team, is_team_head').eq('id', user.id).single()
+        const { data: me } = await db.from('users').select('role, team, is_team_head, activation_status, is_active').eq('id', user.id).single()
         if (!me) return NextResponse.json({ error: 'Profile not found' }, { status: 403 })
+        if (me.activation_status !== 'active' || me.is_active === false) {
+            return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
+        }
 
         const { user_id } = await req.json()
         if (!user_id) return NextResponse.json({ error: 'user_id is required' }, { status: 400 })

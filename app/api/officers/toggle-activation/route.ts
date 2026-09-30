@@ -15,7 +15,7 @@ function buildAdminClient() {
 
 export async function POST(request: Request) {
   try {
-    // 1. Verify caller is authenticated and is an admin
+    // 1. Verify caller is authenticated, active, and is an admin
     const supabase = await createServerClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
@@ -25,12 +25,16 @@ export async function POST(request: Request) {
 
     const { data: callerRow, error: callerError } = await supabase
       .from('users')
-      .select('role')
+      .select('role, activation_status, is_active')
       .eq('id', user.id)
       .single()
 
     if (callerError || !callerRow) {
       return NextResponse.json({ error: 'Could not verify caller role' }, { status: 403 })
+    }
+
+    if (callerRow.activation_status !== 'active' || callerRow.is_active === false) {
+      return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
     }
 
     if (!isPlatformAdministrator(callerRow.role)) {

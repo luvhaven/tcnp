@@ -1,6 +1,6 @@
 # Role Acceptance Test Matrix
 
-Status: 26 approved test profiles are active. API role checks are complete; representative UI and responsive checks are recorded below.
+Status: 26 approved test profiles are active. Production-mode route and authorization smoke checks have now covered those profiles and the permanent owner; interactive workflows and physical-device checks remain outstanding.
 
 This matrix uses the role values currently offered by the Officers page, with the legacy November Oscar role retained as a compatibility check. Super Admin is excluded: the platform owner remains the only account with that authority. Admin can be added as a separate privileged test persona if explicitly requested.
 
@@ -89,23 +89,26 @@ Public self-registration now ignores any submitted role and always creates an in
 
 - **26/26 approved roles:** A passwordless test session was issued without sending mail. `/api/auth/check-activation` returned 200 and `/api/officers/{self}/details` returned 200 for every persona.
 - **Authorization boundary:** `/api/officers/list` returned 403 for all 26 unit/leadership/viewer profiles; unauthenticated access returned 401. Distinct cross-profile requests returned 403 for unit members and Viewer, and 200 only for the five command/captain leadership roles plus Head of Welfare, matching `canViewOfficerFullProfile`.
+- **Production-mode route sweep (2026-09-30):** With Supabase network access enabled, all 27 personas (26 approved roles plus the permanent owner) fetched all 35 app pages successfully: 945/945 page responses. Four API checks per persona also passed (activation, own profile, officer-directory authorization, and cross-profile authorization), for 1,053/1,053 total checks. Owner officer-directory access returned 200; the 26 non-platform-admin QA profiles received 403. No server-side errors were logged during the network-enabled pass. This validates authenticated route responses, not client hydration or each page's save workflow.
 - **Browser role smoke:** Alpha Oscar workspace loaded; an Alpha role received the expected “Command Clearance Required” state on the Command route. Data-creating buttons were not submitted.
 - **Responsive review:** Alpha workspace checked at 320, 390, 768, 1024, and 1440 CSS pixels. At 320px, “Airport Management” overlapped its action button and the first tab label was clipped. Fixed by stacking the header on narrow screens and allowing the tab label to wrap. Rechecked at 320px; the heading, full-width action, and both tab labels now fit.
-- **Production and device scope:** Production build and unauthenticated login page smoke passed. Responsive screenshots were taken in browser emulation, not on physical iOS/Android devices. Other unit pages, operational mutations, push notifications, and the owner self-removal workflow were not exercised against production data to avoid changing real records or removing the owner profile.
+- **Security findings fixed:** Service-role-backed officer activation, team removal, duty-officer assignment/read, Papa briefing updates, mission broadcasts, and Food Ready broadcasts now reject inactive accounts. Journey reminders now require an active account and assignment to the journey, validate the reminder key, apply a rate limit, and avoid duplicate reminder rows. Regression tests cover these guards. Broadcasts, profile removal, and operational data writes were not triggered against production data.
+- **Production and device scope:** Production build and unauthenticated login page smoke passed. Responsive screenshots were taken in browser emulation, not on physical iOS/Android devices. Interactive workflows for every unit, live notification delivery, owner self-removal, and actual saves/edits were not exercised against production records to avoid changing live operations or removing the owner profile.
 ## Release checks
 
-- `npm test`: 36/36 passed.
+- `npm test`: 39/39 passed.
 - `npm run type-check`: passed.
 - `npm run lint`: 0 errors; 36 existing warnings remain.
 - `npm run build`: passed; all 62 app pages/routes compiled.
 - Production-mode local login smoke: passed; no browser console errors in a fresh tab.
 - `git diff --check`: passed.
 
-**Readiness assessment:** Build- and authentication-ready for a controlled canary, but not fully production-certified. This pass did not cover all operational write workflows, all unit pages in an authenticated browser, live notification delivery, or physical iOS/Android devices. Lint warnings also remain. Review those limits before treating the app as fully production-ready.
+**Readiness assessment:** The current code builds and passes automated tests, and its authenticated server routes and permission boundaries passed the checks above. It is ready for a controlled staging/canary review, but it is not fully production-certified: operational create/edit flows, live notification delivery, full client-side interactions for every role, and physical iOS/Android devices remain unverified. Lint still reports 36 warnings (0 errors). No hosting provider deployment was performed; the release changes were pushed to GitHub.
 
 ## Outcome log
 
 | Date | Role/persona | Route and scenario | Expected | Actual | Status / fix |
 | --- | --- | --- | --- | --- | --- |
 | 2026-09-30 | Public signup | Submit a client-supplied privileged role to `/api/auth/signup` | Request remains pending Viewer until an administrator assigns a role | Signup now hard-codes `viewer`; regression test passes | Fixed and verified by regression test |
+| 2026-09-30 | Inactive account / service-role APIs | Use a previously issued session after suspension | Elevated writes and reads stop immediately | Added explicit active-account checks to service-role-backed operational endpoints; journey reminders are assignment-scoped and rate-limited; regression tests pass | Fixed; 39 automated tests pass |
 | — | — | — | — | — | Commit `c230f9b` was pushed to GitHub `main` on 2026-09-30. |
