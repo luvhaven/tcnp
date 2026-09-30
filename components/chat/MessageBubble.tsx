@@ -221,7 +221,7 @@ export const MessageBubble = memo(({
                     <div className={`flex flex-wrap gap-1 mt-1.5 px-0.5 ${isOwn ? 'justify-end' : 'justify-start'}`}>
                         {msgReactions.map(r => (
                             <button key={r.emoji} onClick={() => void toggleReaction(msg.id, r.emoji)}
-                                className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] border transition-all hover:scale-105 active:scale-95 ${r.userIds.includes(currentUserId ?? '') ? 'bg-primary/15 border-primary/40 text-primary font-bold' : 'bg-background border-border text-muted-foreground hover:border-primary/30'}`}>
+                                className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] border transition-all hover:scale-105 active:scale-95 ${r.userIds.includes(currentUserId ?? '') ? 'bg-primary/8 border-primary/40 text-primary font-bold' : 'bg-background border-border text-muted-foreground hover:border-primary/30'}`}>
                                 {r.emoji}<span>{r.count}</span>
                             </button>
                         ))}

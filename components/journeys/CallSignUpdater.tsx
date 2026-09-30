@@ -38,7 +38,7 @@ const STATUS_CONFIG: Record<string, StatusConfig> = {
   first_course: { label: 'First Course', description: 'Departing Nest to Theatre',                       icon: Navigation,  color: 'text-blue-600',   bgColor: 'bg-blue-50' },
   // ---- Theatre ----
   chapman:      { label: 'Chapman',      description: 'Arrived at Theatre gate',                         icon: Church,      color: 'text-teal-600',   bgColor: 'bg-teal-50' },
-  dessert:      { label: 'Dessert',      description: 'Departing Theatre',                               icon: Hotel,       color: 'text-indigo-600', bgColor: 'bg-indigo-50' },
+  dessert:      { label: 'Dessert',      description: 'Departing Theatre',                               icon: Hotel,       color: 'text-sky-700 dark:text-sky-300', bgColor: 'bg-sky-50 dark:bg-sky-950/40' },
   // ---- Terminal ----
   completed:    { label: 'Completed',    description: 'Journey successfully completed',                  icon: CheckCircle, color: 'text-green-600',  bgColor: 'bg-green-50' },
   broken_arrow: { label: 'Broken Arrow', description: 'Major incident — all Cheetahs immobilised',       icon: AlertTriangle, color: 'text-red-600', bgColor: 'bg-red-50' },
@@ -87,7 +87,7 @@ const ACTION_STYLE: Record<string, string> = {
   cocktail:     'bg-emerald-600 hover:bg-emerald-700 text-white',
   first_course: 'bg-blue-600 hover:bg-blue-700 text-white',
   chapman:      'bg-teal-600 hover:bg-teal-700 text-white',
-  dessert:      'bg-indigo-600 hover:bg-indigo-700 text-white',
+  dessert:      'bg-sky-700 hover:bg-sky-800 text-white',
   completed:    'bg-green-600 hover:bg-green-700 text-white',
   broken_arrow: 'bg-red-600 hover:bg-red-700 text-white',
   cancelled:    'bg-gray-200 hover:bg-gray-300 text-gray-800 border-gray-300',

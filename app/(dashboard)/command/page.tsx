@@ -66,8 +66,8 @@ const MODULES = [
     icon: Volume2,
     tag: "Readiness",
     description: "Equipment logistics, AV readiness briefings, and pre-op equipment checklists.",
-    accent: "from-purple-500/20 via-purple-500/10 to-transparent text-purple-500 border-purple-500/20 hover:border-purple-500/40",
-    iconBg: "bg-purple-500/10 text-purple-500",
+    accent: "from-primary/20 via-primary/10 to-transparent text-primary border-primary/20 hover:border-primary/40",
+    iconBg: "bg-primary/10 text-primary",
   },
 ]
 

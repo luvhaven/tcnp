@@ -675,7 +675,7 @@ function JourneyOperationsPanel({
                   <div key={d.user_id} className={cn(
                     'flex items-center gap-1.5 text-xs px-2 py-1 rounded-full',
                     d.user_id === currentUserId
-                      ? 'bg-primary/15 text-primary font-medium'
+                      ? 'bg-primary/8 text-primary font-medium'
                       : 'bg-muted text-muted-foreground'
                   )}>
                     {d.is_lead && <Crown className="h-3 w-3 text-yellow-500" />}

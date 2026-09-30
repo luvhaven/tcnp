@@ -33,7 +33,7 @@ export const CALL_SIGNS: CallSign[] = [
         label: 'Dessert',
         description: 'Departure from Theatre to Nest',
         category: 'movement',
-        color: 'bg-indigo-600',
+        color: 'bg-sky-700',
     },
     {
         key: 'cocktail',
@@ -61,7 +61,7 @@ export const CALL_SIGNS: CallSign[] = [
         label: 'Re-order',
         description: 'Route Change',
         category: 'movement',
-        color: 'bg-purple-600',
+        color: 'bg-primary',
     },
     {
         key: 'chapman',
@@ -150,7 +150,7 @@ export const SITREP_CODES: SitrepCode[] = [
 // ── Canonical call-sign visual language ──────────────────────────────────────
 //
 // Before this existed, three separate colour maps disagreed: "Cocktail" rendered
-// green on My Operations, amber on the Ops Monitor and indigo on the Dashboard.
+// green on My Operations, amber on the Ops Monitor and sky blue on the Dashboard.
 // An officer who learns a colour on one screen was actively misled on the next.
 //
 // The rule now: COLOUR ENCODES SEVERITY, FORM (the icon) ENCODES IDENTITY.

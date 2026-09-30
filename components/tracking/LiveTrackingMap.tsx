@@ -78,7 +78,7 @@ const JOURNEY_PHASE_SET = new Set<string>(
 const ROLE_METADATA: Record<string, { label: string; color: string }> = {
   delta_oscar: { label: 'Delta Oscar', color: '#2563EB' },
   tango_oscar: { label: 'Tango Oscar', color: '#059669' },
-  alpha_oscar: { label: 'Alpha Oscar', color: '#6D28D9' },
+  alpha_oscar: { label: 'Alpha Oscar', color: '#0F766E' },
   victor_oscar: { label: 'Victor Oscar', color: '#D97706' },
   november_oscar: { label: 'November Oscar', color: '#4338CA' },
   noscar_den: { label: 'November (Den)', color: '#4338CA' },
@@ -93,7 +93,7 @@ const ROLE_METADATA: Record<string, { label: string; color: string }> = {
   command: { label: 'Command', color: '#1D4ED8' },
   admin: { label: 'Admin', color: '#1F2937' },
   dev_admin: { label: 'Dev Admin', color: '#111827' },
-  prof: { label: 'Prof', color: '#7C3AED' },
+  prof: { label: 'Prof', color: '#0F766E' },
   duchess: { label: 'Duchess', color: '#DB2777' },
   viewer: { label: 'Viewer', color: '#6B7280' },
 }
@@ -418,8 +418,8 @@ export default function LiveTrackingMap() {
               <span className="text-muted-foreground">journeys</span>
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1">
-              <Users className="h-3 w-3 text-purple-500" />
-              <span className="font-semibold text-purple-600 dark:text-purple-400">{stats.users}</span>
+              <Users className="h-3 w-3 text-primary" />
+              <span className="font-semibold text-primary">{stats.users}</span>
               <span className="text-muted-foreground">tracked</span>
             </span>
           </div>

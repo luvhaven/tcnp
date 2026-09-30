@@ -177,7 +177,7 @@ export function OfficerProfileDialog({
     switch (role) {
       case 'dev_admin':
       case 'super_admin':
-        return 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30'
+        return 'bg-primary/8 text-primary border-primary/30'
       case 'admin':
         return 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30'
       case 'captain':
@@ -256,7 +256,7 @@ export function OfficerProfileDialog({
       <DialogContent className="max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] max-w-2xl flex flex-col gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)] sm:rounded-2xl border-primary/20 shadow-2xl">
         {/* Header Cover Banner */}
         <div className="relative p-6 bg-gradient-to-br from-primary/20 via-primary/5 to-background border-b shrink-0 overflow-hidden">
-          <div className="absolute -right-12 -top-12 h-44 w-44 rounded-full bg-primary/15 blur-2xl pointer-events-none" />
+          <div className="absolute -right-12 -top-12 h-44 w-44 rounded-full bg-primary/8 blur-2xl pointer-events-none" />
           <div className="absolute left-1/3 -bottom-10 h-32 w-32 rounded-full bg-sky-500/10 blur-xl pointer-events-none" />
 
           {/* Close button */}
@@ -394,7 +394,7 @@ export function OfficerProfileDialog({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-8 gap-1 text-xs text-violet-600 hover:text-violet-700 dark:text-violet-400"
+                  className="h-8 gap-1 text-xs text-primary hover:text-primary"
                   onClick={() => {
                     onOpenChange(false)
                     onAssignTitle(mergedOfficer)

@@ -26,7 +26,7 @@ const PREREQUISITES = [
 const CATEGORY_COLORS: Record<string, string> = {
     Comfort: 'text-blue-500',
     Weather: 'text-sky-500',
-    Comms: 'text-purple-500',
+    Comms: 'text-primary',
     Safety: 'text-red-500',
     Cleanliness: 'text-green-500',
 }

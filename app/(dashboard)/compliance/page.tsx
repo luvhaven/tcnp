@@ -44,7 +44,7 @@ type CompliancePost = {
 const POST_TYPES = [
   { value: "outfit_of_day", label: "Outfit of the Day", color: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" },
   { value: "general_outfit", label: "General Outfit", color: "bg-sky-500/15 text-sky-600 dark:text-sky-400" },
-  { value: "grooming", label: "Grooming Tip", color: "bg-purple-500/15 text-purple-600 dark:text-purple-400" },
+  { value: "grooming", label: "Grooming Tip", color: "bg-primary/8 text-primary" },
 ]
 
 // Grooming & dress-code standards relocated from the Guide (SOP TCNP.01.02)

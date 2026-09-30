@@ -945,8 +945,8 @@ export default function JourneysClient({
 
                           {/* Nest/Eagle */}
                           <div className="flex items-start gap-2">
-                            <div className="mt-1 p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-full">
-                              <Hotel className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                            <div className="mt-1 p-1.5 bg-primary/10 rounded-full">
+                              <Hotel className="h-4 w-4 text-primary" />
                             </div>
                             <div>
                               <p className="text-sm font-medium">{journey.nests?.name || journey.eagle_squares?.name || 'Not Assigned'}</p>

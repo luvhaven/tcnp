@@ -40,12 +40,12 @@ const STATUS_MAP: Record<string, StatusConfig> = {
   },
   first_course: {
     label: 'First Course',
-    className: 'bg-sky-500/15 text-sky-400 border border-sky-500/30',
+    className: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30',
     iconEl: <Radio className="h-3 w-3 shrink-0" />,
   },
   dessert: {
     label: 'Dessert',
-    className: 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30',
+    className: 'bg-sky-500/15 text-sky-400 border border-sky-500/30',
     iconEl: <Radio className="h-3 w-3 shrink-0" />,
   },
   cocktail: {
@@ -65,7 +65,7 @@ const STATUS_MAP: Record<string, StatusConfig> = {
   },
   re_order: {
     label: 'Re-Order',
-    className: 'bg-purple-500/15 text-purple-400 border border-purple-500/30',
+    className: 'bg-primary/8 text-primary border border-primary/30',
     iconEl: <Radio className="h-3 w-3 shrink-0" />,
   },
   chapman: {

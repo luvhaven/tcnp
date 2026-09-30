@@ -8,7 +8,7 @@ type CelebrateContextType = (message?: string) => void
 
 const CelebrateContext = createContext<CelebrateContextType>(() => {})
 
-const CONFETTI_COLORS = ["#F26522", "#22C55E", "#3B82F6", "#EAB308", "#EC4899", "#8B5CF6"]
+const CONFETTI_COLORS = ["#F26522", "#22C55E", "#3B82F6", "#EAB308", "#EC4899", "#0D9488"]
 const PARTICLE_COUNT = 14
 
 /**

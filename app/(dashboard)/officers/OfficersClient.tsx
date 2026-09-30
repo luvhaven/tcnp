@@ -418,7 +418,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
 
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
-      case 'dev_admin': return 'bg-purple-500 text-white'
+      case 'dev_admin': return 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
       case 'admin': return 'bg-blue-500 text-white'
       case 'captain': return 'bg-green-500 text-white'
       default: return 'bg-secondary text-secondary-foreground'
@@ -722,7 +722,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
           { label: 'Total Officers', value: officers.length, color: 'text-foreground', bg: 'bg-primary/8', ring: 'ring-primary/15' },
           { label: 'Active', value: officers.filter((o: Officer) => o.is_active).length, color: 'text-[hsl(var(--success))]', bg: 'bg-[hsl(var(--success)/0.08)]', ring: 'ring-[hsl(var(--success)/0.2)]' },
           { label: 'Online Now', value: officers.filter((o: Officer) => o.is_online).length, color: 'text-sky-500', bg: 'bg-sky-500/8', ring: 'ring-sky-500/15' },
-          { label: 'With Titles', value: officers.filter((o: Officer) => o.current_title_id).length, color: 'text-violet-500', bg: 'bg-violet-500/8', ring: 'ring-violet-500/15' },
+          { label: 'With Titles', value: officers.filter((o: Officer) => o.current_title_id).length, color: 'text-primary', bg: 'bg-primary/8', ring: 'ring-primary/15' },
         ].map(({ label, value, color, bg, ring }) => (
           <div key={label} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
             <p className="text-xs font-medium text-muted-foreground">{label}</p>

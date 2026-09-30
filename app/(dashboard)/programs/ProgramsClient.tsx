@@ -267,7 +267,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
     const colors: Record<string, string> = {
       planning: 'bg-blue-500',
       active: 'bg-green-500',
-      completed: 'bg-purple-500',
+      completed: 'bg-success',
       archived: 'bg-gray-500'
     }
     return colors[status.toLowerCase()] || 'bg-gray-500'
@@ -314,7 +314,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
         {[
           { status: 'planning', label: 'Planning', Icon: Calendar, color: 'text-sky-500', bg: 'bg-sky-500/10', ring: 'ring-sky-500/20' },
           { status: 'active', label: 'Active', Icon: CheckCircle, color: 'text-emerald-500', bg: 'bg-emerald-500/10', ring: 'ring-emerald-500/20' },
-          { status: 'completed', label: 'Completed', Icon: CheckCircle, color: 'text-purple-500', bg: 'bg-purple-500/10', ring: 'ring-purple-500/20' },
+          { status: 'completed', label: 'Completed', Icon: CheckCircle, color: 'text-success', bg: 'bg-success/10', ring: 'ring-success/20' },
           { status: 'archived', label: 'Archived', Icon: Archive, color: 'text-muted-foreground', bg: 'bg-muted/60', ring: 'ring-border' },
         ].map(({ status, label, Icon, color, bg, ring }) => (
           <div
@@ -405,7 +405,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                   const statusBadges: Record<string, { label: string; className: string }> = {
                     active: { label: 'Active', className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
                     planning: { label: 'Planning', className: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20' },
-                    completed: { label: 'Completed', className: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20' },
+                    completed: { label: 'Completed', className: 'bg-success/10 text-success border-success/20' },
                     archived: { label: 'Archived', className: 'bg-muted text-muted-foreground border-border' },
                   }
                   const badgeInfo = statusBadges[program.status] || { label: program.status, className: 'bg-muted' }
@@ -494,7 +494,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-8 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-500/10"
+                            className="h-8 text-xs font-semibold text-primary hover:bg-primary/10"
                             onClick={() => handleStatusChange(program.id, 'archived')}
                           >
                             <Archive className="h-3.5 w-3.5 mr-1" />

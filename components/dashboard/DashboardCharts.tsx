@@ -68,7 +68,7 @@ const CHART_COLORS = {
   amber: "#F59E0B",
   green: "#22C55E",
   red: "#EF4444",
-  purple: "#A855F7",
+  critical: "#991B1B",
   slate: "#64748B",
 };
 
@@ -433,7 +433,7 @@ export function DashboardCharts() {
                             ? CHART_COLORS.amber
                             : severity === "high"
                               ? CHART_COLORS.red
-                              : CHART_COLORS.purple;
+                              : CHART_COLORS.critical;
                       return <Cell key={`cell-${index}`} fill={color} />;
                     })}
                   </Pie>

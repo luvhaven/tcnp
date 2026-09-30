@@ -39,9 +39,9 @@ const getEventConfig = (eventType: string) => {
         case 'First Course':
             return { icon: Navigation, bg: 'bg-blue-100 dark:bg-blue-900/30', color: 'text-blue-600 dark:text-blue-400', label: 'First Course (Departed)' }
         case 'Chapman':
-            return { icon: Flag, bg: 'bg-indigo-100 dark:bg-indigo-900/30', color: 'text-indigo-600 dark:text-indigo-400', label: 'Chapman (Checkpoint 1)' }
+            return { icon: Flag, bg: 'bg-sky-100 dark:bg-sky-900/30', color: 'text-sky-700 dark:text-sky-300', label: 'Chapman (Checkpoint 1)' }
         case 'Dessert':
-            return { icon: Clock, bg: 'bg-purple-100 dark:bg-purple-900/30', color: 'text-purple-600 dark:text-purple-400', label: 'Dessert (Checkpoint 2)' }
+            return { icon: Clock, bg: 'bg-primary/10', color: 'text-primary', label: 'Dessert (Checkpoint 2)' }
         case 'Completed':
             return { icon: CheckCircle, bg: 'bg-green-100 dark:bg-green-900/30', color: 'text-green-600 dark:text-green-400', label: 'Completed' }
         case 'Broken Arrow':

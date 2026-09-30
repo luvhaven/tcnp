@@ -80,10 +80,10 @@ export default function EOChecklist({ programId, programName }: { programId: str
 
     return (
         <Card className="border-border/50 overflow-hidden">
-            <CardHeader className="pb-3 bg-gradient-to-r from-violet-500/5 to-transparent">
+            <CardHeader className="pb-3 bg-gradient-to-r from-primary/5 to-transparent">
                 <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                        <Volume2 className="h-4 w-4 text-violet-500" />
+                        <Volume2 className="h-4 w-4 text-primary" />
                         EO Pre-Op Equipment Check
                         <Badge variant="secondary" className="text-[9px] font-mono">TCNP.01.10</Badge>
                     </CardTitle>
@@ -137,7 +137,7 @@ export default function EOChecklist({ programId, programName }: { programId: str
                 <div className="pt-1">
                     <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                         <div
-                            className={cn('h-full rounded-full transition-all duration-500', allChecked ? 'bg-green-500' : 'bg-violet-500')}
+                            className={cn('h-full rounded-full transition-all duration-500', allChecked ? 'bg-green-500' : 'bg-primary')}
                             style={{ width: `${(checkedCount / EO_ITEMS.length) * 100}%` }}
                         />
                     </div>

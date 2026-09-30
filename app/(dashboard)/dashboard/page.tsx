@@ -48,10 +48,10 @@ const EXECUTIVE_STATS = [
     label: "Total Papas",
     sub: "Registered VIP guests",
     Icon: Users,
-    color: "text-violet-500",
-    bg: "bg-violet-500/10",
-    ring: "ring-violet-500/20",
-    glow: "from-violet-500/8",
+    color: "text-primary",
+    bg: "bg-primary/10",
+    ring: "ring-primary/20",
+    glow: "from-primary/8",
   },
   {
     key: "totalCheetahs",
@@ -121,7 +121,7 @@ const getStatusLabel = (status: string) =>
 function getUnitActionForRole(role?: string | null, oscar?: string | null) {
   const r = (oscarToRole(oscar) || oscarToRole(role) || oscar || role || "").toLowerCase()
   if (r.includes("alpha")) {
-    return { href: "/alpha", label: "Alpha Aviation Hub", sub: "Eagle Squares & Flights", Icon: Plane, color: "text-purple-500", bg: "bg-purple-500/10" }
+    return { href: "/alpha", label: "Alpha Aviation Hub", sub: "Eagle Squares & Flights", Icon: Plane, color: "text-primary", bg: "bg-primary/10" }
   }
   if (r.includes("tango")) {
     return { href: "/tango", label: "Tango Fleet", sub: "Cheetah vehicle management", Icon: Car, color: "text-emerald-500", bg: "bg-emerald-500/10" }
@@ -130,10 +130,10 @@ function getUnitActionForRole(role?: string | null, oscar?: string | null) {
     return { href: "/victor", label: "Victor Venues", sub: "Theatres & seat layouts", Icon: Landmark, color: "text-amber-500", bg: "bg-amber-500/10" }
   }
   if (r.includes("nest")) {
-    return { href: "/nests", label: "November Nest", sub: "Hotel accommodations & rooms", Icon: Hotel, color: "text-indigo-500", bg: "bg-indigo-500/10" }
+    return { href: "/nests", label: "November Nest", sub: "Hotel accommodations & rooms", Icon: Hotel, color: "text-primary", bg: "bg-primary/10" }
   }
   if (r.includes("den") || r.includes("theatre")) {
-    return { href: "/den", label: "November Den", sub: "VIP Lounges & Menus", Icon: Home, color: "text-indigo-500", bg: "bg-indigo-500/10" }
+    return { href: "/den", label: "November Den", sub: "VIP Lounges & Menus", Icon: Home, color: "text-primary", bg: "bg-primary/10" }
   }
   if (r.includes("serial") || r.includes("sierra")) {
     return { href: "/serial", label: "Serial Media", sub: "Social media & press coverage", Icon: Camera, color: "text-pink-500", bg: "bg-pink-500/10" }
@@ -142,7 +142,7 @@ function getUnitActionForRole(role?: string | null, oscar?: string | null) {
     return { href: "/training", label: "Training Hub", sub: "Courses, resources & attendance", Icon: BookOpen, color: "text-blue-500", bg: "bg-blue-500/10" }
   }
   if (r.includes("compliance")) {
-    return { href: "/compliance", label: "Compliance", sub: "Dress code & team standards", Icon: Shield, color: "text-violet-500", bg: "bg-violet-500/10" }
+    return { href: "/compliance", label: "Compliance", sub: "Dress code & team standards", Icon: Shield, color: "text-primary", bg: "bg-primary/10" }
   }
   if (r.includes("welfare")) {
     return { href: "/welfare", label: "Welfare Portal", sub: "Officer welfare & meals", Icon: UtensilsCrossed, color: "text-emerald-500", bg: "bg-emerald-500/10" }
@@ -321,7 +321,7 @@ export default function DashboardPage() {
   const leadershipQuickActions = useMemo(() => {
     const canCmd = Boolean(currentUser && canAccessCommandCentre(currentUser.role, currentUser.oscar))
     const actions: Array<{ href: string; label: string; sub: string; Icon: any; color: string; bg: string }> = [
-      { href: "/journeys", label: "Create Journey", sub: "Plan a new Papa movement", Icon: MapPin, color: "text-violet-500", bg: "bg-violet-500/10" },
+      { href: "/journeys", label: "Create Journey", sub: "Plan a new Papa movement", Icon: MapPin, color: "text-primary", bg: "bg-primary/10" },
       { href: "/papas", label: "Add Papa", sub: "Register a new guest", Icon: Users, color: "text-emerald-500", bg: "bg-emerald-500/10" },
     ]
     if (canCmd) {
@@ -498,8 +498,8 @@ export default function DashboardPage() {
           </div>
 
           {/* Card 2: Protocol Unit */}
-          <div className="relative overflow-hidden rounded-2xl border bg-card p-5 ring-1 ring-purple-500/20 transition-all duration-200 hover:shadow-elevation-lg hover:-translate-y-0.5">
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/8 to-transparent pointer-events-none" />
+          <div className="relative overflow-hidden rounded-2xl border bg-card p-5 ring-1 ring-primary/20 transition-all duration-200 hover:shadow-elevation-lg hover:-translate-y-0.5">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/8 to-transparent pointer-events-none" />
             <div className="relative flex items-start justify-between gap-2">
               <div>
                 <p className="text-xs font-medium text-muted-foreground">Protocol Unit</p>
@@ -508,8 +508,8 @@ export default function DashboardPage() {
                 </p>
                 <p className="mt-1 text-[11px] text-muted-foreground">Operational assignment</p>
               </div>
-              <div className="shrink-0 rounded-xl bg-purple-500/10 p-2.5">
-                <Shield className="h-4.5 w-4.5 text-purple-500" aria-hidden="true" />
+              <div className="shrink-0 rounded-xl bg-primary/10 p-2.5">
+                <Shield className="h-4.5 w-4.5 text-primary" aria-hidden="true" />
               </div>
             </div>
           </div>
