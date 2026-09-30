@@ -42,7 +42,7 @@ type Place = {
 const CATEGORIES = [
   { value: "restaurant", label: "Dining", icon: UtensilsCrossed, color: "bg-orange-500/15 text-orange-600 dark:text-orange-400" },
   { value: "sightseeing", label: "Sightseeing", icon: Compass, color: "bg-sky-500/15 text-sky-600 dark:text-sky-400" },
-  { value: "culture", label: "Culture & History", icon: Landmark, color: "bg-purple-500/15 text-purple-600 dark:text-purple-400" },
+  { value: "culture", label: "Culture & History", icon: Landmark, color: "bg-primary/8 text-primary" },
   { value: "shopping", label: "Shopping", icon: ShoppingBag, color: "bg-pink-500/15 text-pink-600 dark:text-pink-400" },
   { value: "nature", label: "Nature", icon: Trees, color: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" },
   { value: "entertainment", label: "Entertainment", icon: Music, color: "bg-amber-500/15 text-amber-600 dark:text-amber-400" },

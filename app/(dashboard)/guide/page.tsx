@@ -118,8 +118,8 @@ const sections = [
   {
     id: 'chat',
     icon: MessageCircle,
-    color: 'text-purple-500',
-    bg: 'bg-purple-500/10',
+    color: 'text-primary',
+    bg: 'bg-primary/10',
     title: 'Team Chat',
     badge: 'Communications',
     content: [
@@ -192,8 +192,8 @@ const sections = [
   {
     id: 'pwa',
     icon: Smartphone,
-    color: 'text-indigo-500',
-    bg: 'bg-indigo-500/10',
+    color: 'text-primary',
+    bg: 'bg-primary/10',
     title: 'Install as App (PWA)',
     badge: 'Mobile',
     content: [

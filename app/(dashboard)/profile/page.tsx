@@ -241,7 +241,7 @@ export default function ProfilePage() {
               <h1 className="text-2xl font-bold tracking-tight">{currentUser.full_name || "Your Name"}</h1>
               <p className="text-sm text-muted-foreground">{currentUser.email}</p>
               <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
-                {currentUser.role && <Badge className="border-0 bg-primary/15 text-primary uppercase text-[10px] tracking-wide">{roleLabel}</Badge>}
+                {currentUser.role && <Badge className="border-0 bg-primary/8 text-primary uppercase text-[10px] tracking-wide">{roleLabel}</Badge>}
                 {normalizeOscarLabel(currentUser.oscar) && <Badge variant="outline" className="text-[10px]">{normalizeOscarLabel(currentUser.oscar)}</Badge>}
                 {currentUser.team && <Badge variant="outline" className="text-[10px] uppercase">{currentUser.is_team_head ? '★ ' : ''}{currentUser.team}</Badge>}
               </div>

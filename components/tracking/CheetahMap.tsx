@@ -37,7 +37,7 @@ type CheetahMapProps = {
 function createPopupContent(location: VehicleLocation) {
   return `
     <div style="min-width: 200px;">
-      <h3 style="font-weight: bold; margin-bottom: 8px; color: #8B5CF6;">
+      <h3 style="font-weight: bold; margin-bottom: 8px; color: #A33E0D;">
         ${location.cheetahs.call_sign}
       </h3>
       <p style="font-size: 12px; color: #666; margin-bottom: 4px;">
@@ -63,7 +63,7 @@ function createPopupContent(location: VehicleLocation) {
           display: inline-block;
           margin-top: 8px;
           padding: 4px 12px;
-          background: #8B5CF6;
+          background: #A33E0D;
           color: white;
           text-decoration: none;
           border-radius: 4px;
@@ -122,7 +122,7 @@ export default function CheetahMap({ locations, height = '600px' }: CheetahMapPr
           const carIcon = L.divIcon({
             html: `
               <div style="
-                background: #8B5CF6;
+                background: #A33E0D;
                 width: 32px;
                 height: 32px;
                 border-radius: 50%;

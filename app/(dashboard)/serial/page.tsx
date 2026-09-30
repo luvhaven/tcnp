@@ -211,20 +211,20 @@ export default function SerialPage() {
   return (
     <div className="space-y-6 page-enter">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-fuchsia-950 via-slate-900 to-slate-900 p-6 text-white">
-        <div className="absolute -left-10 -top-16 h-56 w-56 rounded-full bg-fuchsia-500/20 blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-slate-800 via-slate-900 to-slate-900 p-6 text-white">
+        <div className="absolute -left-10 -top-16 h-56 w-56 rounded-full bg-primary/20 blur-3xl" />
         <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <Camera className="h-6 w-6 text-fuchsia-300" />
+              <Camera className="h-6 w-6 text-orange-300" />
               <h1 className="text-2xl font-bold tracking-tight">Serial</h1>
-              <Badge className="bg-fuchsia-500/20 text-fuchsia-200 border-0 uppercase text-[10px] tracking-wider">Social Media Unit</Badge>
+              <Badge className="bg-primary/20 text-orange-200 border-0 uppercase text-[10px] tracking-wider">Social Media Unit</Badge>
             </div>
             <p className="mt-1 max-w-xl text-sm text-slate-300">
               Capture, curate and publish Papa arrivals, pickups and theatre moments — from lens to Instagram.
             </p>
           </div>
-          <Button onClick={() => setUploadOpen(true)} className="gap-2 bg-fuchsia-600 hover:bg-fuchsia-500">
+          <Button onClick={() => setUploadOpen(true)} className="gap-2 bg-primary hover:bg-primary/90">
             <Upload className="h-4 w-4" /> Upload Media
           </Button>
         </div>

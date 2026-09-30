@@ -210,7 +210,7 @@ export default function TheatresClient({
         {[
           { label: 'Total Venues', value: theatresLoading ? '—' : theatres.length, color: 'text-foreground', ring: 'ring-border' },
           { label: 'Total Capacity', value: theatresLoading ? '—' : theatres.reduce((sum, t) => sum + (t.capacity || 0), 0).toLocaleString(), color: 'text-[hsl(var(--success))]', ring: 'ring-[hsl(var(--success)/0.2)]' },
-          { label: 'Average Capacity', value: theatresLoading ? '—' : theatres.length > 0 ? Math.round(theatres.reduce((sum, t) => sum + (t.capacity || 0), 0) / theatres.length).toLocaleString() : 0, color: 'text-purple-500', ring: 'ring-purple-500/20' },
+          { label: 'Average Capacity', value: theatresLoading ? '—' : theatres.length > 0 ? Math.round(theatres.reduce((sum, t) => sum + (t.capacity || 0), 0) / theatres.length).toLocaleString() : 0, color: 'text-primary', ring: 'ring-primary/20' },
         ].map(({ label, value, color, ring }) => (
           <div key={label} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
             <p className="text-xs font-medium text-muted-foreground">{label}</p>

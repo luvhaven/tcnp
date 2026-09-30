@@ -73,8 +73,8 @@ const PROJECT_TYPES = {
     label: "Year-end party",
     description: "Plan the annual celebration, vendors, programme and guest experience.",
     icon: PartyPopper,
-    accent: "text-fuchsia-600 dark:text-fuchsia-300",
-    surface: "bg-fuchsia-500/10",
+    accent: "text-primary",
+    surface: "bg-primary/10",
   },
   team_bonding: {
     label: "Team bonding",
@@ -365,11 +365,11 @@ export default function ComplianceInitiatives() {
 
   return (
     <section className="space-y-5" aria-labelledby="compliance-initiatives-title">
-      <div className="relative overflow-hidden rounded-3xl border border-violet-500/15 bg-[linear-gradient(135deg,hsl(var(--card))_0%,hsl(var(--card))_58%,rgba(124,58,237,0.10)_100%)] p-5 shadow-sm sm:p-7">
-        <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-violet-500/10 blur-3xl" />
+      <div className="relative overflow-hidden rounded-3xl border border-primary/15 bg-[linear-gradient(135deg,hsl(var(--card))_0%,hsl(var(--card))_58%,hsl(var(--primary)_/_0.10)_100%)] p-5 shadow-sm sm:p-7">
+        <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <div className="max-w-2xl">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-300">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
               <Sparkles className="h-3.5 w-3.5" /> Unit initiatives
             </div>
             <h2 id="compliance-initiatives-title" className="text-2xl font-semibold tracking-tight sm:text-3xl">Plan the moments that strengthen the team.</h2>
@@ -424,7 +424,7 @@ export default function ComplianceInitiatives() {
                   const progress = projectTasks.length ? Math.round((done / projectTasks.length) * 100) : 0
                   const isSelected = selectedProjectId === project.id
                   return (
-                    <article key={project.id} className={cn("group overflow-hidden rounded-3xl border bg-card transition-all", isSelected ? "border-violet-500/40 shadow-md" : "border-border/70 hover:border-border hover:shadow-sm")}>
+                    <article key={project.id} className={cn("group overflow-hidden rounded-3xl border bg-card transition-all", isSelected ? "border-primary/40 shadow-md" : "border-border/70 hover:border-border hover:shadow-sm")}>
                       <button type="button" onClick={() => setSelectedProjectId(isSelected ? null : project.id)} className="w-full p-5 text-left sm:p-6" aria-expanded={isSelected}>
                         <div className="flex items-start gap-4">
                           <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl", config.surface, config.accent)}><Icon className="h-5 w-5" /></div>
@@ -442,7 +442,7 @@ export default function ComplianceInitiatives() {
                         <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
                           <div>
                             <div className="mb-1.5 flex items-center justify-between text-xs text-muted-foreground"><span>{done} of {projectTasks.length} tasks complete</span><span>{progress}%</span></div>
-                            <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-violet-500 transition-all" style={{ width: `${progress}%` }} /></div>
+                            <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} /></div>
                           </div>
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><CalendarRange className="h-3.5 w-3.5" />{formatDate(project.starts_at)}</div>
                         </div>
@@ -460,7 +460,7 @@ export default function ComplianceInitiatives() {
                               const completed = task.status === "done"
                               return (
                                 <div key={task.id} className="flex items-start gap-3 rounded-2xl border border-border/70 bg-background/80 p-3.5">
-                                  <button type="button" disabled={!canManage || toggleTaskMutation.isPending} onClick={() => toggleTaskMutation.mutate(task)} className={cn("mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors", completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-border hover:border-violet-400", !canManage && "cursor-default")} aria-label={completed ? "Mark task pending" : "Mark task complete"}>{completed ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}</button>
+                                  <button type="button" disabled={!canManage || toggleTaskMutation.isPending} onClick={() => toggleTaskMutation.mutate(task)} className={cn("mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors", completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-border hover:border-primary", !canManage && "cursor-default")} aria-label={completed ? "Mark task pending" : "Mark task complete"}>{completed ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}</button>
                                   <div className="min-w-0 flex-1"><p className={cn("text-sm font-medium", completed && "text-muted-foreground line-through")}>{task.title}</p>{task.description && <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{task.description}</p>}<div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">{assignee && <span className="inline-flex items-center gap-1"><UserRound className="h-3 w-3" />{assignee.full_name || assignee.email}</span>}{task.due_at && <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />{formatDate(task.due_at)}</span>}</div></div>
                                 </div>
                               )

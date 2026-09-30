@@ -74,7 +74,7 @@ function MessageText({ content, members, mine }: { content: string; members: Tea
             key={i}
             className={cn(
               "rounded px-1 py-0.5 font-semibold",
-              mine ? "bg-white/20" : "bg-primary/15 text-primary"
+              mine ? "bg-white/20" : "bg-primary/8 text-primary"
             )}
           >
             @{part}
@@ -90,7 +90,7 @@ function MessageText({ content, members, mine }: { content: string; members: Tea
 const TEAM_THEME: Record<string, { label: string; gradient: string; accent: string }> = {
   strength: { label: "Team Strength", gradient: "from-red-950 via-slate-900 to-slate-900", accent: "text-red-300" },
   wisdom: { label: "Team Wisdom", gradient: "from-blue-950 via-slate-900 to-slate-900", accent: "text-blue-300" },
-  swift: { label: "Team Swift", gradient: "from-violet-950 via-slate-900 to-slate-900", accent: "text-violet-300" },
+  swift: { label: "Team Swift", gradient: "from-slate-800 via-slate-900 to-slate-900", accent: "text-orange-300" },
 }
 
 export default function TeamChatRoom() {

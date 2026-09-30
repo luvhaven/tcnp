@@ -105,7 +105,7 @@ const SOP_SECTIONS: SOPSection[] = [
         id: 'prerequisites',
         title: 'Prerequisites & Etiquette',
         icon: Shield,
-        color: 'text-purple-500', bg: 'bg-purple-500/10',
+        color: 'text-primary', bg: 'bg-primary/10',
         badge: 'TCNP.01.02',
         subsections: [
             {
@@ -532,7 +532,7 @@ const SOP_SECTIONS: SOPSection[] = [
         id: 'echo-oscar',
         title: 'Equipment Management (Echo Oscar)',
         icon: Volume2,
-        color: 'text-violet-500', bg: 'bg-violet-500/10',
+        color: 'text-primary', bg: 'bg-primary/10',
         badge: 'TCNP.01.10',
         subsections: [
             {

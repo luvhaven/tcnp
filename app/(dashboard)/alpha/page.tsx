@@ -66,13 +66,13 @@ export default function EaglesPage() {
         <div className="space-y-6 page-enter">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2.5">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
                         <Plane className="h-5 w-5" />
                     </div>
                     <div>
                         <div className="flex items-center gap-2">
                             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Alpha</h1>
-                            <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20">
+                            <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider bg-primary/10 text-primary border-primary/20">
                                 Eagle Squares & Aviation
                             </Badge>
                         </div>

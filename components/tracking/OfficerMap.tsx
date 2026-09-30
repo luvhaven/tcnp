@@ -49,7 +49,7 @@ function createPopupContent(location: OfficerLocation) {
           background: ${location.is_online ? '#10B981' : '#6B7280'};
           margin-right: 8px;
         "></div>
-        <h3 style="font-weight: bold; margin: 0; color: #8B5CF6;">
+        <h3 style="font-weight: bold; margin: 0; color: #A33E0D;">
           ${location.users.full_name}
         </h3>
       </div>
@@ -83,7 +83,7 @@ function createPopupContent(location: OfficerLocation) {
         style="
           display: inline-block;
           padding: 6px 12px;
-          background: #8B5CF6;
+          background: #A33E0D;
           color: white;
           text-decoration: none;
           border-radius: 4px;

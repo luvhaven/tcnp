@@ -96,7 +96,7 @@ const MANAGER_ACCESS = new Set(["head", "head_of_unit", "manager", "admin"])
 const CASE_TYPES = {
   visit: { label: "Visit", icon: HeartHandshake, tone: "bg-sky-500/10 text-sky-700 dark:text-sky-300" },
   charity: { label: "Charity", icon: HandHeart, tone: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
-  member_support: { label: "Member support", icon: ShieldCheck, tone: "bg-violet-500/10 text-violet-700 dark:text-violet-300" },
+  member_support: { label: "Member support", icon: ShieldCheck, tone: "bg-primary/10 text-primary" },
   emergency: { label: "Emergency", icon: Activity, tone: "bg-rose-500/10 text-rose-700 dark:text-rose-300" },
 } as const
 

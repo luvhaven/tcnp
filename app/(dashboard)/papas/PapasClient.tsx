@@ -385,7 +385,7 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
                                 </Badge>
                               )}
                               {papa.has_slides && (
-                                <Badge variant="secondary" className="text-[9px] font-medium gap-1 py-0 h-4.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 border-0">
+                                <Badge variant="secondary" className="text-[9px] font-medium gap-1 py-0 h-4.5 bg-primary/10 text-primary border-0">
                                   <Sliders className="h-2.5 w-2.5" />
                                   Slides Ready
                                 </Badge>
