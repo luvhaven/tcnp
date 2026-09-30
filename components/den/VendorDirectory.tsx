@@ -16,7 +16,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
-import { Store, Plus, Pencil, Trash2, Phone, Mail, User } from "lucide-react"
+import { Store, Plus, Pencil, Trash2, Phone, Mail, User, AlertCircle } from "lucide-react"
 
 // ─── Singleton client ───
 const supabase = createClient()
@@ -54,7 +54,7 @@ export default function VendorDirectory({ canEdit, currentUserId }: Props) {
   const [showRetired, setShowRetired] = useState(false)
   const [form, setForm] = useState(emptyForm)
 
-  const { data: vendors = [], isLoading } = useQuery({
+  const { data: vendors = [], isLoading, isError, error } = useQuery({
     queryKey: ["vendors"],
     queryFn: async () => {
       // `vendors` is newer than types/supabase.ts, which is missing ~25 tables
@@ -179,6 +179,18 @@ export default function VendorDirectory({ canEdit, currentUserId }: Props) {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton h-32 rounded-xl" />)}
         </div>
+      ) : isError ? (
+        <div role="alert" className="flex items-start gap-3 rounded-xl border border-destructive/30 p-4 text-sm">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <div>
+            <p className="font-medium">Vendor directory is unavailable</p>
+            <p className="text-muted-foreground">
+              {(error as any)?.code === "PGRST205" || (error as any)?.code === "42P01"
+                ? "The vendor database migration has not been applied yet. Existing menu data remains available."
+                : (error as any)?.message || "Check your connection and try again."}
+            </p>
+          </div>
+        </div>
       ) : visible.length === 0 ? (
         <div className="empty-state rounded-xl border">
           <Store className="h-10 w-10" />
@@ -206,11 +218,11 @@ export default function VendorDirectory({ canEdit, currentUserId }: Props) {
                       </div>
                       {canEdit && (
                         <div className="flex shrink-0 gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(vendor)}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Edit ${vendor.name}`} onClick={() => openEdit(vendor)}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           <Button
-                            variant="ghost" size="icon" className="h-7 w-7 text-red-500"
+                            variant="ghost" size="icon" className="h-7 w-7 text-red-500" aria-label={`Delete ${vendor.name}`}
                             onClick={async () => {
                               const ok = await confirm({
                                 title: "Delete vendor?",

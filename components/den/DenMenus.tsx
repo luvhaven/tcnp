@@ -83,7 +83,7 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
     },
   })
 
-  const { data: vendors = [] } = useQuery({
+  const { data: vendors = [], error: vendorsError } = useQuery({
     queryKey: ["vendors", "lite"],
     queryFn: async () => {
       // `vendors` postdates types/supabase.ts — same cast as training/page.tsx:136.
@@ -96,7 +96,7 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
     },
   })
 
-  const { data: menus = [], isLoading } = useQuery({
+  const { data: menus = [], isLoading, isError: menusError, error: menuQueryError } = useQuery({
     queryKey: ["program-menus"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -104,7 +104,24 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
         .select("*, programs(name), vendors(id, name, is_active)")
         .order("menu_date", { ascending: false })
         .limit(200)
-      if (error) throw error
+      if (error) {
+        // Keep existing menus readable during a staged rollout where this
+        // client is deployed before the vendor migration reaches the database.
+        const schemaNotReady = ["PGRST200", "PGRST204", "PGRST205", "42703", "42P01"].includes(error.code ?? "")
+        if (!schemaNotReady) throw error
+        const legacyResult = await supabase
+          .from("program_menus")
+          .select("*, programs(name)")
+          .order("menu_date", { ascending: false })
+          .limit(200)
+        if (legacyResult.error) throw legacyResult.error
+        return (legacyResult.data ?? []).map((m: any) => ({
+          ...m,
+          vendor_id: null,
+          vendors: null,
+          items: Array.isArray(m.items) ? m.items : [],
+        })) as ProgramMenu[]
+      }
       return (data ?? []).map((m: any) => ({
         ...m,
         items: Array.isArray(m.items) ? m.items : [],
@@ -260,17 +277,17 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="flex items-center gap-2 text-lg font-semibold">
             <UtensilsCrossed className="h-5 w-5 text-primary" /> Den Menus
           </h3>
           <p className="text-sm text-muted-foreground">Menu of the day and per-program meal plans, curated with Welfare.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {vendors.length > 0 && (
             <Select value={vendorFilter} onValueChange={setVendorFilter}>
-              <SelectTrigger className="h-9 w-[190px]" aria-label="Filter menus by vendor">
+              <SelectTrigger className="h-9 w-[160px] sm:w-[190px]" aria-label="Filter menus by vendor">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -295,6 +312,10 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton h-44 rounded-xl" />)}
+        </div>
+      ) : menusError ? (
+        <div role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm text-destructive">
+          Unable to load menus: {menuQueryError instanceof Error ? menuQueryError.message : "Please try again."}
         </div>
       ) : (
         <>
@@ -330,6 +351,10 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
             </div>
           )}
         </>
+      )}
+
+      {vendorsError && !["PGRST200", "PGRST204", "PGRST205", "42703", "42P01"].includes((vendorsError as any)?.code ?? "") && (
+        <p role="status" className="text-xs text-muted-foreground">Vendor filters are unavailable right now.</p>
       )}
 
       {/* Create / edit dialog */}
