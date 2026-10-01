@@ -29,6 +29,9 @@ class AudioManager {
    *  silence tones that were already scheduled into the future (Web Audio can't
    *  be un-scheduled by clearing the JS interval — the node must be stopped). */
   private _alarmNodes: { osc: OscillatorNode; gain: GainNode }[] = []
+  /** Dedicated master gain node for all alarm tones — severing this guarantees
+   *  instant, zero-latency silence for all pending and in-flight alarm oscillators. */
+  private _alarmMasterGain: GainNode | null = null
 
   private constructor() {
     if (typeof window !== 'undefined') {
@@ -57,9 +60,22 @@ class AudioManager {
   }
 
   static getInstance(): AudioManager {
+    const globalObj = typeof globalThis !== 'undefined'
+      ? (globalThis as unknown as { __tcnp_audio_manager?: AudioManager })
+      : null
+
+    if (globalObj?.__tcnp_audio_manager) {
+      return globalObj.__tcnp_audio_manager
+    }
+
     if (!AudioManager._instance) {
       AudioManager._instance = new AudioManager()
     }
+
+    if (globalObj && typeof window !== 'undefined') {
+      globalObj.__tcnp_audio_manager = AudioManager._instance
+    }
+
     return AudioManager._instance
   }
 
@@ -196,6 +212,17 @@ class AudioManager {
     }
   }
 
+  private get alarmMasterGain(): GainNode {
+    const c = this.ctx
+    if (!this._alarmMasterGain) {
+      const master = c.createGain()
+      master.gain.setValueAtTime(this._muted ? 0 : 1, c.currentTime)
+      master.connect(c.destination)
+      this._alarmMasterGain = master
+    }
+    return this._alarmMasterGain
+  }
+
   // ------------------------------------------------------------------ emergency alarm
 
   /** Schedule one alarm tone AND keep a handle to it so stopAlarm() can kill it
@@ -204,6 +231,7 @@ class AudioManager {
     if (this._muted) return
     try {
       const c = this.ctx
+      const master = this.alarmMasterGain
       const osc = c.createOscillator()
       const gain = c.createGain()
       osc.type = 'sawtooth'
@@ -213,7 +241,7 @@ class AudioManager {
       gain.gain.linearRampToValueAtTime(0.4, t + 0.012)
       gain.gain.exponentialRampToValueAtTime(0.001, t + duration)
       osc.connect(gain)
-      gain.connect(c.destination)
+      gain.connect(master)
       osc.start(t)
       osc.stop(t + duration + 0.05)
       const node = { osc, gain }
@@ -221,6 +249,8 @@ class AudioManager {
       // Auto-forget once it has finished so the list doesn't grow unbounded
       osc.onended = () => {
         this._alarmNodes = this._alarmNodes.filter(n => n !== node)
+        try { gain.disconnect() } catch {}
+        try { osc.disconnect() } catch {}
       }
     } catch {
       // Audio unavailable (iOS low-power, no user gesture, etc.)
@@ -244,7 +274,11 @@ class AudioManager {
     this._alarmGeneration++
     this._playAlarmBurst()
     this._alarmIntervalId = setInterval(() => {
-      if (!this._muted) this._playAlarmBurst()
+      if (!this._muted) {
+        this._playAlarmBurst()
+      } else {
+        this.stopAlarm()
+      }
     }, 5000)
   }
 
@@ -254,16 +288,36 @@ class AudioManager {
       this._alarmIntervalId = null
     }
     this._alarmGeneration++
-    // Silence any tones that were already scheduled into the future — clearing
-    // the interval alone leaves the last burst (up to ~1.4s of audio) playing.
+
+    // Immediately sever the master alarm bus to guarantee 100% immediate silence
+    if (this._alarmMasterGain) {
+      try {
+        const now = this._ctx ? this._ctx.currentTime : 0
+        this._alarmMasterGain.gain.cancelScheduledValues(now)
+        this._alarmMasterGain.gain.setValueAtTime(0, now)
+        this._alarmMasterGain.disconnect()
+      } catch {}
+      this._alarmMasterGain = null
+    }
+
+    // Silence, disconnect, and clean up all scheduled/live tone nodes
     const now = this._ctx ? this._ctx.currentTime : 0
     for (const { osc, gain } of this._alarmNodes) {
       try {
         gain.gain.cancelScheduledValues(now)
         gain.gain.setValueAtTime(0, now)
+        gain.disconnect()
+      } catch {}
+      try {
+        osc.disconnect()
+      } catch {}
+      try {
+        osc.onended = null
+      } catch {}
+      try {
         osc.stop(now)
       } catch {
-        // Node may have already ended
+        // Node may have already ended or stop was already scheduled
       }
     }
     this._alarmNodes = []

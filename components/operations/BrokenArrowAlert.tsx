@@ -26,30 +26,83 @@ export function BrokenArrowAlert() {
   // admin edits ETA, or a duplicate realtime frame arrives). Cleared when the
   // journey leaves broken_arrow, so a genuinely new incident alerts again.
   const acknowledgedRef = useRef<Set<string>>(new Set())
+  const alertRef = useRef<BrokenArrowEvent | null>(null)
+
+  const isAcknowledged = useCallback((journeyId: string) => {
+    if (acknowledgedRef.current.has(journeyId)) return true
+    if (typeof window !== 'undefined') {
+      try {
+        if (sessionStorage.getItem(`tcnp_ack_broken_arrow_${journeyId}`) === 'true') {
+          acknowledgedRef.current.add(journeyId)
+          return true
+        }
+      } catch {}
+    }
+    return false
+  }, [])
+
+  const markAcknowledged = useCallback((journeyId: string) => {
+    acknowledgedRef.current.add(journeyId)
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.setItem(`tcnp_ack_broken_arrow_${journeyId}`, 'true')
+      } catch {}
+    }
+  }, [])
+
+  const clearAcknowledgement = useCallback((journeyId: string) => {
+    acknowledgedRef.current.delete(journeyId)
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.removeItem(`tcnp_ack_broken_arrow_${journeyId}`)
+      } catch {}
+    }
+  }, [])
 
   const handleDismiss = useCallback(() => {
+    // 1. Immediately silence any playing or pending alarm sound
     audioManager.stopAlarm()
+
+    // 2. Mark this journey as acknowledged so future update echoes or background events never re-open it
+    const currentId = alertRef.current?.journeyId || alert?.journeyId
+    if (currentId) {
+      markAcknowledged(currentId)
+    }
+
+    // 3. Clear component state
     setDismissed(true)
-    setAlert(prev => {
-      if (prev) acknowledgedRef.current.add(prev.journeyId)
-      return null
-    })
-  }, [])
+    setAlert(null)
+    alertRef.current = null
+  }, [alert, markAcknowledged])
 
   const handleMuteToggle = useCallback(() => {
     const nowMuted = audioManager.toggleMute()
     setMuted(nowMuted)
-    // If unmuting, restart the alarm so they hear feedback immediately
-    if (!nowMuted) audioManager.startAlarm()
-  }, [])
+    // Only restart alarm if unmuting while an active, undismissed alert is currently displayed
+    if (!nowMuted && alert && !dismissed) {
+      audioManager.startAlarm()
+    }
+  }, [alert, dismissed])
 
   // Start / stop alarm loop via AudioManager
   useEffect(() => {
-    if (!alert || dismissed) return
+    if (!alert || dismissed) {
+      audioManager.stopAlarm()
+      return
+    }
     audioManager.startAlarm()
     audioManager.vibrateEmergency()
-    return () => audioManager.stopAlarm()
+    return () => {
+      audioManager.stopAlarm()
+    }
   }, [alert, dismissed])
+
+  // Safety net on unmount: ensure alarm sound is unconditionally killed
+  useEffect(() => {
+    return () => {
+      audioManager.stopAlarm()
+    }
+  }, [])
 
   // Realtime listener: watch for broken_arrow status changes
   useEffect(() => {
@@ -63,14 +116,20 @@ export function BrokenArrowAlert() {
           if (!updated?.id) return
 
           if (updated.status !== 'broken_arrow') {
-            // Journey resumed or cleared — forget any prior acknowledgement so a
+            // Journey resumed or cleared — forget prior acknowledgement so a
             // future broken_arrow on this journey raises a fresh alarm.
-            acknowledgedRef.current.delete(updated.id)
+            clearAcknowledgement(updated.id)
+            if (alertRef.current?.journeyId === updated.id) {
+              audioManager.stopAlarm()
+              setDismissed(true)
+              setAlert(null)
+              alertRef.current = null
+            }
             return
           }
 
           // Already acknowledged this incident — don't re-open or re-sound it.
-          if (acknowledgedRef.current.has(updated.id)) return
+          if (isAcknowledged(updated.id)) return
 
           let papaName = 'Unknown Papa'
           let cheetahCallSign = 'Unknown Cheetah'
@@ -93,11 +152,11 @@ export function BrokenArrowAlert() {
             if (data?.call_sign) cheetahCallSign = data.call_sign
           }
 
-          // Reset mute for each new incident so it always alerts
-          audioManager.setMuted(false)
-          setMuted(false)
-          setDismissed(false)
-          setAlert({
+          // Critical check: Re-verify acknowledgement after async database calls!
+          // If the operator acknowledged/dismissed while queries were in flight, abort now.
+          if (isAcknowledged(updated.id)) return
+
+          const newAlert: BrokenArrowEvent = {
             journeyId: updated.id,
             papaName,
             cheetahCallSign,
@@ -106,7 +165,14 @@ export function BrokenArrowAlert() {
               minute: '2-digit',
               second: '2-digit',
             }),
-          })
+          }
+
+          alertRef.current = newAlert
+          // Reset mute for each new incident so it always alerts
+          audioManager.setMuted(false)
+          setMuted(false)
+          setDismissed(false)
+          setAlert(newAlert)
         }
       )
       .subscribe()
@@ -114,7 +180,7 @@ export function BrokenArrowAlert() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [supabase])
+  }, [supabase, isAcknowledged, clearAcknowledgement])
 
   return (
     <AnimatePresence>
