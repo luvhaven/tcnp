@@ -21,6 +21,7 @@ import { canManageNoscarDen, canManageWelfare, isAdmin, effectiveOscarRole } fro
 import { motion, AnimatePresence } from "framer-motion"
 import DenMenus from "@/components/den/DenMenus"
 import VendorDirectory from "@/components/den/VendorDirectory"
+import PapaMealOrders from "@/components/den/PapaMealOrders"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { OfficerProfileDialog, type OfficerProfileData } from "@/components/officers/OfficerProfileDialog"
 
@@ -137,6 +138,9 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
   const canManage = userRole ? canManageNoscarDen(userRole) : false
   const { data: currentUser } = useCurrentUser()
   const canEditMenus = canManageWelfare(currentUser?.role, currentUser?.oscar)
+  // Taking a Papa's order is Nest floor work, not menu curation: the Welfare
+  // Oscars who publish menus do not stand in front of a Papa to order for them.
+  const canTakeOrders = canManageNoscarDen(currentUser?.role, currentUser?.oscar)
 
   const saveDenMutation = useMutation({
     mutationFn: async (payload: { isEdit: boolean, data: any }) => {
@@ -387,6 +391,8 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
       <VendorDirectory canEdit={canEditMenus} currentUserId={currentUser?.id ?? null} />
 
       <DenMenus canEdit={canEditMenus} selectedProgram={selectedProgram} currentUserId={currentUser?.id ?? null} />
+
+      <PapaMealOrders canOrder={canTakeOrders} selectedProgram={selectedProgram} currentUserId={currentUser?.id ?? null} />
 
       <Card>
         <CardHeader>
