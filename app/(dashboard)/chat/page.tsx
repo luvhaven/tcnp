@@ -6,10 +6,12 @@ import ChatSystem from '@/components/chat/ChatSystem'
 import TeamChatRoom from '@/components/chat/TeamChatRoom'
 import { AdminChatControls } from '@/components/chat/AdminChatControls'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { MessagesSquare, Radio } from 'lucide-react'
+import { MessagesSquare, Radio, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSearchParams } from 'next/navigation'
 import { isAdmin } from '@/lib/utils'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { Button } from '@/components/ui/button'
 
 type ChatProgram = {
   id: string
@@ -256,17 +258,33 @@ function ChatContent() {
                   : 'No programs found. Create a program first, then use this page to chat with the program team.'}
               </div>
             ) : (
-              <ChatSystem
-                programId={program?.id}
-                papaId={papaId || undefined}
-                initialMessage={initialMessage}
-              />
+              <ErrorBoundary fallback={
+                <div className="p-6 text-center space-y-3">
+                  <AlertTriangle className="h-8 w-8 text-amber-500 mx-auto" />
+                  <p className="text-sm font-medium">Chat encountered a temporary display issue.</p>
+                  <Button variant="outline" size="sm" onClick={() => window.location.reload()}>Reload Chat</Button>
+                </div>
+              }>
+                <ChatSystem
+                  programId={program?.id}
+                  papaId={papaId || undefined}
+                  initialMessage={initialMessage}
+                />
+              </ErrorBoundary>
             )}
           </Card>
         </TabsContent>
 
         <TabsContent value="team">
-          <TeamChatRoom />
+          <ErrorBoundary fallback={
+            <div className="p-6 text-center space-y-3">
+              <AlertTriangle className="h-8 w-8 text-amber-500 mx-auto" />
+              <p className="text-sm font-medium">Team chat encountered a temporary display issue.</p>
+              <Button variant="outline" size="sm" onClick={() => window.location.reload()}>Reload Team Chat</Button>
+            </div>
+          }>
+            <TeamChatRoom />
+          </ErrorBoundary>
         </TabsContent>
       </Tabs>
     </div>

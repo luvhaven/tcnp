@@ -44,9 +44,20 @@ type TeamMember = {
 }
 
 function initials(name?: string | null) {
-  if (!name) return "??"
-  const parts = name.trim().split(" ")
+  if (!name || typeof name !== "string") return "??"
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return "??"
   return (parts.length >= 2 ? parts[0][0] + parts[parts.length - 1][0] : parts[0].slice(0, 2)).toUpperCase()
+}
+
+function safeTimeString(dateStr?: string | null): string {
+  if (!dateStr) return ""
+  try {
+    const d = new Date(dateStr)
+    return isNaN(d.getTime()) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  } catch {
+    return ""
+  }
 }
 
 function escapeRegExp(s: string) {
@@ -366,7 +377,7 @@ export default function TeamChatRoom() {
                           <MessageText content={msg.content} members={members} mine={mine} />
                         )}
                         <div className={cn("mt-0.5 flex items-center gap-2 text-[9px]", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>
-                          <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                          <span>{safeTimeString(msg.created_at)}</span>
                           {msg.flagged && !deleted && (
                             <span className="inline-flex items-center gap-0.5 text-amber-500"><Flag className="h-2.5 w-2.5" /> flagged</span>
                           )}

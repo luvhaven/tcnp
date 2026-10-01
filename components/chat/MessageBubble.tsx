@@ -68,12 +68,23 @@ function renderContent(content: string, searchQuery: string, isOwnBubble = false
     })
 }
 
-function getInitials(name: string): string {
-    if (!name) return '?'
-    const parts = name.trim().split(/\s+/)
+function getInitials(name?: string | null): string {
+    if (!name || typeof name !== 'string') return '?'
+    const parts = name.trim().split(/\s+/).filter(Boolean)
     if (parts.length === 0) return '?'
     if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase()
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+function safeFormatTime(dateStr?: string | null): string {
+    if (!dateStr) return ''
+    try {
+        const d = new Date(dateStr)
+        if (isNaN(d.getTime())) return ''
+        return format(d, 'HH:mm')
+    } catch {
+        return ''
+    }
 }
 
 const resolveDisplayName = (
@@ -90,7 +101,7 @@ const resolveDisplayName = (
     return fallback
 }
 
-export const getDisplayName = (users?: MessageUserMeta) =>
+export const getDisplayName = (users?: MessageUserMeta | null) =>
     resolveDisplayName(users?.full_name, users?.oscar, users?.role)
 
 export const MessageBubble = memo(({
@@ -187,7 +198,7 @@ export const MessageBubble = memo(({
 
                         <div className={`absolute bottom-1 right-2 flex items-center gap-1.5 ${isOwn ? 'text-primary-foreground/70' : 'text-muted-foreground/70'}`}>
                             {(!msg.deleted_at && (msg as any).edited_at) && <span className="text-[9px] italic">(edited)</span>}
-                            <span className="text-[9px] font-medium leading-none">{format(new Date(msg.created_at), 'HH:mm')}</span>
+                            <span className="text-[9px] font-medium leading-none">{safeFormatTime(msg.created_at)}</span>
                         </div>
                     </div>
 

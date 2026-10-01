@@ -17,6 +17,7 @@ import {
 import { cn } from '@/lib/utils'
 import { CallSignKey, getCallSignLabel, getCallSignColor, CALL_SIGNS } from '@/lib/constants/call-signs'
 import { useLocationTracking } from '@/hooks/useLocationTracking'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 type UserLocation = {
   user_id: string
@@ -482,14 +483,24 @@ export default function LiveTrackingMap() {
             <CardContent className="flex-1 p-0 relative min-h-[360px]">
               <div className="absolute inset-0">
                 {isClient && (
-                  <LiveTrackingLeaflet
-                    center={mapCenter}
-                    locations={filteredLocations}
-                    getUserStatus={getUserStatus}
-                    getRoleDisplay={getRoleDisplayMeta}
-                    showTraffic={showTraffic}
-                    trafficTileUrl="/api/maps/traffic/{z}/{x}/{y}"
-                  />
+                  <ErrorBoundary fallback={
+                    <div className="flex items-center justify-center h-full bg-muted/50 rounded-lg">
+                      <div className="text-center space-y-2 p-6">
+                        <MapPin className="h-8 w-8 text-muted-foreground mx-auto" />
+                        <p className="text-sm font-medium">Map display issue</p>
+                        <Button variant="outline" size="sm" onClick={() => window.location.reload()}>Reload Map</Button>
+                      </div>
+                    </div>
+                  }>
+                    <LiveTrackingLeaflet
+                      center={mapCenter}
+                      locations={filteredLocations}
+                      getUserStatus={getUserStatus}
+                      getRoleDisplay={getRoleDisplayMeta}
+                      showTraffic={showTraffic}
+                      trafficTileUrl="/api/maps/traffic/{z}/{x}/{y}"
+                    />
+                  </ErrorBoundary>
                 )}
               </div>
 

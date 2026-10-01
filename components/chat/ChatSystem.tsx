@@ -36,9 +36,14 @@ type TimelineItem =
 const QUICK_REACTIONS = ['\uD83D\uDC4D', '\u2764\uFE0F', '\uD83D\uDE02', '\uD83D\uDE2E', '\uD83D\uDE22', '\uD83D\uDD25'] as const
 
 function formatDateLabel(d: Date): string {
-  if (isToday(d)) return 'Today'
-  if (isYesterday(d)) return 'Yesterday'
-  return format(d, 'EEEE, MMMM d')
+  if (!d || isNaN(d.getTime())) return 'Recent'
+  try {
+    if (isToday(d)) return 'Today'
+    if (isYesterday(d)) return 'Yesterday'
+    return format(d, 'EEEE, MMMM d')
+  } catch {
+    return 'Recent'
+  }
 }
 
 function renderContent(content: string, searchQuery: string): React.ReactNode {
@@ -63,7 +68,8 @@ function buildTimeline(msgs: Message[], firstUnreadId: string | null): TimelineI
   let lastTime: number | null = null
   const GAP = 5 * 60 * 1000
   msgs.forEach((msg, i) => {
-    const d = new Date(msg.created_at)
+    const rawDate = msg?.created_at ? new Date(msg.created_at) : new Date()
+    const d = isNaN(rawDate.getTime()) ? new Date() : rawDate
     if (!lastDate || !isSameDay(d, lastDate)) {
       items.push({ kind: 'date', id: `date-${msg.id}`, label: formatDateLabel(d) })
       lastDate = d; lastSenderId = null; lastTime = null
@@ -72,7 +78,9 @@ function buildTimeline(msgs: Message[], firstUnreadId: string | null): TimelineI
     const gap = lastTime ? d.getTime() - lastTime : Infinity
     const isFirst = lastSenderId !== msg.sender_id || gap > GAP
     const next = msgs[i + 1]
-    const nextGap = next ? new Date(next.created_at).getTime() - d.getTime() : Infinity
+    const nextRaw = next?.created_at ? new Date(next.created_at) : null
+    const nextTime = nextRaw && !isNaN(nextRaw.getTime()) ? nextRaw.getTime() : null
+    const nextGap = nextTime !== null ? nextTime - d.getTime() : Infinity
     const isLast = !next || next.sender_id !== msg.sender_id || nextGap > GAP
     items.push({ kind: 'msg', id: msg.id, msg, isFirst, isLast })
     lastSenderId = msg.sender_id; lastTime = d.getTime()
@@ -417,16 +425,21 @@ export default function ChatSystem({
   }, [userDirectory])
 
   const upsertMessage = useCallback((items: Message[], message: Message) => {
+    const getSafeTime = (val?: string | null) => {
+      if (!val) return 0
+      const t = new Date(val).getTime()
+      return isNaN(t) ? 0 : t
+    }
     const index = items.findIndex((m) => m.id === message.id)
     if (index !== -1) {
       const next = [...items]
       next[index] = message
       return next.sort(
-        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        (a, b) => getSafeTime(a.created_at) - getSafeTime(b.created_at)
       )
     }
     return [...items, message].sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      (a, b) => getSafeTime(a.created_at) - getSafeTime(b.created_at)
     )
   }, [])
 
@@ -1202,7 +1215,8 @@ export default function ChatSystem({
         return
       }
       const beforeAt = textBeforeCursor.substring(0, lastAtIndex)
-      const mentionText = mentionType === '@@' ? `@@${user.full_name.split(' ')[0]} ` : `@${user.full_name.split(' ')[0]} `
+      const firstName = user.full_name?.trim() ? user.full_name.trim().split(/\s+/)[0] : (user.oscar || user.oscar || 'Officer')
+      const mentionText = mentionType === '@@' ? `@@${firstName} ` : `@${firstName} `
       const newText = beforeAt + mentionText + textAfterCursor
 
       setNewMessage(newText)
@@ -1233,7 +1247,7 @@ export default function ChatSystem({
       setSelectedMentions([...selectedMentions, userId])
       const user = users.find(u => u.id === userId)
       if (user) {
-        setNewMessage(prev => prev + `@${user.full_name} `)
+        setNewMessage(prev => prev + `@${user.full_name || user.oscar || 'Officer'} `)
       }
     }
     setShowUserList(false)
@@ -1248,7 +1262,7 @@ export default function ChatSystem({
       setSelectedMentions([...selectedMentions, userId])
       const user = users.find(u => u.id === userId)
       if (user) {
-        setNewMessage(prev => prev + `@@${user.full_name} `)
+        setNewMessage(prev => prev + `@@${user.full_name || user.oscar || 'Officer'} `)
       }
     }
     setShowUserList(false)
@@ -1258,16 +1272,20 @@ export default function ChatSystem({
   const filteredUsers = users.filter(u => {
     if (u.id === currentUser?.id) return false // Exclude sender
     if (!mentionSearch) return true
-    const firstName = u.full_name.split(' ')[0].toLowerCase()
-    return firstName.startsWith(mentionSearch)
+    const firstName = (u.full_name?.trim() ? u.full_name.trim().split(/\s+/)[0] : (u.oscar || u.oscar || '')).toLowerCase()
+    return firstName.startsWith(mentionSearch.toLowerCase())
   })
 
-  const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase()
+  const getInitials = (name?: string | null) => {
+    if (!name || typeof name !== 'string') return '??'
+    const parts = name.trim().split(/\s+/).filter(Boolean)
+    if (parts.length === 0) return '??'
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
   }
 
-  const getDisplayName = (meta: MessageUserMeta) => {
-    return resolveDisplayName(meta.full_name, meta.oscar, meta.role)
+  const getDisplayName = (meta?: MessageUserMeta | null) => {
+    return resolveDisplayName(meta?.full_name, meta?.oscar, meta?.role)
   }
 
   const canViewMessage = (message: Message) => {
@@ -1299,7 +1317,11 @@ export default function ChatSystem({
   // Get typing users list
   const typingUserNames = Object.keys(typingUsers).map(userId => {
     const user = users.find(u => u.id === userId)
-    return user ? user.full_name.split(' ')[0] : 'Someone'
+    if (!user) return 'Someone'
+    if (user.full_name && typeof user.full_name === 'string' && user.full_name.trim().length > 0) {
+      return user.full_name.trim().split(/\s+/)[0]
+    }
+    return user.oscar || user.oscar || 'Someone'
   })
 
   const visibleMessages = useMemo(() =>
@@ -1402,7 +1424,8 @@ export default function ChatSystem({
             const { msg, isFirst, isLast } = item
             const isOwn = msg.sender_id === currentUser?.id
             const displayName = getDisplayName(msg.users)
-            const isEditable = isOwn && (Date.now() - new Date(msg.created_at).getTime()) < 3 * 60 * 1000
+            const msgTime = msg.created_at ? new Date(msg.created_at).getTime() : NaN
+            const isEditable = isOwn && !isNaN(msgTime) && (Date.now() - msgTime) < 3 * 60 * 1000
             const repliedMsg = (msg as any).reply_to_id ? messages.find(m => m.id === (msg as any).reply_to_id) : null
             const msgReactions = reactions[msg.id] ?? []
 
@@ -1516,10 +1539,11 @@ export default function ChatSystem({
           <div className="flex flex-wrap gap-1.5 mb-2">
             {selectedMentions.map(uid => {
               const u = users.find(x => x.id === uid)
+              const name = u?.full_name || u?.oscar || 'Officer'
               return u ? (
                 <Badge key={uid} variant="secondary" className="gap-1 text-xs pr-1">
-                  <AtSign className="h-3 w-3" />{u.full_name}
-                  <button type="button" aria-label={`Remove ${u.full_name} mention`} onClick={() => setSelectedMentions(selectedMentions.filter(id => id !== uid))} className="ml-0.5 hover:text-destructive">×</button>
+                  <AtSign className="h-3 w-3" />{name}
+                  <button type="button" aria-label={`Remove ${name} mention`} onClick={() => setSelectedMentions(selectedMentions.filter(id => id !== uid))} className="ml-0.5 hover:text-destructive">×</button>
                 </Badge>
               ) : null
             })}

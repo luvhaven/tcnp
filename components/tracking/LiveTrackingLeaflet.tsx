@@ -71,6 +71,14 @@ const buildPopupContent = (
     batteryLine = `<p style="font-size:11px;color:#999;margin:6px 0 0">🔋 Battery: N/A</p>`
   }
 
+  const latNum = Number(location.latitude)
+  const lngNum = Number(location.longitude)
+  const latDisplay = Number.isFinite(latNum) ? latNum.toFixed(5) : 'N/A'
+  const lngDisplay = Number.isFinite(lngNum) ? lngNum.toFixed(5) : 'N/A'
+  const updatedDisplay = location.updated_at && !isNaN(new Date(location.updated_at).getTime())
+    ? new Date(location.updated_at).toLocaleTimeString()
+    : 'Recent'
+
   return `
     <div style="min-width:220px">
       <p style="font-weight:700;font-size:14px;margin-bottom:2px">${titleDisplay}</p>
@@ -80,8 +88,8 @@ const buildPopupContent = (
       <span style="display:inline-block;padding:2px 8px;border-radius:9999px;font-size:10px;font-weight:600;color:#fff;background:${status.color}">${statusLabel}</span>
       ${batteryLine}
       ${speedLine}
-      <p style="font-size:11px;color:#888;margin:8px 0 0">Updated: ${new Date(location.updated_at).toLocaleTimeString()}</p>
-      <p style="font-size:10px;color:#999;margin:4px 0 0">📍 ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}</p>
+      <p style="font-size:11px;color:#888;margin:8px 0 0">Updated: ${updatedDisplay}</p>
+      <p style="font-size:10px;color:#999;margin:4px 0 0">📍 ${latDisplay}, ${lngDisplay}</p>
     </div>`
 }
 
@@ -191,8 +199,10 @@ export default function LiveTrackingLeaflet({
 
     if (tileTimeoutRef.current) clearTimeout(tileTimeoutRef.current)
     if (baseLayerRef.current) {
-      baseLayerRef.current.off()
-      baseLayerRef.current.remove()
+      try {
+        baseLayerRef.current.off()
+        baseLayerRef.current.remove()
+      } catch { /* ignore */ }
     }
 
     tileErrorCountRef.current = 0
@@ -202,7 +212,8 @@ export default function LiveTrackingLeaflet({
     const layer = L.tileLayer(source.url, {
       attribution: source.attribution,
       subdomains: source.subdomains ?? 'abc',
-      maxZoom: source.maxZoom,
+      maxZoom: 19,
+      maxNativeZoom: Math.min(source.maxZoom || 19, 19),
       // Transparent 1x1 gif — avoids the broken-image glyph on failed tiles
       errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7',
     })
@@ -210,18 +221,25 @@ export default function LiveTrackingLeaflet({
     const failedTiles = new WeakSet<HTMLElement>()
     layer.on('tileerror', (event: L.TileErrorEvent) => {
       if (baseLayerRef.current !== layer) return
-      failedTiles.add(event.tile)
+      if (event?.tile) failedTiles.add(event.tile)
       tileErrorCountRef.current += 1
-      // A flood of explicit errors (not just silence) — advance immediately
-      // rather than waiting out the full timeout
-      if (tileErrorCountRef.current > 6 && loadedTileCountRef.current === 0) {
-        attachTileSource(map, mode, layerIndex + 1)
+      // A flood of explicit errors (not just silence) — advance asynchronously to next fallback
+      if (tileErrorCountRef.current > 8 && loadedTileCountRef.current === 0) {
+        if (layerIndex + 1 < style.layers.length) {
+          setTimeout(() => {
+            if (mapRef.current && baseLayerRef.current === layer) {
+              attachTileSource(map, mode, layerIndex + 1)
+            }
+          }, 50)
+        } else {
+          setTilesFailing(true)
+        }
       }
     })
     layer.on('tileload', (event: L.TileEvent) => {
       // Leaflet may emit tileload after loading errorTileUrl. A transparent
       // error placeholder is not evidence that the basemap is available.
-      if (baseLayerRef.current !== layer || failedTiles.has(event.tile)) return
+      if (baseLayerRef.current !== layer || (event?.tile && failedTiles.has(event.tile))) return
       loadedTileCountRef.current += 1
       setTilesFailing(false)
       if (tileTimeoutRef.current) {
@@ -230,15 +248,21 @@ export default function LiveTrackingLeaflet({
       }
     })
     baseLayerRef.current = layer
-    layer.addTo(map)
+    try {
+      layer.addTo(map)
+    } catch { /* ignore */ }
     const tileContainer = layer.getContainer()
     if (tileContainer) tileContainer.style.filter = resolveActiveStyle(mode) === 'dark' && layerIndex === 0
       ? 'invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9)' : ''
 
     // Silence guard: hung/dropped requests fire neither tileload nor tileerror
     tileTimeoutRef.current = setTimeout(() => {
-      if (loadedTileCountRef.current === 0) {
-        attachTileSource(map, mode, layerIndex + 1)
+      if (loadedTileCountRef.current === 0 && baseLayerRef.current === layer) {
+        if (layerIndex + 1 < style.layers.length) {
+          attachTileSource(map, mode, layerIndex + 1)
+        } else {
+          setTilesFailing(true)
+        }
       }
     }, TILE_TIMEOUT_MS)
   }
@@ -263,6 +287,8 @@ export default function LiveTrackingLeaflet({
     const map = L.map(containerRef.current, {
       center,
       zoom: 12,
+      minZoom: 3,
+      maxZoom: 19,
       preferCanvas: true,
       zoomControl: false, // custom-positioned below
     })
@@ -299,7 +325,9 @@ export default function LiveTrackingLeaflet({
       // so it can safely re-initialize immediately if Strict Mode remounts it.
       if (mapRef.current) {
         if (tileTimeoutRef.current) clearTimeout(tileTimeoutRef.current)
-        mapRef.current.remove()
+        try {
+          mapRef.current.remove()
+        } catch { /* ignore cleanup error */ }
         mapRef.current = null
         baseLayerRef.current = null
         markersRef.current = {}
@@ -339,25 +367,45 @@ export default function LiveTrackingLeaflet({
 
     if (showTraffic && trafficTileUrl) {
       if (!trafficRef.current) {
-        trafficRef.current = L.tileLayer(
-          trafficTileUrl,
-          { attribution: '© TomTom', maxZoom: 19, opacity: 0.75 }
-        ).addTo(map)
+        try {
+          trafficRef.current = L.tileLayer(
+            trafficTileUrl,
+            {
+              attribution: '© TomTom',
+              maxZoom: 19,
+              maxNativeZoom: 18,
+              opacity: 0.75,
+              errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7',
+            }
+          ).addTo(map)
+        } catch { /* ignore */ }
       }
     } else {
-      trafficRef.current?.remove()
-      trafficRef.current = null
+      if (trafficRef.current) {
+        try {
+          trafficRef.current.remove()
+        } catch { /* ignore */ }
+        trafficRef.current = null
+      }
     }
   }, [showTraffic, trafficTileUrl])
 
   useEffect(() => {
-    if (mapRef.current) mapRef.current.setView(center, mapRef.current.getZoom() ?? 12)
+    if (mapRef.current && Number.isFinite(center[0]) && Number.isFinite(center[1])) {
+      try {
+        mapRef.current.setView(center, mapRef.current.getZoom() ?? 12)
+      } catch { /* ignore */ }
+    }
   }, [center])
 
   // ── Resize observer ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current || !mapRef.current) return
-    const ro = new ResizeObserver(() => mapRef.current?.invalidateSize())
+    const ro = new ResizeObserver(() => {
+      try {
+        mapRef.current?.invalidateSize()
+      } catch { /* ignore */ }
+    })
     ro.observe(containerRef.current)
     return () => ro.disconnect()
   }, [])
@@ -366,7 +414,11 @@ export default function LiveTrackingLeaflet({
   useEffect(() => {
     const handler = () => {
       setIsFullscreen(!!document.fullscreenElement)
-      setTimeout(() => mapRef.current?.invalidateSize(), 100)
+      setTimeout(() => {
+        try {
+          mapRef.current?.invalidateSize()
+        } catch { /* ignore */ }
+      }, 100)
     }
     document.addEventListener('fullscreenchange', handler)
     return () => document.removeEventListener('fullscreenchange', handler)
@@ -387,7 +439,15 @@ export default function LiveTrackingLeaflet({
     if (!map || !('geolocation' in navigator)) return
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        map.setView([pos.coords.latitude, pos.coords.longitude], Math.max(map.getZoom(), 14), { animate: true })
+        try {
+          const lat = pos.coords.latitude
+          const lng = pos.coords.longitude
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            const currentZoom = map.getZoom() || 12
+            const targetZoom = Math.min(Math.max(currentZoom, 14), 18)
+            map.setView([lat, lng], targetZoom, { animate: true })
+          }
+        } catch { /* ignore */ }
       },
       () => { /* silent — user may have denied, banner elsewhere already covers this */ },
       { enableHighAccuracy: true, timeout: 8000 }
@@ -397,8 +457,18 @@ export default function LiveTrackingLeaflet({
   const fitAllMarkers = () => {
     const map = mapRef.current
     if (!map || locations.length === 0) return
-    const bounds = L.latLngBounds(locations.map((l) => [l.latitude, l.longitude] as L.LatLngExpression))
-    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 })
+    const validLocs = locations.filter((l) => {
+      const lat = Number(l.latitude)
+      const lng = Number(l.longitude)
+      return Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)
+    })
+    if (validLocs.length === 0) return
+    try {
+      const bounds = L.latLngBounds(validLocs.map((l) => [Number(l.latitude), Number(l.longitude)] as L.LatLngExpression))
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 })
+      }
+    } catch { /* ignore */ }
   }
 
   // ── Markers ─
@@ -410,16 +480,25 @@ export default function LiveTrackingLeaflet({
 
     Object.keys(markers).forEach((uid) => {
       if (!locations.find((l) => l.user_id === uid)) {
-        markers[uid].remove()
+        try {
+          markers[uid].remove()
+        } catch { /* ignore */ }
         delete markers[uid]
       }
     })
 
     locations.forEach((location) => {
-      const position: L.LatLngExpression = [location.latitude, location.longitude]
+      const lat = Number(location.latitude)
+      const lng = Number(location.longitude)
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return
+
+      const position: L.LatLngExpression = [lat, lng]
       const status = getUserStatus(location.updated_at)
-      const minutesSince = (Date.now() - new Date(location.updated_at).getTime()) / 60000
-      const isStale = minutesSince > 5
+      const minutesSince = location.updated_at
+        ? (Date.now() - new Date(location.updated_at).getTime()) / 60000
+        : 999
+      const isStale = isNaN(minutesSince) || minutesSince > 5
       const roleDisplay = getRoleDisplay(location.role)
       const popupContent = buildPopupContent(location, status, roleDisplay)
 
@@ -449,17 +528,30 @@ export default function LiveTrackingLeaflet({
         })
       }
 
-      if (markers[location.user_id]) {
-        markers[location.user_id].setLatLng(position).setPopupContent(popupContent).setIcon(icon)
-      } else {
-        markers[location.user_id] = L.marker(position, { icon }).addTo(map).bindPopup(popupContent)
-      }
+      try {
+        if (markers[location.user_id]) {
+          markers[location.user_id].setLatLng(position).setPopupContent(popupContent).setIcon(icon)
+        } else {
+          markers[location.user_id] = L.marker(position, { icon }).addTo(map).bindPopup(popupContent)
+        }
+      } catch { /* ignore marker update error during fast zoom/pan */ }
     })
 
     if (locations.length > 0 && !hasFitBoundsRef.current) {
-      const bounds = L.latLngBounds(locations.map((l) => [l.latitude, l.longitude] as L.LatLngExpression))
-      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 })
-      hasFitBoundsRef.current = true
+      const validLocs = locations.filter((l) => {
+        const lat = Number(l.latitude)
+        const lng = Number(l.longitude)
+        return Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)
+      })
+      if (validLocs.length > 0) {
+        try {
+          const bounds = L.latLngBounds(validLocs.map((l) => [Number(l.latitude), Number(l.longitude)] as L.LatLngExpression))
+          if (bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 })
+            hasFitBoundsRef.current = true
+          }
+        } catch { /* ignore */ }
+      }
     }
   }, [locations, getUserStatus])
 
