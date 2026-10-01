@@ -89,17 +89,31 @@ export async function POST(request: Request) {
 
         const roleToTitleMap: Record<string, string> = {
             'alpha_oscar': 'ALPHA_OSCAR',
+            'head_alpha_oscar': 'ALPHA_OSCAR_LEAD',
             'tango_oscar': 'TANGO_OSCAR',
+            'head_tango_oscar': 'TANGO_OSCAR_LEAD',
             'victor_oscar': 'VICTOR_OSCAR',
+            'head_victor_oscar': 'VICTOR_OSCAR_LEAD',
             'delta_oscar': 'DELTA_OSCAR',
             'echo_oscar': 'ECHO_OSCAR',
+            'head_echo_oscar': 'ECHO_OSCAR_LEAD',
             'november_oscar': 'NOVEMBER_OSCAR',
-            'noscar_den': 'NOVEMBER_OSCAR',
-            'head_noscar_den': 'HEAD_NOVEMBER_OSCAR',
+            'noscar_den': 'NOVEMBER_DEN',
+            'head_noscar_den': 'NOVEMBER_DEN_LEAD',
             'noscar_nest': 'NOVEMBER_OSCAR',
-            'head_noscar_nest': 'HEAD_NOVEMBER_OSCAR',
+            'head_noscar_nest': 'NOVEMBER_OSCAR_LEAD',
+            'serial_oscar': 'SERIAL_OSCAR',
+            'head_serial_oscar': 'SERIAL_OSCAR_LEAD',
+            'compliance_oscar': 'COMPLIANCE_OSCAR',
+            'head_compliance_oscar': 'COMPLIANCE_OSCAR_LEAD',
+            'welfare_oscar': 'WELFARE_OSCAR',
+            'head_welfare_oscar': 'WELFARE_OSCAR_LEAD',
             'captain': 'CAPTAIN',
-            'vice_captain': 'VICE_CAPTAIN'
+            'vice_captain': 'VICE_CAPTAIN',
+            'head_of_command': 'HEAD_OF_COMMAND',
+            'head_of_operations': 'HEAD_OF_OPERATIONS',
+            'command': 'COMMAND',
+            'admin': 'ADMIN'
         }
 
         let assignedCount = 0

@@ -11,7 +11,7 @@ import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { UserCircle, Plus, Edit, Trash2, UserCheck, UserX, Award, Search, LayoutGrid, List, Download, Filter, Eye } from "lucide-react"
@@ -153,7 +153,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     { id: 'alpha', label: 'Alpha Oscar (AO)', roles: ['head_alpha_oscar', 'alpha_oscar'] },
     { id: 'tango', label: 'Tango Oscar (TO)', roles: ['head_tango_oscar', 'tango_oscar'] },
     { id: 'victor', label: 'Victor Oscar (VO)', roles: ['head_victor_oscar', 'victor_oscar'] },
-    { id: 'november', label: 'November', roles: ['november_oscar', 'head_noscar_den', 'noscar_den', 'head_noscar_nest', 'noscar_nest'] },
+    { id: 'november_nest', label: 'November (Nest)', roles: ['head_noscar_nest', 'noscar_nest', 'november_oscar', 'hospitality_oscar', 'head_hospitality_oscar'] },
+    { id: 'november_den', label: 'November (Den)', roles: ['head_noscar_den', 'noscar_den'] },
     { id: 'delta', label: 'Delta Oscar (DO)', roles: ['delta_oscar'] },
     { id: 'serial', label: 'Serial Oscar (SO)', roles: ['head_serial_oscar', 'serial_oscar'] },
     { id: 'compliance', label: 'Compliance Oscar (CO)', roles: ['head_compliance_oscar', 'compliance_oscar'] },
@@ -371,15 +372,34 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
 
   const assignTitleMutation = useMutation({
     mutationFn: async (payload: any) => {
-      if (payload.roleUpdate && payload.roleUpdate.role !== payload.roleUpdate.currentRole) {
+      if (payload.roleUpdate && payload.roleUpdate.role && payload.roleUpdate.role !== payload.roleUpdate.currentRole) {
         const res = await fetch("/api/admin/update-user", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: payload.roleUpdate.id, role: payload.roleUpdate.role }),
         })
-        if (!res.ok) throw new Error("Failed to update officer role")
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}))
+          throw new Error(errData.error || "Failed to update officer role")
+        }
       }
-      if (payload.titleData?.title_id) {
+
+      if (payload.clearTitle && payload.rpcData?.p_user_id) {
+        // Explicitly clear/unassign title
+        const updateQuery = supabase
+          .from('title_assignments')
+          .update({ is_active: false })
+          .eq('user_id', payload.rpcData.p_user_id)
+        if (payload.rpcData.p_program_id) {
+          await updateQuery.eq('program_id', payload.rpcData.p_program_id)
+        } else {
+          await updateQuery
+        }
+        await supabase
+          .from('users')
+          .update({ current_title_id: null })
+          .eq('id', payload.rpcData.p_user_id)
+      } else if (payload.titleData?.title_id && payload.rpcData?.p_title_code) {
         const { error } = await supabase.rpc('assign_title', payload.rpcData)
         if (error) throw error
 
@@ -399,9 +419,19 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
         }
       }
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['officers'] })
-      toast.success('Officer updated successfully!')
+      queryClient.invalidateQueries({ queryKey: ['currentUserProfile'] })
+      if (variables?.rpcData?.p_user_id) {
+        queryClient.invalidateQueries({ queryKey: ['officer-details', variables.rpcData.p_user_id] })
+      }
+      if (viewingOfficer && assigningTitleFor && viewingOfficer.id === assigningTitleFor.id) {
+        setViewingOfficer(prev => prev ? {
+          ...prev,
+          current_title_id: variables?.clearTitle ? null : (variables?.titleData?.title_id || prev.current_title_id)
+        } : null)
+      }
+      toast.success(variables?.clearTitle ? 'Title unassigned successfully!' : 'Program role assigned successfully!')
       setTitleDialogOpen(false)
       setAssignFromDirectoryOpen(false)
       setAssigningTitleFor(null)
@@ -458,7 +488,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       const { error: uploadError } = await supabase.storage.from('officer-photos').upload(fileName, file)
       if (uploadError) throw uploadError
       const { data: { publicUrl } } = supabase.storage.from('officer-photos').getPublicUrl(fileName)
-      setFormData({ ...formData, photo_url: publicUrl })
+      setFormData(prev => ({ ...prev, photo_url: publicUrl }))
       toast.success('Photo uploaded successfully')
     } catch (error: any) {
       toast.error(error.message || 'Failed to upload photo')
@@ -503,12 +533,21 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
   const handleAssignTitle = (e: React.FormEvent) => {
     e.preventDefault()
     if (!assigningTitleFor) return
+    const isUnassigning = !titleFormData.title_id || titleFormData.title_id === 'unassigned'
+    const selectedTitle = titles.find(t => t.id === titleFormData.title_id)
+
+    if (!isUnassigning && !selectedTitle) {
+      toast.error('Please select a valid title')
+      return
+    }
+
     assignTitleMutation.mutate({
       roleUpdate: { id: assigningTitleFor.id, role: titleFormData.role, currentRole: assigningTitleFor.role },
       titleData: titleFormData,
+      clearTitle: isUnassigning,
       rpcData: {
         p_user_id: assigningTitleFor.id,
-        p_title_code: titles.find(t => t.id === titleFormData.title_id)?.code,
+        p_title_code: selectedTitle?.code,
         p_program_id: titleFormData.program_id || null,
         p_assigned_by: currentUser?.id
       }
@@ -520,7 +559,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     if (!assigningTitleFor) return
     assignTitleMutation.mutate({
       roleUpdate: { id: assigningTitleFor.id, role: titleFormData.role, currentRole: assigningTitleFor.role },
-      titleData: { title_id: '', program_id: '' }, // empty, bypassing RPC
+      titleData: { title_id: '', program_id: '' },
+      clearTitle: false,
       rpcData: {}
     })
   }
@@ -603,7 +643,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
   const handleBulkDelete = async () => {
     if (selectedOfficers.length === 0) return
     const confirmed = await confirm({
-      title: '⚠️ Bulk Delete Muti-Select',
+      title: '⚠️ Bulk Delete Multi-Select',
       message: `You are about to permanently delete ${selectedOfficers.length} officers. This action cannot be undone — all histories and assignments will be destroyed.`,
       confirmText: 'Yes, Delete Selected',
       cancelText: 'Cancel',
@@ -613,11 +653,15 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     if (!confirmed) return
 
     const officersToDelete = officers.filter((o: Officer) =>
-      selectedOfficers.includes(o.id) && o.role !== 'dev_admin' && o.id !== currentUser?.id
+      selectedOfficers.includes(o.id) &&
+      o.role !== 'dev_admin' &&
+      o.role !== 'super_admin' &&
+      !isPermanentOwnerEmail(o.email) &&
+      o.id !== currentUser?.id
     )
 
     if (officersToDelete.length === 0) {
-      toast.error('Selected officers cannot be deleted')
+      toast.error('Selected officers cannot be deleted (protected accounts or self)')
       return
     }
 
@@ -1227,7 +1271,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
               <Input id="phone" type="tel" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="role">{editing ? 'Oscar *' : 'Oscar *'}</Label>
+              <Label htmlFor="role">Role / Oscar *</Label>
               <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a role..." />
@@ -1304,17 +1348,62 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
               <TabsContent value="program_role">
                 <form onSubmit={handleAssignTitle} className="space-y-4 mt-4">
                   <div className="space-y-2">
-                    <Label htmlFor="title">Program Role *</Label>
-                    <Select required value={titleFormData.title_id || 'unassigned'} onValueChange={(value) => setTitleFormData({ ...titleFormData, title_id: value === 'unassigned' ? '' : value })}>
+                    <Label htmlFor="title">Program Role</Label>
+                    <Select
+                      value={titleFormData.title_id || 'unassigned'}
+                      onValueChange={(value) => setTitleFormData({ ...titleFormData, title_id: value === 'unassigned' ? '' : value })}
+                    >
                       <SelectTrigger id="title">
                         <SelectValue placeholder="Select a title..." />
                       </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="unassigned">Select a title...</SelectItem>
-                        {getTitleByUnit('leadership').filter(t => t.is_fixed).map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.is_team_lead && '(Team Lead)'}</SelectItem>)}
-                        {getTitleByUnit('leadership').filter(t => !t.is_fixed).map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.max_positions > 1 && `(${title.max_positions} positions)`}</SelectItem>)}
-                        {getTitleByUnit('command').map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.max_positions > 1 && `(${title.max_positions} positions)`}</SelectItem>)}
-                        {getTitleByUnit('oscar').map((title) => <SelectItem key={title.id} value={title.id}>{title.name} {title.is_team_lead && '⭐'} {title.max_positions > 1 && `(${title.max_positions} positions)`}</SelectItem>)}
+                      <SelectContent className="max-h-[300px]">
+                        <SelectItem value="unassigned">None (Unassigned / Clear Title)</SelectItem>
+                        {getTitleByUnit('leadership').length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1.5">Leadership</SelectLabel>
+                            {getTitleByUnit('leadership').map((title) => (
+                              <SelectItem key={title.id} value={title.id}>
+                                {title.name}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
+                        {getTitleByUnit('command').length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1.5">Command</SelectLabel>
+                            {getTitleByUnit('command').map((title) => (
+                              <SelectItem key={title.id} value={title.id}>
+                                {title.name}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
+                        {getTitleByUnit('oscar').filter(t => t.is_team_lead).length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1.5">Unit Team Leads</SelectLabel>
+                            {getTitleByUnit('oscar')
+                              .filter(t => t.is_team_lead)
+                              .sort((a, b) => a.name.localeCompare(b.name))
+                              .map((title) => (
+                                <SelectItem key={title.id} value={title.id}>
+                                  ⭐ {title.name}
+                                </SelectItem>
+                              ))}
+                          </SelectGroup>
+                        )}
+                        {getTitleByUnit('oscar').filter(t => !t.is_team_lead).length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1.5">Oscar Units</SelectLabel>
+                            {getTitleByUnit('oscar')
+                              .filter(t => !t.is_team_lead)
+                              .sort((a, b) => a.name.localeCompare(b.name))
+                              .map((title) => (
+                                <SelectItem key={title.id} value={title.id}>
+                                  {title.name}
+                                </SelectItem>
+                              ))}
+                          </SelectGroup>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
