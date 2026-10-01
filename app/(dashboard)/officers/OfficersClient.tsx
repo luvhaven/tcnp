@@ -360,6 +360,12 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
         } : o)
       })
 
+      setViewingOfficer((current) => current?.id === variables.id ? {
+        ...current,
+        is_active: updatedData.is_active,
+        activation_status: updatedData.activation_status
+      } : current)
+
       // Delay invalidation slightly to guarantee Supabase DB commit has cleared globally
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ['officers'] })
