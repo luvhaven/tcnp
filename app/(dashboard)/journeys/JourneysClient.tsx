@@ -296,7 +296,9 @@ export default function JourneysClient({
       .channel('journeys_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'journeys' }, () => {
         resetPage()
-        loadJourneys(false)
+        // Realtime refreshes are background work. Their failures must not
+        // emit a second, contradictory toast after a successful create/update.
+        void loadJourneys(false, false)
       })
       .subscribe()
 
@@ -309,7 +311,7 @@ export default function JourneysClient({
     if (page > 0) loadJourneys(true)
   }, [page])
 
-  const loadJourneys = async (isLoadMore = false) => {
+  const loadJourneys = async (isLoadMore = false, reportError = true): Promise<boolean> => {
     if (isLoadMore) setLoadingMore(true)
     try {
       const rangeFrom = isLoadMore ? from : 0
@@ -341,9 +343,11 @@ export default function JourneysClient({
         }
         setHasMore(data.length === 50)
       }
+      return true
     } catch (error) {
       console.error('Error loading journeys data:', error)
-      toast.error('Failed to load journeys')
+      if (reportError) toast.error('Failed to load journeys')
+      return false
     } finally {
       if (isLoadMore) setLoadingMore(false)
       else setLoading(false)
@@ -475,9 +479,13 @@ export default function JourneysClient({
       })
       resetDOState()
       resetPage()
-      loadJourneys(false)
-      if (relatedSaveFailed) {
-        toast.warning('Journey created, but some assignments could not be saved. Edit the journey to retry.')
+      const journeyListRefreshed = await loadJourneys(false, false)
+      if (relatedSaveFailed || !journeyListRefreshed) {
+        const followUpIssues = [
+          relatedSaveFailed && 'some assignments could not be saved',
+          !journeyListRefreshed && 'the journey list could not be refreshed',
+        ].filter(Boolean)
+        toast.warning(`Journey created, but ${followUpIssues.join(' and ')}.`)
       } else {
         toast.success('Journey created successfully!')
       }
