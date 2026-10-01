@@ -27,6 +27,7 @@ import {
   Plane,
   Calendar,
   Pencil,
+  Trash2,
   History
 } from "lucide-react"
 import { JourneyTimelineDialog } from "@/components/journeys/JourneyTimelineDialog"
@@ -139,6 +140,9 @@ export default function JourneysClient({
   const createJourneyInFlight = useRef(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [callSignDialogOpen, setCallSignDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [journeyToDelete, setJourneyToDelete] = useState<Journey | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentRole, setCurrentRole] = useState<string | null>(null)
@@ -666,6 +670,36 @@ export default function JourneysClient({
     }
   }
 
+  const handleDeleteClick = (journey: Journey, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setJourneyToDelete(journey)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!journeyToDelete) return
+    setIsDeleting(true)
+    try {
+      const { error } = await supabase
+        .from('journeys')
+        .delete()
+        .eq('id', journeyToDelete.id)
+
+      if (error) throw error
+
+      toast.success('Journey deleted successfully')
+      setDeleteDialogOpen(false)
+      setJourneyToDelete(null)
+      resetPage()
+      await loadJourneys(false)
+    } catch (err: any) {
+      console.error('Error deleting journey:', err)
+      toast.error(err.message || 'Failed to delete journey')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
 
 
   const getAvailableCallSigns = (currentStatus: string, journeyType?: string | null) => {
@@ -921,15 +955,28 @@ export default function JourneysClient({
                               <span className="sr-only">History</span>
                             </Button>
                             {canCreateJourney && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 hover:bg-muted"
-                                onClick={(e) => handleEditClick(journey, e)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                                <span className="sr-only">Edit</span>
-                              </Button>
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 hover:bg-muted"
+                                  onClick={(e) => handleEditClick(journey, e)}
+                                  title="Edit Journey"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                  <span className="sr-only">Edit</span>
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 hover:bg-destructive/10 text-destructive hover:text-destructive"
+                                  onClick={(e) => handleDeleteClick(journey, e)}
+                                  title="Delete Journey"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  <span className="sr-only">Delete</span>
+                                </Button>
+                              </>
                             )}
                           </div>
                         </div>
@@ -1053,6 +1100,18 @@ export default function JourneysClient({
                         >
                           <History className="h-4 w-4" />
                         </Button>
+                        {canCreateJourney && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 hover:bg-destructive/10 text-destructive hover:text-destructive"
+                            onClick={(e) => handleDeleteClick(journey, e)}
+                            title="Delete Journey"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            <span className="sr-only">Delete</span>
+                          </Button>
+                        )}
                         <span className="text-xs text-muted-foreground">
                           {new Date(journey.created_at).toLocaleDateString()}
                         </span>
@@ -1528,6 +1587,69 @@ export default function JourneysClient({
           </form>
         </DialogContent>
       </Dialog>
+      {/* Delete Journey Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={(open) => {
+        if (!open && !isDeleting) {
+          setDeleteDialogOpen(false)
+          setJourneyToDelete(null)
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Journey
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this journey? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          {journeyToDelete && (
+            <div className="rounded-md border p-3 bg-muted/30 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Guest:</span>
+                <span className="font-medium">
+                  {journeyToDelete.papas?.title} {journeyToDelete.papas?.full_name || 'Unknown Papa'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Route:</span>
+                <span className="font-medium">{journeyToDelete.origin} → {journeyToDelete.destination}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Status:</span>
+                <Badge variant="outline" className={getStatusColor(journeyToDelete.status)}>
+                  {getStatusLabel(journeyToDelete.status)}
+                </Badge>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false)
+                setJourneyToDelete(null)
+              }}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? 'Deleting...' : 'Delete Journey'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Journey Timeline Dialog */}
       <JourneyTimelineDialog
         journeyId={timelineJourneyId}
