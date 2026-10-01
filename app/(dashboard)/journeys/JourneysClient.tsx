@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -135,6 +135,8 @@ export default function JourneysClient({
   const [loadingMore, setLoadingMore] = useState(false)
   const { page, from, to, hasMore, setHasMore, nextPage, resetPage } = usePagination({ pageSize: 50 })
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [isCreatingJourney, setIsCreatingJourney] = useState(false)
+  const createJourneyInFlight = useRef(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [callSignDialogOpen, setCallSignDialogOpen] = useState(false)
   const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null)
@@ -396,6 +398,12 @@ export default function JourneysClient({
       return
     }
 
+    // React state updates on the next render; the ref closes the window for a
+    // second submit event arriving before the button becomes disabled.
+    if (createJourneyInFlight.current) return
+    createJourneyInFlight.current = true
+    setIsCreatingJourney(true)
+
     try {
       const lead = teamLeadId || selectedDOs[0] || null
       // secondary_papa_ids is client-only form state for the journey_papas
@@ -424,28 +432,39 @@ export default function JourneysClient({
         .single()
 
       if (error) throw error
+      if (!newJourney?.id) throw new Error('Journey was not returned after creation')
 
+      let relatedSaveFailed = false
       // Save DO assignments to junction table
       if (selectedDOs.length > 0 && newJourney?.id) {
-        const doPayload = selectedDOs.map(uid => ({ user_id: uid, is_lead: uid === (lead ?? '') }))
-        await fetch('/api/journey-duty-officers', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ journey_id: newJourney.id, officers: doPayload })
-        })
+        try {
+          const doPayload = selectedDOs.map(uid => ({ user_id: uid, is_lead: uid === (lead ?? '') }))
+          const response = await fetch('/api/journey-duty-officers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ journey_id: newJourney.id, officers: doPayload })
+          })
+          if (!response.ok) throw new Error(`Duty officer assignment failed (${response.status})`)
+        } catch (assignmentError) {
+          console.error('Journey created, but duty officer assignments could not be saved:', assignmentError)
+          // The journey exists; report this as a partial save below, not as a
+          // failed journey creation.
+          relatedSaveFailed = true
+        }
       }
 
       // Save secondary papas if junction table migration is applied
       if (formData.secondary_papa_ids.length > 0 && newJourney?.id) {
         try {
           const papaPayload = formData.secondary_papa_ids.map(pid => ({ journey_id: newJourney.id, papa_id: pid, is_primary: false }))
-          await (supabase as any).from('journey_papas').insert(papaPayload)
-        } catch (e) {
-          console.warn('Failed to save secondary papas (migration may be missing).', e)
+          const { error: papaError } = await (supabase as any).from('journey_papas').insert(papaPayload)
+          if (papaError) throw papaError
+        } catch (papaError) {
+          console.warn('Journey created, but secondary papas could not be saved.', papaError)
+          relatedSaveFailed = true
         }
       }
 
-      toast.success('Journey created successfully!')
       setCreateDialogOpen(false)
       setFormData({
         papa_id: '', secondary_papa_ids: [], assigned_cheetah_id: '', program_id: '',
@@ -457,9 +476,17 @@ export default function JourneysClient({
       resetDOState()
       resetPage()
       loadJourneys(false)
+      if (relatedSaveFailed) {
+        toast.warning('Journey created, but some assignments could not be saved. Edit the journey to retry.')
+      } else {
+        toast.success('Journey created successfully!')
+      }
     } catch (error: any) {
       console.error('Error creating journey:', error)
       toast.error(error.message || 'Failed to create journey')
+    } finally {
+      createJourneyInFlight.current = false
+      setIsCreatingJourney(false)
     }
   }
 
@@ -1255,7 +1282,9 @@ export default function JourneysClient({
               <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">Create Journey</Button>
+              <Button type="submit" disabled={isCreatingJourney}>
+                {isCreatingJourney ? 'Creating Journey…' : 'Create Journey'}
+              </Button>
             </div>
           </form>
         </DialogContent>
