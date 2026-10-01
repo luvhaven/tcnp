@@ -10,8 +10,10 @@ import CheetahPrerequisites from '@/components/cheetahs/CheetahPrerequisites'
 import FlowerChecklist from '@/components/cheetahs/FlowerChecklist'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import Link from 'next/link'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, Radio, MapPin, Car, User, Calendar, Clock, Crown, Shield } from 'lucide-react'
+import { Loader2, Radio, MapPin, Car, User, Calendar, Clock, Crown, Shield, Building2, MessageSquare, Navigation, Sparkles } from 'lucide-react'
 import { format, formatDistanceToNow } from 'date-fns'
 import { notificationService } from '@/lib/services/notificationService'
 import { toast } from 'sonner'
@@ -22,6 +24,20 @@ import { CallSignChip } from '@/components/ui/call-sign-chip'
 import { cn, oscarToRole, isAdmin, effectiveOscarRole } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface ActiveProgram {
+  id: string
+  name: string
+  description: string | null
+  status: string
+  start_date: string
+  end_date: string | null
+  theatre_name: string | null
+  theatre_address: string | null
+  assigned_title: string | null
+  assigned_unit: string | null
+  assigned_at: string | null
+}
 
 interface DutyOfficer {
   user_id: string
@@ -92,6 +108,9 @@ function journeyMatchesRole(journey: Journey, role: string, userId: string, osca
     )
   }
 
+  // Anyone assigned to a program can see journeys for that program in the Program Feed
+  if (journey.program_id) return true
+
   // Default: only journeys directly assigned
   return false
 }
@@ -112,6 +131,7 @@ const getStatusColor = (status: string) => {
 export default function MyOperationsPage() {
   const supabase = createClient()
   const [journeys, setJourneys] = useState<Journey[]>([])
+  const [activePrograms, setActivePrograms] = useState<ActiveProgram[]>([])
   const [completedAssignments, setCompletedAssignments] = useState<Journey[]>([])
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
@@ -144,16 +164,129 @@ export default function MyOperationsPage() {
 
       const isAdminUser = isAdmin(role) || isAdmin(effectiveOscarRole(role, oscar))
 
-      // Get program IDs where this user is assigned
-      const { data: assignments } = await (supabase as any)
-        .from('current_title_assignments')
-        .select('program_id')
+      // ── Load user's active program assignments ────────────────────────────
+      const userActivePrograms: ActiveProgram[] = []
+      const addedProgramIds = new Set<string>()
+
+      // 1. Direct assignments in title_assignments for this user
+      const { data: titleAssignments } = await (supabase as any)
+        .from('title_assignments')
+        .select(`
+          id,
+          program_id,
+          assigned_at,
+          is_active,
+          official_titles:title_id (
+            name,
+            code,
+            unit
+          ),
+          programs:program_id (
+            id,
+            name,
+            description,
+            status,
+            start_date,
+            end_date,
+            theatres:theatre_id (
+              name,
+              address
+            )
+          )
+        `)
         .eq('user_id', user.id)
         .eq('is_active', true)
+        .not('program_id', 'is', null)
 
-      const programIds: string[] = (assignments || [])
-        .map((a: any) => a.program_id)
-        .filter(Boolean)
+      ;(titleAssignments || []).forEach((row: any) => {
+        const p = row.programs
+        if (p && !addedProgramIds.has(p.id)) {
+          addedProgramIds.add(p.id)
+          userActivePrograms.push({
+            id: p.id,
+            name: p.name,
+            description: p.description,
+            status: p.status,
+            start_date: p.start_date,
+            end_date: p.end_date,
+            theatre_name: p.theatres?.name || null,
+            theatre_address: p.theatres?.address || null,
+            assigned_title: row.official_titles?.name || null,
+            assigned_unit: row.official_titles?.unit || null,
+            assigned_at: row.assigned_at || null,
+          })
+        }
+      })
+
+      // 2. Query current_title_assignments view as fallback
+      const { data: currentAssignments } = await (supabase as any)
+        .from('current_title_assignments')
+        .select('program_id, program_name, title_name, unit, assigned_at')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .not('program_id', 'is', null)
+
+      if (currentAssignments && currentAssignments.length > 0) {
+        for (const row of currentAssignments) {
+          if (!addedProgramIds.has(row.program_id)) {
+            addedProgramIds.add(row.program_id)
+            const { data: pData } = await (supabase as any)
+              .from('programs')
+              .select('id, name, description, status, start_date, end_date, theatres:theatre_id(name, address)')
+              .eq('id', row.program_id)
+              .single()
+
+            if (pData) {
+              userActivePrograms.push({
+                id: pData.id,
+                name: pData.name,
+                description: pData.description,
+                status: pData.status,
+                start_date: pData.start_date,
+                end_date: pData.end_date,
+                theatre_name: pData.theatres?.name || null,
+                theatre_address: pData.theatres?.address || null,
+                assigned_title: row.title_name || null,
+                assigned_unit: row.unit || null,
+                assigned_at: row.assigned_at || null,
+              })
+            }
+          }
+        }
+      }
+
+      // 3. For leadership/admins without direct title assignments, show active/planning programs
+      if (isAdminUser && userActivePrograms.length === 0) {
+        const { data: allActiveProgs } = await (supabase as any)
+          .from('programs')
+          .select('id, name, description, status, start_date, end_date, theatres:theatre_id(name, address)')
+          .in('status', ['active', 'planning'])
+          .order('start_date', { ascending: false })
+
+        if (allActiveProgs) {
+          allActiveProgs.forEach((p: any) => {
+            if (!addedProgramIds.has(p.id)) {
+              addedProgramIds.add(p.id)
+              userActivePrograms.push({
+                id: p.id,
+                name: p.name,
+                description: p.description,
+                status: p.status,
+                start_date: p.start_date,
+                end_date: p.end_date,
+                theatre_name: p.theatres?.name || null,
+                theatre_address: p.theatres?.address || null,
+                assigned_title: 'Leadership / Command',
+                assigned_unit: 'Command',
+                assigned_at: null,
+              })
+            }
+          })
+        }
+      }
+
+      setActivePrograms(userActivePrograms)
+      const programIds: string[] = Array.from(addedProgramIds)
 
       // Step 1: Get all journey_ids where this user is a DO (lead or not)
       const { data: myDORows } = await (supabase as any)
@@ -385,21 +518,124 @@ export default function MyOperationsPage() {
         </div>
       </div>
 
+      {/* Active Program Card */}
+      {activePrograms.length > 0 && (
+        <div className="space-y-3">
+          {activePrograms.map((prog) => (
+            <Card key={prog.id} className="border-primary/20 bg-linear-to-r from-primary/5 via-card to-background shadow-xs overflow-hidden">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="space-y-1.5 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="bg-primary text-primary-foreground font-semibold text-[11px] gap-1 px-2 py-0.5">
+                        <Sparkles className="h-3 w-3" />
+                        Active Program
+                      </Badge>
+                      <Badge variant="outline" className="text-[11px] capitalize border-primary/30">
+                        {prog.status}
+                      </Badge>
+                      {prog.assigned_unit && (
+                        <Badge variant="secondary" className="text-[11px]">
+                          Unit: {prog.assigned_unit}
+                        </Badge>
+                      )}
+                    </div>
+
+                    <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground truncate">
+                      {prog.name}
+                    </h2>
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                      {prog.theatre_name && (
+                        <span className="flex items-center gap-1">
+                          <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                          <strong className="text-foreground">{prog.theatre_name}</strong>
+                          {prog.theatre_address ? ` (${prog.theatre_address})` : ''}
+                        </span>
+                      )}
+                      {prog.start_date && (
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3.5 w-3.5 text-primary shrink-0" />
+                          {format(new Date(prog.start_date), 'PPP')}
+                          {prog.end_date && prog.end_date !== prog.start_date && ` – ${format(new Date(prog.end_date), 'PPP')}`}
+                        </span>
+                      )}
+                    </div>
+
+                    {prog.assigned_title && (
+                      <p className="text-xs text-foreground/80 pt-0.5">
+                        Deployment Role: <span className="font-semibold text-primary">{prog.assigned_title}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap sm:flex-col gap-2 shrink-0 justify-end">
+                    <Button variant="default" size="sm" asChild className="gap-1.5 text-xs shadow-xs">
+                      <Link href={`/chat?programId=${prog.id}`}>
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        Program Chat
+                      </Link>
+                    </Button>
+                    <Button variant="outline" size="sm" asChild className="gap-1.5 text-xs">
+                      <Link href="/tracking/live">
+                        <Navigation className="h-3.5 w-3.5" />
+                        Live Map
+                      </Link>
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
       {/* DO Quick Reference Panel — shown for DOs and when user has DO assignments */}
       {(userRole === 'delta_oscar' || myAssigned.length > 0) && (
         <DOHelpPanel />
       )}
 
       {journeys.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <Radio className="h-16 w-16 text-muted-foreground/30 mb-4" />
-            <h3 className="text-xl font-semibold mb-2">No Active Assignments</h3>
-            <p className="text-muted-foreground text-sm max-w-sm">
-              You have no active journey assignments. Contact your Tango Oscar or Captain to receive an assignment.
-            </p>
-          </CardContent>
-        </Card>
+        activePrograms.length > 0 ? (
+          <Card className="border-border/60 shadow-xs bg-muted/20">
+            <CardContent className="flex flex-col items-center justify-center py-12 px-4 text-center">
+              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                <Shield className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="text-lg font-semibold mb-1">
+                Deployed to {activePrograms[0]?.name}
+              </h3>
+              <p className="text-muted-foreground text-xs sm:text-sm max-w-md mb-4">
+                You are active in this program as <strong>{activePrograms[0]?.assigned_title || 'Protocol Officer'}</strong>.
+                Journey movements and operational dispatches will appear here once scheduled.
+              </p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                <Button variant="outline" size="sm" asChild className="gap-1.5 text-xs">
+                  <Link href={`/chat?programId=${activePrograms[0]?.id}`}>
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    Open Program Chat
+                  </Link>
+                </Button>
+                <Button variant="outline" size="sm" asChild className="gap-1.5 text-xs">
+                  <Link href="/tracking/live">
+                    <Navigation className="h-3.5 w-3.5" />
+                    Live Map
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <Radio className="h-16 w-16 text-muted-foreground/30 mb-4" />
+              <h3 className="text-xl font-semibold mb-2">No Active Assignments</h3>
+              <p className="text-muted-foreground text-sm max-w-sm">
+                You have no active journey assignments. Contact your Tango Oscar or Captain to receive an assignment.
+              </p>
+            </CardContent>
+          </Card>
+        )
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList>

@@ -20,7 +20,7 @@ import type {
 } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { notificationService } from '@/lib/services/notificationService'
-import { isAdmin } from '@/lib/utils'
+import { isAdmin, effectiveOscarRole } from '@/lib/utils'
 
 type ChatMessageRow = Database['public']['Tables']['chat_messages']['Row']
 type ChatMessageInsert = Database['public']['Tables']['chat_messages']['Insert']
@@ -308,33 +308,82 @@ export default function ChatSystem({
       return
     }
 
-    if (isAdmin(currentUser.role)) {
+    const isUserAdmin = isAdmin(currentUser.role) || isAdmin(effectiveOscarRole(currentUser.role, currentUser.oscar))
+    if (isUserAdmin) {
       setCanChatInProgram(true)
+      setProgramAccessChecked(true)
+      return
+    }
+
+    if (currentUser.is_active === false || currentUser.activation_status === 'deactivated') {
+      setCanChatInProgram(false)
       setProgramAccessChecked(true)
       return
     }
 
     try {
       setProgramAccessChecked(false)
-      const { data, error } = await (supabase as any)
+
+      // 1. Check title_assignments directly
+      const { data: titleData } = await (supabase as any)
+        .from('title_assignments')
+        .select('id')
+        .eq('user_id', currentUser.id)
+        .eq('program_id', programId)
+        .eq('is_active', true)
+        .limit(1)
+
+      if (Array.isArray(titleData) && titleData.length > 0) {
+        setCanChatInProgram(true)
+        return
+      }
+
+      // 2. Check current_title_assignments view
+      const { data: currentData } = await (supabase as any)
         .from('current_title_assignments')
         .select('program_id')
         .eq('user_id', currentUser.id)
         .eq('program_id', programId)
+        .limit(1)
 
-      if (error) {
-        console.error('Error checking program chat access:', error)
-        setCanChatInProgram(false)
-      } else {
-        setCanChatInProgram(Array.isArray(data) && data.length > 0)
+      if (Array.isArray(currentData) && currentData.length > 0) {
+        setCanChatInProgram(true)
+        return
       }
+
+      // 3. Check journey assignments under this program
+      const { data: journeyData } = await (supabase as any)
+        .from('journeys')
+        .select('id')
+        .eq('program_id', programId)
+        .eq('assigned_duty_officer_id', currentUser.id)
+        .limit(1)
+
+      if (Array.isArray(journeyData) && journeyData.length > 0) {
+        setCanChatInProgram(true)
+        return
+      }
+
+      // 4. Any active protocol officer in an active or planning program has chat access
+      const { data: progData } = await supabase
+        .from('programs')
+        .select('status')
+        .eq('id', programId)
+        .single()
+
+      if (progData && ['active', 'planning'].includes(progData.status)) {
+        setCanChatInProgram(true)
+        return
+      }
+
+      setCanChatInProgram(false)
     } catch (error) {
       console.error('Unexpected error checking program chat access:', error)
-      setCanChatInProgram(false)
+      setCanChatInProgram(currentUser?.is_active !== false)
     } finally {
       setProgramAccessChecked(true)
     }
-  }, [supabase, programId, currentUser?.id, currentUser?.role])
+  }, [supabase, programId, currentUser?.id, currentUser?.role, currentUser?.oscar, currentUser?.is_active, currentUser?.activation_status])
 
   useEffect(() => {
     void evaluateProgramAccess()
@@ -809,7 +858,7 @@ export default function ChatSystem({
       if (user) {
         const { data, error } = await supabase
           .from('users')
-          .select('id, full_name, oscar, role, email')
+          .select('id, full_name, oscar, role, email, is_active, activation_status')
           .eq('id', user.id)
           .single()
 
@@ -979,7 +1028,7 @@ export default function ChatSystem({
 
   const handleDeleteMessage = useCallback(async (messageId: string, hardDelete: boolean = false) => {
     if (!currentUser?.id) return
-    const isUserAdmin = isAdmin(currentUser.role)
+    const isUserAdmin = isAdmin(currentUser.role) || isAdmin(effectiveOscarRole(currentUser.role, currentUser.oscar))
 
     if (hardDelete && isUserAdmin) {
       try {
@@ -1050,13 +1099,17 @@ export default function ChatSystem({
       return
     }
 
-    if (programId && !['dev_admin', 'admin'].includes(currentUser.role)) {
+    const isUserAdmin = Boolean(
+      currentUser && (isAdmin(currentUser.role) || isAdmin(effectiveOscarRole(currentUser.role, currentUser.oscar)))
+    )
+
+    if (programId && !isUserAdmin) {
       if (!programAccessChecked) {
         toast.warning('Checking your permission for this program. Please wait a moment and try again.')
         return
       }
       if (!canChatInProgram) {
-        toast.error('You are not assigned to this program as a protocol officer, so chat is read-only.')
+        toast.error('You are not assigned to this program, so chat is read-only.')
         return
       }
     }
@@ -1293,7 +1346,8 @@ export default function ChatSystem({
     if (!currentUser) return false
 
     // Admins and leadership can see all messages
-    if (isAdmin(currentUser.role)) return true
+    const isUserAdmin = isAdmin(currentUser.role) || isAdmin(effectiveOscarRole(currentUser.role, currentUser.oscar))
+    if (isUserAdmin) return true
 
     // Sender can see their own messages
     if (message.sender_id === currentUser.id) return true
@@ -1307,10 +1361,14 @@ export default function ChatSystem({
     return false
   }
 
+  const isUserAdmin = Boolean(
+    currentUser && (isAdmin(currentUser.role) || isAdmin(effectiveOscarRole(currentUser.role, currentUser.oscar)))
+  )
+
   const isReadOnlyProgramChat =
     Boolean(programId) &&
     !!currentUser &&
-    !['dev_admin', 'admin'].includes(currentUser.role) &&
+    !isUserAdmin &&
     programAccessChecked &&
     !canChatInProgram
 

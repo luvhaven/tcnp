@@ -295,14 +295,49 @@ export default function TeamChatRoom() {
     return <div className="flex items-center justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
   }
 
+  const handleJoinTeam = async (selectedTeam: string) => {
+    if (!currentUser?.id) return
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ team: selectedTeam })
+        .eq('id', currentUser.id)
+      if (error) throw error
+      toast.success(`You joined ${TEAM_THEME[selectedTeam]?.label || selectedTeam}!`)
+      queryClient.invalidateQueries({ queryKey: ["current-user"] })
+      queryClient.invalidateQueries({ queryKey: ["team-chat", selectedTeam] })
+      queryClient.invalidateQueries({ queryKey: ["team-members", selectedTeam] })
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to select team')
+    }
+  }
+
   if (!team) {
     return (
-      <div className="empty-state rounded-xl border">
-        <Users className="h-10 w-10" />
-        <p className="font-medium">You&apos;re not in a team yet</p>
-        <p className="max-w-sm text-sm text-muted-foreground">
-          Every officer belongs to Team Strength, Wisdom or Swift. Ask an admin to assign your team, then your team chatroom appears here.
-        </p>
+      <div className="empty-state rounded-xl border p-8 text-center space-y-4 max-w-md mx-auto my-6 bg-card/60 backdrop-blur-sm">
+        <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+          <Users className="h-6 w-6 text-primary" />
+        </div>
+        <div>
+          <p className="font-semibold text-base">Select Your Team</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Choose your assigned team below to immediately access your team&apos;s channel.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2">
+          {Object.entries(TEAM_THEME).map(([key, item]) => (
+            <Button
+              key={key}
+              variant="outline"
+              size="sm"
+              onClick={() => handleJoinTeam(key)}
+              className="flex flex-col h-auto py-2.5 px-3 gap-0.5 hover:border-primary/50 hover:bg-primary/5 transition-all text-center"
+            >
+              <span className="font-semibold text-xs">{item.label}</span>
+              <span className="text-[10px] text-muted-foreground">Join room</span>
+            </Button>
+          ))}
+        </div>
       </div>
     )
   }

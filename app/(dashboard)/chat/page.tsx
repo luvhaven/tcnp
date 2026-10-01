@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { MessagesSquare, Radio, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSearchParams } from 'next/navigation'
-import { isAdmin } from '@/lib/utils'
+import { isAdmin, effectiveOscarRole } from '@/lib/utils'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { Button } from '@/components/ui/button'
 
@@ -51,9 +51,9 @@ function ChatContent() {
 
         const { data: userRow, error: userError } = await supabase
           .from('users')
-          .select('id, role')
+          .select('id, role, oscar, is_active, activation_status')
           .eq('id', user.id)
-          .single<{ id: string; role: string | null }>()
+          .single<{ id: string; role: string | null; oscar: string | null; is_active: boolean | null; activation_status: string | null }>()
 
         if (userError || !userRow) {
           console.error('❌ Error loading current user for chat:', userError)
@@ -74,31 +74,68 @@ function ChatContent() {
           return
         }
 
-        let visiblePrograms = (allPrograms || []) as ChatProgram[]
+        const allProgsList = (allPrograms || []) as ChatProgram[]
+        let visiblePrograms = allProgsList
 
-        if (!isAdmin(userRow.role)) {
-          // Restrict officers to programs they are assigned to via current_title_assignments
-          const { data: assignments, error: assignError } = await (supabase as any)
+        const isUserAdmin = isAdmin(userRow.role) || isAdmin(effectiveOscarRole(userRow.role, userRow.oscar))
+
+        if (!isUserAdmin) {
+          const allowedIds = new Set<string>()
+
+          // 1. Current title assignments
+          const { data: currentAssignments } = await (supabase as any)
             .from('current_title_assignments')
             .select('program_id')
             .eq('user_id', user.id)
 
-          if (assignError) {
-            console.error('❌ Error loading program assignments for chat:', assignError)
-            visiblePrograms = []
-          } else {
-            const allowedIds = new Set(
-              (assignments || [])
-                .map((row: { program_id: string | null }) => row.program_id)
-                .filter((id: string | null): id is string => Boolean(id))
-            )
-            visiblePrograms = visiblePrograms.filter((p) => allowedIds.has(p.id))
+          ;(currentAssignments || []).forEach((r: any) => {
+            if (r.program_id) allowedIds.add(r.program_id)
+          })
+
+          // 2. Direct title assignments
+          const { data: directAssignments } = await (supabase as any)
+            .from('title_assignments')
+            .select('program_id')
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .not('program_id', 'is', null)
+
+          ;(directAssignments || []).forEach((r: any) => {
+            if (r.program_id) allowedIds.add(r.program_id)
+          })
+
+          // 3. Direct journey DO assignments in programs
+          const { data: journeyAssignments } = await (supabase as any)
+            .from('journeys')
+            .select('program_id')
+            .eq('assigned_duty_officer_id', user.id)
+            .not('program_id', 'is', null)
+
+          ;(journeyAssignments || []).forEach((r: any) => {
+            if (r.program_id) allowedIds.add(r.program_id)
+          })
+
+          // 4. If officer is added and active, also allow active/planning operational programs
+          const isActiveOfficer = userRow.is_active !== false && userRow.activation_status !== 'deactivated'
+          if (isActiveOfficer) {
+            allProgsList.forEach((p) => {
+              if (p.status === 'active' || p.status === 'planning') {
+                allowedIds.add(p.id)
+              }
+            })
           }
+
+          visiblePrograms = allProgsList.filter((p) => allowedIds.has(p.id))
         }
 
         setPrograms(visiblePrograms)
 
-        if (visiblePrograms.length > 0) {
+        const requestedProgramId = searchParams.get('programId') || searchParams.get('program')
+        const requestedProgram = requestedProgramId ? visiblePrograms.find((p) => p.id === requestedProgramId) : null
+
+        if (requestedProgram) {
+          setProgram(requestedProgram)
+        } else if (visiblePrograms.length > 0) {
           const active = visiblePrograms.find((p) => p.status === 'active')
           const planning = visiblePrograms.find((p) => p.status === 'planning')
           const selected = (active || planning || visiblePrograms[0] || null) as ChatProgram | null
