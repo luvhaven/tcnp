@@ -15,4 +15,10 @@ test('dashboard selects the unambiguous primary Papa relationship', () => {
   const alerts = fs.readFileSync('components/dashboard/JourneyAlerts.tsx', 'utf8')
   assert.match(alerts, /papas!journeys_papa_id_fkey\(/)
   assert.doesNotMatch(alerts, /\bpapas\(/)
+
+  const journeysClient = fs.readFileSync('app/(dashboard)/journeys/JourneysClient.tsx', 'utf8')
+  assert.match(journeysClient, /papas!journeys_papa_id_fkey\(/)
+
+  const journeysPage = fs.readFileSync('app/(dashboard)/journeys/page.tsx', 'utf8')
+  assert.match(journeysPage, /papas!journeys_papa_id_fkey\(/)
 })

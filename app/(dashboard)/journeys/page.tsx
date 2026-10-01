@@ -19,7 +19,7 @@ export default async function JourneysPage() {
   // Fetch initial journeys (first 50)
   const { data: initialJourneys } = await supabase.from('journeys').select(`
     *,
-    papas (title, full_name),
+    papas!journeys_papa_id_fkey(title, full_name),
     cheetahs (call_sign, registration_number, driver_name, driver_phone),
     assigned_do:users!journeys_assigned_duty_officer_id_fkey (full_name),
     nests (name),

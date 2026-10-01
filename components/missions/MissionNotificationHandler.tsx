@@ -56,7 +56,7 @@ export default function MissionNotificationHandler() {
             papa_id,
             etd,
             eta,
-            papas (
+            papas!journeys_papa_id_fkey (
               full_name,
               title
             )

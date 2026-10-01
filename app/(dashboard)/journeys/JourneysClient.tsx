@@ -319,7 +319,7 @@ export default function JourneysClient({
 
       const { data, error } = await supabase.from('journeys').select(`
         *,
-        papas (title, full_name),
+        papas!journeys_papa_id_fkey(title, full_name),
         cheetahs (call_sign, registration_number, driver_name, driver_phone),
         assigned_do:users!journeys_assigned_duty_officer_id_fkey (full_name),
         nests (name),
