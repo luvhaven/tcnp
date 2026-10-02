@@ -841,10 +841,26 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
               </SelectContent>
             </Select>
             <div className="flex items-center rounded-md border p-0.5 bg-muted/50 h-9">
-              <Button variant={viewMode === 'grid' ? "secondary" : "ghost"} size="sm" className="h-full px-2 shadow-none" onClick={() => toggleViewMode('grid')}>
+              <Button
+                type="button"
+                variant={viewMode === 'grid' ? "secondary" : "ghost"}
+                size="sm"
+                className="h-full px-2 shadow-none"
+                onClick={() => toggleViewMode('grid')}
+                title="Grid view"
+                aria-label="Grid view"
+              >
                 <LayoutGrid className="h-4 w-4" />
               </Button>
-              <Button variant={viewMode === 'table' ? "secondary" : "ghost"} size="sm" className="h-full px-2 shadow-none" onClick={() => toggleViewMode('table')}>
+              <Button
+                type="button"
+                variant={viewMode === 'table' ? "secondary" : "ghost"}
+                size="sm"
+                className="h-full px-2 shadow-none"
+                onClick={() => toggleViewMode('table')}
+                title="List / Table view"
+                aria-label="List view"
+              >
                 <List className="h-4 w-4" />
               </Button>
             </div>
@@ -872,10 +888,123 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
               <CardDescription>Protocol staff directory</CardDescription>
             </CardHeader>
             <CardContent>
-              {filteredOfficers.length === 0 ? (
+              {filteredOfficers.filter((o: Officer) => o.activation_status !== 'pending').length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <UserCircle className="h-12 w-12 text-muted-foreground/50" />
-                  <p className="mt-4 text-sm font-medium">No officers yet</p>
+                  <p className="mt-4 text-sm font-medium">No officers match filters</p>
+                </div>
+              ) : viewMode === 'table' ? (
+                <div className="rounded-md border table-scroll-wrapper">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead>Officer</TableHead>
+                        <TableHead>Department / Unit</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Team</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead className="text-right">Profile</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredOfficers
+                        .filter((o: Officer) => o.activation_status !== 'pending')
+                        .sort(sortOfficersByHierarchy)
+                        .map((officer: Officer) => {
+                          const category = CATEGORIES.find(c => c.roles.includes(officer.role))
+                          return (
+                            <TableRow
+                              key={officer.id}
+                              className="hover:bg-accent/50 transition-colors cursor-pointer group"
+                              onClick={() => setViewingOfficer(officer)}
+                            >
+                              <TableCell>
+                                <div className="flex items-center gap-3">
+                                  <Avatar className="h-8 w-8 ring-1 ring-border group-hover:ring-primary/50 transition shrink-0">
+                                    {officer.photo_url ? (
+                                      <AvatarImage src={officer.photo_url} />
+                                    ) : (
+                                      <AvatarFallback className={getRoleBadgeColor(officer.role)}>
+                                        {getInitials(officer.full_name || officer.email)}
+                                      </AvatarFallback>
+                                    )}
+                                  </Avatar>
+                                  <div className="flex flex-col min-w-0">
+                                    <span className={`font-medium group-hover:text-primary transition truncate ${!officer.is_active ? 'opacity-60 text-muted-foreground' : ''}`}>
+                                      {officer.full_name || 'No name'}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground truncate">
+                                      {officer.email}
+                                    </span>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <span className="text-xs font-medium text-muted-foreground">
+                                  {category?.label || officer.unit || '—'}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <Badge className={`text-[10px] uppercase tracking-wide ${getRoleBadgeColor(officer.role)}`}>
+                                    {getRoleLabel(officer.role)}
+                                  </Badge>
+                                  {officer.oscar && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {officer.oscar}
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                {officer.team ? (
+                                  <Badge variant="outline" className="text-[10px] uppercase tracking-wide border-primary/40 text-primary">
+                                    {officer.is_team_head ? '★ ' : ''}{officer.team}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <div className="flex items-center space-x-1.5">
+                                    <div className={`h-2 w-2 rounded-full ${officer.is_online ? 'bg-green-500' : 'bg-zinc-300 dark:bg-zinc-700'}`} />
+                                    <span className="text-xs text-muted-foreground capitalize">
+                                      {officer.is_online ? 'online' : 'offline'}
+                                    </span>
+                                  </div>
+                                  {!officer.is_active && (
+                                    <Badge variant="outline" className="text-[10px] bg-destructive/10 text-destructive border-destructive/30">
+                                      Inactive
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <span className="text-xs text-muted-foreground">
+                                  {officer.phone || '—'}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 w-8 p-0 hover:text-primary"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setViewingOfficer(officer)
+                                  }}
+                                  title="View Full Profile"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                    </TableBody>
+                  </Table>
                 </div>
               ) : (
                 renderCategorizedOfficers(
@@ -1171,6 +1300,78 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
               <div className="flex flex-col items-center justify-center py-12 text-center bg-white/5 rounded-xl border border-white/10">
                 <UserCheck className="h-12 w-12 text-muted-foreground/50" />
                 <p className="mt-4 text-sm font-medium">No pending approvals</p>
+              </div>
+            ) : viewMode === 'table' ? (
+              <div className="rounded-md border table-scroll-wrapper">
+                <Table>
+                  <TableHeader className="bg-muted/50">
+                    <TableRow>
+                      <TableHead>Officer</TableHead>
+                      <TableHead>Requested Role</TableHead>
+                      <TableHead>OSCAR</TableHead>
+                      <TableHead>Phone</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredOfficers
+                      .filter((o: Officer) => o.activation_status === 'pending')
+                      .map((officer: Officer) => (
+                        <TableRow key={officer.id} className="hover:bg-accent/50 transition-colors">
+                          <TableCell className="cursor-pointer" onClick={() => setViewingOfficer(officer)}>
+                            <div className="flex items-center gap-3 group">
+                              <Avatar className="h-8 w-8 ring-1 ring-border group-hover:ring-primary/50 transition">
+                                {officer.photo_url ? (
+                                  <AvatarImage src={officer.photo_url} />
+                                ) : (
+                                  <AvatarFallback className="bg-orange-500 text-white">
+                                    {getInitials(officer.full_name || officer.email)}
+                                  </AvatarFallback>
+                                )}
+                              </Avatar>
+                              <div className="flex flex-col">
+                                <span className="font-medium group-hover:text-primary transition">{officer.full_name || 'No name'}</span>
+                                <span className="text-xs text-muted-foreground">{officer.email}</span>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={getRoleBadgeColor(officer.role)}>
+                              {getRoleLabel(officer.role)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {officer.oscar ? <Badge variant="outline">{officer.oscar}</Badge> : <span className="text-xs text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-xs text-muted-foreground">{officer.phone || '—'}</span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="bg-yellow-500/20 text-yellow-500 border-yellow-500/30">
+                              Awaiting
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setViewingOfficer(officer)} title="View Full Profile">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-8 px-2 text-xs" onClick={() => toggleActivationMutation.mutate(officer)}>
+                                <UserCheck className="h-3.5 w-3.5 mr-1" />
+                                Approve
+                              </Button>
+                              {officer.role !== 'dev_admin' && officer.id !== currentUser?.id && (
+                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={() => handleDelete(officer)} title="Delete">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
               </div>
             ) : (
               <motion.div layout className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
