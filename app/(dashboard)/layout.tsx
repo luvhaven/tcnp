@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion"
 import { useIsIOS, useIsClient } from "@/hooks/useIsClient"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { PresenceHeartbeat } from "@/components/utils/PresenceHeartbeat"
+import { SentryUserContext } from "@/components/monitoring/SentryUserContext"
 import { BrokenArrowAlert } from "@/components/operations/BrokenArrowAlert"
 import { createClient } from "@/lib/supabase/client"
 
@@ -189,6 +190,9 @@ export default function DashboardLayout({
         </a>
         {/* Presence heartbeat - updates last_seen every 60s so officers show as online */}
         <PresenceHeartbeat />
+
+        {/* Tags error reports with who hit them (id/email/role/unit only) */}
+        <SentryUserContext />
 
         {/* Broken Arrow Global Alert */}
         <BrokenArrowAlert />

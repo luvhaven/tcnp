@@ -47,3 +47,10 @@ next-env.d.ts
 tsc_errors.log
 *.bak
 *.log
+
+# next-pwa emits service worker source maps once Sentry enables
+# hidden-source-map on the client build. They are build artifacts for workbox
+# glue code, not application source, and must not be committed.
+public/sw.js.map
+public/workbox-*.js.map
+public/fallback-*.js.map

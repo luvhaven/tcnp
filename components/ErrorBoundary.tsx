@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import * as Sentry from '@sentry/nextjs'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AlertTriangle } from 'lucide-react'
@@ -8,6 +9,8 @@ import { AlertTriangle } from 'lucide-react'
 interface ErrorBoundaryProps {
     children: React.ReactNode
     fallback?: React.ReactNode
+    /** Identifies which boundary caught the error in Sentry. */
+    name?: string
 }
 
 interface ErrorBoundaryState {
@@ -27,6 +30,15 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
     componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
         console.error('Error boundary caught error:', error, errorInfo)
+
+        // Without this the boundary swallows the crash: the user sees the
+        // fallback card, recovers, and we never learn the error happened.
+        Sentry.captureException(error, {
+            contexts: {
+                react: { componentStack: errorInfo.componentStack },
+            },
+            tags: { boundary: this.props.name ?? 'ErrorBoundary' },
+        })
     }
 
     render() {
