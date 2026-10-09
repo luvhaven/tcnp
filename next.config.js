@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 
+const { withSentryConfig } = require('@sentry/nextjs/config')
+
 const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
   ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
   : '*.supabase.co'
@@ -115,6 +117,14 @@ const withPWA = require("@ducanh2912/next-pwa").default({
     disableDevLogs: true,
     runtimeCaching: [
       {
+        // The Sentry tunnel must always reach the network. Workbox only
+        // intercepts GET requests so the POSTed error reports already bypass
+        // the service worker, but declaring it first makes that explicit and
+        // survives any future reordering of these rules.
+        urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.startsWith('/monitoring'),
+        handler: "NetworkOnly",
+      },
+      {
         urlPattern: ({ url }) => url.origin === self.location.origin && !url.pathname.startsWith('/_next/static/') && !/\.(?:png|svg|ico|woff2?)$/.test(url.pathname),
         handler: "NetworkOnly",
       },
@@ -132,4 +142,39 @@ const withPWA = require("@ducanh2912/next-pwa").default({
   },
 });
 
-module.exports = withPWA(nextConfig);
+const sentryBuildOptions = {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+
+  // Only log upload details in CI, where the output is actually read.
+  silent: !process.env.CI,
+
+  // Route browser events through `<app>/monitoring` on our own origin instead
+  // of straight to ingest.sentry.io. Two reasons this is required here:
+  //  1. The Content-Security-Policy above restricts `connect-src` to self and
+  //     Supabase. A direct ingest call would be blocked in production.
+  //  2. Ad/tracker blockers drop requests to sentry.io, which would silently
+  //     hide errors from exactly the users most likely to be running one.
+  // NOTE: `monitoring` is excluded from the proxy.ts matcher so reports from
+  // logged-out users are not redirected to /login.
+  tunnelRoute: '/monitoring',
+
+  // Upload source maps for code pulled in by the client bundle beyond the
+  // default set, so minified stack traces resolve to real file:line.
+  widenClientFileUpload: true,
+
+  sourcemaps: {
+    // Source maps are uploaded to Sentry, then deleted from the deployed
+    // output so application source is not publicly downloadable.
+    deleteSourcemapsAfterUpload: true,
+  },
+
+  // Strips Sentry's own debug logging from the production bundle.
+  disableLogger: true,
+
+  // We are not using Sentry Cron monitors for Vercel cron jobs.
+  automaticVercelMonitors: false,
+};
+
+module.exports = withSentryConfig(withPWA(nextConfig), sentryBuildOptions);

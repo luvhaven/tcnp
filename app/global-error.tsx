@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import * as Sentry from '@sentry/nextjs'
 import { Button } from '@/components/ui/button'
 import { AlertTriangle } from 'lucide-react'
 
@@ -13,6 +14,9 @@ export default function GlobalError({
 }) {
     useEffect(() => {
         console.error('Global Error:', error)
+        // The root layout itself failed. This is the most severe class of
+        // crash and the one users can least describe, so always report it.
+        Sentry.captureException(error, { tags: { boundary: 'global-error' } })
     }, [error])
 
     return (

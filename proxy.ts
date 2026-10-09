@@ -50,6 +50,9 @@ export const config = {
   matcher: [
     // API handlers authenticate themselves and must return JSON status codes,
     // never HTML login redirects. Static/PWA assets must also bypass routing.
-    '/((?!api(?:/|$)|_next/static|_next/image|favicon.ico|manifest.json|manifest.webmanifest|sw.js|sw.js.map|workbox-|worker-|fallback-|swe-worker|robots.txt|sitemap.xml|offline.html|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|js|css|json|webmanifest|woff|woff2|ttf|eot|mp3|wav|ogg)$).*)',
+    // `monitoring` is the Sentry tunnel (see next.config.js tunnelRoute): error
+    // reports are posted by logged-out users too, and redirecting them to
+    // /login would drop exactly the login-page crashes we need to see.
+    '/((?!api(?:/|$)|monitoring(?:/|$)|_next/static|_next/image|favicon.ico|manifest.json|manifest.webmanifest|sw.js|sw.js.map|workbox-|worker-|fallback-|swe-worker|robots.txt|sitemap.xml|offline.html|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|js|css|json|webmanifest|woff|woff2|ttf|eot|mp3|wav|ogg)$).*)',
   ],
 }

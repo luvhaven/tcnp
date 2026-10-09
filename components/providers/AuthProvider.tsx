@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef } from 'react'
+import * as Sentry from '@sentry/nextjs'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
 
@@ -20,6 +21,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 if (event === 'SIGNED_OUT') {
                     // Clear any client-side cache
                     isAuthenticating.current = false
+                    // Stop attributing errors to the officer who just left;
+                    // on shared devices this would blame the wrong person.
+                    Sentry.setUser(null)
                     router.push('/login')
                 } else if (event === 'TOKEN_REFRESHED') {
                     // Session was refreshed successfully
