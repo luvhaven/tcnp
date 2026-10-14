@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
 import { isPermanentOwnerEmail } from '@/lib/platform-owner'
+import { isTransientNetworkError } from '@/lib/supabase/error-utils'
 import * as Sentry from '@sentry/nextjs'
 import { supabaseErrorCodeTag } from '@/lib/monitoring/sentry-shared'
 
@@ -39,6 +40,11 @@ export function useCurrentUser() {
         queryFn: async () => {
             const { data: { user }, error: authError } = await supabase.auth.getUser()
             if (authError) {
+                // A dropped connection says nothing about who the user is.
+                // Throwing hands it to React Query to retry; returning null
+                // would cache "signed out" for the full staleTime and strip
+                // the user's role across every page that reads this hook.
+                if (isTransientNetworkError(authError)) throw authError
                 Sentry.captureException(authError, {
                     tags: { feature: 'current-user', profile_stage: 'auth_user' },
                 })
@@ -53,6 +59,10 @@ export function useCurrentUser() {
                 .single()
 
             if (error) {
+                // Same reasoning as the auth failure above: retry transport
+                // failures rather than caching a profile-less user.
+                if (isTransientNetworkError(error)) throw error
+
                 const isPermanentOwner = isPermanentOwnerEmail(user.email)
                 Sentry.captureException(error, {
                     level: isPermanentOwner ? 'warning' : 'error',
@@ -117,6 +127,12 @@ export function useCurrentUser() {
         },
         staleTime: 5 * 60 * 1000,   // 5 minutes — profile changes are not realtime-critical
         gcTime: 10 * 60 * 1000,     // keep in cache for 10 minutes after last subscriber
-        retry: 1,
+        // retry/retryDelay come from QueryProvider: transport failures are
+        // retried with backoff, everything else fails on the first answer.
+        meta: {
+            sentry: {
+                tags: { feature: 'current-user', profile_stage: 'transient_read' },
+            },
+        },
     })
 }
