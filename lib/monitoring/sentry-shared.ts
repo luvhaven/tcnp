@@ -225,3 +225,20 @@ export function retitleSerializedException(event: SerializableEvent): void {
 
   exception.value = message
 }
+
+/**
+ * Tag value for a Supabase error code.
+ *
+ * Sentry rejects empty tag values outright — the event arrives with the tag
+ * marked `<invalid>` and a "Discarded invalid value / expected a non-empty
+ * value" processing error, so the code is lost exactly when it is needed.
+ * PostgREST sends `code: ''` for transport-level failures (a dropped
+ * connection has no Postgres error code), and `??` does not catch an empty
+ * string because it is not nullish. Hence `||`, via one helper, so no call
+ * site has to remember the distinction.
+ */
+export function supabaseErrorCodeTag(code: unknown): string {
+  return typeof code === 'string' && code.trim() !== '' ? code
+    : typeof code === 'number' ? String(code)
+    : 'unknown'
+}

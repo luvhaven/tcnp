@@ -10,7 +10,7 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/monitoring/sentry-sha
 }).outputText, { exports: mod.exports, module: mod, process, RegExp })
 
 const { redactUrl, isNextNavigationSignal, DATA_COLLECTION, SECRET_PARAMS, resolveDsn, FALLBACK_DSN,
-  matchesIgnoredError, retitleSerializedException } = mod.exports
+  matchesIgnoredError, retitleSerializedException, supabaseErrorCodeTag } = mod.exports
 
 // request-timeout.ts has no imports, so it transpiles and runs standalone too.
 const timeoutMod = { exports: {} }
@@ -198,4 +198,20 @@ test('noise the ignore list names is matched once the real message is visible', 
     matchesIgnoredError('TCNP_SUPABASE_REQUEST_TIMEOUT: Supabase did not respond within 15000ms.'),
     false,
   )
+})
+
+test('an empty Supabase error code does not silently destroy the tag', () => {
+  // PostgREST sends code: '' for transport failures, and Sentry rejects empty
+  // tag values — the event arrives tagged <invalid> with a "expected a
+  // non-empty value" processing error, losing the code exactly when a
+  // transport failure is what you are trying to identify. `??` does not catch
+  // this because '' is not nullish.
+  assert.equal(supabaseErrorCodeTag(''), 'unknown')
+  assert.equal(supabaseErrorCodeTag('   '), 'unknown')
+  assert.equal(supabaseErrorCodeTag(undefined), 'unknown')
+  assert.equal(supabaseErrorCodeTag(null), 'unknown')
+  // A real code must survive untouched, including numeric ones.
+  assert.equal(supabaseErrorCodeTag('42501'), '42501')
+  assert.equal(supabaseErrorCodeTag('PGRST116'), 'PGRST116')
+  assert.equal(supabaseErrorCodeTag(500), '500')
 })

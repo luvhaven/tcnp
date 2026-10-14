@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
 import { isPermanentOwnerEmail } from '@/lib/platform-owner'
 import * as Sentry from '@sentry/nextjs'
+import { supabaseErrorCodeTag } from '@/lib/monitoring/sentry-shared'
 
 export type CurrentUser = {
     id: string
@@ -58,7 +59,7 @@ export function useCurrentUser() {
                     tags: {
                         feature: 'current-user',
                         profile_stage: 'profile_read',
-                        supabase_error_code: error.code ?? 'unknown',
+                        supabase_error_code: supabaseErrorCodeTag(error.code),
                     },
                 })
 
