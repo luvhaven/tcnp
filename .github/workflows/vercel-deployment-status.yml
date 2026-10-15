@@ -1,0 +1,84 @@
+# Reports the outcome of a Vercel deployment into GitHub, where the whole team
+# can see it without a Vercel account.
+#
+# Vercel's GitHub integration already posts deployment_status events to this
+# repository, so nothing here needs a Vercel token or any secret: the outcome
+# arrives as the webhook payload.
+#
+# IMPORTANT: deployment_status workflows only ever run from the version of this
+# file on the DEFAULT BRANCH. Editing it on a feature branch changes nothing
+# until that branch is merged — including while testing this workflow itself.
+name: Vercel deployment status
+
+on:
+  deployment_status:
+
+permissions:
+  contents: write      # post a commit comment
+  deployments: read
+
+jobs:
+  report:
+    # pending / queued / in_progress fire too; only the terminal states matter.
+    if: >-
+      github.event.deployment_status.state == 'success' ||
+      github.event.deployment_status.state == 'failure' ||
+      github.event.deployment_status.state == 'error'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report deployment outcome
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATE: ${{ github.event.deployment_status.state }}
+          ENVIRONMENT: ${{ github.event.deployment.environment }}
+          SHA: ${{ github.event.deployment.sha }}
+          # target_url is the deployment itself; log_url is Vercel's build log.
+          TARGET_URL: ${{ github.event.deployment_status.target_url }}
+          LOG_URL: ${{ github.event.deployment_status.log_url }}
+          DESCRIPTION: ${{ github.event.deployment_status.description }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [ "$STATE" = "success" ]; then
+            ICON="✅"; HEADLINE="Deployment succeeded"
+          else
+            ICON="❌"; HEADLINE="Deployment FAILED"
+          fi
+
+          SHORT_SHA="$(printf '%s' "$SHA" | cut -c1-7)"
+
+          {
+            echo "## $ICON $HEADLINE"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Environment | \`${ENVIRONMENT:-unknown}\` |"
+            echo "| Commit | \`${SHORT_SHA}\` |"
+            echo "| State | \`${STATE}\` |"
+            if [ -n "${TARGET_URL:-}" ]; then echo "| Deployment | ${TARGET_URL} |"; fi
+            if [ -n "${LOG_URL:-}" ]; then echo "| Build log | ${LOG_URL} |"; fi
+            if [ -n "${DESCRIPTION:-}" ]; then echo; echo "> ${DESCRIPTION}"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # A commit comment notifies the commit author and anyone watching the
+          # repo — this is what reaches people who cannot open Vercel.
+          # Successful PREVIEW deploys are skipped: every push would comment,
+          # and the noise would train everyone to ignore these.
+          if [ "$STATE" != "success" ] || [ "$ENVIRONMENT" = "Production" ]; then
+            BODY="$ICON **$HEADLINE** — \`${ENVIRONMENT:-unknown}\`"
+            if [ -n "${TARGET_URL:-}" ]; then BODY="$BODY"$'\n\n'"Deployment: ${TARGET_URL}"; fi
+            if [ -n "${LOG_URL:-}" ]; then BODY="$BODY"$'\n'"Build log: ${LOG_URL}"; fi
+            if [ -n "${DESCRIPTION:-}" ]; then BODY="$BODY"$'\n\n'"> ${DESCRIPTION}"; fi
+
+            gh api "repos/${REPO}/commits/${SHA}/comments" \
+              -f body="$BODY" --silent || echo "::warning::could not post commit comment"
+          fi
+
+          # Failing the job turns the run red and triggers GitHub's own
+          # "workflow failed" email, which is the notification you get without
+          # configuring anything.
+          if [ "$STATE" != "success" ]; then
+            echo "::error::Vercel $STATE for ${ENVIRONMENT:-unknown} at ${SHORT_SHA}. Build log: ${LOG_URL:-n/a}"
+            exit 1
+          fi
