@@ -5,6 +5,7 @@ import { isSupabaseRequestTimeout } from '@/lib/supabase/request-timeout'
 import { checkRateLimit } from '@/lib/security/rate-limit'
 import { isPermanentOwnerEmail } from '@/lib/platform-owner'
 import * as Sentry from '@sentry/nextjs'
+import { supabaseErrorCodeTag } from '@/lib/monitoring/sentry-shared'
 
 const loginSchema = z.object({
   email: z.string().trim().email().transform((value) => value.toLowerCase()),
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
         tags: {
           feature: 'auth',
           auth_stage: 'profile_read',
-          supabase_error_code: profileError.code ?? 'unknown',
+          supabase_error_code: supabaseErrorCodeTag(profileError.code),
         },
       })
 
@@ -75,7 +76,7 @@ export async function POST(request: Request) {
       // migration state are broken; the dashboard has the same narrow fallback.
       if (isPermanentOwner) {
         console.error('[auth/login] Permanent owner profile read failed', {
-          code: profileError.code ?? 'unknown',
+          code: supabaseErrorCodeTag(profileError.code),
         })
         return NextResponse.json({ ok: true })
       }
