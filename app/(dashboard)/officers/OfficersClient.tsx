@@ -20,6 +20,8 @@ import { motion, AnimatePresence } from "framer-motion"
 import { OfficerProfileDialog } from "@/components/officers/OfficerProfileDialog"
 import { isPlatformAdministrator } from "@/lib/utils"
 import { isPermanentOwnerEmail } from "@/lib/platform-owner"
+import { useSearchParams } from "next/navigation"
+import { PasswordResetRequestsTab } from "@/components/officers/PasswordResetRequestsTab"
 
 type Officer = {
   id: string
@@ -202,6 +204,30 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
   })
 
   const canManageOfficers = Boolean(currentUser && isPlatformAdministrator(currentUser.role))
+
+  const searchParams = useSearchParams()
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'directory')
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    if (tabParam && ['directory', 'manage', 'pending', 'resets'].includes(tabParam)) {
+      setActiveTab(tabParam)
+    }
+  }, [searchParams])
+
+  const { data: resetRequests = [] } = useQuery<any[]>({
+    queryKey: ['admin-password-resets'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/password-resets')
+      if (!res.ok) return []
+      const data = await res.json()
+      return data.requests || []
+    },
+    enabled: canManageOfficers,
+    staleTime: 10_000,
+  })
+
+  const pendingResetsCount = resetRequests.filter(r => r.status === 'pending').length
 
   const { data: officers = [] } = useQuery({
     queryKey: ['officers', 'directory'],
@@ -781,7 +807,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
         ))}
       </div>
 
-      <Tabs defaultValue="directory" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <TabsList>
             <TabsTrigger value="directory">Directory</TabsTrigger>
@@ -791,6 +817,14 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
               {filteredOfficers.filter(o => o.activation_status === 'pending').length > 0 && (
                 <Badge variant="destructive" className="ml-2 px-1 text-[10px]">
                   {filteredOfficers.filter(o => o.activation_status === 'pending').length}
+                </Badge>
+              )}
+            </TabsTrigger>}
+            {canManageOfficers && <TabsTrigger value="resets">
+              Password Resets
+              {pendingResetsCount > 0 && (
+                <Badge variant="destructive" className="ml-2 px-1 text-[10px] bg-amber-500 text-black">
+                  {pendingResetsCount}
                 </Badge>
               )}
             </TabsTrigger>}
@@ -1446,6 +1480,11 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                 </AnimatePresence>
               </motion.div>
             )}
+          </TabsContent>
+        )}
+        {canManageOfficers && (
+          <TabsContent value="resets" className="space-y-4">
+            <PasswordResetRequestsTab />
           </TabsContent>
         )}
       </Tabs>

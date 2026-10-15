@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { isPlatformAdministrator } from '@/lib/utils'
@@ -59,8 +60,10 @@ export default async function OfficersPage() {
   }))
 
   return (
-    <OfficersClient
-      initialOfficers={enrichedInitialOfficers}
-    />
+    <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading officers directory…</div>}>
+      <OfficersClient
+        initialOfficers={enrichedInitialOfficers}
+      />
+    </Suspense>
   )
 }

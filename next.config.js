@@ -146,6 +146,7 @@ const sentryBuildOptions = {
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
   authToken: process.env.SENTRY_AUTH_TOKEN,
+  sentryUrl: process.env.SENTRY_URL,
 
   // Only log upload details in CI, where the output is actually read.
   silent: !process.env.CI,

@@ -11,7 +11,7 @@ and no overhead, so local development is unaffected.
 
 ## One-time setup
 
-Two people are involved: whoever creates the Sentry project collects four
+Two people are involved: whoever creates the Sentry project collects five
 values, and whoever controls the deployment environment variables (the CTO)
 pastes them into Vercel. Only the last step needs Vercel access.
 
@@ -26,14 +26,20 @@ pastes them into Vercel. Only the last step needs Vercel access.
    adequate protection.
 3. Create a project: platform **Next.js**, name it `tcnp`.
 
-### 2. Collect the four values
+### 2. Collect the five values
 
 | Variable                 | Where to find it in Sentry |
 | ------------------------ | -------------------------- |
 | `NEXT_PUBLIC_SENTRY_DSN` | **Settings → Projects → tcnp → Client Keys (DSN)**. Copy the full DSN string. |
-| `SENTRY_ORG`             | `tcnp` — the organization **slug**, not its display name. Confirm under **Settings → General Settings → Organization Slug**, or read it off any Sentry URL (`tcnp.sentry.io`). |
+| `SENTRY_ORG`             | The organization **slug** that owns the project, not its display name. Confirm under **Settings → General Settings → Organization Slug**. |
 | `SENTRY_PROJECT`         | `tcnp` — the project **slug**. Shown under **Settings → Projects → tcnp → Project Settings**. Org and project slugs live in separate namespaces, so both being `tcnp` is fine. |
 | `SENTRY_AUTH_TOKEN`      | **Settings → Developer Settings → Organization Tokens → Create New Token** (prefix `sntrys_`). **Shown exactly once** — copy it immediately or create another. |
+| `SENTRY_URL`             | `https://de.sentry.io` for an EU-region organization. This is the API host used to create releases and upload source maps. |
+
+`SENTRY_ORG` must match the organization that owns both the project and the
+auth token. Do not assume it matches the repository or project name. For
+example, if the token belongs to `protocol-b7`, use `SENTRY_ORG=protocol-b7`
+even when the project slug is `tcnp`.
 
 Use an **organization** token, not a personal one. A personal token is bound
 to one person's account: when they leave or their access is revoked, source
@@ -52,7 +58,7 @@ confirms the EU region. A US DSN has `.us.` or no region segment at all.
 ### 3. Verify the values before handing them over
 
 Do this locally so the CTO's step is pure copy-paste and cannot fail silently.
-Put all four in `.env.local`, then:
+Put all five in `.env.local`, then:
 
 ```bash
 npm run build && SENTRY_DEBUG=true npm start
@@ -66,7 +72,7 @@ the two slugs are right too.
 `.env.local` is gitignored. Never commit the auth token — it can write to your
 Sentry organization.
 
-### 4. Hand the four variables to whoever controls Vercel
+### 4. Hand the five variables to whoever controls Vercel
 
 They add them under **Project → Settings → Environment Variables**, scoped to
 **Production** and **Preview**, then trigger a redeploy. Environment variables

@@ -35,6 +35,7 @@ export interface AppNotification {
  */
 export function resolveNotificationRoute(n: AppNotification): string | null {
   const kind = n.metadata?.kind
+  if (kind === 'password_reset_request') return '/officers?tab=resets'
   if (kind === 'food_ready') return '/welfare'
   if (kind === 'birthday_0700' || n.type === 'birthday_reminder') return '/welfare'
   if (kind === 'mission_request') return '/dashboard'
@@ -62,6 +63,7 @@ const NOTIFICATION_PAGE_SIZE = 10
  */
 function resolveChimeKey(n: AppNotification): string {
   const kind = n.metadata?.kind
+  if (kind === 'password_reset_request') return 'warning'
   if (kind === 'food_ready' || kind === 'mission_request' || kind === 'mention') return kind
   if (kind === 'birthday_0700' || n.type === 'birthday_reminder') return 'success'
   if (n.type === 'announcement' || n.type === 'reminder') return 'info'

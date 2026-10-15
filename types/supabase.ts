@@ -2154,6 +2154,88 @@ export type Database = {
         }
         Relationships: []
       }
+      password_reset_requests: {
+        Row: {
+          id: string
+          user_id: string
+          email: string
+          status: string
+          reset_token: string
+          requested_at: string
+          approved_at: string | null
+          approved_by: string | null
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
+          completed_at: string | null
+          expires_at: string
+          ip_address: string | null
+          user_agent: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          email: string
+          status?: string
+          reset_token: string
+          requested_at?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          completed_at?: string | null
+          expires_at?: string
+          ip_address?: string | null
+          user_agent?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          email?: string
+          status?: string
+          reset_token?: string
+          requested_at?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          completed_at?: string | null
+          expires_at?: string
+          ip_address?: string | null
+          user_agent?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "password_reset_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "password_reset_requests_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "password_reset_requests_rejected_by_fkey"
+            columns: ["rejected_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       papa_accommodations: {
         Row: {
           check_in: string | null

@@ -502,3 +502,32 @@ export interface TriggerCallSignInput {
   latitude?: number;
   longitude?: number;
 }
+
+export interface PasswordResetRequest {
+  id: string;
+  user_id: string;
+  email: string;
+  status: 'pending' | 'approved' | 'rejected' | 'completed' | 'expired';
+  reset_token: string;
+  requested_at: string;
+  approved_at: string | null;
+  approved_by: string | null;
+  rejected_at: string | null;
+  rejected_by: string | null;
+  rejection_reason: string | null;
+  completed_at: string | null;
+  expires_at: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+  updated_at: string;
+  user?: {
+    id: string;
+    full_name: string;
+    email: string;
+    role: string;
+    unit: string | null;
+    oscar: string | null;
+    photo_url: string | null;
+  };
+}
