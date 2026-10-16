@@ -14,7 +14,14 @@ export class NotificationService {
     private permission: NotificationPermission = 'default'
 
     private constructor() {
-        if (typeof window !== 'undefined') {
+        // `window` existing does not imply `Notification` does. iOS Safari
+        // exposes the Notification API only to installed PWAs, so in a normal
+        // tab this reads an undeclared global and throws a ReferenceError.
+        // Because the singleton below is built at module scope, that throw
+        // happens on IMPORT — taking down every route that pulls this in
+        // (chat, my-operations, my-assignments, the permission banner) via
+        // the error boundary, long before anything renders.
+        if (typeof window !== 'undefined' && 'Notification' in window) {
             this.permission = Notification.permission
         }
     }
