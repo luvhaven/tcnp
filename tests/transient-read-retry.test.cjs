@@ -10,7 +10,7 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/supabase/error-utils.
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, { exports: mod.exports, module: mod, console, JSON, Object, Error, Promise, setTimeout, Math })
 
-const { isTransientNetworkError, retryTransientRead } = mod.exports
+const { isTransientNetworkError, retryTransientRead, isMissingSessionError } = mod.exports
 
 test('the transport failures seen in production are retryable', () => {
   // TCNP-2: Supabase reads failing from Nigerian mobile networks. Each engine
@@ -96,4 +96,34 @@ test('a read that works first time is not delayed at all', async () => {
   const delays = []
   assert.equal(await retryTransientRead(async () => 'ok', { wait: recordingWait(delays) }), 'ok')
   assert.deepEqual(delays, [])
+})
+
+test('"nobody is signed in" is recognised however Supabase phrases it', () => {
+  // getUser() answers with this whenever there is no access token, so every
+  // logged-out visitor on a route reading the current user produced one.
+  class AuthSessionMissingError extends Error {
+    constructor() { super('Auth session missing!'); this.name = 'AuthSessionMissingError' }
+  }
+  assert.equal(isMissingSessionError(new AuthSessionMissingError()), true)
+  // Matched by name even if the message is localised or reworded upstream.
+  assert.equal(isMissingSessionError({ name: 'AuthSessionMissingError', message: '' }), true)
+  // And by message even if the class is lost crossing a serialisation boundary.
+  assert.equal(isMissingSessionError({ message: 'Auth session missing!' }), true)
+})
+
+test('real auth failures are never mistaken for a missing session', () => {
+  // The boundary that matters: filtering too broadly here would hide genuine
+  // login breakage behind a silence that looks like health.
+  assert.equal(isMissingSessionError({ name: 'AuthApiError', message: 'Invalid login credentials' }), false)
+  assert.equal(isMissingSessionError({ name: 'AuthApiError', message: 'JWT expired' }), false)
+  assert.equal(isMissingSessionError({ name: 'AuthApiError', message: 'Token has invalid claims' }), false)
+  assert.equal(isMissingSessionError({ name: 'AuthRetryableFetchError', message: 'Load failed' }), false)
+  assert.equal(isMissingSessionError(null), false)
+  assert.equal(isMissingSessionError({}), false)
+})
+
+test('a missing session is not a transport failure either', () => {
+  // It must not be retried: asking again without a session returns the same
+  // answer, three times slower.
+  assert.equal(isTransientNetworkError({ name: 'AuthSessionMissingError', message: 'Auth session missing!' }), false)
 })

@@ -215,3 +215,13 @@ test('an empty Supabase error code does not silently destroy the tag', () => {
   assert.equal(supabaseErrorCodeTag('PGRST116'), 'PGRST116')
   assert.equal(supabaseErrorCodeTag(500), '500')
 })
+
+test('a logged-out visitor does not reach the issue feed', () => {
+  // Supabase reports "no session" through the same channel as real failures,
+  // so without this every logged-out page view filed a High priority issue.
+  assert.equal(matchesIgnoredError('Auth session missing!'), true)
+  // Anything that is actually broken still gets through.
+  assert.equal(matchesIgnoredError('Invalid login credentials'), false)
+  assert.equal(matchesIgnoredError('JWT expired'), false)
+  assert.equal(matchesIgnoredError('Failed to fetch (supabase.co)'), false)
+})
