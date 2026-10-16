@@ -115,3 +115,43 @@ export const isTransientNetworkError = (error: unknown): boolean => {
 
   return TRANSPORT_FAILURE_MESSAGES.some((marker) => text.includes(marker))
 }
+
+/** How many times a read whose connection dropped is worth attempting. */
+const TRANSIENT_ATTEMPT_LIMIT = 3
+
+/** 1s, 2s, 4s — capped, so a bad connection cannot stall a page indefinitely. */
+const transientBackoffMs = (attempt: number) => Math.min(1000 * 2 ** attempt, 4000)
+
+const sleep = (ms: number) => new Promise<void>((resolve) => { setTimeout(resolve, ms) })
+
+/**
+ * Run a Supabase read, retrying only failures a retry can fix.
+ *
+ * React Query already does this for queries that go through it. Loaders built
+ * on plain effects do not, so they fail on the first dropped packet — which on
+ * a poor mobile connection means a visible error for something that would have
+ * succeeded a second later.
+ *
+ * Only transport failures are retried; an answered failure (a permission
+ * denial, a missing row) returns the same answer however many times it is
+ * asked, so it is rethrown immediately.
+ *
+ * `wait` is injectable so tests do not sleep.
+ */
+export const retryTransientRead = async <T>(
+  run: () => Promise<T>,
+  options: { attempts?: number; wait?: (ms: number) => Promise<void> } = {}
+): Promise<T> => {
+  const attempts = options.attempts ?? TRANSIENT_ATTEMPT_LIMIT
+  const wait = options.wait ?? sleep
+
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await run()
+    } catch (error) {
+      const exhausted = attempt >= attempts - 1
+      if (exhausted || !isTransientNetworkError(error)) throw error
+      await wait(transientBackoffMs(attempt))
+    }
+  }
+}
