@@ -155,3 +155,21 @@ export const retryTransientRead = async <T>(
     }
   }
 }
+/**
+ * True when Supabase is reporting that nobody is signed in.
+ *
+ * `getUser()` answers with AuthSessionMissingError whenever there is no access
+ * token, so every logged-out visitor on a route that reads the current user
+ * produces one. That is a state, not a failure: there is nothing to fix, no
+ * user is affected, and reporting it buries real auth breakage.
+ *
+ * Kept narrow on purpose. Invalid credentials, an expired or malformed token
+ * and transport failures all say something else and must keep reporting.
+ */
+export const isMissingSessionError = (error: unknown): boolean => {
+  if (typeof error === 'object' && error !== null && 'name' in error
+    && (error as { name?: unknown }).name === 'AuthSessionMissingError') {
+    return true
+  }
+  return normalizeSupabaseError(error).message.toLowerCase().includes('auth session missing')
+}

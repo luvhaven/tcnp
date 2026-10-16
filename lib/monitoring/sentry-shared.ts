@@ -111,6 +111,13 @@ export const IGNORED_ERRORS: (string | RegExp)[] = [
   // Next.js App Router control-flow signals, not failures.
   'NEXT_REDIRECT',
   'NEXT_NOT_FOUND',
+  // Supabase's answer to "who is signed in?" when nobody is. Returned by
+  // getUser() whenever there is no access token, so every logged-out visitor
+  // on a route that reads the current user produces one. A missing session is
+  // a state, not a failure — a genuine auth failure says something else
+  // (invalid credentials, an expired token, a transport error) and still
+  // reports. Also handled explicitly at the call site in useCurrentUser.
+  'Auth session missing',
 ]
 
 /** Third-party script origins whose stack frames we never want to triage. */

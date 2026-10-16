@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
 import { isPermanentOwnerEmail } from '@/lib/platform-owner'
-import { isTransientNetworkError } from '@/lib/supabase/error-utils'
+import { isTransientNetworkError, isMissingSessionError } from '@/lib/supabase/error-utils'
 import * as Sentry from '@sentry/nextjs'
 import { supabaseErrorCodeTag } from '@/lib/monitoring/sentry-shared'
 
@@ -45,6 +45,12 @@ export function useCurrentUser() {
                 // would cache "signed out" for the full staleTime and strip
                 // the user's role across every page that reads this hook.
                 if (isTransientNetworkError(authError)) throw authError
+
+                // Nobody is signed in. That is the honest answer to the
+                // question this hook asks, not something that went wrong, so
+                // report nothing and let consumers render the logged-out view.
+                if (isMissingSessionError(authError)) return null
+
                 Sentry.captureException(authError, {
                     tags: { feature: 'current-user', profile_stage: 'auth_user' },
                 })
