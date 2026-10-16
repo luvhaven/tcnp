@@ -24,6 +24,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { CountUp } from "@/components/ui/count-up"
 import * as Sentry from "@sentry/nextjs"
+import { retryTransientRead } from "@/lib/supabase/error-utils"
 
 // ─── Lazy-loaded charts ────────────────────────────────────────────────────────
 
@@ -228,104 +229,111 @@ export default function DashboardPage() {
     setLoadError(false)
     let stage: DashboardLoadStage = "active_program"
     try {
-      // The program name is contextual. A failure here must not suppress a
-      // user's independently verified assignments or the rest of the page.
-      const { data: programData, error: programError } = await supabase
-        .from("programs")
-        .select(canViewGlobalDashboard ? "id, name" : "id")
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(1)
-
-      if (programError) {
-        setActiveProgram(null)
-        Sentry.captureException(programError, {
-          level: "warning",
-          tags: { feature: "dashboard", dashboard_stage: "active_program" },
-        })
-      } else {
-        setActiveProgram((programData?.[0] as any) ?? null)
-      }
-
-      stage = "auth_user"
-      const { data: { user }, error: authError } = await supabase.auth.getUser()
-      if (authError || !user) throw authError || new Error("Session unavailable")
-
-      // 2. Fetch officer-specific assigned duties
-      if (user) {
-        stage = "officer_assignments"
-        const { data: myDORows, error: assignmentError } = await (supabase as any)
-          .from("journey_duty_officers")
-          .select("journey_id, status")
-          .eq("user_id", user.id)
-
-        if (assignmentError) throw assignmentError
-        const activeDutyRows = (myDORows || []).filter((row: any) =>
-          row.status == null || ["pending", "acknowledged"].includes(row.status),
-        )
-        const doIds: string[] = activeDutyRows.map((row: any) => row.journey_id).filter(Boolean)
-        const rejectedJourneyIds: string[] = (myDORows || [])
-          .filter((row: any) => row.status === "rejected")
-          .map((row: any) => row.journey_id)
-          .filter(Boolean)
-        const orParts = [`assigned_duty_officer_id.eq.${user.id}`, `assigned_do_id.eq.${user.id}`]
-        if (doIds.length > 0) orParts.push(`id.in.(${doIds.join(",")})`)
-
-        stage = "assigned_journeys"
-        let myJourneysQuery = (supabase as any)
-          .from("journeys")
-          .select(DASHBOARD_JOURNEY_SELECT, { count: "exact" })
-          .not("status", "in", "(completed,cancelled)")
-          .or("is_deleted.is.null,is_deleted.eq.false")
-          .or(orParts.join(","))
-        if (rejectedJourneyIds.length > 0) {
-          myJourneysQuery = myJourneysQuery.not("id", "in", `(${rejectedJourneyIds.join(",")})`)
-        }
-        const { data: myJourneysList, count: myCount, error: journeyError } = await myJourneysQuery
-          .order("etd", { ascending: true, nullsFirst: false })
-          .limit(5)
-
-        if (journeyError) throw journeyError
-        setMyScheduledJourneys(myJourneysList || [])
-        setMyAssignmentsCount(myCount || 0)
-        setMyAssignment(myJourneysList?.[0] ?? null)
-      }
-
-      // 3. Only Command/Admin receive cross-program metrics or journey details.
-      if (canViewGlobalDashboard) {
-        stage = "global_metrics"
-        const [papasRes, cheetahsRes, journeysRes, incidentsRes] = await Promise.all([
-          supabase.from("papas").select("id", { count: "exact", head: true }),
-          supabase.from("cheetahs").select("id", { count: "exact", head: true }),
-          (supabase as any).from("journeys").select("id", { count: "exact", head: true })
-            .not("status", "in", "(completed,cancelled)")
-            .or("is_deleted.is.null,is_deleted.eq.false"),
-          supabase.from("incidents").select("id", { count: "exact", head: true }).eq("status", "open"),
-        ])
-
-        for (const result of [papasRes, cheetahsRes, journeysRes, incidentsRes]) {
-          if (result.error) throw result.error
-          if (result.count === null) throw new Error("Metric unavailable")
-        }
-        setStats({
-          totalPapas: papasRes.count || 0,
-          totalCheetahs: cheetahsRes.count || 0,
-          activeJourneys: journeysRes.count || 0,
-          incidents: incidentsRes.count || 0,
-        })
-
-        stage = "recent_journeys"
-        const { data: journeys, error: recentError } = await (supabase as any)
-          .from("journeys")
-          .select(DASHBOARD_JOURNEY_SELECT)
-          .or("is_deleted.is.null,is_deleted.eq.false")
+      // Plain-effect loader: React Query never sees these reads, so without
+      // this a single dropped packet becomes a visible error for something
+      // that would have succeeded a second later. Transport failures only —
+      // an answered failure is rethrown on the first attempt.
+      await retryTransientRead(async () => {
+        stage = "active_program"
+        // The program name is contextual. A failure here must not suppress a
+        // user's independently verified assignments or the rest of the page.
+        const { data: programData, error: programError } = await supabase
+          .from("programs")
+          .select(canViewGlobalDashboard ? "id, name" : "id")
+          .eq("status", "active")
           .order("created_at", { ascending: false })
-          .limit(5)
+          .limit(1)
 
-        if (recentError) throw recentError
-        setRecentJourneys(journeys || [])
-      }
-      setUpdatedAt(new Date())
+        if (programError) {
+          setActiveProgram(null)
+          Sentry.captureException(programError, {
+            level: "warning",
+            tags: { feature: "dashboard", dashboard_stage: "active_program" },
+          })
+        } else {
+          setActiveProgram((programData?.[0] as any) ?? null)
+        }
+
+        stage = "auth_user"
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        if (authError || !user) throw authError || new Error("Session unavailable")
+
+        // 2. Fetch officer-specific assigned duties
+        if (user) {
+          stage = "officer_assignments"
+          const { data: myDORows, error: assignmentError } = await (supabase as any)
+            .from("journey_duty_officers")
+            .select("journey_id, status")
+            .eq("user_id", user.id)
+
+          if (assignmentError) throw assignmentError
+          const activeDutyRows = (myDORows || []).filter((row: any) =>
+            row.status == null || ["pending", "acknowledged"].includes(row.status),
+          )
+          const doIds: string[] = activeDutyRows.map((row: any) => row.journey_id).filter(Boolean)
+          const rejectedJourneyIds: string[] = (myDORows || [])
+            .filter((row: any) => row.status === "rejected")
+            .map((row: any) => row.journey_id)
+            .filter(Boolean)
+          const orParts = [`assigned_duty_officer_id.eq.${user.id}`, `assigned_do_id.eq.${user.id}`]
+          if (doIds.length > 0) orParts.push(`id.in.(${doIds.join(",")})`)
+
+          stage = "assigned_journeys"
+          let myJourneysQuery = (supabase as any)
+            .from("journeys")
+            .select(DASHBOARD_JOURNEY_SELECT, { count: "exact" })
+            .not("status", "in", "(completed,cancelled)")
+            .or("is_deleted.is.null,is_deleted.eq.false")
+            .or(orParts.join(","))
+          if (rejectedJourneyIds.length > 0) {
+            myJourneysQuery = myJourneysQuery.not("id", "in", `(${rejectedJourneyIds.join(",")})`)
+          }
+          const { data: myJourneysList, count: myCount, error: journeyError } = await myJourneysQuery
+            .order("etd", { ascending: true, nullsFirst: false })
+            .limit(5)
+
+          if (journeyError) throw journeyError
+          setMyScheduledJourneys(myJourneysList || [])
+          setMyAssignmentsCount(myCount || 0)
+          setMyAssignment(myJourneysList?.[0] ?? null)
+        }
+
+        // 3. Only Command/Admin receive cross-program metrics or journey details.
+        if (canViewGlobalDashboard) {
+          stage = "global_metrics"
+          const [papasRes, cheetahsRes, journeysRes, incidentsRes] = await Promise.all([
+            supabase.from("papas").select("id", { count: "exact", head: true }),
+            supabase.from("cheetahs").select("id", { count: "exact", head: true }),
+            (supabase as any).from("journeys").select("id", { count: "exact", head: true })
+              .not("status", "in", "(completed,cancelled)")
+              .or("is_deleted.is.null,is_deleted.eq.false"),
+            supabase.from("incidents").select("id", { count: "exact", head: true }).eq("status", "open"),
+          ])
+
+          for (const result of [papasRes, cheetahsRes, journeysRes, incidentsRes]) {
+            if (result.error) throw result.error
+            if (result.count === null) throw new Error("Metric unavailable")
+          }
+          setStats({
+            totalPapas: papasRes.count || 0,
+            totalCheetahs: cheetahsRes.count || 0,
+            activeJourneys: journeysRes.count || 0,
+            incidents: incidentsRes.count || 0,
+          })
+
+          stage = "recent_journeys"
+          const { data: journeys, error: recentError } = await (supabase as any)
+            .from("journeys")
+            .select(DASHBOARD_JOURNEY_SELECT)
+            .or("is_deleted.is.null,is_deleted.eq.false")
+            .order("created_at", { ascending: false })
+            .limit(5)
+
+          if (recentError) throw recentError
+          setRecentJourneys(journeys || [])
+        }
+        setUpdatedAt(new Date())
+      })
     } catch (err) {
       setLoadError(true)
       console.error("Dashboard load failed at stage:", stage, err)
