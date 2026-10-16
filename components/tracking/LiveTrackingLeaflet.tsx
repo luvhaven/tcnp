@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
+import { detachTileLayer } from '@/lib/maps/tile-layer-detach'
 import 'leaflet/dist/leaflet.css'
 import { Layers, Locate, Maximize, Minimize, WifiOff } from 'lucide-react'
 
@@ -199,10 +200,10 @@ export default function LiveTrackingLeaflet({
 
     if (tileTimeoutRef.current) clearTimeout(tileTimeoutRef.current)
     if (baseLayerRef.current) {
-      try {
-        baseLayerRef.current.off()
-        baseLayerRef.current.remove()
-      } catch { /* ignore */ }
+      // Not removed inline: a zoom animation in flight has already queued
+      // Leaflet's _updateLevels for the next frame, and detaching first makes
+      // that frame dereference a null map. See lib/maps/tile-layer-detach.ts.
+      detachTileLayer(map, baseLayerRef.current)
     }
 
     tileErrorCountRef.current = 0
