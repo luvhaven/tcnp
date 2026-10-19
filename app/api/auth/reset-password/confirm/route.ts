@@ -1,15 +1,15 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { checkRateLimit } from '@/lib/security/rate-limit'
+import { clearResetCookie, hashResetToken, readResetToken } from '@/lib/security/reset-token'
 import * as Sentry from '@sentry/nextjs'
 
 const confirmSchema = z.object({
-  token: z.string().min(16),
   newPassword: z.string().min(6, 'Password must be at least 6 characters').max(4096),
 })
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const rateCheck = checkRateLimit(request, 'auth-reset-confirm', 6, 5 * 60 * 1000)
     if (!rateCheck.success) {
@@ -28,7 +28,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Invalid input.' }, { status: 400 })
     }
 
-    const { token, newPassword } = parsed.data
+    const token = readResetToken(request)
+    if (!token) {
+      return NextResponse.json(
+        { error: 'No reset request was started in this browser. Please submit a new request.' },
+        { status: 400 }
+      )
+    }
+
+    const { newPassword } = parsed.data
     const adminClient = createAdminClient()
     const db = adminClient as any
 
@@ -36,7 +44,7 @@ export async function POST(request: Request) {
     const { data: resetReq, error: reqError } = await db
       .from('password_reset_requests')
       .select('id, user_id, email, status, expires_at')
-      .eq('reset_token', token)
+      .eq('reset_token', hashResetToken(token))
       .maybeSingle()
 
     if (reqError || !resetReq) {
@@ -69,6 +77,16 @@ export async function POST(request: Request) {
       )
     }
 
+    const { data: targetUser } = await db
+      .from('users')
+      .select('is_active, activation_status')
+      .eq('id', resetReq.user_id)
+      .maybeSingle()
+
+    if (!targetUser || targetUser.is_active === false || targetUser.activation_status !== 'active') {
+      return NextResponse.json({ error: 'This account cannot be reset. Please contact Command Center.' }, { status: 403 })
+    }
+
     // 2. Update user's password in Supabase Auth
     const { error: authUpdateError } = await adminClient.auth.admin.updateUserById(resetReq.user_id, {
       password: newPassword,
@@ -77,7 +95,7 @@ export async function POST(request: Request) {
     if (authUpdateError) {
       console.error('[reset-password/confirm] Supabase auth update error:', authUpdateError)
       return NextResponse.json(
-        { error: authUpdateError.message || 'Failed to update password. Please try again.' },
+        { error: 'Failed to update password. Please try again.' },
         { status: 500 }
       )
     }
@@ -121,10 +139,12 @@ export async function POST(request: Request) {
       console.warn('[reset-password/confirm] Failed to log audit event:', auditErr)
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: 'Password reset successfully. You can now sign in with your new password.',
     })
+    clearResetCookie(response)
+    return response
   } catch (err: any) {
     console.error('[reset-password/confirm] Unexpected error:', err)
     Sentry.captureException(err)

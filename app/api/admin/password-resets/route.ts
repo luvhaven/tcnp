@@ -36,7 +36,6 @@ export async function GET(request: Request) {
         user_id,
         email,
         status,
-        reset_token,
         requested_at,
         approved_at,
         approved_by,
@@ -45,6 +44,8 @@ export async function GET(request: Request) {
         rejection_reason,
         completed_at,
         expires_at,
+        ip_address,
+        user_agent,
         created_at,
         user:users!password_reset_requests_user_id_fkey(
           id,

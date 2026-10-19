@@ -1,19 +1,18 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { checkRateLimit } from '@/lib/security/rate-limit'
+import { hashResetToken, readResetToken } from '@/lib/security/reset-token'
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const rateCheck = checkRateLimit(request, 'auth-reset-status', 120, 60 * 1000)
     if (!rateCheck.success) {
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
     }
 
-    const { searchParams } = new URL(request.url)
-    const token = searchParams.get('token')?.trim()
-
-    if (!token || token.length < 16) {
-      return NextResponse.json({ error: 'Invalid or missing reset token.' }, { status: 400 })
+    const token = readResetToken(request)
+    if (!token) {
+      return NextResponse.json({ status: 'none' })
     }
 
     const adminClient = createAdminClient()
@@ -21,12 +20,18 @@ export async function GET(request: Request) {
 
     const { data: resetReq, error } = await db
       .from('password_reset_requests')
-      .select('id, status, email, expires_at, rejection_reason')
-      .eq('reset_token', token)
+      .select('id, status, expires_at, rejection_reason')
+      .eq('reset_token', hashResetToken(token))
       .maybeSingle()
 
-    if (error || !resetReq) {
-      return NextResponse.json({ error: 'Reset request not found or expired.' }, { status: 404 })
+    if (error) {
+      return NextResponse.json({ error: 'Unable to check reset status.' }, { status: 500 })
+    }
+
+    // No recorded request behind this cookie (unknown or inactive email): look exactly like
+    // a request still waiting for an administrator, so status checks reveal nothing.
+    if (!resetReq) {
+      return NextResponse.json({ status: 'pending' })
     }
 
     // Check expiration
@@ -39,15 +44,12 @@ export async function GET(request: Request) {
 
       return NextResponse.json({
         status: 'expired',
-        email: resetReq.email,
         message: 'This reset request has expired. Please submit a new request.'
       })
     }
 
     return NextResponse.json({
       status: resetReq.status,
-      requestId: resetReq.id,
-      email: resetReq.email,
       rejectionReason: resetReq.rejection_reason || undefined
     })
   } catch (err: any) {
