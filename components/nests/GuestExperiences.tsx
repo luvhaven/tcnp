@@ -23,6 +23,7 @@ import { useConfirm } from "@/components/providers/ConfirmProvider"
 import {
   Compass, Plus, Pencil, Trash2, MapPin, UtensilsCrossed, Landmark, ShoppingBag, Trees, Music, Waves, Sparkles, Loader2, Lightbulb,
 } from "lucide-react"
+import { UPLOAD_RULES, validateUploadFiles } from "@/lib/security/upload-validation"
 
 // ─── Singleton client ───
 const supabase = createClient()
@@ -97,6 +98,8 @@ export default function GuestExperiences() {
   const savePlace = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.name.trim()) { toast.error("Name is required"); return }
+    const fileError = validateUploadFiles(form.files, UPLOAD_RULES.image)
+    if (fileError) { toast.error(fileError); return }
     setUploading(true)
     try {
       const imagePaths: string[] = editing ? [...editing.image_paths] : []
