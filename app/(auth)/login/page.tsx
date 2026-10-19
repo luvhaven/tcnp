@@ -180,8 +180,6 @@ export default function LoginPage() {
 
   // Password reset fields
   const [resetEmail, setResetEmail] = useState("");
-  const [resetToken, setResetToken] = useState("");
-  const [resetRequestId, setResetRequestId] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -215,14 +213,12 @@ export default function LoginPage() {
       const raw = sessionStorage.getItem(RESET_STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw);
-      // Valid within 2 hours
-      if (parsed.resetToken && parsed.timestamp && Date.now() - parsed.timestamp < 2 * 3600 * 1000) {
-        setResetRequestId(parsed.requestId || "");
-        setResetToken(parsed.resetToken);
+      // Valid within 2 hours. The reset token itself lives in an httpOnly cookie.
+      if (parsed.timestamp && Date.now() - parsed.timestamp < 2 * 3600 * 1000) {
         setResetEmail(parsed.email || "");
 
         // Check current status
-        fetch(`/api/auth/reset-password/status?token=${encodeURIComponent(parsed.resetToken)}`)
+        fetch("/api/auth/reset-password/status")
           .then((r) => r.json())
           .then((data) => {
             if (data.status === "approved") {
@@ -243,37 +239,16 @@ export default function LoginPage() {
     }
   }, []);
 
-  // ─── Realtime Listener & Polling for Reset Approval ─────────────────────────
+  // ─── Polling for Reset Approval ─────────────────────────────────────────────
 
   useEffect(() => {
-    if (mode !== "waiting_approval" || !resetRequestId || !resetToken) return;
+    if (mode !== "waiting_approval") return;
 
     let cancelled = false;
-    const supabase = createClient();
 
-    // 1. Supabase Realtime Channel
-    let channel: any = null;
-    if (supabase) {
-      channel = supabase
-        .channel(`password-reset:${resetRequestId}`)
-        .on("broadcast", { event: "status_changed" }, (payload: any) => {
-          if (cancelled) return;
-          const status = payload.payload?.status;
-          if (status === "approved") {
-            toast.success("Request approved! Please set your new password.");
-            setMode("reset_password");
-          } else if (status === "rejected") {
-            setRejectionReason(payload.payload?.reason || "");
-            setMode("rejected");
-          }
-        })
-        .subscribe();
-    }
-
-    // 2. Fallback Polling every 2.5s for 100% guarantee
     const pollInterval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/auth/reset-password/status?token=${encodeURIComponent(resetToken)}`);
+        const res = await fetch("/api/auth/reset-password/status");
         if (!res.ok) return;
         const data = await res.json();
         if (cancelled) return;
@@ -284,7 +259,7 @@ export default function LoginPage() {
         } else if (data.status === "rejected") {
           setRejectionReason(data.rejectionReason || "");
           setMode("rejected");
-        } else if (data.status === "expired") {
+        } else if (data.status === "expired" || data.status === "none") {
           setFormError("Your reset request has expired. Please submit a new request.");
           setMode("request_reset");
           sessionStorage.removeItem(RESET_STORAGE_KEY);
@@ -297,11 +272,8 @@ export default function LoginPage() {
     return () => {
       cancelled = true;
       clearInterval(pollInterval);
-      if (channel && supabase) {
-        supabase.removeChannel(channel);
-      }
     };
-  }, [mode, resetRequestId, resetToken]);
+  }, [mode]);
 
   // ─── Handlers ───────────────────────────────────────────────────────────────
 
@@ -433,29 +405,17 @@ export default function LoginPage() {
       }
 
       setResetEmail(targetEmail);
-      setResetRequestId(data.requestId);
-      setResetToken(data.resetToken);
 
-      // Save in sessionStorage
+      // Remember the pending reset across reloads (the token stays in an httpOnly cookie)
       if (typeof window !== "undefined") {
         sessionStorage.setItem(
           RESET_STORAGE_KEY,
-          JSON.stringify({
-            requestId: data.requestId,
-            resetToken: data.resetToken,
-            email: targetEmail,
-            timestamp: Date.now(),
-          })
+          JSON.stringify({ email: targetEmail, timestamp: Date.now() })
         );
       }
 
-      if (data.status === "approved") {
-        toast.success("Request approved! Please create your new password.");
-        setMode("reset_password");
-      } else {
-        toast.info("Reset request sent to administrators.");
-        setMode("waiting_approval");
-      }
+      toast.info(data.message || "Reset request sent to administrators.");
+      setMode("waiting_approval");
     } catch (err: any) {
       setFormError(err.message || "Unable to submit reset request. Please try again.");
     } finally {
@@ -481,10 +441,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/reset-password/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: resetToken,
-          newPassword,
-        }),
+        body: JSON.stringify({ newPassword }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -509,8 +466,6 @@ export default function LoginPage() {
       setPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      setResetToken("");
-      setResetRequestId("");
       setFormNotice("Password reset successfully! Please sign in with your new password.");
       toast.success("Password reset successfully! Please sign in with your new password.");
     } catch (err: any) {
@@ -524,8 +479,6 @@ export default function LoginPage() {
     if (typeof window !== "undefined") {
       sessionStorage.removeItem(RESET_STORAGE_KEY);
     }
-    setResetToken("");
-    setResetRequestId("");
     setFormError("");
     setFormNotice("");
     setMode("login");

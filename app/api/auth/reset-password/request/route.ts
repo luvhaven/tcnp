@@ -1,17 +1,34 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { checkRateLimit } from '@/lib/security/rate-limit'
-import { randomBytes } from 'crypto'
+import { checkRateLimit, getClientIp } from '@/lib/security/rate-limit'
+import {
+  generateResetToken,
+  hashResetToken,
+  RESET_TOKEN_TTL_MS,
+  setResetCookie,
+} from '@/lib/security/reset-token'
 import * as Sentry from '@sentry/nextjs'
 
 const requestSchema = z.object({
   email: z.string().trim().email().transform((v) => v.toLowerCase()),
 })
 
-export async function POST(request: Request) {
+const SUBMITTED_MESSAGE =
+  'If this email belongs to an active account, administrators have been asked to approve a reset. Keep this page open.'
+
+// Every outcome looks the same to the caller, so the endpoint cannot be used to discover
+// which emails have accounts or what state they are in. The browser always receives a
+// fresh cookie token; when no request was recorded it simply never matches anything.
+function submittedResponse(token: string) {
+  const response = NextResponse.json({ success: true, status: 'pending', message: SUBMITTED_MESSAGE })
+  setResetCookie(response, token)
+  return response
+}
+
+export async function POST(request: NextRequest) {
   try {
-    const rateCheck = checkRateLimit(request, 'auth-reset-request', 5, 10 * 60 * 1000)
+    const rateCheck = await checkRateLimit(request, 'auth-reset-request', 5, 10 * 60 * 1000)
     if (!rateCheck.success) {
       return NextResponse.json(
         { error: 'Too many reset requests. Please wait a few minutes before trying again.' },
@@ -47,58 +64,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unable to process reset request at this time.' }, { status: 500 })
     }
 
-    if (!user) {
-      return NextResponse.json(
-        { error: 'No account found matching this email address. Please verify your email or request access.' },
-        { status: 404 }
-      )
+    const resetToken = generateResetToken()
+
+    if (!user || user.activation_status !== 'active' || user.is_active === false) {
+      return submittedResponse(resetToken)
     }
 
-    if (user.activation_status === 'pending') {
-      return NextResponse.json(
-        { error: 'This account is pending initial admin approval. You cannot reset password yet.' },
-        { status: 403 }
-      )
-    }
-
-    if (user.is_active === false || user.activation_status === 'deactivated') {
-      return NextResponse.json(
-        { error: 'This account has been deactivated. Please contact Command Center.' },
-        { status: 403 }
-      )
-    }
-
-    // 2. Check for an active existing request within the last hour
+    // A new request supersedes any open one, so only the newest browser can finish a reset.
     const nowIso = new Date().toISOString()
-    const { data: existingRequest } = await db
+    await db
       .from('password_reset_requests')
-      .select('*')
+      .update({ status: 'expired', updated_at: nowIso })
       .eq('user_id', user.id)
       .in('status', ['pending', 'approved'])
-      .gt('expires_at', nowIso)
-      .order('requested_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
 
-    if (existingRequest) {
-      return NextResponse.json({
-        success: true,
-        requestId: existingRequest.id,
-        resetToken: existingRequest.reset_token,
-        status: existingRequest.status,
-        email: user.email,
-        message: existingRequest.status === 'approved'
-          ? 'Your reset request has been approved! You can now set your new password.'
-          : 'A reset request is already active and awaiting administrator approval.'
-      })
-    }
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS).toISOString()
 
-    // 3. Generate a secure reset token
-    const resetToken = randomBytes(32).toString('hex')
-    const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString() // 2 hours
-
-    // Capture client metadata if available
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || null
+    // Capture client metadata so administrators can judge whether the request is genuine
+    const ip = getClientIp(request.headers)
     const userAgent = request.headers.get('user-agent') || null
 
     const { data: newRequest, error: insertError } = await db
@@ -107,12 +90,12 @@ export async function POST(request: Request) {
         user_id: user.id,
         email: user.email,
         status: 'pending',
-        reset_token: resetToken,
+        reset_token: hashResetToken(resetToken),
         expires_at: expiresAt,
         ip_address: ip,
         user_agent: userAgent,
       })
-      .select('id, status, reset_token, email')
+      .select('id')
       .single()
 
     if (insertError || !newRequest) {
@@ -132,7 +115,7 @@ export async function POST(request: Request) {
       const notifications = admins.map((admin: { id: string }) => ({
         user_id: admin.id,
         title: 'Password Reset Request',
-        message: `${user.full_name || user.email} requested a password reset. Review in Officers > Resets.`,
+        message: `${user.full_name || user.email} requested a password reset. Confirm it with them directly before approving (Officers > Resets).`,
         type: 'alert',
         channel: 'push',
         status: 'pending',
@@ -144,6 +127,8 @@ export async function POST(request: Request) {
           full_name: user.full_name,
           oscar: user.oscar,
           unit: user.unit,
+          ip_address: ip,
+          user_agent: userAgent,
         },
       }))
 
@@ -151,6 +136,20 @@ export async function POST(request: Request) {
       if (notifError) {
         console.error('[reset-password/request] Notification insert error:', notifError)
       }
+    }
+
+    // Tell the account owner, so a reset they did not ask for gets reported.
+    const { error: ownerNotifError } = await db.from('notifications').insert({
+      user_id: user.id,
+      title: 'Password reset requested',
+      message: 'A password reset was requested for your account. If this was not you, contact Command Center immediately.',
+      type: 'alert',
+      channel: 'push',
+      status: 'pending',
+      metadata: { kind: 'password_reset_requested_for_you', request_id: newRequest.id },
+    })
+    if (ownerNotifError) {
+      console.error('[reset-password/request] Owner notification error:', ownerNotifError)
     }
 
     // 5. Broadcast to admin channel for any active admin dashboard tabs
@@ -172,14 +171,7 @@ export async function POST(request: Request) {
       console.warn('[reset-password/request] Broadcast error:', broadcastErr)
     }
 
-    return NextResponse.json({
-      success: true,
-      requestId: newRequest.id,
-      resetToken: newRequest.reset_token,
-      status: 'pending',
-      email: user.email,
-      message: 'Reset request submitted to administrators.',
-    })
+    return submittedResponse(resetToken)
   } catch (err: any) {
     console.error('[reset-password/request] Unexpected error:', err)
     Sentry.captureException(err)

@@ -3,10 +3,10 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { checkRateLimit } from '@/lib/security/rate-limit'
-import { isAdmin, effectiveOscarRole } from '@/lib/utils'
+import { isAdmin, effectiveOscarRole, isPlatformAdministrator } from '@/lib/utils'
 
 export async function DELETE(request: Request) {
-    const limitCheck = checkRateLimit(request, 'admin-chat-delete', 20, 60000)
+    const limitCheck = await checkRateLimit(request, 'admin-chat-delete', 20, 60000)
     if (!limitCheck.success) {
         return NextResponse.json({ error: 'Rate limit exceeded for admin chat operations.' }, { status: 429 })
     }
@@ -51,6 +51,11 @@ export async function DELETE(request: Request) {
     const team = searchParams.get('team')
     const messageId = searchParams.get('messageId')
     const deleteAll = searchParams.get('all') === 'true'
+
+    // Platform-wide destruction is reserved for platform administrators.
+    if (!messageId && !programId && !team && !isPlatformAdministrator(callerData.role)) {
+        return NextResponse.json({ error: 'Forbidden: only platform administrators can delete every chat' }, { status: 403 })
+    }
 
     const supabaseAdmin = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -125,7 +130,7 @@ export async function DELETE(request: Request) {
 }
 
 export async function POST(request: Request) {
-    const limitCheck = checkRateLimit(request, 'admin-chat-action', 30, 60000)
+    const limitCheck = await checkRateLimit(request, 'admin-chat-action', 30, 60000)
     if (!limitCheck.success) {
         return NextResponse.json({ error: 'Rate limit exceeded for chat actions.' }, { status: 429 })
     }
@@ -174,8 +179,8 @@ export async function POST(request: Request) {
 
     try {
         if (action === 'archive') {
-            if (!isUserAdmin) {
-                return NextResponse.json({ error: 'Forbidden: only administrators can archive chats' }, { status: 403 })
+            if (!isPlatformAdministrator(callerData.role)) {
+                return NextResponse.json({ error: 'Forbidden: only platform administrators can archive chats' }, { status: 403 })
             }
 
             let updateQuery = supabaseAdmin.from('chat_messages').update({ is_archived: true })
@@ -227,6 +232,26 @@ export async function POST(request: Request) {
         if (action === 'flag' || action === 'unflag') {
             if (!messageId) {
                 return NextResponse.json({ error: 'messageId is required' }, { status: 400 })
+            }
+
+            // Read through the caller's own client so RLS decides whether they can see the message.
+            const { data: msg } = await supabaseAuth
+                .from('chat_messages')
+                .select('id, team, flagged, flagged_by')
+                .eq('id', messageId)
+                .maybeSingle()
+            if (!msg) {
+                return NextResponse.json({ error: 'Message not found' }, { status: 404 })
+            }
+
+            if (action === 'flag') {
+                // Keep the original reporter if the message is already flagged.
+                if (msg.flagged) return NextResponse.json({ success: true })
+            } else {
+                const isTeamModerator = msg.team && callerData.team === msg.team && callerData.is_team_head
+                if (!isUserAdmin && !isTeamModerator && msg.flagged_by !== user.id) {
+                    return NextResponse.json({ error: 'Forbidden: not authorized to unflag this message' }, { status: 403 })
+                }
             }
 
             const { error: flagError } = await supabaseAdmin

@@ -25,6 +25,7 @@ import ComplianceInitiatives from "@/components/compliance/ComplianceInitiatives
 import {
   Shirt, Plus, Trash2, Pencil, Sparkles, Scissors, CheckCircle2, ImageIcon, Loader2, CalendarDays,
 } from "lucide-react"
+import { UPLOAD_RULES, validateUploadFiles } from "@/lib/security/upload-validation"
 
 // ─── Singleton client ───
 const supabase = createClient()
@@ -137,6 +138,8 @@ export default function CompliancePage() {
   const savePost = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.title.trim()) { toast.error("Title is required"); return }
+    const fileError = validateUploadFiles(form.files, UPLOAD_RULES.image)
+    if (fileError) { toast.error(fileError); return }
     setUploading(true)
     try {
       const imagePaths: string[] = editing ? [...editing.image_paths] : []

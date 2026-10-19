@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { isAdmin } from '@/lib/utils'
+import { isPlatformAdministrator } from '@/lib/utils'
 
 export async function POST(request: Request) {
     try {
@@ -24,8 +24,8 @@ export async function POST(request: Request) {
 
         const role = (currentUser as { role?: string } | null)?.role
 
-        if (!role || !isAdmin(role)) {
-            return NextResponse.json({ error: 'Forbidden: Leadership access required' }, { status: 403 })
+        if (!role || !isPlatformAdministrator(role)) {
+            return NextResponse.json({ error: 'Forbidden: platform administrator access required' }, { status: 403 })
         }
 
         const body = await request.json()
@@ -75,10 +75,19 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Could not load the selected officers' }, { status: 500 })
         }
 
-        const mappedUsers = usersData || []
-        if (mappedUsers.length === 0) {
+        const loadedUsers = usersData || []
+        if (loadedUsers.length === 0) {
             return NextResponse.json({ error: 'None of the selected officers could be found' }, { status: 404 })
         }
+
+        // Deactivated or suspended accounts are never assigned (or reactivated) from here;
+        // reactivation goes through the officer edit flow. Pending accounts may still be
+        // activated below when the program is live.
+        const isPending = (u: { activation_status?: string | null }) => u.activation_status === 'pending'
+        const isActive = (u: { is_active?: boolean | null; activation_status?: string | null }) =>
+            u.is_active !== false && u.activation_status === 'active'
+        const mappedUsers = loadedUsers.filter((u: any) => isActive(u) || isPending(u))
+        const inactiveIds: string[] = loadedUsers.filter((u: any) => !isActive(u) && !isPending(u)).map((u: any) => u.id)
 
         // Fetch the program to ensure auto-activation happens if it is active
         let isProgramActive = false
@@ -160,8 +169,8 @@ export async function POST(request: Request) {
                 }
             }
 
-            // Auto-Activate if program is active AND user is inactive/pending
-            if (isProgramActive && (!u.is_active || u.activation_status === 'pending')) {
+            // Auto-activate pending accounts when the program is live
+            if (isProgramActive && isPending(u)) {
                 updates.is_active = true
                 updates.activation_status = 'active'
             }
@@ -182,6 +191,8 @@ export async function POST(request: Request) {
             already_assigned_ids: [...alreadyAssignedIds],
             failed_count: failedIds.length,
             failed_ids: failedIds,
+            inactive_count: inactiveIds.length,
+            inactive_ids: inactiveIds,
         }, { status: failedIds.length > 0 ? 207 : 200 })
     } catch (error: any) {
         console.error('Unexpected error in bulk-assign-program:', error)
