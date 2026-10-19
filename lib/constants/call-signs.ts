@@ -125,6 +125,45 @@ export const dbEnumToCallSignKey = (dbValue: string): CallSignKey | null => {
     return (entry?.[0] as CallSignKey) ?? null
 }
 
+// ── Movement sequence ────────────────────────────────────────────────────────
+// The SOP TCNP.01.05 movement call signs are not strictly ordered (any sign may
+// be sent at any time), but an operation almost always runs
+//   First Course → Cocktail → Chapman → Dessert → (complete)
+// so the field UI offers the expected next sign as one large primary button.
+// Broken Arrow resumes with Cocktail once the Cheetah is moving again.
+// Live broadcasts (traffic / route) never change journeys.status, so they never
+// appear here as a "current" state.
+export type NextMovement = CallSignKey | 'complete'
+
+export const NEXT_CALL_SIGN: Partial<Record<string, NextMovement>> = {
+    first_course: 'cocktail',
+    cocktail: 'chapman',
+    chapman: 'dessert',
+    dessert: 'complete',
+    broken_arrow: 'cocktail',
+}
+
+/**
+ * First movement call sign when a planned journey starts, per SOP TCNP.01.05:
+ *   First Course = departure from Nest to Theatre
+ *   Dessert      = departure from Theatre to Nest
+ *   Cocktail     = principal in-transit (generic movement)
+ * Never returns a traffic/route broadcast — those are event-only SITREPs, not a
+ * valid opening movement status.
+ */
+export const firstCallSignFor = (origin: string | null | undefined, destination: string | null | undefined): CallSignKey => {
+    const dest = (destination ?? '').toLowerCase()
+    const from = (origin ?? '').toLowerCase()
+    // Theatre / venue bound → First Course
+    if (dest.includes('theatre') || dest.includes('venue') || dest.includes('church') || dest.includes('covenant')) return 'first_course'
+    // Returning to the Nest / hotel → Dessert
+    if (dest.includes('nest') || dest.includes('hotel')) return 'dessert'
+    // Leaving the Nest for anywhere else → First Course
+    if (from.includes('nest') || from.includes('hotel')) return 'first_course'
+    // Everything else (airport runs, transfers) → generic in-transit
+    return 'cocktail'
+}
+
 // ── SITREP glossary — the complete situation-report codes exactly per SOP ─────
 // TCNP.01.05 (Journey Management). This is the authoritative reference shown to
 // Duty Officers. Order follows a typical Nest → Theatre → Nest operation.

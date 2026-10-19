@@ -794,6 +794,14 @@ body {
   bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 0.75rem);
 }
 
+/* On phones, keep floating notices above the My Operations distress bar
+   (components/operations/DistressButton) rather than over it. */
+@media (max-width: 767px) {
+  body:has(.distress-bar) .floating-stack {
+    bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 6rem);
+  }
+}
+
 /* ─── Installed-app (standalone) native feel ─────────────────────────────── */
 
 @media (display-mode: standalone) {
