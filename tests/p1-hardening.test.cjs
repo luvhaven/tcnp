@@ -74,3 +74,13 @@ test('the browser no longer inserts notifications for other users', () => {
   assert.doesNotMatch(chat, /from\('notifications'\)\s*\.insert/)
   assert.match(chat, /\/api\/chat\/mention-notifications/)
 })
+
+test('members cannot rewrite the profile fields that grant unit authority', () => {
+  const sql = fs.readFileSync('supabase/migrations/20261019160000_lock_authority_profile_fields.sql', 'utf8')
+  for (const column of ['oscar', 'unit', 'current_title_id', 'is_team_head', 'email']) {
+    assert.match(sql, new RegExp(`NEW\.${column} IS DISTINCT FROM OLD\.${column}`), column)
+  }
+  // The DO-assignment check no longer accepts any oscar text containing "command".
+  assert.doesNotMatch(sql, /LIKE '%command%'/)
+  assert.match(sql, /caller_role = 'delta_oscar'/)
+})
