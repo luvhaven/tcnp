@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/supabase'
 import { NextResponse } from 'next/server'
 import { checkRateLimit } from '@/lib/security/rate-limit'
+import { SIGNUP_OSCAR_OPTIONS } from '@/lib/utils'
 
 export async function POST(request: Request) {
     try {
@@ -27,6 +28,12 @@ export async function POST(request: Request) {
         const VALID_TEAMS = ['strength', 'wisdom', 'swift']
         if (team && !VALID_TEAMS.includes(team)) {
             return NextResponse.json({ error: 'Invalid team selection' }, { status: 400 })
+        }
+
+        // The unit is chosen from a fixed list; anything else is rejected rather than stored.
+        const submittedOscar = typeof custom_oscar === 'string' ? custom_oscar.trim() : ''
+        if (submittedOscar && !(SIGNUP_OSCAR_OPTIONS as readonly string[]).includes(submittedOscar)) {
+            return NextResponse.json({ error: 'Invalid unit selection' }, { status: 400 })
         }
 
         // Create user via Supabase Admin API
@@ -58,11 +65,7 @@ export async function POST(request: Request) {
             return `OSCAR-${initials}-${roleCode}`
         }
 
-        const submittedOscar = typeof custom_oscar === 'string' ? custom_oscar.trim() : ''
-        // Hospitality is a November (Nest) responsibility, never a selectable Oscar.
-        const oscar = /hospitality/i.test(submittedOscar)
-            ? 'November (Nest)'
-            : submittedOscar || generateOscar(full_name, role)
+        const oscar = submittedOscar || generateOscar(full_name, role)
 
         const insertData: any = {
             id: authData.user.id,

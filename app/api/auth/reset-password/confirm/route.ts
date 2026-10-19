@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { checkRateLimit } from '@/lib/security/rate-limit'
+import { checkRateLimit, getClientIp } from '@/lib/security/rate-limit'
 import { clearResetCookie, hashResetToken, readResetToken } from '@/lib/security/reset-token'
 import * as Sentry from '@sentry/nextjs'
 
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
 
     // 4. Log in audit_logs
     try {
-      const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || null
+      const ip = getClientIp(request.headers)
       const userAgent = request.headers.get('user-agent') || null
 
       await db.from('audit_logs').insert({

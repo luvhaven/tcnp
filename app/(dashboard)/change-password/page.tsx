@@ -6,19 +6,23 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 
 export default function ChangePasswordPage() {
     const router = useRouter()
-    const supabase = createClient()
     const [loading, setLoading] = useState(false)
+    const [currentPassword, setCurrentPassword] = useState("")
     const [password, setPassword] = useState("")
     const [confirmPassword, setConfirmPassword] = useState("")
 
     const handlePasswordChange = async (e: React.FormEvent) => {
         e.preventDefault()
+
+        if (!currentPassword) {
+            toast.error("Enter your current password")
+            return
+        }
 
         if (password.length < 8) {
             toast.error("Password must be at least 8 characters long")
@@ -33,13 +37,16 @@ export default function ChangePasswordPage() {
         setLoading(true)
 
         try {
-            const { error } = await supabase.auth.updateUser({
-                password: password
+            const res = await fetch("/api/auth/change-password", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ current_password: currentPassword, new_password: password })
             })
-
-            if (error) throw error
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error(data.error || "Failed to update password")
 
             toast.success("Password updated successfully! You are still logged in.")
+            setCurrentPassword("")
             setPassword("")
             setConfirmPassword("")
         } catch (error: any) {
@@ -74,12 +81,29 @@ export default function ChangePasswordPage() {
                 <CardContent>
                     <form onSubmit={handlePasswordChange} className="space-y-5">
                         <div className="space-y-2">
+                            <Label htmlFor="current-password">Current Password</Label>
+                            <div className="relative">
+                                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    id="current-password"
+                                    type="password"
+                                    autoComplete="current-password"
+                                    value={currentPassword}
+                                    onChange={(e) => setCurrentPassword(e.target.value)}
+                                    className="pl-9"
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
                             <Label htmlFor="new-password">New Password</Label>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     id="new-password"
                                     type="password"
+                                    autoComplete="new-password"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     className="pl-9"
@@ -114,7 +138,7 @@ export default function ChangePasswordPage() {
 
                         <Button
                             type="submit"
-                            disabled={loading || !password || !confirmPassword || password !== confirmPassword || password.length < 8}
+                            disabled={loading || !currentPassword || !password || !confirmPassword || password !== confirmPassword || password.length < 8}
                             className="w-full"
                         >
                             {loading ? (

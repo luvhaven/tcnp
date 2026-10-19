@@ -132,7 +132,8 @@ export function RequestAvailabilityButton({ programId, programName }: { programI
 }
 
 /** Admin: live roster of responses with filtering and bulk program assignment */
-export function AvailabilityRosterButton({ programId, programName }: { programId: string; programName: string }) {
+/** `canAssign` (platform administrators) enables bulk-assigning confirmed officers. */
+export function AvailabilityRosterButton({ programId, programName, canAssign = false }: { programId: string; programName: string; canAssign?: boolean }) {
   const [open, setOpen] = useState(false)
   const [filter, setFilter] = useState<"yes" | "no" | "all">("yes")
   const [search, setSearch] = useState("")
@@ -230,6 +231,9 @@ export function AvailabilityRosterButton({ programId, programName }: { programId
         toast.success(`${assignedCount} officer${assignedCount === 1 ? "" : "s"} assigned to ${programName}`)
       } else if (alreadyAssignedCount > 0) {
         toast.info(`Selected officer${alreadyAssignedCount === 1 ? " is" : "s are"} already assigned to ${programName}`)
+      }
+      if (data.inactive_count > 0) {
+        toast.warning(`${data.inactive_count} deactivated officer${data.inactive_count === 1 ? " was" : "s were"} skipped. Reactivate them first.`)
       }
       if (data.failed_count > 0) {
         toast.error(`${data.failed_count} officer${data.failed_count === 1 ? " was" : "s were"} not assigned. You can retry the failed assignments.`)
@@ -349,7 +353,7 @@ export function AvailabilityRosterButton({ programId, programName }: { programId
               )}
 
               {/* Bulk assign action */}
-              {selected.length > 0 && (
+              {canAssign && selected.length > 0 && (
                 <div className="flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 p-3">
                   <p className="text-sm font-medium">{selected.length} selected</p>
                   <Button size="sm" className="gap-1" onClick={assignSelected} disabled={assigning}>

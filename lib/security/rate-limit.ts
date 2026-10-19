@@ -53,20 +53,31 @@ export function rateLimit(ip: string, limit: number, windowMs: number): { succes
 }
 
 /**
- * Convenience wrapper for Next.js Request object to extract IP securely
- * and execute the sliding window limit.
+ * The client IP to key limits on. On Vercel `x-real-ip` is set by the platform
+ * and cannot be supplied by the client, whereas the first `x-forwarded-for`
+ * entry is whatever the client sent. Only when `x-real-ip` is missing (local
+ * dev, other hosts) do we fall back to the last `x-forwarded-for` hop, which is
+ * the one appended by the nearest proxy.
+ */
+export function getClientIp(headers: Headers): string {
+    const realIp = headers.get('x-real-ip')?.trim();
+    if (realIp) return realIp;
+
+    const forwarded = headers.get('x-forwarded-for');
+    if (forwarded) {
+        const hops = forwarded.split(',').map((hop) => hop.trim()).filter(Boolean);
+        if (hops.length > 0) return hops[hops.length - 1];
+    }
+
+    return '127.0.0.1';
+}
+
+/**
+ * Convenience wrapper for Next.js Request object: keys the sliding window on
+ * the platform-provided client IP.
  */
 export function checkRateLimit(req: Request, endpointName: string = 'api', limit: number = 5, windowMs: number = 60000) {
-    // Attempt to parse forwarded/real IP from standard headers
-    const ip = req.headers.get('x-forwarded-for')
-        || req.headers.get('x-real-ip')
-        || '127.0.0.1'; // Fallback if no header proxies
-
-    // Normalize IPv6 localhost edge cases
-    const normalizedIp = ip.split(',')[0].trim();
-
-    // Namespace the IP with the endpoint
-    const key = `${endpointName}:${normalizedIp}`;
+    const key = `${endpointName}:${getClientIp(req.headers)}`;
 
     return rateLimit(key, limit, windowMs);
 }
