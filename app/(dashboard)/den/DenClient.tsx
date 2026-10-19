@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Home, Plus, Edit, Trash2, Users, UserPlus, UserCheck } from "lucide-react"
 import { toast } from "sonner"
+import { notifyError } from '@/lib/notify'
 import { canManageNoscarDen, canManageWelfare, isAdmin, effectiveOscarRole } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 import DenMenus from "@/components/den/DenMenus"
@@ -160,7 +161,7 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
       resetForm()
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to save')
+      notifyError(error, 'Failed to save')
     }
   })
 
@@ -200,7 +201,7 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
       setOfficerFormData({ user_id: '' })
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to assign officer')
+      notifyError(error, 'Failed to assign officer')
     }
   })
 
@@ -215,7 +216,7 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
       toast.success(isActive ? 'Officer marked active' : 'Officer marked inactive')
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to update status')
+      notifyError(error, 'Failed to update status')
     }
   })
 
@@ -230,7 +231,7 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
       toast.success('Officer removed from location')
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to remove')
+      notifyError(error, 'Failed to remove')
     }
   })
 
@@ -245,6 +246,7 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
       type: 'den',
       program_id: formData.program_id || null
     }
+    if (saveDenMutation.isPending) return
     saveDenMutation.mutate({ isEdit: !!editing, data: submitData })
   }
 
@@ -293,6 +295,7 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
       toast.error('Please select an officer')
       return
     }
+    if (assignOfficerMutation.isPending) return
     assignOfficerMutation.mutate({
       user_id: officerFormData.user_id,
       nest_id: selectedDen.id,
@@ -340,7 +343,7 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">November (Den)</h1>
-              <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider bg-primary/10 text-primary border-primary/20">
+              <Badge variant="outline" className="text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary border-primary/20">
                 VIP Lounge & Den
               </Badge>
             </div>
@@ -435,17 +438,17 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
                             </div>
                             {canManage && (
                               <div className="flex gap-1 shrink-0">
-                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={() => {
+                                <Button aria-label="Assign officer" variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={() => {
                                   setSelectedDen(den)
                                   setOfficerFormData({ user_id: '' })
                                   setOfficerDialogOpen(true)
                                 }}>
                                   <UserPlus className="h-4 w-4" />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={() => handleEdit(den)}>
+                                <Button aria-label="Edit Den" variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={() => handleEdit(den)}>
                                   <Edit className="h-4 w-4" />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(den.id)}>
+                                <Button aria-label="Delete Den" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(den.id)}>
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </div>
@@ -497,7 +500,7 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
                                         </Avatar>
                                         <div>
                                           <p className="text-xs font-medium group-hover:underline">{assignment.user?.full_name}</p>
-                                          <p className="text-[10px] text-muted-foreground">{assignment.user?.oscar}</p>
+                                          <p className="text-xs text-muted-foreground">{assignment.user?.oscar}</p>
                                         </div>
                                       </div>
                                       {canManage && (
@@ -507,7 +510,7 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
                                             onCheckedChange={() => toggleOfficerActive(assignment)}
                                             className="scale-75"
                                           />
-                                          <Button
+                                          <Button aria-label="Remove assignment"
                                             variant="ghost"
                                             size="icon"
                                             className="h-6 w-6"
@@ -645,7 +648,7 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">
+              <Button type="submit" pending={saveDenMutation.isPending}>
                 {editing ? 'Update' : 'Add'} Den
               </Button>
             </div>
@@ -686,8 +689,8 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
               <Button type="button" variant="outline" onClick={() => setOfficerDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">
-                <UserCheck className="mr-2 h-4 w-4" />
+              <Button type="submit" pending={assignOfficerMutation.isPending}>
+                {!assignOfficerMutation.isPending && <UserCheck className="mr-2 h-4 w-4" />}
                 Assign Officer
               </Button>
             </div>

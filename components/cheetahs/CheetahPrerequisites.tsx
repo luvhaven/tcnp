@@ -52,11 +52,11 @@ export default function CheetahPrerequisites({ cheetahId, cheetahCallSign }: { c
                     <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                         <Car className="h-4 w-4 text-blue-500" />
                         Cheetah Prerequisites
-                        <Badge variant="secondary" className="text-[9px] font-mono">Pre-Op</Badge>
+                        <Badge variant="secondary" className="text-[11px] font-mono">Pre-Op</Badge>
                     </CardTitle>
                     <div className="flex items-center gap-1.5">
                         <span className="text-xs text-muted-foreground font-mono">{checkedCount}/{PREREQUISITES.length}</span>
-                        {allChecked && <Badge className="bg-green-500/20 text-green-600 border-green-500/30 text-[9px]">✓ Ready</Badge>}
+                        {allChecked && <Badge className="bg-green-500/20 text-green-600 border-green-500/30 text-[11px]">✓ Ready</Badge>}
                     </div>
                 </div>
             </CardHeader>
@@ -73,7 +73,7 @@ export default function CheetahPrerequisites({ cheetahId, cheetahCallSign }: { c
                             {checked ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500 flex-shrink-0 mt-0.5" /> : <Circle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />}
                             <div className="flex-1 flex items-start justify-between gap-2">
                                 <span className={cn('leading-snug', checked ? 'text-muted-foreground line-through' : 'text-foreground')}>{p.item}</span>
-                                <span className={cn('text-[9px] font-mono flex-shrink-0', CATEGORY_COLORS[p.category] || 'text-muted-foreground')}>{p.category}</span>
+                                <span className={cn('text-[11px] font-mono flex-shrink-0', CATEGORY_COLORS[p.category] || 'text-muted-foreground')}>{p.category}</span>
                             </div>
                         </button>
                     )

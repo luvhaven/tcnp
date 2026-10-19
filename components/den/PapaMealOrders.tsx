@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { AnimatePresence, motion } from "framer-motion"
 import { toast } from "sonner"
+import { notifyError, UserFacingError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -140,7 +141,7 @@ export default function PapaMealOrders({ canOrder, selectedProgram, currentUserI
         .upsert(payload, { onConflict: "papa_id,order_date,meal_type" })
       if (error) {
         if (isSchemaNotReady(error)) {
-          throw new Error("Meal ordering is unavailable until its database migration is applied.")
+          throw new UserFacingError("Meal ordering is unavailable until its database migration is applied.")
         }
         throw error
       }
@@ -151,7 +152,7 @@ export default function PapaMealOrders({ canOrder, selectedProgram, currentUserI
       setOpenPapaId(null)
       queryClient.invalidateQueries({ queryKey: ["papa-meal-orders"] })
     },
-    onError: (err: any) => toast.error(err.message || "Failed to save the order"),
+    onError: (err: any) => notifyError(err, "Failed to save the order"),
   })
 
   const cancelMutation = useMutation({
@@ -167,7 +168,7 @@ export default function PapaMealOrders({ canOrder, selectedProgram, currentUserI
       setOpenPapaId(null)
       queryClient.invalidateQueries({ queryKey: ["papa-meal-orders"] })
     },
-    onError: (err: any) => toast.error(err.message || "Failed to cancel the order"),
+    onError: (err: any) => notifyError(err, "Failed to cancel the order"),
   })
 
   const openPapa = (papa: OrderablePapa) => {
@@ -288,7 +289,7 @@ export default function PapaMealOrders({ canOrder, selectedProgram, currentUserI
                     </span>
                   </span>
                   {hasDietaryRestriction(papa) && (
-                    <Badge variant="outline" className="shrink-0 gap-1 text-[10px]">
+                    <Badge variant="outline" className="shrink-0 gap-1 text-xs">
                       <ShieldAlert className="h-3 w-3" />Dietary
                     </Badge>
                   )}

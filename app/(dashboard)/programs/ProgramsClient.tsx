@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Calendar, Plus, Edit, Trash2, Archive, CheckCircle, Building2, Search, Filter } from "lucide-react"
 import { toast } from "sonner"
+import { notifyError } from '@/lib/notify'
 import { motion, AnimatePresence } from "framer-motion"
 import ProgramExport from "@/components/programs/ProgramExport"
 import ProgramSchedule from "@/components/programs/ProgramSchedule"
@@ -87,7 +88,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
       setNewTheatreName('')
       setNewTheatreLocation('')
     } catch (err: any) {
-      toast.error(err.message || 'Failed to create theatre')
+      notifyError(err, 'Failed to create theatre')
     } finally {
       setCreatingTheatre(false)
     }
@@ -146,7 +147,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
       resetForm()
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to save program')
+      notifyError(error, 'Failed to save program')
     }
   })
 
@@ -355,7 +356,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                   key={tab}
                   variant={statusFilter === tab ? 'default' : 'outline'}
                   onClick={() => setStatusFilter(tab)}
-                  className={`text-[10px] font-semibold uppercase tracking-wider cursor-pointer transition-colors ${statusFilter === tab ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+                  className={`text-xs font-semibold uppercase tracking-wider cursor-pointer transition-colors ${statusFilter === tab ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
                 >
                   {tab}
                 </Badge>
@@ -426,7 +427,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <h3 className="truncate font-semibold text-base text-foreground">{program.name}</h3>
-                              <Badge variant="outline" className={`text-[10px] font-semibold uppercase tracking-wider ${badgeInfo.className}`}>
+                              <Badge variant="outline" className={`text-xs font-semibold uppercase tracking-wider ${badgeInfo.className}`}>
                                 {badgeInfo.label}
                               </Badge>
                             </div>

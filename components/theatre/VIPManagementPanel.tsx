@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
+import { notifyError } from '@/lib/notify'
 import { ShieldCheck, Loader2, Search, Plus, Edit, Trash2, User, Upload, Eye, X, RotateCw } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
@@ -134,7 +135,7 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
             toast.success("Photo uploaded successfully")
         } catch (error: any) {
             console.error("Error uploading photo:", error)
-            toast.error(error.message || "Failed to upload photo")
+            notifyError(error, "Failed to upload photo")
         } finally {
             setUploading(false)
         }
@@ -178,7 +179,7 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
             reloadVIPs()
         } catch (error: any) {
             console.error("Error saving VIP:", error)
-            toast.error(error.message || "Failed to save VIP")
+            notifyError(error, "Failed to save VIP")
         } finally {
             setSaving(false)
         }
@@ -225,7 +226,7 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
             reloadVIPs()
         } catch (error: any) {
             console.error("Error deleting VIP:", error)
-            toast.error(error.message || "Failed to remove VIP")
+            notifyError(error, "Failed to remove VIP")
         }
     }
 

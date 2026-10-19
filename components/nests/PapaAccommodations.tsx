@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
+import { notifyError, UserFacingError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -110,7 +111,7 @@ export default function PapaAccommodations({ canEdit, selectedProgram, currentUs
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!form.papa_id || !form.hotel_name.trim()) throw new Error("Papa and hotel name are required")
+      if (!form.papa_id || !form.hotel_name.trim()) throw new UserFacingError("Papa and hotel name are required")
       const payload = {
         papa_id: form.papa_id,
         program_id: form.program_id || null,
@@ -139,7 +140,7 @@ export default function PapaAccommodations({ canEdit, selectedProgram, currentUs
       setEditing(null)
       queryClient.invalidateQueries({ queryKey: ["papa-accommodations"] })
     },
-    onError: (err: any) => toast.error(err.message || "Failed to save"),
+    onError: (err: any) => notifyError(err, "Failed to save"),
   })
 
   const deleteMutation = useMutation({
@@ -151,7 +152,7 @@ export default function PapaAccommodations({ canEdit, selectedProgram, currentUs
       toast.success("Accommodation removed")
       queryClient.invalidateQueries({ queryKey: ["papa-accommodations"] })
     },
-    onError: (err: any) => toast.error(err.message || "Failed to delete"),
+    onError: (err: any) => notifyError(err, "Failed to delete"),
   })
 
   const openCreate = () => {
@@ -225,15 +226,15 @@ export default function PapaAccommodations({ canEdit, selectedProgram, currentUs
                           {acc.papas?.title ? `${acc.papas.title} ` : ""}{acc.papas?.full_name ?? "Unknown Papa"}
                         </CardTitle>
                         <CardDescription className="mt-1 flex flex-wrap items-center gap-1">
-                          <Badge variant="secondary" className="text-[10px]">{acc.hotel_name}</Badge>
-                          {acc.programs?.name && <Badge variant="outline" className="text-[10px]">{acc.programs.name}</Badge>}
-                          {acc.nests?.name && <Badge variant="outline" className="text-[10px]">Nest: {acc.nests.name}</Badge>}
+                          <Badge variant="secondary" className="text-xs">{acc.hotel_name}</Badge>
+                          {acc.programs?.name && <Badge variant="outline" className="text-xs">{acc.programs.name}</Badge>}
+                          {acc.nests?.name && <Badge variant="outline" className="text-xs">Nest: {acc.nests.name}</Badge>}
                         </CardDescription>
                       </div>
                       {canEdit && (
                         <div className="flex shrink-0 gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(acc)}><Pencil className="h-3.5 w-3.5" /></Button>
-                          <Button
+                          <Button aria-label="Edit accommodation" variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(acc)}><Pencil className="h-3.5 w-3.5" /></Button>
+                          <Button aria-label="Remove accommodation"
                             variant="ghost" size="icon" className="h-7 w-7 text-red-500"
                             onClick={async () => {
                               const ok = await confirm({ title: "Remove accommodation?", message: `${acc.hotel_name} for ${acc.papas?.full_name ?? "this Papa"}.` })

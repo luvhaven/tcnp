@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
+import { notifyError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { canManageCompliance, cn } from "@/lib/utils"
@@ -168,7 +169,7 @@ export default function CompliancePage() {
       setEditing(null)
       queryClient.invalidateQueries({ queryKey: ["compliance-posts"] })
     } catch (err: any) {
-      toast.error(err.message || "Failed to save")
+      notifyError(err, "Failed to save")
     } finally {
       setUploading(false)
     }
@@ -186,7 +187,7 @@ export default function CompliancePage() {
       toast.success("Post removed")
       queryClient.invalidateQueries({ queryKey: ["compliance-posts"] })
     },
-    onError: (err: any) => toast.error(err.message || "Failed to delete"),
+    onError: (err: any) => notifyError(err, "Failed to delete"),
   })
 
   const openCreate = (type: string) => {
@@ -224,8 +225,8 @@ export default function CompliancePage() {
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-1">
-                <Badge className={cn("border-0 text-[10px] uppercase tracking-wide", meta.color)}>{meta.label}</Badge>
-                {post.programs?.name && <Badge variant="outline" className="text-[10px]">{post.programs.name}</Badge>}
+                <Badge className={cn("border-0 text-xs uppercase tracking-wide", meta.color)}>{meta.label}</Badge>
+                {post.programs?.name && <Badge variant="outline" className="text-xs">{post.programs.name}</Badge>}
               </div>
               <p className="mt-1.5 font-medium">{post.title}</p>
               {post.event_date && (
@@ -236,8 +237,8 @@ export default function CompliancePage() {
             </div>
             {canEdit && (
               <div className="flex shrink-0 gap-1">
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(post)}><Pencil className="h-3.5 w-3.5" /></Button>
-                <Button
+                <Button aria-label="Edit post" variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(post)}><Pencil className="h-3.5 w-3.5" /></Button>
+                <Button aria-label="Delete post"
                   variant="ghost" size="icon" className="h-7 w-7 text-red-500"
                   onClick={async () => {
                     const ok = await confirm({ title: "Delete post?", message: `"${post.title}" will be removed.` })
@@ -265,7 +266,7 @@ export default function CompliancePage() {
             <div className="flex items-center gap-2">
               <Shirt className="h-6 w-6 text-emerald-300" />
               <h1 className="text-2xl font-bold tracking-tight">Compliance</h1>
-              <Badge className="border-0 bg-emerald-500/20 text-emerald-200 uppercase text-[10px] tracking-wider">Grooming & Dress Code</Badge>
+              <Badge className="border-0 bg-emerald-500/20 text-emerald-200 uppercase text-xs tracking-wider">Grooming & Dress Code</Badge>
             </div>
             <p className="mt-1 max-w-xl text-sm text-slate-300">
               The standard is perfection — outfit of the day, event dress codes and grooming excellence for every officer.

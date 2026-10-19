@@ -23,6 +23,8 @@ import { MissionRequestPrompt } from "@/components/missions/MissionAvailability"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { CountUp } from "@/components/ui/count-up"
+import { ErrorState } from "@/components/ui/error-state"
+import { EmptyState } from "@/components/ui/empty-state"
 import * as Sentry from "@sentry/nextjs"
 import { retryTransientRead } from "@/lib/supabase/error-utils"
 
@@ -234,39 +236,52 @@ export default function DashboardPage() {
       // that would have succeeded a second later. Transport failures only —
       // an answered failure is rethrown on the first attempt.
       await retryTransientRead(async () => {
-        stage = "active_program"
-        // The program name is contextual. A failure here must not suppress a
-        // user's independently verified assignments or the rest of the page.
-        const { data: programData, error: programError } = await supabase
-          .from("programs")
-          .select(canViewGlobalDashboard ? "id, name" : "id")
-          .eq("status", "active")
-          .order("created_at", { ascending: false })
-          .limit(1)
+        // The session comes from the shared useCurrentUser cache instead of a
+        // fresh auth.getUser() round trip on every dashboard load.
+        stage = "auth_user"
+        const userId = currentUser?.id
+        if (!userId) throw new Error("Session unavailable")
 
-        if (programError) {
-          setActiveProgram(null)
-          Sentry.captureException(programError, {
-            level: "warning",
-            tags: { feature: "dashboard", dashboard_stage: "active_program" },
-          })
-        } else {
-          setActiveProgram((programData?.[0] as any) ?? null)
+        // Each read below is independent, so they run together. `track`
+        // records which one failed so the Sentry stage tag stays accurate.
+        const track = async <T,>(name: DashboardLoadStage, run: () => Promise<T>): Promise<T> => {
+          try {
+            return await run()
+          } catch (err) {
+            stage = name
+            throw err
+          }
         }
 
-        stage = "auth_user"
-        const { data: { user }, error: authError } = await supabase.auth.getUser()
-        if (authError || !user) throw authError || new Error("Session unavailable")
+        const loadActiveProgram = async () => {
+          // The program name is contextual. A failure here must not suppress a
+          // user's independently verified assignments or the rest of the page.
+          const { data: programData, error: programError } = await supabase
+            .from("programs")
+            .select(canViewGlobalDashboard ? "id, name" : "id")
+            .eq("status", "active")
+            .order("created_at", { ascending: false })
+            .limit(1)
 
-        // 2. Fetch officer-specific assigned duties
-        if (user) {
-          stage = "officer_assignments"
-          const { data: myDORows, error: assignmentError } = await (supabase as any)
+          if (programError) {
+            Sentry.captureException(programError, {
+              level: "warning",
+              tags: { feature: "dashboard", dashboard_stage: "active_program" },
+            })
+            return null
+          }
+          return (programData?.[0] as any) ?? null
+        }
+
+        // Officer-specific assigned duties: the duty-officer rows decide which
+        // journeys to read, so these two stay sequential with each other.
+        const loadMyJourneys = async () => {
+          const { data: myDORows, error: assignmentError } = await track<any>("officer_assignments", async () => (supabase as any)
             .from("journey_duty_officers")
             .select("journey_id, status")
-            .eq("user_id", user.id)
+            .eq("user_id", userId))
 
-          if (assignmentError) throw assignmentError
+          if (assignmentError) { stage = "officer_assignments"; throw assignmentError }
           const activeDutyRows = (myDORows || []).filter((row: any) =>
             row.status == null || ["pending", "acknowledged"].includes(row.status),
           )
@@ -275,10 +290,9 @@ export default function DashboardPage() {
             .filter((row: any) => row.status === "rejected")
             .map((row: any) => row.journey_id)
             .filter(Boolean)
-          const orParts = [`assigned_duty_officer_id.eq.${user.id}`, `assigned_do_id.eq.${user.id}`]
+          const orParts = [`assigned_duty_officer_id.eq.${userId}`, `assigned_do_id.eq.${userId}`]
           if (doIds.length > 0) orParts.push(`id.in.(${doIds.join(",")})`)
 
-          stage = "assigned_journeys"
           let myJourneysQuery = (supabase as any)
             .from("journeys")
             .select(DASHBOARD_JOURNEY_SELECT, { count: "exact" })
@@ -288,49 +302,69 @@ export default function DashboardPage() {
           if (rejectedJourneyIds.length > 0) {
             myJourneysQuery = myJourneysQuery.not("id", "in", `(${rejectedJourneyIds.join(",")})`)
           }
-          const { data: myJourneysList, count: myCount, error: journeyError } = await myJourneysQuery
+          const { data: myJourneysList, count: myCount, error: journeyError } = await track<any>("assigned_journeys", () => myJourneysQuery
             .order("etd", { ascending: true, nullsFirst: false })
-            .limit(5)
+            .limit(5))
 
-          if (journeyError) throw journeyError
-          setMyScheduledJourneys(myJourneysList || [])
-          setMyAssignmentsCount(myCount || 0)
-          setMyAssignment(myJourneysList?.[0] ?? null)
+          if (journeyError) { stage = "assigned_journeys"; throw journeyError }
+          return { list: (myJourneysList || []) as any[], count: (myCount || 0) as number }
         }
 
-        // 3. Only Command/Admin receive cross-program metrics or journey details.
-        if (canViewGlobalDashboard) {
-          stage = "global_metrics"
-          const [papasRes, cheetahsRes, journeysRes, incidentsRes] = await Promise.all([
+        // Only Command/Admin receive cross-program metrics or journey details.
+        const loadGlobalMetrics = async () => {
+          if (!canViewGlobalDashboard) return null
+          const [papasRes, cheetahsRes, journeysRes, incidentsRes] = await track("global_metrics", () => Promise.all([
             supabase.from("papas").select("id", { count: "exact", head: true }),
             supabase.from("cheetahs").select("id", { count: "exact", head: true }),
             (supabase as any).from("journeys").select("id", { count: "exact", head: true })
               .not("status", "in", "(completed,cancelled)")
               .or("is_deleted.is.null,is_deleted.eq.false"),
             supabase.from("incidents").select("id", { count: "exact", head: true }).eq("status", "open"),
-          ])
+          ]))
 
           for (const result of [papasRes, cheetahsRes, journeysRes, incidentsRes]) {
-            if (result.error) throw result.error
-            if (result.count === null) throw new Error("Metric unavailable")
+            if (result.error) { stage = "global_metrics"; throw result.error }
+            if (result.count === null) { stage = "global_metrics"; throw new Error("Metric unavailable") }
           }
-          setStats({
+          return {
             totalPapas: papasRes.count || 0,
             totalCheetahs: cheetahsRes.count || 0,
             activeJourneys: journeysRes.count || 0,
             incidents: incidentsRes.count || 0,
-          })
+          }
+        }
 
-          stage = "recent_journeys"
-          const { data: journeys, error: recentError } = await (supabase as any)
+        const loadRecentJourneys = async () => {
+          if (!canViewGlobalDashboard) return null
+          const { data: journeys, error: recentError } = await track<any>("recent_journeys", async () => (supabase as any)
             .from("journeys")
             .select(DASHBOARD_JOURNEY_SELECT)
             .or("is_deleted.is.null,is_deleted.eq.false")
             .order("created_at", { ascending: false })
-            .limit(5)
+            .limit(5))
 
-          if (recentError) throw recentError
-          setRecentJourneys(journeys || [])
+          if (recentError) { stage = "recent_journeys"; throw recentError }
+          return (journeys || []) as any[]
+        }
+
+        stage = "active_program"
+        const [program, mine, metrics, recent] = await Promise.all([
+          loadActiveProgram(),
+          loadMyJourneys(),
+          loadGlobalMetrics(),
+          loadRecentJourneys(),
+        ])
+
+        // State is applied only once every required read has succeeded, so a
+        // partial failure never paints a half-updated dashboard.
+        setActiveProgram(program)
+        setMyScheduledJourneys(mine.list)
+        setMyAssignmentsCount(mine.count)
+        setMyAssignment(mine.list[0] ?? null)
+        // Only Command/Admin ever receive cross-program metrics or journeys.
+        if (canViewGlobalDashboard) {
+          if (metrics) setStats(metrics)
+          if (recent) setRecentJourneys(recent)
         }
         setUpdatedAt(new Date())
       })
@@ -343,7 +377,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [supabase, canViewGlobalDashboard])
+  }, [supabase, canViewGlobalDashboard, currentUser?.id])
 
   const handleDashboardRetry = async () => {
     setLoading(true)
@@ -375,7 +409,16 @@ export default function DashboardPage() {
 
   if (loading || userLoading) return <DashboardSkeleton />
 
-  if (loadError) return <section role="alert" className="mx-auto max-w-xl space-y-4 rounded-xl border p-6"><h1 className="text-xl font-semibold">Dashboard data unavailable</h1><p className="text-sm text-muted-foreground">We could not verify the latest operational data. Counts and assignments are hidden to avoid showing incomplete information.</p><Button onClick={() => void handleDashboardRetry()}>Retry dashboard</Button></section>
+  if (loadError) {
+    return (
+      <ErrorState
+        className="mx-auto max-w-xl rounded-xl border"
+        title={<span className="text-xl font-semibold">Dashboard data unavailable</span>}
+        description="We could not verify the latest operational data. Counts and assignments are hidden to avoid showing incomplete information."
+        onRetry={() => void handleDashboardRetry()}
+      />
+    )
+  }
 
   const firstName = currentUser?.full_name?.split(" ")[0]
   const officerUnit = currentUser?.oscar || (currentUser?.role ? toTitleCase(currentUser.role) : "General Duty")
@@ -404,7 +447,7 @@ export default function DashboardPage() {
                 {canViewGlobalDashboard ? "Command Overview" : `${officerUnit} Portal`}
               </span>
               {activeProgram && (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   {canViewGlobalDashboard && activeProgram.name ? `Latest active program: ${activeProgram.name}` : "Active program"}
                 </span>
@@ -462,12 +505,12 @@ export default function DashboardPage() {
                 <MapPin className="h-5 w-5" aria-hidden="true" />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">My Active Assignment</p>
+                <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">My Active Assignment</p>
                 <p className="truncate font-semibold text-sm mt-0.5">
                   {myAssignment.papas?.title} {myAssignment.papas?.full_name ?? "Papa"} — {myAssignment.origin || "Origin"} → {myAssignment.destination || "Destination"}
                 </p>
                 <div className="flex items-center gap-2 mt-1">
-                  <Badge className={`${getStatusColor(myAssignment.status)} text-[10px] uppercase px-2 py-0`}>
+                  <Badge className={`${getStatusColor(myAssignment.status)} text-xs uppercase px-2 py-0`}>
                     {getStatusLabel(myAssignment.status)}
                   </Badge>
                   <span className="text-xs text-muted-foreground">
@@ -626,14 +669,16 @@ export default function DashboardPage() {
         {canViewGlobalDashboard ? (
           // Leadership View: Global Journeys
           recentJourneys.length === 0 ? (
-            <div className="empty-state py-12">
-              <MapPin className="h-10 w-10" aria-hidden="true" />
-              <p className="font-medium text-sm">No journeys yet</p>
-              <p className="text-xs text-muted-foreground">Create your first journey to see it here</p>
-              <Button variant="outline" size="sm" className="mt-4 gap-2" onClick={() => router.push("/journeys")}>
-                <ArrowRight className="h-3.5 w-3.5" /> Create Journey
-              </Button>
-            </div>
+            <EmptyState
+              icon={MapPin}
+              title="No journeys yet"
+              description="Create your first journey to see it here"
+              action={
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => router.push("/journeys")}>
+                  <ArrowRight className="h-3.5 w-3.5" /> Create Journey
+                </Button>
+              }
+            />
           ) : (
             <ul className="divide-y divide-border/60">
               {recentJourneys.map((journey) => {
@@ -661,7 +706,7 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-3 shrink-0">
                         <Badge
                           variant={journey.status === "broken_arrow" ? "destructive" : "secondary"}
-                          className="uppercase tracking-wide text-[10px] px-2 py-0 hidden sm:flex"
+                          className="uppercase tracking-wide text-xs px-2 py-0 hidden sm:flex"
                         >
                           {getStatusLabel(journey.status)}
                         </Badge>
@@ -679,16 +724,16 @@ export default function DashboardPage() {
         ) : (
           // Officer View: Assigned Journeys Only
           myScheduledJourneys.length === 0 ? (
-            <div className="empty-state py-12">
-              <MapPin className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
-              <p className="font-medium text-sm">No duty assignments yet</p>
-              <p className="text-xs text-muted-foreground max-w-sm text-center mt-1">
-                You currently have no scheduled journeys assigned. When Command assigns you to a convoy, it will appear here and in My Operations.
-              </p>
-              <Button variant="outline" size="sm" className="mt-4 gap-2" onClick={() => router.push("/my-operations")}>
-                <Zap className="h-3.5 w-3.5 text-orange-500" /> Open My Operations
-              </Button>
-            </div>
+            <EmptyState
+              icon={MapPin}
+              title="No duty assignments yet"
+              description="You currently have no scheduled journeys assigned. When Command assigns you to a convoy, it will appear here and in My Operations."
+              action={
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => router.push("/my-operations")}>
+                  <Zap className="h-3.5 w-3.5 text-orange-500" /> Open My Operations
+                </Button>
+              }
+            />
           ) : (
             <ul className="divide-y divide-border/60">
               {myScheduledJourneys.map((journey) => {
@@ -716,7 +761,7 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-3 shrink-0">
                         <Badge
                           variant={journey.status === "broken_arrow" ? "destructive" : "secondary"}
-                          className="uppercase tracking-wide text-[10px] px-2 py-0 hidden sm:flex"
+                          className="uppercase tracking-wide text-xs px-2 py-0 hidden sm:flex"
                         >
                           {getStatusLabel(journey.status)}
                         </Badge>

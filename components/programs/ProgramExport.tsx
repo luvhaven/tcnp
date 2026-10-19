@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { notifyError, UserFacingError } from '@/lib/notify'
 
 type ProgramExportProps = {
   programId: string
@@ -25,7 +26,7 @@ export default function ProgramExport({ programId, programName, status }: Progra
     try {
       // Get current user
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
+      if (!user) throw new UserFacingError('Not authenticated')
 
       // Call the export function
       const { data: exportData, error: exportError } = await supabase
@@ -64,7 +65,7 @@ export default function ProgramExport({ programId, programName, status }: Progra
       toast.success('Program exported successfully!')
     } catch (error: any) {
       console.error('Error exporting program:', error)
-      toast.error(error.message || 'Failed to export program')
+      notifyError(error, 'Failed to export program')
     } finally {
       setExporting(false)
     }

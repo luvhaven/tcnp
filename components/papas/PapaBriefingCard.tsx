@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
+import { notifyError, UserFacingError } from '@/lib/notify'
 import { Edit2, Save, X, CheckCircle, User, Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -192,7 +193,7 @@ export default function PapaBriefingCard({ papa, config, canEdit }: PapaBriefing
         body: JSON.stringify(draft),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Save failed')
+      if (!res.ok) throw new UserFacingError(json.error || 'Save failed')
 
       toast.success(`Briefing updated — ${json.updated?.length ?? 0} field(s) saved`)
       // Update local view without full reload
@@ -202,7 +203,7 @@ export default function PapaBriefingCard({ papa, config, canEdit }: PapaBriefing
       setEditing(false)
       setDraft({})
     } catch (err: any) {
-      toast.error(err.message || 'Failed to save briefing')
+      notifyError(err, 'Failed to save briefing')
     } finally {
       setSaving(false)
     }

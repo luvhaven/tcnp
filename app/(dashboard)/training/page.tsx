@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
+import { notifyError, UserFacingError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { isPlatformAdministrator } from "@/lib/utils"
@@ -158,7 +159,7 @@ export default function TrainingPage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!form.topic.trim()) throw new Error("Topic is required")
+      if (!form.topic.trim()) throw new UserFacingError("Topic is required")
       const payload = {
         topic: form.topic.trim(),
         description: form.description.trim() || null,
@@ -172,7 +173,7 @@ export default function TrainingPage() {
         session_type: form.session_type,
         updated_at: new Date().toISOString(),
       }
-      if (form.visibility === "target_unit" && !form.target_unit_id) throw new Error("Choose the unit this session is for")
+      if (form.visibility === "target_unit" && !form.target_unit_id) throw new UserFacingError("Choose the unit this session is for")
       if (editing) {
         const { error } = await (supabase as any).from("training_schedules").update(payload).eq("id", editing.id)
         if (error) throw error
@@ -187,7 +188,7 @@ export default function TrainingPage() {
       setEditing(null)
       queryClient.invalidateQueries({ queryKey: ["training-schedules"] })
     },
-    onError: (err: any) => toast.error(err.message || "Failed to save"),
+    onError: (err: any) => notifyError(err, "Failed to save"),
   })
 
   const deleteMutation = useMutation({
@@ -199,7 +200,7 @@ export default function TrainingPage() {
       toast.success("Session removed")
       queryClient.invalidateQueries({ queryKey: ["training-schedules"] })
     },
-    onError: (err: any) => toast.error(err.message || "Failed to delete"),
+    onError: (err: any) => notifyError(err, "Failed to delete"),
   })
 
   const openCreate = () => {
@@ -228,8 +229,8 @@ export default function TrainingPage() {
   // Document Mutations & Handlers
   const saveDocMutation = useMutation({
     mutationFn: async () => {
-      if (!docForm.title.trim()) throw new Error("Title is required")
-      if (!docForm.content.trim()) throw new Error("Content is required")
+      if (!docForm.title.trim()) throw new UserFacingError("Title is required")
+      if (!docForm.content.trim()) throw new UserFacingError("Content is required")
       const payload = { ...docForm, managed_by_training: true }
       if (editingDoc) {
         const { error } = await (supabase as any).from("oscar_documents").update(payload).eq("id", editingDoc.id)
@@ -244,7 +245,7 @@ export default function TrainingPage() {
       setDocDialogOpen(false)
       queryClient.invalidateQueries({ queryKey: ["oscar-documents"] })
     },
-    onError: (err: any) => toast.error(err.message || "Failed to save"),
+    onError: (err: any) => notifyError(err, "Failed to save"),
   })
 
   const deleteDocMutation = useMutation({
@@ -256,7 +257,7 @@ export default function TrainingPage() {
       toast.success("Document deleted")
       queryClient.invalidateQueries({ queryKey: ["oscar-documents"] })
     },
-    onError: (err: any) => toast.error(err.message || "Failed to delete"),
+    onError: (err: any) => notifyError(err, "Failed to delete"),
   })
 
   const openDocCreate = () => {
@@ -277,7 +278,7 @@ export default function TrainingPage() {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <CardTitle className="text-base">{s.topic}</CardTitle>
-            <div className="mt-1 flex flex-wrap gap-1.5"><Badge variant="outline" className="text-[9px] capitalize">{(s.session_type || "training").replaceAll("_", " ")}</Badge>{(s.visibility || "all_members") !== "all_members" && <Badge variant="secondary" className="text-[9px]">{s.visibility === "training_unit" ? "Training Unit only" : units.find((unit) => unit.id === s.target_unit_id)?.name || "Target unit"}</Badge>}</div>
+            <div className="mt-1 flex flex-wrap gap-1.5"><Badge variant="outline" className="text-[11px] capitalize">{(s.session_type || "training").replaceAll("_", " ")}</Badge>{(s.visibility || "all_members") !== "all_members" && <Badge variant="secondary" className="text-[11px]">{s.visibility === "training_unit" ? "Training Unit only" : units.find((unit) => unit.id === s.target_unit_id)?.name || "Target unit"}</Badge>}</div>
             <CardDescription className="mt-1 flex flex-wrap items-center gap-2 text-xs">
               <span className="inline-flex items-center gap-1"><CalendarDays className="h-3 w-3" /> {s.session_date}</span>
               {(s.start_time || s.end_time) && (
@@ -290,8 +291,8 @@ export default function TrainingPage() {
           </div>
           {canEdit && (
             <div className="flex shrink-0 gap-1">
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}><Pencil className="h-3.5 w-3.5" /></Button>
-              <Button
+              <Button aria-label="Edit training session" variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}><Pencil className="h-3.5 w-3.5" /></Button>
+              <Button aria-label="Delete training session"
                 variant="ghost" size="icon" className="h-7 w-7 text-red-500"
                 onClick={async () => {
                   const ok = await confirm({ title: "Delete training session?", message: `"${s.topic}" will be removed from the schedule.` })
@@ -426,7 +427,7 @@ export default function TrainingPage() {
                       <div>
                         <h4 className="font-medium flex gap-2 items-center">
                           {d.title}
-                          <Badge variant="secondary" className="text-[10px] capitalize font-medium">{d.doc_type === 'sop' ? 'SOP' : 'Code of Conduct'}</Badge>
+                          <Badge variant="secondary" className="text-xs capitalize font-medium">{d.doc_type === 'sop' ? 'SOP' : 'Code of Conduct'}</Badge>
                         </h4>
                         <p className="text-xs text-muted-foreground mt-1 capitalize">{TARGET_OSCARS.find(o => o.id === d.oscar)?.name || d.oscar}</p>
                       </div>

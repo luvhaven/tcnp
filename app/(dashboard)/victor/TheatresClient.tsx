@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { MapPin, Plus, Edit, Trash2, Scan, Armchair, Landmark, Waypoints, Loader2, RotateCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
+import { notifyError } from '@/lib/notify'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import VIPManagementPanel from "@/components/theatre/VIPManagementPanel"
 import SeatArrangements from "@/components/theatre/SeatArrangements"
@@ -95,7 +96,7 @@ export default function TheatresClient({
       resetForm()
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to save venue')
+      notifyError(error, 'Failed to save venue')
     }
   })
 
@@ -181,7 +182,7 @@ export default function TheatresClient({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Victor</h1>
-              <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+              <Badge variant="outline" className="text-xs font-semibold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
                 Venues & Seating
               </Badge>
             </div>

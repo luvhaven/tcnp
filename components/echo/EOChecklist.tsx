@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle2, Circle, ClipboardCheck, AlertTriangle, Volume2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { notifyError, UserFacingError } from '@/lib/notify'
 import { cn } from '@/lib/utils'
 
 const EO_ITEMS = [
@@ -57,7 +58,7 @@ export default function EOChecklist({ programId, programName }: { programId: str
         setSaving(true)
         try {
             const { data: { user } } = await supabase.auth.getUser()
-            if (!user) throw new Error('Not authenticated')
+            if (!user) throw new UserFacingError('Not authenticated')
             const { data: ud } = await supabase.from('users').select('full_name').eq('id', user.id).single()
 
             await (supabase as any).from('eo_checklist_logs').insert([{
@@ -72,7 +73,7 @@ export default function EOChecklist({ programId, programName }: { programId: str
             setLastLog({ performed_at: new Date().toISOString(), officer_name: ud?.full_name || 'You' })
             toast.success('EO checklist logged', { description: allChecked ? 'All equipment cleared ✓' : `${checkedCount}/9 items checked` })
         } catch (err: any) {
-            toast.error(err.message || 'Failed to save checklist')
+            notifyError(err, 'Failed to save checklist')
         } finally {
             setSaving(false)
         }
@@ -85,28 +86,28 @@ export default function EOChecklist({ programId, programName }: { programId: str
                     <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                         <Volume2 className="h-4 w-4 text-primary" />
                         EO Pre-Op Equipment Check
-                        <Badge variant="secondary" className="text-[9px] font-mono">TCNP.01.10</Badge>
+                        <Badge variant="secondary" className="text-[11px] font-mono">TCNP.01.10</Badge>
                     </CardTitle>
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground font-mono">{checkedCount}/{EO_ITEMS.length}</span>
                         {allChecked ? (
-                            <Badge className="bg-green-500/20 text-green-600 border-green-500/30 text-[10px]">
+                            <Badge className="bg-green-500/20 text-green-600 border-green-500/30 text-xs">
                                 <CheckCircle2 className="h-3 w-3 mr-1" />Equipment Ready
                             </Badge>
                         ) : (
-                            <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-500/40">
+                            <Badge variant="outline" className="text-xs text-amber-600 border-amber-500/40">
                                 <AlertTriangle className="h-3 w-3 mr-1" />Pending
                             </Badge>
                         )}
                     </div>
                 </div>
                 {lastLog && (
-                    <p className="text-[10px] text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                         Last checked by <span className="font-medium text-foreground">{lastLog.officer_name}</span> · {new Date(lastLog.performed_at).toLocaleString()}
                     </p>
                 )}
                 {programName && (
-                    <Badge variant="outline" className="text-[10px] w-fit mt-1">{programName}</Badge>
+                    <Badge variant="outline" className="text-xs w-fit mt-1">{programName}</Badge>
                 )}
             </CardHeader>
             <CardContent className="p-4 space-y-2">

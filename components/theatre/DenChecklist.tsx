@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle2, Circle, ClipboardCheck, AlertTriangle, Theater } from 'lucide-react'
 import { toast } from 'sonner'
+import { notifyError, UserFacingError } from '@/lib/notify'
 import { cn } from '@/lib/utils'
 
 // Per SOP: The Den facility checklist must be run 4× per day
@@ -60,7 +61,7 @@ export default function DenChecklist({ theatreId, theatreName }: { theatreId: st
         setSaving(true)
         try {
             const { data: { user } } = await supabase.auth.getUser()
-            if (!user) throw new Error('Not authenticated')
+            if (!user) throw new UserFacingError('Not authenticated')
             const { data: ud } = await supabase.from('users').select('full_name').eq('id', user.id).single()
 
             await (supabase as any).from('den_checklist_logs').insert([{
@@ -82,7 +83,7 @@ export default function DenChecklist({ theatreId, theatreName }: { theatreId: st
             setChecks(Array(DEN_ITEMS.length).fill(false))
             toast.success(`Den checklist logged: ${session}`, { description: allChecked ? 'All clear ✓' : `${checkedCount}/${DEN_ITEMS.length} items checked` })
         } catch (err: any) {
-            toast.error(err.message || 'Failed to save')
+            notifyError(err, 'Failed to save')
         } finally {
             setSaving(false)
         }
@@ -95,11 +96,11 @@ export default function DenChecklist({ theatreId, theatreName }: { theatreId: st
                     <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                         <Theater className="h-4 w-4 text-orange-500" />
                         Den Facility Checklist
-                        <Badge variant="secondary" className="text-[9px] font-mono">TCNP.01.09</Badge>
+                        <Badge variant="secondary" className="text-[11px] font-mono">TCNP.01.09</Badge>
                     </CardTitle>
                     <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-muted-foreground">{todayLogs.length}/4 today</span>
-                        <Badge className={cn('text-[9px]', todayLogs.length >= 4 ? 'bg-green-500/20 text-green-600 border-green-500/30' : 'bg-amber-500/20 text-amber-600 border-amber-500/30')}>
+                        <span className="text-xs text-muted-foreground">{todayLogs.length}/4 today</span>
+                        <Badge className={cn('text-[11px]', todayLogs.length >= 4 ? 'bg-green-500/20 text-green-600 border-green-500/30' : 'bg-amber-500/20 text-amber-600 border-amber-500/30')}>
                             {todayLogs.length >= 4 ? '✓ Complete' : 'In Progress'}
                         </Badge>
                     </div>
@@ -110,7 +111,7 @@ export default function DenChecklist({ theatreId, theatreName }: { theatreId: st
                         {TIMES_OF_DAY.map(t => {
                             const done = todayLogs.find(l => l.session === t)
                             return (
-                                <span key={t} className={cn('text-[9px] rounded px-1.5 py-0.5 border', done ? 'bg-green-500/10 border-green-500/20 text-green-600' : 'bg-muted/30 border-border/30 text-muted-foreground')}>
+                                <span key={t} className={cn('text-[11px] rounded px-1.5 py-0.5 border', done ? 'bg-green-500/10 border-green-500/20 text-green-600' : 'bg-muted/30 border-border/30 text-muted-foreground')}>
                                     {done ? '✓' : '○'} {t.split(' ')[0]}
                                 </span>
                             )
@@ -126,7 +127,7 @@ export default function DenChecklist({ theatreId, theatreName }: { theatreId: st
                             key={t}
                             type="button"
                             onClick={() => setSession(t)}
-                            className={cn('text-[10px] rounded-md px-2 py-1 border transition-all', session === t ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/30 border-border/40 hover:bg-muted/60')}
+                            className={cn('text-xs rounded-md px-2 py-1 border transition-all', session === t ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/30 border-border/40 hover:bg-muted/60')}
                         >
                             {t}
                         </button>

@@ -109,7 +109,7 @@ export default function OperationalReadiness({ programs, papas, cheetahs, nests,
                   <p className="flex items-center gap-1.5 text-sm font-medium">
                     {item.label}
                     {item.required && !ready && (
-                      <Badge variant="outline" className="border-amber-400/60 text-[9px] uppercase text-amber-600 dark:text-amber-400">required</Badge>
+                      <Badge variant="outline" className="border-amber-400/60 text-[11px] uppercase text-amber-600 dark:text-amber-400">required</Badge>
                     )}
                   </p>
                   <p className="truncate text-[11px] text-muted-foreground">Owned by {item.owner}</p>

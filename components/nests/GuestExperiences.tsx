@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
+import { notifyError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { canManageNoscarNest, cn } from "@/lib/utils"
@@ -129,7 +130,7 @@ export default function GuestExperiences() {
       setEditing(null)
       queryClient.invalidateQueries({ queryKey: ["hospitality-places"] })
     } catch (err: any) {
-      toast.error(err.message || "Failed to save")
+      notifyError(err, "Failed to save")
     } finally {
       setUploading(false)
     }
@@ -147,7 +148,7 @@ export default function GuestExperiences() {
       toast.success("Place removed")
       queryClient.invalidateQueries({ queryKey: ["hospitality-places"] })
     },
-    onError: (err: any) => toast.error(err.message || "Failed to delete"),
+    onError: (err: any) => notifyError(err, "Failed to delete"),
   })
 
   const openCreate = () => {
@@ -180,7 +181,7 @@ export default function GuestExperiences() {
             <div className="flex items-center gap-2">
               <Compass className="h-6 w-6 text-teal-300" />
               <h2 className="text-2xl font-bold tracking-tight">Guest Experiences</h2>
-              <Badge className="border-0 bg-teal-500/20 text-teal-200 uppercase text-[10px] tracking-wider">November Nest</Badge>
+              <Badge className="border-0 bg-teal-500/20 text-teal-200 uppercase text-xs tracking-wider">November Nest</Badge>
             </div>
             <p className="mt-1 max-w-xl text-sm text-slate-300">
               Curated experiences for our Papas — the finest places to visit, dine and unwind while they are with us.
@@ -247,7 +248,7 @@ export default function GuestExperiences() {
                           <meta.icon className="h-12 w-12" />
                         </div>
                       )}
-                      <Badge className={cn("absolute left-2 top-2 border-0 text-[10px] uppercase tracking-wide", meta.color)}>
+                      <Badge className={cn("absolute left-2 top-2 border-0 text-xs uppercase tracking-wide", meta.color)}>
                         {meta.label}
                       </Badge>
                     </div>
@@ -264,8 +265,8 @@ export default function GuestExperiences() {
                         </div>
                         {canEdit && (
                           <div className="flex shrink-0 gap-1">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(place)}><Pencil className="h-3.5 w-3.5" /></Button>
-                            <Button
+                            <Button aria-label="Edit place" variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(place)}><Pencil className="h-3.5 w-3.5" /></Button>
+                            <Button aria-label="Remove place"
                               variant="ghost" size="icon" className="h-7 w-7 text-red-500"
                               onClick={async () => {
                                 const ok = await confirm({ title: "Remove place?", message: `"${place.name}" will be removed from the guide.` })

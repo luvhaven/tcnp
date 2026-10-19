@@ -34,6 +34,9 @@ import { JourneyTimelineDialog } from "@/components/journeys/JourneyTimelineDial
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
+import { notifyError } from '@/lib/notify'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/lib/constants/tncpCallSigns"
 import { DateTimePicker } from "@/components/ui/date-time-picker"
 import { usePagination } from "@/hooks/usePagination"
@@ -116,7 +119,8 @@ export default function JourneysClient({
   initialNests,
   initialEagleSquares
 }: {
-  initialJourneys: Journey[]
+  /** null when the server read failed; the client then loads them itself. */
+  initialJourneys: Journey[] | null
   initialPapas: any[]
   initialCheetahs: any[]
   initialPrograms: any[]
@@ -125,18 +129,23 @@ export default function JourneysClient({
   initialEagleSquares: any[]
 }) {
   const supabase = createClient()
-  const [journeys, setJourneys] = useState<Journey[]>(initialJourneys)
+  const [journeys, setJourneys] = useState<Journey[]>(initialJourneys ?? [])
   const [papas, setPapas] = useState<any[]>(initialPapas)
   const [cheetahs, setCheetahs] = useState<any[]>(initialCheetahs)
   const [programs, setPrograms] = useState<any[]>(initialPrograms)
   const [officers, setOfficers] = useState<any[]>(initialOfficers)
   const [nests, setNests] = useState<any[]>(initialNests)
   const [eagleSquares, setEagleSquares] = useState<any[]>(initialEagleSquares)
-  const [loading, setLoading] = useState(false)
+  // Start in the loading state when the server could not supply the first
+  // page, so "No active journeys" is never shown for a list we never read.
+  const serverJourneysMissing = useRef(initialJourneys == null)
+  const [loading, setLoading] = useState(serverJourneysMissing.current)
+  const [journeysLoadFailed, setJourneysLoadFailed] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const { page, from, to, hasMore, setHasMore, nextPage, resetPage } = usePagination({ pageSize: 50 })
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [isCreatingJourney, setIsCreatingJourney] = useState(false)
+  const [isUpdatingJourney, setIsUpdatingJourney] = useState(false)
   const createJourneyInFlight = useRef(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [callSignDialogOpen, setCallSignDialogOpen] = useState(false)
@@ -222,7 +231,7 @@ export default function JourneysClient({
         const json = await res.json()
         if (json.error) {
           console.error('by-program API error:', json.error)
-          toast.error('Could not load officers: ' + json.error)
+          notifyError(json.error, 'Could not load officers')
           setProgramOfficers([])
         } else {
           setProgramOfficers(json.officers || [])
@@ -294,6 +303,7 @@ export default function JourneysClient({
       }
     }
     init()
+    if (serverJourneysMissing.current) void loadJourneys(false)
 
     // Subscribe to real-time updates
     const channel = supabase
@@ -347,10 +357,12 @@ export default function JourneysClient({
         }
         setHasMore(data.length === 50)
       }
+      if (!isLoadMore) setJourneysLoadFailed(false)
       return true
     } catch (error) {
       console.error('Error loading journeys data:', error)
-      if (reportError) toast.error('Failed to load journeys')
+      if (!isLoadMore) setJourneysLoadFailed(true)
+      if (reportError) notifyError(error, 'Failed to load journeys')
       return false
     } finally {
       if (isLoadMore) setLoadingMore(false)
@@ -495,7 +507,7 @@ export default function JourneysClient({
       }
     } catch (error: any) {
       console.error('Error creating journey:', error)
-      toast.error(error.message || 'Failed to create journey')
+      notifyError(error, 'Failed to create journey')
     } finally {
       createJourneyInFlight.current = false
       setIsCreatingJourney(false)
@@ -572,6 +584,8 @@ export default function JourneysClient({
       return
     }
 
+    if (isUpdatingJourney) return
+    setIsUpdatingJourney(true)
     try {
       const lead = teamLeadId || selectedDOs[0] || formData.assigned_duty_officer_id || null
       // secondary_papa_ids is client-only form state for the journey_papas
@@ -627,7 +641,9 @@ export default function JourneysClient({
       loadJourneys(false)
     } catch (error: any) {
       console.error('Error updating journey:', error)
-      toast.error(error.message || 'Failed to update journey')
+      notifyError(error, 'Failed to update journey')
+    } finally {
+      setIsUpdatingJourney(false)
     }
   }
 
@@ -666,7 +682,7 @@ export default function JourneysClient({
       loadJourneys(false)
     } catch (error: any) {
       console.error('Error updating journey:', error)
-      toast.error(error.message || 'Failed to update journey')
+      notifyError(error, 'Failed to update journey')
     }
   }
 
@@ -694,7 +710,7 @@ export default function JourneysClient({
       await loadJourneys(false)
     } catch (err: any) {
       console.error('Error deleting journey:', err)
-      toast.error(err.message || 'Failed to delete journey')
+      notifyError(err, 'Failed to delete journey')
     } finally {
       setIsDeleting(false)
     }
@@ -889,18 +905,20 @@ export default function JourneysClient({
               <CardDescription>Live monitoring of ongoing movements</CardDescription>
             </CardHeader>
             <CardContent>
-              {journeys.filter(j => ['planned', 'in_progress', 'first_course', 'chapman', 'dessert', 'broken_arrow'].includes(j.status)).length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <MapPin className="h-12 w-12 text-muted-foreground/50" />
-                  <p className="mt-4 text-sm font-medium">No active journeys</p>
-                  <p className="text-xs text-muted-foreground">Create a new journey to get started</p>
-                  {canCreateJourney && (
-                    <Button className="mt-4" onClick={() => setCreateDialogOpen(true)}>
+              {journeysLoadFailed && journeys.length === 0 ? (
+                <ErrorState title="Couldn't load journeys" onRetry={() => { setLoading(true); void loadJourneys(false) }} />
+              ) : journeys.filter(j => ['planned', 'in_progress', 'first_course', 'chapman', 'dessert', 'broken_arrow'].includes(j.status)).length === 0 ? (
+                <EmptyState
+                  icon={MapPin}
+                  title="No active journeys"
+                  description="Create a new journey to get started"
+                  action={canCreateJourney && (
+                    <Button onClick={() => setCreateDialogOpen(true)}>
                       <Plus className="mr-2 h-4 w-4" />
                       Create Journey
                     </Button>
                   )}
-                </div>
+                />
               ) : (
                 <div className="space-y-4">
                   {journeys
@@ -1087,7 +1105,7 @@ export default function JourneysClient({
                         <Badge variant="outline">
                           {getStatusLabel(journey.status)}
                         </Badge>
-                        <Button
+                        <Button aria-label="View timeline"
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 hover:bg-muted text-blue-600"
@@ -1118,7 +1136,7 @@ export default function JourneysClient({
                       </div>
                     </div>
                   ))}
-                {journeys.filter(j => ['completed', 'cancelled'].includes(j.status)).length === 0 && (
+                {!journeysLoadFailed && journeys.filter(j => ['completed', 'cancelled'].includes(j.status)).length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     No completed journeys found
                   </div>
@@ -1197,7 +1215,7 @@ export default function JourneysClient({
                               <span className="font-medium text-sm">{officer.full_name}</span>
                               <span className="ml-2 text-xs text-muted-foreground">{officer.title_name || officer.oscar || officer.role}</span>
                               {officer.is_available_only && (
-                                <span className="ml-2 text-[10px] uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Available</span>
+                                <span className="ml-2 text-xs uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Available</span>
                               )}
                             </label>
                             {isSelected && selectedDOs.length > 1 && (
@@ -1504,7 +1522,7 @@ export default function JourneysClient({
                               <span className="font-medium text-sm">{officer.full_name}</span>
                               <span className="ml-2 text-xs text-muted-foreground">{officer.title_name || officer.oscar || officer.role}</span>
                               {officer.is_available_only && (
-                                <span className="ml-2 text-[10px] uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Available</span>
+                                <span className="ml-2 text-xs uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Available</span>
                               )}
                             </label>
                             {isSelected && selectedDOs.length > 1 && (
@@ -1580,7 +1598,7 @@ export default function JourneysClient({
               <Button type="button" variant="outline" onClick={() => setEditDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">
+              <Button type="submit" pending={isUpdatingJourney}>
                 Save Changes
               </Button>
             </div>

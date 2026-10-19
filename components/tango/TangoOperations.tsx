@@ -31,6 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { toast } from "sonner"
+import { notifyError, UserFacingError } from '@/lib/notify'
 
 type TangoOperationsProps = {
   cheetahs: any[]
@@ -274,7 +275,7 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
 
   const savePartner = useMutation({
     mutationFn: async () => {
-      if (!userId) throw new Error("Sign in again before saving a partner")
+      if (!userId) throw new UserFacingError("Sign in again before saving a partner")
       const payload = {
         ...partnerForm,
         name: partnerForm.name.trim(),
@@ -284,7 +285,7 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
         notes: partnerForm.notes.trim() || null,
         is_active: true,
       }
-      if (!payload.name) throw new Error("Partner name is required")
+      if (!payload.name) throw new UserFacingError("Partner name is required")
       const query = (supabase as any).from("fleet_partners")
       const { error } = editingPartnerId
         ? await query.update(payload).eq("id", editingPartnerId)
@@ -297,7 +298,7 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
       setPartnerForm(emptyPartner)
       void queryClient.invalidateQueries({ queryKey: ["fleet-partners"] })
     },
-    onError: (error: any) => toast.error(error.message || "Partner could not be saved"),
+    onError: (error: any) => notifyError(error, "Partner could not be saved"),
   })
 
   const deletePartner = useMutation({
@@ -309,7 +310,7 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
       toast.success("Partner removed")
       void queryClient.invalidateQueries({ queryKey: ["fleet-partners"] })
     },
-    onError: (error: any) => toast.error(error.message || "Partner could not be removed"),
+    onError: (error: any) => notifyError(error, "Partner could not be removed"),
   })
 
   const linkVehicle = useMutation({
@@ -324,13 +325,13 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
       toast.success("Fleet ownership updated")
       void queryClient.invalidateQueries({ queryKey: ["cheetahs"] })
     },
-    onError: (error: any) => toast.error(error.message || "Vehicle ownership could not be updated"),
+    onError: (error: any) => notifyError(error, "Vehicle ownership could not be updated"),
   })
 
   const addAllocation = useMutation({
     mutationFn: async () => {
-      if (!userId) throw new Error("Sign in again before assigning a vehicle")
-      if (!allocationForm.journey_id || !allocationForm.cheetah_id) throw new Error("Choose a journey and Cheetah")
+      if (!userId) throw new UserFacingError("Sign in again before assigning a vehicle")
+      if (!allocationForm.journey_id || !allocationForm.cheetah_id) throw new UserFacingError("Choose a journey and Cheetah")
       const { error } = await (supabase as any).from("journey_cheetahs").insert({
         journey_id: allocationForm.journey_id,
         cheetah_id: allocationForm.cheetah_id,
@@ -348,7 +349,7 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
       void queryClient.invalidateQueries({ queryKey: ["journey-cheetahs"] })
       void queryClient.invalidateQueries({ queryKey: ["tango-journeys-board"] })
     },
-    onError: (error: any) => toast.error(error.message || "Cheetah could not be assigned"),
+    onError: (error: any) => notifyError(error, "Cheetah could not be assigned"),
   })
 
   const removeAllocation = useMutation({
@@ -361,14 +362,14 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
       void queryClient.invalidateQueries({ queryKey: ["journey-cheetahs"] })
       void queryClient.invalidateQueries({ queryKey: ["tango-journeys-board"] })
     },
-    onError: (error: any) => toast.error(error.message || "Allocation could not be removed"),
+    onError: (error: any) => notifyError(error, "Allocation could not be removed"),
   })
 
   const submitFeedback = useMutation({
     mutationFn: async () => {
-      if (!userId) throw new Error("Sign in again before sending feedback")
-      if (!feedbackForm.journey_id || !feedbackForm.cheetah_id) throw new Error("Choose the journey and Cheetah")
-      if (!myJourneyIds.has(feedbackForm.journey_id)) throw new Error("Only an assigned Duty Officer can review this journey")
+      if (!userId) throw new UserFacingError("Sign in again before sending feedback")
+      if (!feedbackForm.journey_id || !feedbackForm.cheetah_id) throw new UserFacingError("Choose the journey and Cheetah")
+      if (!myJourneyIds.has(feedbackForm.journey_id)) throw new UserFacingError("Only an assigned Duty Officer can review this journey")
       const journey = journeyById.get(feedbackForm.journey_id)
       const { error } = await (supabase as any).from("driver_feedback").insert({
         ...feedbackForm,
@@ -384,7 +385,7 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
       setFeedbackForm({ journey_id: "", cheetah_id: "", rating: 5, safety_rating: 5, punctuality_rating: 5, cleanliness_rating: 5, notes: "" })
       void queryClient.invalidateQueries({ queryKey: ["driver-feedback"] })
     },
-    onError: (error: any) => toast.error(error.message || "Feedback could not be sent"),
+    onError: (error: any) => notifyError(error, "Feedback could not be sent"),
   })
 
   const handlePartnerSubmit = (event: FormEvent) => {
@@ -511,7 +512,7 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
                       </div>
                       <div className="shrink-0 text-right">
                         <p className="text-2xl font-semibold tabular-nums">{journeyAllocations.length}</p>
-                        <p className="text-[10px] text-muted-foreground">Cheetah{journeyAllocations.length === 1 ? "" : "s"}</p>
+                        <p className="text-xs text-muted-foreground">Cheetah{journeyAllocations.length === 1 ? "" : "s"}</p>
                       </div>
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
@@ -641,9 +642,9 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
               <div className="flex items-center justify-between"><div><h3 className="font-semibold">Live feedback feed</h3><p className="text-xs text-muted-foreground">Newest observations appear first.</p></div><span className="flex items-center gap-2 text-xs text-muted-foreground"><span className="h-2 w-2 rounded-full bg-emerald-500" />Live</span></div>
               {(feedbackQuery.data || []).length === 0 ? <p className="rounded-xl border border-dashed py-10 text-center text-sm text-muted-foreground">No driver feedback submitted.</p> : (feedbackQuery.data || []).map((feedback: any) => { const journey = journeyById.get(feedback.journey_id); const vehicle = cheetahById.get(feedback.cheetah_id); const reviewer = peopleById.get(feedback.reviewer_id); return (
                 <article key={feedback.id} className="rounded-xl border p-4">
-                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium">{vehicle?.call_sign || vehicle?.registration_number || "Driver review"}</p><p className="truncate text-xs text-muted-foreground">{journeyLabel(journey)} · {reviewer?.full_name || "Duty Officer"}</p></div><div className="text-right"><p className="text-lg font-semibold tabular-nums">{feedback.rating}/5</p><p className="text-[10px] text-muted-foreground">overall</p></div></div>
+                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium">{vehicle?.call_sign || vehicle?.registration_number || "Driver review"}</p><p className="truncate text-xs text-muted-foreground">{journeyLabel(journey)} · {reviewer?.full_name || "Duty Officer"}</p></div><div className="text-right"><p className="text-lg font-semibold tabular-nums">{feedback.rating}/5</p><p className="text-xs text-muted-foreground">overall</p></div></div>
                   {feedback.notes && <p className="mt-3 text-sm leading-relaxed">{feedback.notes}</p>}
-                  <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-muted-foreground"><span>Safety {feedback.safety_rating}/5</span><span>·</span><span>Punctuality {feedback.punctuality_rating}/5</span><span>·</span><span>Cleanliness {feedback.cleanliness_rating}/5</span><span className="ml-auto">{formatDateTime(feedback.created_at)}</span></div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground"><span>Safety {feedback.safety_rating}/5</span><span>·</span><span>Punctuality {feedback.punctuality_rating}/5</span><span>·</span><span>Cleanliness {feedback.cleanliness_rating}/5</span><span className="ml-auto">{formatDateTime(feedback.created_at)}</span></div>
                 </article>
               )})}
             </div>

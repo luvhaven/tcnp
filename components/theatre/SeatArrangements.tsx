@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
+import { notifyError, UserFacingError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -247,7 +248,7 @@ export default function SeatArrangements({ canEdit, currentUserId }: Props) {
 
   const assignMutation = useMutation({
     mutationFn: async () => {
-      if (!seatTarget) throw new Error("No seat selected")
+      if (!seatTarget) throw new UserFacingError("No seat selected")
       const base = {
         arrangement_id: seatTarget.arrangementId,
         row_label: seatTarget.rowLabel,
@@ -261,13 +262,13 @@ export default function SeatArrangements({ canEdit, currentUserId }: Props) {
       // The table enforces exactly one occupant reference
       // (num_nonnulls(senior_minister_id, papa_id, occupant_name) = 1).
       if (seatForm.kind === "minister") {
-        if (!seatForm.ministerId) throw new Error("Choose a senior minister")
+        if (!seatForm.ministerId) throw new UserFacingError("Choose a senior minister")
         base.senior_minister_id = seatForm.ministerId
       } else if (seatForm.kind === "papa") {
-        if (!seatForm.papaId) throw new Error("Choose a Papa")
+        if (!seatForm.papaId) throw new UserFacingError("Choose a Papa")
         base.papa_id = seatForm.papaId
       } else {
-        if (!seatForm.occupantName.trim()) throw new Error("Enter a name for this seat")
+        if (!seatForm.occupantName.trim()) throw new UserFacingError("Enter a name for this seat")
         base.occupant_name = seatForm.occupantName.trim()
       }
 
@@ -284,7 +285,7 @@ export default function SeatArrangements({ canEdit, currentUserId }: Props) {
         if (error) {
           // seat_assignments_unique_seat — someone claimed this seat first.
           if ((error as any).code === "23505") {
-            throw new Error("That seat was just taken. Reload to see who is in it.")
+            throw new UserFacingError("That seat was just taken. Reload to see who is in it.")
           }
           throw error
         }
@@ -295,7 +296,7 @@ export default function SeatArrangements({ canEdit, currentUserId }: Props) {
       setSeatTarget(null)
       queryClient.invalidateQueries({ queryKey: ["seat-assignments"] })
     },
-    onError: (err: any) => toast.error(err.message || "Failed to assign seat"),
+    onError: (err: any) => notifyError(err, "Failed to assign seat"),
   })
 
   const unassignMutation = useMutation({
@@ -308,13 +309,13 @@ export default function SeatArrangements({ canEdit, currentUserId }: Props) {
       setSeatTarget(null)
       queryClient.invalidateQueries({ queryKey: ["seat-assignments"] })
     },
-    onError: (err: any) => toast.error(err.message || "Failed to clear seat"),
+    onError: (err: any) => notifyError(err, "Failed to clear seat"),
   })
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!form.program_id) throw new Error("Program is required")
-      if (!form.session_name.trim()) throw new Error("Session name is required")
+      if (!form.program_id) throw new UserFacingError("Program is required")
+      if (!form.session_name.trim()) throw new UserFacingError("Session name is required")
       const payload = {
         program_id: form.program_id,
         theatre_id: form.theatre_id || null,
@@ -339,7 +340,7 @@ export default function SeatArrangements({ canEdit, currentUserId }: Props) {
       setEditing(null)
       queryClient.invalidateQueries({ queryKey: ["seat-arrangements"] })
     },
-    onError: (err: any) => toast.error(err.message || "Failed to save"),
+    onError: (err: any) => notifyError(err, "Failed to save"),
   })
 
   const deleteMutation = useMutation({
@@ -351,7 +352,7 @@ export default function SeatArrangements({ canEdit, currentUserId }: Props) {
       toast.success("Arrangement removed")
       queryClient.invalidateQueries({ queryKey: ["seat-arrangements"] })
     },
-    onError: (err: any) => toast.error(err.message || "Failed to delete"),
+    onError: (err: any) => notifyError(err, "Failed to delete"),
   })
 
   const openSeat = (
@@ -473,13 +474,13 @@ export default function SeatArrangements({ canEdit, currentUserId }: Props) {
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-                                <Badge variant="secondary" className="gap-1 text-[10px] uppercase">
+                                <Badge variant="secondary" className="gap-1 text-xs uppercase">
                                   <ListOrdered className="h-3 w-3" /> Session {a.session_order}
                                 </Badge>
                                 <span>{a.session_name}</span>
                               </CardTitle>
                               <CardDescription className="mt-1 flex flex-wrap items-center gap-2">
-                                {a.programs?.name && <Badge variant="outline" className="text-[10px]">{a.programs.name}</Badge>}
+                                {a.programs?.name && <Badge variant="outline" className="text-xs">{a.programs.name}</Badge>}
                                 {a.theatres?.name && (
                                   <span className="inline-flex items-center gap-1 text-xs">
                                     <Landmark className="h-3 w-3" /> {a.theatres.name}
@@ -489,8 +490,8 @@ export default function SeatArrangements({ canEdit, currentUserId }: Props) {
                             </div>
                             {canEdit && (
                               <div className="flex shrink-0 gap-1">
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(a)}><Pencil className="h-3.5 w-3.5" /></Button>
-                                <Button
+                                <Button aria-label="Edit arrangement" variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(a)}><Pencil className="h-3.5 w-3.5" /></Button>
+                                <Button aria-label="Delete arrangement"
                                   variant="ghost" size="icon" className="h-7 w-7 text-red-500"
                                   onClick={async () => {
                                     const ok = await confirm({ title: "Delete arrangement?", message: `${a.session_name} on ${a.arrangement_date} will be removed.` })
@@ -505,7 +506,7 @@ export default function SeatArrangements({ canEdit, currentUserId }: Props) {
                         </CardHeader>
                         <CardContent className="space-y-3">
                           {/* Stage marker */}
-                          <div className="mx-auto w-2/3 rounded-t-3xl border border-b-0 border-dashed border-primary/40 py-1 text-center text-[10px] uppercase tracking-[0.3em] text-primary/70">
+                          <div className="mx-auto w-2/3 rounded-t-3xl border border-b-0 border-dashed border-primary/40 py-1 text-center text-xs uppercase tracking-[0.3em] text-primary/70">
                             Mount Sinai (Stage)
                           </div>
                           {/* Seat map */}

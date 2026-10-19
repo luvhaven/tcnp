@@ -19,6 +19,7 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Hotel, Plus, Edit, Trash2, Building, Users, UserPlus, UserCheck, ChevronDown } from "lucide-react"
 import { toast } from "sonner"
+import { notifyError } from '@/lib/notify'
 import { effectiveOscarRole, isPlatformAdministrator } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 import PapaAccommodations from "@/components/nests/PapaAccommodations"
@@ -176,7 +177,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       resetForm()
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to save')
+      notifyError(error, 'Failed to save')
     }
   })
 
@@ -216,7 +217,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       setOfficerFormData({ user_id: '', assignment_type: 'nest' })
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to assign officer')
+      notifyError(error, 'Failed to assign officer')
     }
   })
 
@@ -231,7 +232,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       toast.success(isActive ? 'Officer marked active' : 'Officer marked inactive')
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to update status')
+      notifyError(error, 'Failed to update status')
     }
   })
 
@@ -246,7 +247,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       toast.success('Officer removed from location')
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to remove')
+      notifyError(error, 'Failed to remove')
     }
   })
 
@@ -261,6 +262,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       type: 'nest',
       program_id: formData.program_id || null
     }
+    if (saveNestMutation.isPending) return
     saveNestMutation.mutate({ isEdit: !!editing, data: submitData })
   }
 
@@ -309,6 +311,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       toast.error('Please select an officer')
       return
     }
+    if (assignOfficerMutation.isPending) return
     assignOfficerMutation.mutate({
       user_id: officerFormData.user_id,
       nest_id: selectedNest.id,
@@ -356,7 +359,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">November (Nest)</h1>
-              <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider bg-primary/10 text-primary border-primary/20">
+              <Badge variant="outline" className="text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary border-primary/20">
                 Hotel & Accommodations
               </Badge>
             </div>
@@ -455,17 +458,17 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
                             </div>
                             {canManage && (
                               <div className="flex gap-1 shrink-0">
-                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={() => {
+                                <Button aria-label="Assign officer" variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={() => {
                                   setSelectedNest(nest)
                                   setOfficerFormData({ ...officerFormData, assignment_type: 'nest' })
                                   setOfficerDialogOpen(true)
                                 }}>
                                   <UserPlus className="h-4 w-4" />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={() => handleEdit(nest)}>
+                                <Button aria-label="Edit Nest" variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={() => handleEdit(nest)}>
                                   <Edit className="h-4 w-4" />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(nest.id)}>
+                                <Button aria-label="Delete Nest" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(nest.id)}>
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </div>
@@ -517,7 +520,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
                                         </Avatar>
                                         <div>
                                           <p className="text-xs font-medium group-hover:underline">{assignment.user?.full_name}</p>
-                                          <p className="text-[10px] text-muted-foreground">{assignment.user?.oscar}</p>
+                                          <p className="text-xs text-muted-foreground">{assignment.user?.oscar}</p>
                                         </div>
                                       </div>
                                       {canManage && (
@@ -527,7 +530,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
                                             onCheckedChange={() => toggleOfficerActive(assignment)}
                                             className="scale-75"
                                           />
-                                          <Button
+                                          <Button aria-label="Remove assignment"
                                             variant="ghost"
                                             size="icon"
                                             className="h-6 w-6"
@@ -555,7 +558,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
                               <ChevronDown className={`h-3 w-3 transition-transform ${expandedComfort === nest.id ? 'rotate-180' : ''}`} />
                               Comfort Checklist
                             </span>
-                            <span className="text-[10px] font-mono text-pink-500">TCNP.01.07</span>
+                            <span className="text-xs font-mono text-pink-500">TCNP.01.07</span>
                           </button>
                           {expandedComfort === nest.id && (
                             <div className="mt-2">
@@ -684,7 +687,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">
+              <Button type="submit" pending={saveNestMutation.isPending}>
                 {editing ? 'Update' : 'Add'} Nest
               </Button>
             </div>
@@ -725,8 +728,8 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
               <Button type="button" variant="outline" onClick={() => setOfficerDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">
-                <UserCheck className="mr-2 h-4 w-4" />
+              <Button type="submit" pending={assignOfficerMutation.isPending}>
+                {!assignOfficerMutation.isPending && <UserCheck className="mr-2 h-4 w-4" />}
                 Assign Officer
               </Button>
             </div>

@@ -393,7 +393,7 @@ export default function AuditLogsPage() {
                         <details className="mt-2 text-[11px] text-muted-foreground">
                           <summary className="cursor-pointer select-none hover:text-foreground font-medium flex items-center gap-2">
                             <span>View changes</span>
-                            <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">
+                            <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">
                               {"JSON"}
                             </span>
                           </summary>
@@ -408,7 +408,7 @@ export default function AuditLogsPage() {
                       {log.created_at && (
                         <>
                           <span>{formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}</span>
-                          <span className="text-[10px] opacity-80">
+                          <span className="text-xs opacity-80">
                             {new Date(log.created_at).toLocaleString()}
                           </span>
                         </>

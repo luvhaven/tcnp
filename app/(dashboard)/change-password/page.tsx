@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
+import { notifyError } from '@/lib/notify'
 import { useRouter } from "next/navigation"
 
 export default function ChangePasswordPage() {
@@ -43,7 +44,7 @@ export default function ChangePasswordPage() {
             setPassword("")
             setConfirmPassword("")
         } catch (error: any) {
-            toast.error(error.message || "Failed to update password")
+            notifyError(error, "Failed to update password")
         } finally {
             setLoading(false)
         }
@@ -52,7 +53,7 @@ export default function ChangePasswordPage() {
     return (
         <div className="space-y-6 max-w-lg mx-auto">
             <div className="flex items-center gap-3">
-                <Button variant="ghost" size="icon" onClick={() => router.back()} className="h-8 w-8">
+                <Button aria-label="Go back" variant="ghost" size="icon" onClick={() => router.back()} className="h-8 w-8">
                     <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <div>

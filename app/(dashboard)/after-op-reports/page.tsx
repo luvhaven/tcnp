@@ -152,25 +152,25 @@ export default function AfterOpReportPage() {
                                             <CardTitle className="text-sm flex items-center gap-2">
                                                 {papa}
                                                 {hasIncident && (
-                                                    <Badge variant="destructive" className="text-[9px] gap-1">
+                                                    <Badge variant="destructive" className="text-[11px] gap-1">
                                                         <AlertTriangle className="h-2.5 w-2.5" />Incident Reported
                                                     </Badge>
                                                 )}
                                                 {hasGifts && (
-                                                    <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[9px]">
+                                                    <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[11px]">
                                                         💰 Gift Received
                                                     </Badge>
                                                 )}
                                             </CardTitle>
                                             <div className="flex items-center gap-3 flex-wrap">
-                                                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
                                                     <User className="h-3 w-3" />{report.submitted_by_name}
                                                 </span>
-                                                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
                                                     <Calendar className="h-3 w-3" />{format(new Date(report.submitted_at), 'dd MMM yyyy, HH:mm')}
                                                 </span>
                                                 {report.journey && (
-                                                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
                                                         <MapPin className="h-3 w-3" />{report.journey.origin} → {report.journey.destination}
                                                     </span>
                                                 )}
@@ -194,7 +194,7 @@ export default function AfterOpReportPage() {
                                             { label: 'Required Improvements', value: report.improvements },
                                         ].filter(f => !!f.value?.trim()).map(field => (
                                             <div key={field.label} className={cn('rounded-md px-3 py-2', field.highlight ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-muted/30 border border-border/30')}>
-                                                <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">{field.label}</p>
+                                                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">{field.label}</p>
                                                 <p className="text-foreground leading-snug">{field.value}</p>
                                             </div>
                                         ))}

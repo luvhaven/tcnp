@@ -17,7 +17,7 @@ export default async function JourneysPage() {
   )
 
   // Fetch initial journeys (first 50)
-  const { data: initialJourneys } = await supabase.from('journeys').select(`
+  const { data: initialJourneys, error: initialJourneysError } = await supabase.from('journeys').select(`
     *,
     papas!journeys_papa_id_fkey(title, full_name),
     cheetahs (call_sign, registration_number, driver_name, driver_phone),
@@ -41,7 +41,7 @@ export default async function JourneysPage() {
 
   return (
     <JourneysClient 
-      initialJourneys={initialJourneys || []} 
+      initialJourneys={initialJourneysError ? null : initialJourneys || []} 
       initialPapas={papasRes.data || []}
       initialCheetahs={cheetahsRes.data || []}
       initialPrograms={programsRes.data || []}

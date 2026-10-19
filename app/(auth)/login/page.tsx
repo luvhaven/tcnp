@@ -630,7 +630,7 @@ export default function LoginPage() {
             <h1 className="text-2xl font-bold tracking-tight text-white leading-none">
               TCN Protocol
             </h1>
-            <p className="text-[10px] font-semibold tracking-[0.22em] text-orange-300/60 uppercase mt-1.5">
+            <p className="text-xs font-semibold tracking-[0.22em] text-orange-300/60 uppercase mt-1.5">
               Central Application
             </p>
           </div>
@@ -646,7 +646,7 @@ export default function LoginPage() {
                 <ArrowLeft className="h-3.5 w-3.5" />
                 <span>Back to Sign In</span>
               </button>
-              <span className="text-[10px] uppercase font-bold tracking-widest text-orange-400/90">
+              <span className="text-xs uppercase font-bold tracking-widest text-orange-400/90">
                 Password Recovery
               </span>
             </div>
@@ -861,7 +861,7 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-2">
-                <span className="inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                <span className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/30">
                   Command Approval Pending
                 </span>
                 <h2 className="text-xl font-bold text-white tracking-tight">Request Dispatched</h2>
@@ -908,7 +908,7 @@ export default function LoginPage() {
                 <div className="w-10 h-10 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400 mb-2">
                   <ShieldCheck className="h-5 w-5" />
                 </div>
-                <span className="inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                <span className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                   Request Approved
                 </span>
                 <h2 className="text-xl font-bold text-white tracking-tight mt-1">Create New Password</h2>
@@ -992,7 +992,7 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-2">
-                <span className="inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                <span className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-rose-500/15 text-rose-400 border border-rose-500/30">
                   Request Declined
                 </span>
                 <h2 className="text-xl font-bold text-white tracking-tight">Clearance Not Approved</h2>
@@ -1178,7 +1178,7 @@ export default function LoginPage() {
           )}
 
           {/* ── Footer ──────────────────────────────────────────────── */}
-          <p className="mt-6 text-center text-[10px] text-gray-600 tracking-widest uppercase relative z-10">
+          <p className="mt-6 text-center text-xs text-gray-600 tracking-widest uppercase relative z-10">
             Command Center · Secure Access
           </p>
         </div>

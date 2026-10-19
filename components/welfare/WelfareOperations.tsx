@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { notifyError, UserFacingError } from '@/lib/notify'
 import {
   Activity,
   Bell,
@@ -274,12 +275,12 @@ export default function WelfareOperations() {
 
   const createCampaignMutation = useMutation({
     mutationFn: async () => {
-      if (!currentUser?.id) throw new Error("Your profile is still loading")
+      if (!currentUser?.id) throw new UserFacingError("Your profile is still loading")
       const startsAt = lagosDateTime(campaignForm.starts_at)
       const endsAt = lagosDateTime(campaignForm.ends_at)
       const durationHours = (endsAt.getTime() - startsAt.getTime()) / 3_600_000
-      if (durationHours <= 0) throw new Error("End time must be after start time")
-      if (durationHours > 72) throw new Error("Prayer chains can span up to 72 hours at a time")
+      if (durationHours <= 0) throw new UserFacingError("End time must be after start time")
+      if (durationHours > 72) throw new UserFacingError("Prayer chains can span up to 72 hours at a time")
       const { data, error } = await (supabase as any).from("prayer_campaigns").insert({
         title: campaignForm.title.trim(),
         kind: campaignForm.kind,
@@ -319,12 +320,12 @@ export default function WelfareOperations() {
       setCampaignForm({ title: "", kind: "prayer_chain", program_id: "", training_schedule_id: "", starts_at: "", ends_at: "", description: "" })
       invalidatePrayer()
     },
-    onError: (error: Error) => toast.error(error.message || "Could not create prayer chain"),
+    onError: (error: Error) => notifyError(error, "Could not create prayer chain"),
   })
 
   const saveSlotMutation = useMutation({
     mutationFn: async () => {
-      if (!editingSlot || !currentUser?.id) throw new Error("Prayer watch is unavailable")
+      if (!editingSlot || !currentUser?.id) throw new UserFacingError("Prayer watch is unavailable")
       const { error } = await (supabase as any).from("prayer_slots").update({
         label: slotForm.label.trim(),
         team_name: slotForm.team_name.trim() || null,
@@ -351,12 +352,12 @@ export default function WelfareOperations() {
       setSlotDialogOpen(false)
       invalidatePrayer()
     },
-    onError: (error: Error) => toast.error(error.message || "Could not update prayer watch"),
+    onError: (error: Error) => notifyError(error, "Could not update prayer watch"),
   })
 
   const createCaseMutation = useMutation({
     mutationFn: async () => {
-      if (!currentUser?.id) throw new Error("Your profile is still loading")
+      if (!currentUser?.id) throw new UserFacingError("Your profile is still loading")
       const { error } = await (supabase as any).from("welfare_cases").insert({
         case_type: caseForm.case_type,
         title: caseForm.title.trim(),
@@ -377,7 +378,7 @@ export default function WelfareOperations() {
       setCaseForm({ case_type: "visit", title: "", description: "", target_user_id: "", beneficiary_name: "", event_at: "", privacy: "welfare_only", assigned_to: "" })
       queryClient.invalidateQueries({ queryKey: ["welfare-care-cases"] })
     },
-    onError: (error: Error) => toast.error(error.message || "Could not create care item"),
+    onError: (error: Error) => notifyError(error, "Could not create care item"),
   })
 
   const updateCaseStatusMutation = useMutation({
@@ -386,12 +387,12 @@ export default function WelfareOperations() {
       if (error) throw error
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["welfare-care-cases"] }),
-    onError: (error: Error) => toast.error(error.message || "Could not update care item"),
+    onError: (error: Error) => notifyError(error, "Could not update care item"),
   })
 
   const createCelebrationMutation = useMutation({
     mutationFn: async () => {
-      if (!currentUser?.id) throw new Error("Your profile is still loading")
+      if (!currentUser?.id) throw new UserFacingError("Your profile is still loading")
       const { error } = await (supabase as any).from("welfare_celebrations").insert({
         celebration_type: celebrationForm.celebration_type,
         target_user_id: celebrationForm.target_user_id || null,
@@ -411,7 +412,7 @@ export default function WelfareOperations() {
       setCelebrationForm({ celebration_type: "birthday", target_user_id: "", celebrant_name: "", event_date: "", title: "", message: "", status: "draft" })
       queryClient.invalidateQueries({ queryKey: ["welfare-celebrations"] })
     },
-    onError: (error: Error) => toast.error(error.message || "Could not save celebration"),
+    onError: (error: Error) => notifyError(error, "Could not save celebration"),
   })
 
   const publishCelebrationMutation = useMutation({
@@ -423,7 +424,7 @@ export default function WelfareOperations() {
       toast.success("Celebration published for the team")
       queryClient.invalidateQueries({ queryKey: ["welfare-celebrations"] })
     },
-    onError: (error: Error) => toast.error(error.message || "Could not publish celebration"),
+    onError: (error: Error) => notifyError(error, "Could not publish celebration"),
   })
 
   const openSlot = (slot: PrayerSlot) => {

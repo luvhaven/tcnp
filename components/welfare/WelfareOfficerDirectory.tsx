@@ -203,9 +203,9 @@ export default function WelfareOfficerDirectory() {
                       <Eye className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                     </div>
                     <div className="flex flex-wrap items-center gap-1">
-                      {o.oscar && <Badge variant="secondary" className="text-[9px]">{o.oscar}</Badge>}
-                      {o.team && <Badge variant="outline" className="border-primary/40 text-[9px] uppercase text-primary">{o.team}</Badge>}
-                      {!o.is_active && <Badge variant="outline" className="text-[9px] text-muted-foreground">Inactive</Badge>}
+                      {o.oscar && <Badge variant="secondary" className="text-[11px]">{o.oscar}</Badge>}
+                      {o.team && <Badge variant="outline" className="border-primary/40 text-[11px] uppercase text-primary">{o.team}</Badge>}
+                      {!o.is_active && <Badge variant="outline" className="text-[11px] text-muted-foreground">Inactive</Badge>}
                     </div>
                   </div>
                 </div>

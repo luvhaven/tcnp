@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useQueryClient } from "@tanstack/react-query"
 import { motion } from "framer-motion"
 import { toast } from "sonner"
+import { notifyError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { cn, normalizeOscarLabel } from "@/lib/utils"
@@ -159,7 +160,7 @@ export default function ProfilePage() {
       queryClient.invalidateQueries({ queryKey: ["currentUser"] })
       toast.success("Headshot updated")
     } catch (err: any) {
-      toast.error(err.message || "Upload failed")
+      notifyError(err, "Upload failed")
     } finally {
       setUploading(false)
       setPendingFile(null)
@@ -194,7 +195,7 @@ export default function ProfilePage() {
         toast.success("Profile saved")
       }
     } catch (err: any) {
-      toast.error(err.message || "Failed to save profile")
+      notifyError(err, "Failed to save profile")
     } finally {
       setSaving(false)
     }
@@ -241,9 +242,9 @@ export default function ProfilePage() {
               <h1 className="text-2xl font-bold tracking-tight">{currentUser.full_name || "Your Name"}</h1>
               <p className="text-sm text-muted-foreground">{currentUser.email}</p>
               <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
-                {currentUser.role && <Badge className="border-0 bg-primary/8 text-primary uppercase text-[10px] tracking-wide">{roleLabel}</Badge>}
-                {normalizeOscarLabel(currentUser.oscar) && <Badge variant="outline" className="text-[10px]">{normalizeOscarLabel(currentUser.oscar)}</Badge>}
-                {currentUser.team && <Badge variant="outline" className="text-[10px] uppercase">{currentUser.is_team_head ? '★ ' : ''}{currentUser.team}</Badge>}
+                {currentUser.role && <Badge className="border-0 bg-primary/8 text-primary uppercase text-xs tracking-wide">{roleLabel}</Badge>}
+                {normalizeOscarLabel(currentUser.oscar) && <Badge variant="outline" className="text-xs">{normalizeOscarLabel(currentUser.oscar)}</Badge>}
+                {currentUser.team && <Badge variant="outline" className="text-xs uppercase">{currentUser.is_team_head ? '★ ' : ''}{currentUser.team}</Badge>}
               </div>
             </div>
           </div>
@@ -276,7 +277,7 @@ export default function ProfilePage() {
                   <div key={spec.key} className="flex items-center gap-2 text-sm">
                     <Circle className={cn("h-3.5 w-3.5", spec.required ? "text-amber-500" : "text-muted-foreground/40")} />
                     <span className={spec.required ? "font-medium" : "text-muted-foreground"}>{spec.label}</span>
-                    {spec.required && <Badge variant="outline" className="border-amber-400/50 text-[9px] uppercase text-amber-600 dark:text-amber-400">required</Badge>}
+                    {spec.required && <Badge variant="outline" className="border-amber-400/50 text-[11px] uppercase text-amber-600 dark:text-amber-400">required</Badge>}
                   </div>
                 ))}
               </div>

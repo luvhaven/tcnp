@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle2, Circle, ClipboardCheck, AlertTriangle, Hotel } from 'lucide-react'
 import { toast } from 'sonner'
+import { notifyError, UserFacingError } from '@/lib/notify'
 import { cn } from '@/lib/utils'
 
 const COMFORT_ITEMS = [
@@ -64,7 +65,7 @@ export default function ComfortChecklist({ nestId, nestName }: { nestId: string;
         setSaving(true)
         try {
             const { data: { user } } = await supabase.auth.getUser()
-            if (!user) throw new Error('Not authenticated')
+            if (!user) throw new UserFacingError('Not authenticated')
             const { data: ud } = await supabase.from('users').select('full_name').eq('id', user.id).single()
 
             await (supabase as any).from('nest_comfort_logs').insert([{
@@ -79,7 +80,7 @@ export default function ComfortChecklist({ nestId, nestName }: { nestId: string;
             setLastLog({ performed_at: new Date().toISOString(), officer_name: ud?.full_name || 'You', all_passed: allChecked })
             toast.success(`Comfort checklist logged for ${nestName}`, { description: allChecked ? 'All 17 checks passed ✓' : `${checkedCount}/17 items checked` })
         } catch (err: any) {
-            toast.error(err.message || 'Failed to save checklist')
+            notifyError(err, 'Failed to save checklist')
         } finally {
             setSaving(false)
         }
@@ -92,23 +93,23 @@ export default function ComfortChecklist({ nestId, nestName }: { nestId: string;
                     <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                         <Hotel className="h-4 w-4 text-pink-500" />
                         Cave Comfort Checklist
-                        <Badge variant="secondary" className="text-[9px] font-mono">TCNP.01.07</Badge>
+                        <Badge variant="secondary" className="text-[11px] font-mono">TCNP.01.07</Badge>
                     </CardTitle>
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground font-mono">{checkedCount}/{COMFORT_ITEMS.length}</span>
                         {allChecked ? (
-                            <Badge className="bg-green-500/20 text-green-600 border-green-500/30 text-[10px]">
+                            <Badge className="bg-green-500/20 text-green-600 border-green-500/30 text-xs">
                                 <CheckCircle2 className="h-3 w-3 mr-1" />Cave Ready
                             </Badge>
                         ) : (
-                            <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-500/40">
+                            <Badge variant="outline" className="text-xs text-amber-600 border-amber-500/40">
                                 <AlertTriangle className="h-3 w-3 mr-1" />Pending
                             </Badge>
                         )}
                     </div>
                 </div>
                 {lastLog && (
-                    <p className="text-[10px] text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                         Last checked by <span className="font-medium text-foreground">{lastLog.officer_name}</span> · {new Date(lastLog.performed_at).toLocaleString()}
                         {lastLog.all_passed && <span className="ml-1 text-green-600">✓ All clear</span>}
                     </p>
