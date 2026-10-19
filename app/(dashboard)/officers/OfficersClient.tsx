@@ -664,7 +664,10 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
       if (!response.ok) throw new UserFacingError(result.error || "Failed to batch assign officers")
 
       queryClient.invalidateQueries({ queryKey: ['officers'] })
-      toast.success(`Successfully assigned ${assignForm.officer_ids.length} officer(s) to program!`)
+      toast.success(`Successfully assigned ${assignForm.officer_ids.length - Number(result.inactive_count ?? 0)} officer(s) to program!`)
+      if (result.inactive_count > 0) {
+        toast.warning(`${result.inactive_count} deactivated officer(s) were skipped. Reactivate them first.`)
+      }
       setAssignFromDirectoryOpen(false)
       setAssignForm({ officer_ids: [], program_id: '' })
       setSelectedOfficers([])

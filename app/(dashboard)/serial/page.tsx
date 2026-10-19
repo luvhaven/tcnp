@@ -23,6 +23,7 @@ import {
 import {
   Camera, Upload, Instagram, Trash2, Film, ImageIcon, Lock, Loader2, Link2,
 } from "lucide-react"
+import { UPLOAD_RULES, validateUploadFiles } from "@/lib/security/upload-validation"
 
 // ─── Singleton client ───
 const supabase = createClient()
@@ -131,6 +132,11 @@ export default function SerialPage() {
     e.preventDefault()
     if (!currentUser || form.files.length === 0) {
       toast.error("Choose at least one photo or video.")
+      return
+    }
+    const fileError = validateUploadFiles(form.files, UPLOAD_RULES.media)
+    if (fileError) {
+      toast.error(fileError)
       return
     }
     setUploading(true)

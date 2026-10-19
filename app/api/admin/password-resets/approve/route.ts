@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { isPlatformAdministrator } from '@/lib/utils'
+import { isPlatformAdministrator, isSuperAdmin, platformAuthorityRank } from '@/lib/utils'
+import { isPermanentOwnerEmail } from '@/lib/platform-owner'
 
 export async function POST(request: Request) {
   try {
@@ -46,8 +47,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Reset request not found' }, { status: 404 })
     }
 
-    if (resetReq.status === 'completed') {
-      return NextResponse.json({ error: 'This request has already been completed.' }, { status: 400 })
+    if (resetReq.status !== 'pending') {
+      return NextResponse.json({ error: `This request is ${resetReq.status} and can no longer be approved.` }, { status: 400 })
+    }
+
+    const { data: target } = await db
+      .from('users')
+      .select('role, email')
+      .eq('id', resetReq.user_id)
+      .maybeSingle()
+
+    if (!target) {
+      return NextResponse.json({ error: 'Account not found' }, { status: 404 })
+    }
+
+    // Approving a reset hands the account to whoever made the request, so administrator
+    // accounts can only be released by a Super Admin, and the platform owner never by anyone.
+    if (isPermanentOwnerEmail(target.email)) {
+      return NextResponse.json({ error: 'The platform owner account cannot be reset through this workflow.' }, { status: 403 })
+    }
+    if (platformAuthorityRank(target.role) >= 80 && !isSuperAdmin(caller.role)) {
+      return NextResponse.json({ error: 'Only a Super Admin can approve resets for administrator accounts.' }, { status: 403 })
+    }
+    if (resetReq.user_id === caller.id) {
+      return NextResponse.json({ error: 'You cannot approve your own reset request.' }, { status: 403 })
     }
 
     const nowIso = new Date().toISOString()
@@ -60,6 +83,7 @@ export async function POST(request: Request) {
         updated_at: nowIso,
       })
       .eq('id', requestId)
+      .eq('status', 'pending')
 
     if (updateError) {
       console.error('[admin/password-resets/approve] Update error:', updateError)

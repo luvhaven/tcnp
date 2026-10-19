@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { MessagesSquare, Radio, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSearchParams } from 'next/navigation'
-import { isAdmin, effectiveOscarRole } from '@/lib/utils'
+import { isAdmin, effectiveOscarRole, isPlatformAdministrator } from '@/lib/utils'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { Button } from '@/components/ui/button'
 
@@ -272,7 +272,7 @@ function ChatContent() {
             )}
 
             {role && isAdmin(role) && (
-              <AdminChatControls programId={program?.id} programName={program?.name} />
+              <AdminChatControls programId={program?.id} programName={program?.name} canManageAll={isPlatformAdministrator(role)} />
             )}
           </div>
         )}

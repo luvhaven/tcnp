@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation'
 
 export function PasswordEnforcer() {
     const [mustChange, setMustChange] = useState(false)
+    const [currentPassword, setCurrentPassword] = useState('')
     const [newPassword, setNewPassword] = useState('')
     const [loading, setLoading] = useState(false)
     const [showPassword, setShowPassword] = useState(false)
@@ -79,8 +80,12 @@ export function PasswordEnforcer() {
 
     const handleChangePassword = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (newPassword.length < 6) {
-            toast.error('Password must be at least 6 characters')
+        if (!currentPassword) {
+            toast.error('Enter your current password')
+            return
+        }
+        if (newPassword.length < 8) {
+            toast.error('Password must be at least 8 characters')
             return
         }
 
@@ -89,7 +94,7 @@ export function PasswordEnforcer() {
             const res = await fetch('/api/auth/change-password', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ new_password: newPassword })
+                body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
             })
 
             const data = await res.json()
@@ -122,6 +127,18 @@ export function PasswordEnforcer() {
 
                 <form onSubmit={handleChangePassword} className="space-y-6 mt-4">
                     <div className="space-y-2">
+                        <Label htmlFor="current-password">Current Password</Label>
+                        <Input
+                            id="current-password"
+                            type="password"
+                            autoComplete="current-password"
+                            value={currentPassword}
+                            onChange={(e) => setCurrentPassword(e.target.value)}
+                            required
+                        />
+                    </div>
+
+                    <div className="space-y-2">
                         <Label htmlFor="new-password">New Security Key</Label>
                         <div className="relative">
                             <Input
@@ -129,7 +146,7 @@ export function PasswordEnforcer() {
                                 type={showPassword ? 'text' : 'password'}
                                 value={newPassword}
                                 onChange={(e) => setNewPassword(e.target.value)}
-                                placeholder="Enter new 6+ char password"
+                                placeholder="Enter new 8+ char password"
                                 required
                                 className="pr-10"
                             />

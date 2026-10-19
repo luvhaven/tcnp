@@ -5,7 +5,7 @@ import { checkRateLimit, rateLimit } from '@/lib/security/rate-limit'
 
 export async function POST(req: NextRequest) {
   try {
-    const limitCheck = checkRateLimit(req, 'journey-reminder', 120, 60_000)
+    const limitCheck = await checkRateLimit(req, 'journey-reminder', 120, 60_000)
     if (!limitCheck.success) {
       return NextResponse.json({ error: 'Too many reminder requests. Please wait a minute.' }, { status: 429 })
     }

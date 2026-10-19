@@ -3,11 +3,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/supabase'
 import { NextResponse } from 'next/server'
 import { checkRateLimit } from '@/lib/security/rate-limit'
+import { SIGNUP_OSCAR_OPTIONS } from '@/lib/utils'
 
 export async function POST(request: Request) {
     try {
         // Enforce strict rate limit (5 signups per IP per 5 minutes)
-        const limitCheck = checkRateLimit(request, 'auth-signup', 5, 5 * 60 * 1000)
+        const limitCheck = await checkRateLimit(request, 'auth-signup', 5, 5 * 60 * 1000)
         if (!limitCheck.success) {
             return NextResponse.json({ error: 'Too many signup attempts. Please try again later.' }, { status: 429 })
         }
@@ -27,6 +28,12 @@ export async function POST(request: Request) {
         const VALID_TEAMS = ['strength', 'wisdom', 'swift']
         if (team && !VALID_TEAMS.includes(team)) {
             return NextResponse.json({ error: 'Invalid team selection' }, { status: 400 })
+        }
+
+        // The unit is chosen from a fixed list; anything else is rejected rather than stored.
+        const submittedOscar = typeof custom_oscar === 'string' ? custom_oscar.trim() : ''
+        if (submittedOscar && !(SIGNUP_OSCAR_OPTIONS as readonly string[]).includes(submittedOscar)) {
+            return NextResponse.json({ error: 'Invalid unit selection' }, { status: 400 })
         }
 
         // Create user via Supabase Admin API
@@ -58,11 +65,7 @@ export async function POST(request: Request) {
             return `OSCAR-${initials}-${roleCode}`
         }
 
-        const submittedOscar = typeof custom_oscar === 'string' ? custom_oscar.trim() : ''
-        // Hospitality is a November (Nest) responsibility, never a selectable Oscar.
-        const oscar = /hospitality/i.test(submittedOscar)
-            ? 'November (Nest)'
-            : submittedOscar || generateOscar(full_name, role)
+        const oscar = submittedOscar || generateOscar(full_name, role)
 
         const insertData: any = {
             id: authData.user.id,

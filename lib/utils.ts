@@ -11,6 +11,33 @@ export function cn(...inputs: ClassValue[]) {
  * It is authoritative for feature access even when `role` is temporarily set to
  * `delta_oscar` due to a DO assignment.
  */
+const UNIT_OSCAR_ROLE_KEYS: ReadonlySet<string> = new Set([
+  'alpha_oscar', 'head_alpha_oscar',
+  'tango_oscar', 'head_tango_oscar',
+  'victor_oscar', 'head_victor_oscar',
+  'echo_oscar', 'head_echo_oscar',
+  'november_oscar', 'noscar_den', 'head_noscar_den', 'noscar_nest', 'head_noscar_nest',
+  'serial_oscar', 'head_serial_oscar',
+  'compliance_oscar', 'head_compliance_oscar',
+  'welfare_oscar', 'head_welfare_oscar',
+  'training_oscar', 'head_training_oscar',
+  'delta_oscar',
+])
+
+/** Unit values a new officer may pick at signup (mirrors the signup form). */
+export const SIGNUP_OSCAR_OPTIONS = [
+  'Command',
+  'Alpha Oscar',
+  'Compliance Oscar',
+  'November (Den)',
+  'November (Nest)',
+  'Serial Oscar',
+  'Tango Oscar',
+  'Training Oscar',
+  'Victor Oscar',
+  'Welfare Oscar',
+] as const
+
 export function oscarToRole(oscar: string | null | undefined): string | null {
   if (!oscar) return null
   const norm = oscar.trim().toLowerCase()
@@ -57,8 +84,9 @@ export function oscarToRole(oscar: string | null | undefined): string | null {
   // Command — HQ/leadership staff (not a phonetic Oscar, but selectable at signup/profile)
   if (['command', 'command centre', 'command center'].includes(norm)) return 'command'
 
-  // Fallback: if the oscar string already looks like a role key, return as-is
-  if (norm.includes('_oscar') || norm.includes('_admin') || norm.includes('captain')) return norm
+  // Fallback: a stored unit role key passes through. Platform and leadership
+  // roles (admins, captain, command staff) never come from the oscar column.
+  if (UNIT_OSCAR_ROLE_KEYS.has(norm)) return norm
 
   return null
 }

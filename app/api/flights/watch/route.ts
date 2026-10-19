@@ -58,7 +58,7 @@ async function getOpenSkyToken() {
 }
 
 export async function GET(request: Request) {
-  const rateLimit = checkRateLimit(request, 'command-flight-watch', 10, 60_000)
+  const rateLimit = await checkRateLimit(request, 'command-flight-watch', 10, 60_000)
   if (!rateLimit.success) {
     return NextResponse.json({ error: 'Flight watch is refreshing too often. Try again shortly.' }, { status: 429 })
   }

@@ -15,7 +15,7 @@ const ALLOWED_ROLES = [
  */
 export async function POST(req: NextRequest) {
     try {
-        const limitCheck = checkRateLimit(req, 'mission-request', 3, 5 * 60 * 1000)
+        const limitCheck = await checkRateLimit(req, 'mission-request', 3, 5 * 60 * 1000)
         if (!limitCheck.success) {
             return NextResponse.json({ error: 'Too many mission requests. Please wait a few minutes.' }, { status: 429 })
         }
