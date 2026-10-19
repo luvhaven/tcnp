@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { logSupabaseError } from '@/lib/supabase/error-utils'
+import { uniqueTopic } from '@/lib/realtime/topic'
 
 type RpcParams = {
   user_uuid: string
@@ -80,50 +80,36 @@ export function useUnreadChatCount() {
 
     void fetchUnread()
 
-    const channel = supabase.channel(`chat-unread-${userId}`, {
-      config: {
-        broadcast: { self: true }
-      }
-    })
+    // Only new messages from others can raise the count. Listening to every change
+    // made each read receipt (an UPDATE) trigger a refetch on every client.
+    let refetchTimer: ReturnType<typeof setTimeout> | null = null
+    const scheduleRefetch = () => {
+      if (refetchTimer) clearTimeout(refetchTimer)
+      refetchTimer = setTimeout(() => void fetchUnread(), 800)
+    }
 
-    channel
+    let subscribedOnce = false
+    const channel = supabase
+      .channel(uniqueTopic(`chat-unread-${userId}`))
       .on('postgres_changes', {
-        event: '*',
+        event: 'INSERT',
         schema: 'public',
-        table: 'chat_messages'
-      }, (payload) => {
-        const nextId = typeof (payload.new as { id?: string } | null | undefined)?.id === 'string'
-          ? (payload.new as { id: string }).id
-          : undefined
-        const previousId = typeof (payload.old as { id?: string } | null | undefined)?.id === 'string'
-          ? (payload.old as { id: string }).id
-          : undefined
-
-        console.log('🔔 Chat message change detected, refreshing unread count', {
-          eventType: payload.eventType,
-          recordId: nextId ?? previousId
-        })
-        // Immediate update for better UX
-        setTimeout(() => void fetchUnread(), 100)
-      })
+        table: 'chat_messages',
+        filter: `sender_id=neq.${userId}`
+      }, scheduleRefetch)
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          console.log('✅ Unread count subscription active')
-        } else if (status === 'CHANNEL_ERROR') {
-          const lastFetch = lastSuccessfulFetchRef.current
-          if (lastFetch) {
-            console.warn('❌ Unread count subscription reported CHANNEL_ERROR', {
-              channel: channel.topic,
-              lastSuccessfulFetch: new Date(lastFetch).toISOString()
-            })
-          } else {
-            console.warn('❌ Unread count subscription reported CHANNEL_ERROR (no successful fetch yet)')
-          }
-        } else if (status === 'TIMED_OUT') {
-          console.warn('⏱️ Unread count subscription timed out; scheduling retry')
-          setTimeout(() => void fetchUnread(), 1000)
+          // Catch up on anything missed while the connection was down.
+          if (subscribedOnce) scheduleRefetch()
+          subscribedOnce = true
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('Unread count subscription interrupted:', status)
+          scheduleRefetch()
         }
       })
+
+    // ChatSystem announces when it has marked messages read.
+    window.addEventListener('tcnp:chat-read', scheduleRefetch)
 
     // Refresh every 30 seconds for reliability
     const interval = setInterval(() => {
@@ -131,6 +117,8 @@ export function useUnreadChatCount() {
     }, 30000)
 
     return () => {
+      if (refetchTimer) clearTimeout(refetchTimer)
+      window.removeEventListener('tcnp:chat-read', scheduleRefetch)
       supabase.removeChannel(channel)
       clearInterval(interval)
     }
