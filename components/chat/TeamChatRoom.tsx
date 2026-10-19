@@ -113,7 +113,9 @@ export default function TeamChatRoom() {
   const [showMembers, setShowMembers] = useState(false)
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionIndex, setMentionIndex] = useState(0)
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const stickToBottomRef = useRef(true)
+  const [joiningTeam, setJoiningTeam] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const team = currentUser?.team ?? null
@@ -128,10 +130,12 @@ export default function TeamChatRoom() {
         .from("chat_messages")
         .select("id, sender_id, content, team, created_at, deleted_at, deleted_by_admin, flagged, mentions, users:sender_id(full_name, role, photo_url)")
         .eq("team", team)
-        .order("created_at", { ascending: true })
+        // Newest 300, shown oldest-first. Ascending + limit would freeze the room
+        // on its first 300 messages once it grows past that.
+        .order("created_at", { ascending: false })
         .limit(300)
       if (error) throw error
-      return (data ?? []) as unknown as TeamMessage[]
+      return ((data ?? []) as unknown as TeamMessage[]).reverse()
     },
     enabled: !!team,
   })
@@ -172,10 +176,18 @@ export default function TeamChatRoom() {
     return () => { void supabase.removeChannel(channel) }
   }, [team, queryClient])
 
-  // Autoscroll on new messages
+  // Follow new messages only while the reader is already at the bottom, and scroll
+  // the message pane itself: scrollIntoView would also drag the whole page on phones.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+    const el = scrollRef.current
+    if (el && stickToBottomRef.current) el.scrollTop = el.scrollHeight
   }, [messages.length])
+
+  const handleMessagesScroll = () => {
+    const el = scrollRef.current
+    if (!el) return
+    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  }
 
   // ── @mention machinery ────────────────────────────────────────────────────
   // The active "@query" is the text between the last '@' and the caret-end of
@@ -226,7 +238,7 @@ export default function TeamChatRoom() {
 
   const send = async () => {
     const content = draft.trim()
-    if (!content || !currentUser || !team) return
+    if (!content || !currentUser || !team || sending) return
     setSending(true)
     try {
       // Mentions = team members whose canonical @Full Name appears in the text
@@ -244,9 +256,12 @@ export default function TeamChatRoom() {
       if (error) throw error
       setDraft("")
       setMentionQuery(null)
+      stickToBottomRef.current = true
       queryClient.invalidateQueries({ queryKey: ["team-chat", team] })
-    } catch (err: any) {
-      toast.error(err.message || "Failed to send")
+      inputRef.current?.focus()
+    } catch {
+      // The draft stays in the composer so it can simply be sent again.
+      toast.error("Message not sent. Check your connection and try again.")
     } finally {
       setSending(false)
     }
@@ -296,19 +311,23 @@ export default function TeamChatRoom() {
   }
 
   const handleJoinTeam = async (selectedTeam: string) => {
-    if (!currentUser?.id) return
+    if (!currentUser?.id || joiningTeam) return
+    setJoiningTeam(selectedTeam)
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ team: selectedTeam })
-        .eq('id', currentUser.id)
-      if (error) throw error
+      // `team` is a privileged column, so joining goes through the server.
+      const res = await fetch("/api/teams/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ team: selectedTeam }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || "Failed to join team")
       toast.success(`You joined ${TEAM_THEME[selectedTeam]?.label || selectedTeam}!`)
-      queryClient.invalidateQueries({ queryKey: ["current-user"] })
-      queryClient.invalidateQueries({ queryKey: ["team-chat", selectedTeam] })
-      queryClient.invalidateQueries({ queryKey: ["team-members", selectedTeam] })
+      await queryClient.invalidateQueries({ queryKey: ["currentUser"] })
     } catch (err: any) {
-      toast.error(err.message || 'Failed to select team')
+      toast.error(err.message || "Failed to join team")
+    } finally {
+      setJoiningTeam(null)
     }
   }
 
@@ -331,10 +350,11 @@ export default function TeamChatRoom() {
               variant="outline"
               size="sm"
               onClick={() => handleJoinTeam(key)}
+              disabled={joiningTeam !== null}
               className="flex flex-col h-auto py-2.5 px-3 gap-0.5 hover:border-primary/50 hover:bg-primary/5 transition-all text-center"
             >
               <span className="font-semibold text-xs">{item.label}</span>
-              <span className="text-[10px] text-muted-foreground">Join room</span>
+              <span className="text-[10px] text-muted-foreground">{joiningTeam === key ? "Joining…" : "Join room"}</span>
             </Button>
           ))}
         </div>
@@ -373,7 +393,14 @@ export default function TeamChatRoom() {
       <div className="flex flex-col sm:flex-row">
         {/* Messages column */}
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="h-[440px] space-y-3 overflow-y-auto p-4">
+          <div
+            ref={scrollRef}
+            onScroll={handleMessagesScroll}
+            role="log"
+            aria-live="polite"
+            aria-label={`${theme?.label ?? "Team"} messages`}
+            className="h-[min(60dvh,560px)] space-y-3 overflow-y-auto overscroll-contain p-4"
+          >
             {isLoading ? (
               <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-12 w-2/3 rounded-xl" />)}</div>
             ) : messages.length === 0 ? (
@@ -420,15 +447,15 @@ export default function TeamChatRoom() {
                       </div>
                       {/* Moderation actions */}
                       {canModerate && !deleted && (
-                        <div className="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                        <div className="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
                           <Button
-                            variant="ghost" size="icon" className="h-6 w-6 text-amber-500" title={msg.flagged ? "Unflag" : "Flag message"}
+                            variant="ghost" size="icon" className="h-8 w-8 text-amber-500" title={msg.flagged ? "Unflag" : "Flag message"} aria-label={msg.flagged ? "Unflag message" : "Flag message"}
                             onClick={() => moderateMutation.mutate({ id: msg.id, action: msg.flagged ? "unflag" : "flag" })}
                           >
                             <Flag className="h-3 w-3" />
                           </Button>
                           <Button
-                            variant="ghost" size="icon" className="h-6 w-6 text-red-500" title="Delete message"
+                            variant="ghost" size="icon" className="h-8 w-8 text-red-500" title="Delete message" aria-label="Delete message"
                             onClick={async () => {
                               const ok = await confirm({ title: "Delete message?", message: "The message will be hidden for all team members." })
                               if (ok) moderateMutation.mutate({ id: msg.id, action: "delete" })
@@ -443,7 +470,6 @@ export default function TeamChatRoom() {
                 })}
               </AnimatePresence>
             )}
-            <div ref={bottomRef} />
           </div>
 
           {/* Composer */}
@@ -522,7 +548,7 @@ export default function TeamChatRoom() {
         {showMembers && (
           <div className="w-full border-t sm:w-60 sm:shrink-0 sm:border-l sm:border-t-0">
             <p className="border-b px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Members</p>
-            <div className="max-h-[220px] space-y-0.5 overflow-y-auto p-2 sm:max-h-[440px]">
+            <div className="max-h-[220px] space-y-0.5 overflow-y-auto p-2 sm:max-h-[min(60dvh,560px)]">
               {members.map(m => (
                 <div key={m.id} className="group flex items-center gap-2 rounded-lg p-1.5 hover:bg-muted/60">
                   <div className="relative">
@@ -541,8 +567,9 @@ export default function TeamChatRoom() {
                   {canModerate && m.id !== currentUser?.id && (
                     <Button
                       variant="ghost" size="icon"
-                      className="h-6 w-6 text-red-500 opacity-0 transition-opacity group-hover:opacity-100"
+                      className="h-8 w-8 text-red-500 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
                       title="Remove from team"
+                      aria-label={`Remove ${m.full_name ?? "officer"} from team`}
                       onClick={() => void removeMember(m)}
                     >
                       <UserMinus className="h-3 w-3" />
