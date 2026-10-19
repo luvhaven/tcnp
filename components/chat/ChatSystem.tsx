@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
+import React, { useEffect, useLayoutEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -152,6 +152,7 @@ type Message = {
   is_archived?: boolean
   deleted_at?: string | null
   deleted_by_admin?: boolean
+  edited_at?: string | null
   users: MessageUserMeta
 }
 
@@ -177,11 +178,13 @@ type ChatParticipant = {
 export default function ChatSystem({
   programId,
   papaId,
-  initialMessage
+  initialMessage,
+  roomLabel
 }: {
   programId?: string;
   papaId?: string;
   initialMessage?: string;
+  roomLabel?: string;
 }) {
   const supabase = useMemo(() => createClient(), [])
   const confirm = useConfirm()
@@ -190,6 +193,8 @@ export default function ChatSystem({
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
 
   const [messages, setMessages] = useState<Message[]>([])
+  const messagesRef = useRef<Message[]>([])
+  useEffect(() => { messagesRef.current = messages }, [messages])
   const [users, setUsers] = useState<User[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [newMessage, setNewMessage] = useState(initialMessage || '')
@@ -200,6 +205,7 @@ export default function ChatSystem({
   const [showMentionSuggestions, setShowMentionSuggestions] = useState(false)
   const [mentionSearch, setMentionSearch] = useState('')
   const [mentionType, setMentionType] = useState<'@' | '@@'>('@')
+  const [mentionIndex, setMentionIndex] = useState(0)
   const [cursorPosition, setCursorPosition] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const channelRef = useRef<RealtimeChannel | null>(null)
@@ -217,6 +223,15 @@ export default function ChatSystem({
   const [firstUnreadId, setFirstUnreadId] = useState<string | null>(null)
   const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  // Handlers inside the realtime subscription read these refs so the channel is
+  // created once per room instead of again whenever the user record loads.
+  const currentUserRef = useRef<any>(null)
+  const isAtBottomRef = useRef(true)
+  const loadRequestRef = useRef(0)
+  const sendingRef = useRef(false)
+  const [sending, setSending] = useState(false)
+  const highlightDoneRef = useRef(false)
+  const prependAnchorRef = useRef<number | null>(null)
 
   const userDirectory = useMemo<Record<string, MessageUserMeta>>(() => {
     const directory: Record<string, MessageUserMeta> = {}
@@ -446,6 +461,7 @@ export default function ChatSystem({
       deleted_by_admin: Boolean((message as any).deleted_by_admin),
       created_at: message.created_at ?? new Date().toISOString(),
       reply_to_id: (message as any).reply_to_id ?? null,
+      edited_at: (message as any).edited_at ?? null,
       users: userMeta
     }
   }, [userDirectory, ensureUserProfile])
@@ -494,29 +510,48 @@ export default function ChatSystem({
 
   // updatePresenceFlags was removed because PresenceHeartbeat handles it globally
 
-  const markMessageRead = useCallback(async (message: Message) => {
-    if (!currentUser?.id) return
-    if (message.sender_id === currentUser.id) return
-    if (message.read_by.includes(currentUser.id)) return
+  // Read receipts are queued and flushed in one batch, and only while the tab is
+  // visible: marking 50 history messages used to fire 50 RPCs on every render.
+  const readQueueRef = useRef<Set<string>>(new Set())
+  const readFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const flushReadQueue = useCallback(async () => {
+    readFlushTimerRef.current = null
+    const userId = currentUserRef.current?.id
+    if (!userId || typeof document === 'undefined' || document.visibilityState !== 'visible') return
+    const ids = Array.from(readQueueRef.current)
+    readQueueRef.current.clear()
+    await Promise.all(ids.map(async (id) => {
+      const { error } = await (supabase as any).rpc('mark_message_read', { message_uuid: id, user_uuid: userId })
+      if (error) markedMessagesRef.current.delete(id)
+    }))
+    if (ids.length) window.dispatchEvent(new Event('tcnp:chat-read'))
+  }, [supabase])
+
+  const markMessageRead = useCallback((message: Message) => {
+    const userId = currentUserRef.current?.id
+    if (!userId) return
+    if (message.sender_id === userId) return
+    if (message.read_by.includes(userId)) return
     if (markedMessagesRef.current.has(message.id)) return
 
     markedMessagesRef.current.add(message.id)
-
-    try {
-      const { error } = await (supabase as any).rpc('mark_message_read', {
-        message_uuid: message.id,
-        user_uuid: currentUser.id
-      })
-
-      if (error) {
-        markedMessagesRef.current.delete(message.id)
-        console.error('Error marking message as read:', error)
-      }
-    } catch (error) {
-      markedMessagesRef.current.delete(message.id)
-      console.error('Unexpected error marking message as read:', error)
+    readQueueRef.current.add(message.id)
+    if (!readFlushTimerRef.current) {
+      readFlushTimerRef.current = setTimeout(() => { void flushReadQueue() }, 1200)
     }
-  }, [supabase, currentUser?.id])
+  }, [flushReadQueue])
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && readQueueRef.current.size > 0) void flushReadQueue()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      if (readFlushTimerRef.current) clearTimeout(readFlushTimerRef.current)
+    }
+  }, [flushReadQueue])
 
   const isRecentlySeen = (lastSeen: string | null): boolean => {
     if (!lastSeen) return false
@@ -620,21 +655,17 @@ export default function ChatSystem({
 
     void initializeChat()
 
+    // Unique per mount: realtime-js hands back an existing channel for a reused
+    // topic, and a second mount would then attach callbacks to a subscribed channel.
     const channel = supabase.channel(
-      `chat-messages-${programId || 'global'}-${papaId || 'none'}`,
-      {
-        config: {
-          broadcast: { self: false },
-          presence: { key: currentUser?.id || 'anonymous' }
-        }
-      }
+      `chat-messages-${programId || 'global'}-${papaId || 'none'}-${Math.random().toString(36).slice(2, 8)}`,
+      { config: { broadcast: { self: false } } }
     )
 
     const handlePayload = async (
       payload: RealtimePostgresChangesPayload<ChatMessageRow>
     ) => {
       if (!mounted) return
-      console.log('📦 Realtime payload received:', payload.eventType, payload)
 
       const newRow = payload.new as ChatMessageRow
 
@@ -651,7 +682,8 @@ export default function ChatSystem({
       } else if (programId) {
         if (newRow.program_id !== programId || newRow.papa_id !== null) return
       } else {
-        if (newRow.program_id !== null || newRow.papa_id !== null) return
+        // Team-room messages also have no program/papa; keep them out of global chat.
+        if (newRow.program_id !== null || newRow.papa_id !== null || (newRow as any).team != null) return
       }
 
       const raw = payload.new as RawMessage
@@ -669,25 +701,28 @@ export default function ChatSystem({
 
           if (!error && fullMessage) {
             const message = transformMessage(fullMessage as RawMessage)
+            const isNew = !messagesRef.current.some(m => m.id === message.id)
             setMessages((prev) => {
               // Prevent duplicates
               if (prev.some(m => m.id === message.id)) return prev
-              const updated = upsertMessage(prev, message)
-              return updated
+              return upsertMessage(prev, message)
             })
 
-            if (message.sender_id !== currentUser?.id) {
-              void markMessageRead(message)
+            const me = currentUserRef.current?.id
+            if (isNew && message.sender_id !== me) {
+              if (isAtBottomRef.current) {
+                markMessageRead(message)
+              } else {
+                // Reading history: count it for the jump button and mark where new ones start.
+                setNewMsgCount(count => count + 1)
+                setFirstUnreadId(current => current ?? message.id)
+              }
 
-              // Notification for mentions/private
-              const isMentioned = message.mentions.includes(currentUser?.id || '')
-              if (isMentioned || message.is_private) {
+              // Device notification for private messages only when the tab is hidden;
+              // mentions already reach the user through useChatNotifications.
+              if (message.is_private && typeof document !== 'undefined' && document.visibilityState === 'hidden') {
                 const senderName = message.users?.full_name || 'Someone'
-                void notificationService.notifyNewMessage(
-                  senderName,
-                  message.content,
-                  message.is_private
-                )
+                void notificationService.notifyNewMessage(senderName, message.content, true)
               }
             }
 
@@ -713,8 +748,10 @@ export default function ChatSystem({
             next[idx] = {
               ...next[idx],
               content: newRow.content,
-              read_by: (newRow.read_by as string[]) || [],
-              mentions: (newRow.mentions as string[]) || [],
+              read_by: parseJsonArray(newRow.read_by),
+              mentions: parseJsonArray(newRow.mentions),
+              is_archived: Boolean((newRow as any).is_archived),
+              edited_at: (newRow as any).edited_at ?? next[idx].edited_at ?? null,
               deleted_at: (newRow as any).deleted_at ?? null,
               deleted_by_admin: Boolean((newRow as any).deleted_by_admin)
             }
@@ -753,7 +790,7 @@ export default function ChatSystem({
       .on('broadcast', { event: 'typing' }, (payload) => {
         if (!mounted) return
         const { userId } = payload.payload
-        if (userId === currentUser?.id) return
+        if (userId === currentUserRef.current?.id) return
 
         setTypingUsers(prev => ({
           ...prev,
@@ -761,10 +798,8 @@ export default function ChatSystem({
         }))
       })
       .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('Chat realtime subscription active')
-        } else if (status === 'CHANNEL_ERROR') {
-          console.warn('Chat subscription error')
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('Chat subscription error:', status)
         }
       })
 
@@ -772,63 +807,59 @@ export default function ChatSystem({
 
     return () => {
       mounted = false
-      if (channelRef.current) {
-        console.log('Cleaning up chat subscription')
-        supabase.removeChannel(channelRef.current)
-        channelRef.current = null
-      }
+      supabase.removeChannel(channel)
+      if (channelRef.current === channel) channelRef.current = null
     }
-  }, [supabase, programId, papaId, currentUser?.id])
+    // Handlers read the user through currentUserRef, so the channel is built once per room.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase, programId, papaId])
 
   useEffect(() => {
-    if (!currentUser?.id) return
+    currentUserRef.current = currentUser
+  }, [currentUser])
 
-    messages.forEach((message) => {
-      if (message.sender_id !== currentUser.id && !message.read_by.includes(currentUser.id)) {
-        void markMessageRead(message)
-      }
-    })
-  }, [messages, currentUser?.id, markMessageRead])
+  // Mark what is on screen as read while the reader is at the latest messages.
+  useEffect(() => {
+    if (!currentUser?.id || !isAtBottom) return
+    messages.forEach((message) => markMessageRead(message))
+  }, [messages, currentUser?.id, isAtBottom, markMessageRead])
 
+  // Presence is a last_seen snapshot; refresh it on a timer instead of reloading
+  // the participant list on every UPDATE to any user row (each heartbeat is one).
   useEffect(() => {
     if (!currentUser?.id) return
-
-    // Subscribe to users table changes for is_online / last_seen updates
-    const usersOnlineChannel = supabase
-      .channel('chat-users-online-rt')
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'users',
-        filter: undefined
-      }, () => {
-        void loadParticipants()
-      })
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(usersOnlineChannel)
-    }
-  }, [supabase, currentUser?.id, loadParticipants])
+    const interval = setInterval(() => { void loadParticipants() }, 60 * 1000)
+    return () => clearInterval(interval)
+  }, [currentUser?.id, loadParticipants])
 
   // Auto-scroll behavior
   const shouldAutoScroll = useRef(true)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (highlightId && messages.some(m => m.id === highlightId)) {
-      setTimeout(() => {
-        const el = document.getElementById(`msg-${highlightId}`)
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          setHighlightedMessageId(highlightId)
-          setTimeout(() => setHighlightedMessageId(null), 2000)
-        }
-      }, 300)
-    } else if (shouldAutoScroll.current) {
-      // Only auto-scroll if user is near bottom
-      setTimeout(() => scrollToBottom(), 100)
+  // Runs before paint so the list never visibly jumps.
+  useLayoutEffect(() => {
+    const el = messagesContainerRef.current
+    if (!el) return
+
+    // Older messages were prepended: keep the reader on the message they were looking at.
+    if (prependAnchorRef.current !== null) {
+      el.scrollTop = el.scrollHeight - prependAnchorRef.current
+      prependAnchorRef.current = null
+      return
     }
+
+    if (highlightId && !highlightDoneRef.current && messages.some(m => m.id === highlightId)) {
+      highlightDoneRef.current = true
+      const target = document.getElementById(`msg-${highlightId}`)
+      if (target) {
+        target.scrollIntoView({ block: 'center' })
+        setHighlightedMessageId(highlightId)
+        setTimeout(() => setHighlightedMessageId(null), 2000)
+      }
+      return
+    }
+
+    if (shouldAutoScroll.current) el.scrollTop = el.scrollHeight
   }, [messages, highlightId])
 
   // Detect if user scrolled up
@@ -838,19 +869,18 @@ export default function ChatSystem({
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight
     const atBottom = distanceFromBottom < 100
     shouldAutoScroll.current = atBottom
+    isAtBottomRef.current = atBottom
     setIsAtBottom(atBottom)
     if (atBottom) { setNewMsgCount(0); setFirstUnreadId(null) }
   }, [])
 
   const jumpToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = messagesContainerRef.current
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    shouldAutoScroll.current = true
+    isAtBottomRef.current = true
     setIsAtBottom(true); setNewMsgCount(0); setFirstUnreadId(null)
   }, [])
-
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
 
   const loadCurrentUser = async () => {
     try {
@@ -867,7 +897,6 @@ export default function ChatSystem({
           return
         }
 
-        console.log('Current user loaded:', data)
         setCurrentUser(data)
       }
     } catch (error) {
@@ -876,6 +905,8 @@ export default function ChatSystem({
   }
 
   const loadMessages = async () => {
+    // A slower response for the previous room must not overwrite this one.
+    const requestId = ++loadRequestRef.current
     setLoadingMessages(true)
     setMessageLoadError(null)
 
@@ -897,10 +928,11 @@ export default function ChatSystem({
       } else if (programId) {
         query = query.eq('program_id', programId).is('papa_id', null)
       } else {
-        query = query.is('program_id', null).is('papa_id', null)
+        query = query.is('program_id', null).is('papa_id', null).is('team', null)
       }
 
       const { data, error } = await query
+      if (requestId !== loadRequestRef.current) return
 
       if (error) throw error
 
@@ -938,9 +970,9 @@ export default function ChatSystem({
         supabaseError.hint ||
         'Failed to load messages'
 
-      setMessageLoadError(friendlyMessage)
+      if (requestId === loadRequestRef.current) setMessageLoadError(friendlyMessage)
     } finally {
-      setLoadingMessages(false)
+      if (requestId === loadRequestRef.current) setLoadingMessages(false)
     }
   }
 
@@ -951,7 +983,8 @@ export default function ChatSystem({
       let query = supabase
         .from('chat_messages')
         .select(`*, users:sender_id(full_name, oscar, role)`)
-        .lt('created_at', oldestTimestampRef.current)
+        // lte + dedupe below: lt would skip messages sharing the boundary timestamp
+        .lte('created_at', oldestTimestampRef.current)
         .order('created_at', { ascending: false })
         .limit(50)
 
@@ -961,19 +994,23 @@ export default function ChatSystem({
       } else if (programId) {
         query = query.eq('program_id', programId).is('papa_id', null)
       } else {
-        query = query.is('program_id', null).is('papa_id', null)
+        query = query.is('program_id', null).is('papa_id', null).is('team', null)
       }
 
       const { data, error } = await query
       if (error) throw error
 
       const rows = (data || []).reverse()
-      if (rows.length > 0) {
+      const known = new Set(messagesRef.current.map(m => m.id))
+      const fresh = rows.filter(row => !known.has(row.id))
+      if (fresh.length > 0) {
         oldestTimestampRef.current = rows[0].created_at
         setHasMoreMessages(rows.length === 50)
-        const earlier = rows
+        const earlier = fresh
           .map((msg) => { try { return transformMessage(msg as RawMessage) } catch { return null } })
           .filter((msg): msg is Message => msg !== null)
+        const el = messagesContainerRef.current
+        if (el) prependAnchorRef.current = el.scrollHeight - el.scrollTop
         setMessages(prev => [...earlier, ...prev])
       } else {
         setHasMoreMessages(false)
@@ -995,36 +1032,60 @@ export default function ChatSystem({
     setNewMessage('')
   }, [programId, papaId])
 
+  const reactionsLoadedRef = useRef<Set<string>>(new Set())
+  const reactionsRef = useRef<ReactionMap>({})
+  useEffect(() => { reactionsRef.current = reactions }, [reactions])
+
   const loadReactions = useCallback(async (ids: string[]) => {
     if (!ids.length) return
     const { data } = await (supabase as any).from('message_reactions').select('message_id,user_id,emoji').in('message_id', ids)
     if (!data) return
     const map: ReactionMap = {}
+    ids.forEach(id => { map[id] = [] })
       ; (data as { message_id: string; user_id: string; emoji: string }[]).forEach(r => {
-        if (!map[r.message_id]) map[r.message_id] = []
         const ex = map[r.message_id].find(x => x.emoji === r.emoji)
         if (ex) { ex.count++; ex.userIds.push(r.user_id) }
         else map[r.message_id].push({ emoji: r.emoji, count: 1, userIds: [r.user_id] })
       })
-    setReactions(map)
+    setReactions(prev => ({ ...prev, ...map }))
   }, [supabase])
 
+  // Only fetch reactions for messages not loaded yet: read receipts and edits
+  // change `messages` constantly and used to refetch every reaction each time.
   useEffect(() => {
-    const ids = messages.map(m => m.id)
-    if (ids.length) void loadReactions(ids)
+    const ids = messages.map(m => m.id).filter(id => !reactionsLoadedRef.current.has(id))
+    if (!ids.length) return
+    ids.forEach(id => reactionsLoadedRef.current.add(id))
+    void loadReactions(ids)
   }, [messages, loadReactions])
 
   const toggleReaction = useCallback(async (messageId: string, emoji: string) => {
-    if (!currentUser?.id) return
-    const existing = reactions[messageId]?.find(r => r.emoji === emoji)
-    const hasReacted = existing?.userIds.includes(currentUser.id) ?? false
-    if (hasReacted) {
-      await (supabase as any).from('message_reactions').delete().eq('message_id', messageId).eq('user_id', currentUser.id).eq('emoji', emoji)
-    } else {
-      await (supabase as any).from('message_reactions').insert({ message_id: messageId, user_id: currentUser.id, emoji })
-    }
-    void loadReactions(messages.map(m => m.id))
-  }, [supabase, currentUser, reactions, messages, loadReactions])
+    const userId = currentUserRef.current?.id
+    if (!userId) return
+    const hasReacted = reactionsRef.current[messageId]?.find(r => r.emoji === emoji)?.userIds.includes(userId) ?? false
+
+    // Optimistic: update the chip immediately, then reconcile with the server.
+    setReactions(prev => {
+      const list = (prev[messageId] ?? []).map(r => ({ ...r, userIds: [...r.userIds] }))
+      const entry = list.find(r => r.emoji === emoji)
+      if (hasReacted && entry) {
+        entry.userIds = entry.userIds.filter(id => id !== userId)
+        entry.count = entry.userIds.length
+      } else if (entry) {
+        entry.userIds.push(userId)
+        entry.count = entry.userIds.length
+      } else {
+        list.push({ emoji, count: 1, userIds: [userId] })
+      }
+      return { ...prev, [messageId]: list.filter(r => r.count > 0) }
+    })
+
+    const { error } = hasReacted
+      ? await (supabase as any).from('message_reactions').delete().eq('message_id', messageId).eq('user_id', userId).eq('emoji', emoji)
+      : await (supabase as any).from('message_reactions').insert({ message_id: messageId, user_id: userId, emoji })
+    if (error) toast.error('Could not update reaction')
+    void loadReactions([messageId])
+  }, [supabase, loadReactions])
 
   const handleDeleteMessage = useCallback(async (messageId: string, hardDelete: boolean = false) => {
     if (!currentUser?.id) return
@@ -1046,7 +1107,7 @@ export default function ChatSystem({
       }
     }
 
-    const isOwner = messages.find(m => m.id === messageId)?.sender_id === currentUser.id
+    const isOwner = messagesRef.current.find(m => m.id === messageId)?.sender_id === currentUser.id
 
     try {
       const response = await fetch('/api/admin/chat', {
@@ -1067,7 +1128,7 @@ export default function ChatSystem({
     } catch (err: any) {
       toast.error(err.message || 'Could not delete message')
     }
-  }, [currentUser, messages])
+  }, [currentUser])
 
   const handleReply = useCallback((message: Message) => {
     setEditingMessage(null)
@@ -1092,7 +1153,7 @@ export default function ChatSystem({
   }
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim()) return
+    if (!newMessage.trim() || sendingRef.current) return
 
     if (!currentUser?.id) {
       toast.error('You must be logged in to send messages')
@@ -1114,46 +1175,64 @@ export default function ChatSystem({
       }
     }
 
+    const draft = newMessage
+    sendingRef.current = true
+    setSending(true)
+
     try {
       if (editingMessage) {
-        // Handle Edit
-        const { data, error } = await (supabase as any).rpc('edit_chat_message', {
-          message_id: editingMessage.id,
-          new_content: newMessage
-        })
-
-        if (error) throw error
-
-        // Update local state immediately for better UX
-        setMessages(prev => prev.map(m =>
-          m.id === editingMessage.id
-            ? { ...m, content: newMessage, edited_at: new Date().toISOString() }
-            : m
-        ))
-
-        toast.success('Message edited')
-        cancelEdit()
-      } else {
-        // Handle New Message
-        const sanitizedMentions = selectedMentions.filter((id) => id !== currentUser.id)
-        if (sanitizedMentions.length !== selectedMentions.length) {
-          toast.warning('You cannot mention yourself. Self-mentions were removed.')
-          setSelectedMentions(sanitizedMentions)
+        if (draft.trim() === editingMessage.content.trim()) {
+          cancelEdit()
+          return
         }
 
-        const isPrivate = sanitizedMentions.length > 0 && newMessage.includes('@@')
+        const { error } = await (supabase as any).rpc('edit_chat_message', {
+          message_id: editingMessage.id,
+          new_content: draft
+        })
+
+        if (error) {
+          // Most often the edit window closed while typing; leave edit mode either way.
+          toast.error('This message can no longer be edited.')
+          cancelEdit()
+          return
+        }
+
+        setMessages(prev => prev.map(m =>
+          m.id === editingMessage.id
+            ? { ...m, content: draft, edited_at: new Date().toISOString() }
+            : m
+        ))
+        cancelEdit()
+      } else {
+        // Only keep mentions whose name is still in the text, so deleting an
+        // @Name also drops the notification (and the private flag) for that person.
+        const firstNameOf = (id: string) => users.find(u => u.id === id)?.full_name?.trim().split(/\s+/)[0]
+        const sanitizedMentions = selectedMentions.filter((id) => {
+          if (id === currentUser.id) return false
+          const firstName = firstNameOf(id)
+          return firstName ? draft.includes(`@${firstName}`) : false
+        })
+        const isPrivate = sanitizedMentions.some((id) => {
+          const firstName = firstNameOf(id)
+          return firstName ? draft.includes(`@@${firstName}`) : false
+        })
+
+        // Clear the composer straight away; the draft is restored if sending fails.
+        setNewMessage('')
+        setSelectedMentions([])
+        const replyTarget = replyTo
+        setReplyTo(null)
 
         const payload: ChatMessageInsert = {
           sender_id: currentUser.id,
-          content: newMessage,
+          content: draft,
           mentions: sanitizedMentions as unknown as ChatMessageInsert['mentions'],
           is_private: isPrivate,
           program_id: programId || null,
           papa_id: papaId || null,
-          reply_to_id: replyTo?.id || null
+          reply_to_id: replyTarget?.id || null
         }
-
-        console.log('Sending message:', payload)
 
         const { data, error } = await (supabase as any)
           .from('chat_messages')
@@ -1164,30 +1243,29 @@ export default function ChatSystem({
                       `)
 
         if (error) {
-          console.error('Supabase error details:', error)
+          setNewMessage(current => current || draft)
+          setSelectedMentions(current => current.length ? current : sanitizedMentions)
+          setReplyTo(current => current ?? replyTarget)
           throw error
         }
 
-        console.log('Message sent successfully:', data)
-
         if (Array.isArray(data) && data.length > 0) {
           const inserted = transformMessage(data[0] as RawMessage)
+          shouldAutoScroll.current = true
           setMessages((prev) => upsertMessage(prev, inserted))
         }
 
-        // Send notifications to mentioned users
         if (sanitizedMentions.length > 0) {
-          await createNotifications(sanitizedMentions, newMessage)
+          void createNotifications(sanitizedMentions, draft)
         }
-
-        setNewMessage('')
-        setSelectedMentions([])
-        setReplyTo(null)
-        toast.success('Message sent')
       }
     } catch (error: any) {
       console.error('Error sending/editing message:', error)
-      toast.error(error.message || 'Failed to process message')
+      toast.error('Message not sent. Check your connection and try again.')
+    } finally {
+      sendingRef.current = false
+      setSending(false)
+      textareaRef.current?.focus()
     }
   }
 
@@ -1215,9 +1293,15 @@ export default function ChatSystem({
     }
   }
 
+  // Grow with the draft and shrink back after sending or when an edit prefills it.
+  useLayoutEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+  }, [newMessage])
+
   const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    // Auto-resize textarea
-    const el = e.target; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 128)}px`
     const value = e.target.value
     const cursorPos = e.target.selectionStart || 0
     setNewMessage(value)
@@ -1236,16 +1320,18 @@ export default function ChatSystem({
       // Check if it's @@ or @
       if (textAfterAt.startsWith('@@')) {
         const searchText = textAfterAt.substring(2)
-        if (searchText.length === 0 || /^[a-zA-Z\s]*$/.test(searchText)) {
+        if (/^[a-zA-Z]*$/.test(searchText)) {
           setMentionType('@@')
+          setMentionIndex(0)
           setMentionSearch(searchText.toLowerCase())
           setShowMentionSuggestions(true)
           return
         }
       } else if (textAfterAt.startsWith('@')) {
         const searchText = textAfterAt.substring(1)
-        if (searchText.length === 0 || /^[a-zA-Z\s]*$/.test(searchText)) {
+        if (/^[a-zA-Z]*$/.test(searchText)) {
           setMentionType('@')
+          setMentionIndex(0)
           setMentionSearch(searchText.toLowerCase())
           setShowMentionSuggestions(true)
           return
@@ -1382,6 +1468,14 @@ export default function ChatSystem({
     return user.oscar || user.oscar || 'Someone'
   })
 
+  const typingLabel =
+    typingUserNames.length === 0 ? '' :
+      typingUserNames.length === 1 ? `${typingUserNames[0]} is typing…` :
+        typingUserNames.length === 2 ? `${typingUserNames[0]} and ${typingUserNames[1]} are typing…` :
+          `${typingUserNames.length} people are typing…`
+
+  const messageById = useMemo(() => new Map(messages.map(m => [m.id, m])), [messages])
+
   const visibleMessages = useMemo(() =>
     messages.filter(canViewMessage).filter(m => !searchQuery || m.content.toLowerCase().includes(searchQuery.toLowerCase())),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1391,9 +1485,7 @@ export default function ChatSystem({
   const timeline = useMemo(() => buildTimeline(visibleMessages, firstUnreadId), [visibleMessages, firstUnreadId])
 
   return (
-    <div className="relative flex flex-col h-[calc(100dvh-7.8rem)] min-h-[520px] bg-zinc-50/50 dark:bg-zinc-950/50 rounded-xl border shadow-sm overflow-hidden">
-      {/* Background Texture Drop */}
-      <div className="absolute inset-0 z-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:16px_16px] opacity-60 pointer-events-none" />
+    <div className="relative flex flex-col h-[calc(100dvh-13rem)] sm:h-[calc(100dvh-12rem)] min-h-[420px] bg-background rounded-xl border shadow-sm overflow-hidden">
 
       {/* Header */}
       <div className="flex-none border-b border-border/40 bg-card/70 backdrop-blur-xl px-3 py-2 shadow-sm z-10">
@@ -1403,18 +1495,19 @@ export default function ChatSystem({
               <MessageCircle className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <h2 className="text-xs font-semibold leading-tight">Team Chat</h2>
-              <p className="text-[10px] text-muted-foreground">{users.filter(u => u.is_online).length} online · {visibleMessages.length} messages</p>
-              {isReadOnlyProgramChat && <p className="text-[10px] text-amber-600 font-medium">Read-only: not assigned to this program</p>}
+              <h2 className="text-sm font-semibold leading-tight truncate">{roomLabel || (programId ? 'Program chat' : 'General chat')}</h2>
+              <p className="text-xs text-muted-foreground">
+                {typingLabel || `${users.filter(u => u.is_online).length} online`}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <input type="search" aria-label="Search messages" placeholder="Search messages…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                className="h-8 w-36 pl-8 pr-3 text-xs rounded-lg border bg-background/80 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-all focus:w-48" />
+              <input type="search" aria-label="Search loaded messages" placeholder="Search…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                className="h-9 w-28 sm:w-40 pl-8 pr-3 text-base sm:text-xs rounded-lg border bg-background/80 focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all sm:focus:w-52" />
             </div>
-            <Button aria-label={`${users.filter(u => u.is_online).length} team members online`} aria-expanded={showUserList} variant="outline" size="sm" onClick={() => setShowUserList(!showUserList)} className="gap-1.5 h-8 text-xs">
+            <Button aria-label={`${users.filter(u => u.is_online).length} team members online`} aria-expanded={showUserList} variant="outline" size="sm" onClick={() => setShowUserList(!showUserList)} className="gap-1.5 h-9 text-xs">
               <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-green-500 motion-safe:animate-pulse" />
               <Users aria-hidden="true" className="h-3.5 w-3.5" />
               {users.filter(u => u.is_online).length}
@@ -1423,13 +1516,26 @@ export default function ChatSystem({
         </div>
       </div>
 
+      {isReadOnlyProgramChat && (
+        <div role="status" className="flex-none border-b bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-800 dark:text-amber-300 z-10">
+          Read-only: you are not assigned to this program, so you can read but not post.
+        </div>
+      )}
+
       {/* Messages */}
-      <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto scroll-smooth z-10 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border/40 hover:[&::-webkit-scrollbar-thumb]:bg-border/60 [&::-webkit-scrollbar-thumb]:rounded-full">
+      <div
+        ref={messagesContainerRef}
+        onScroll={handleScroll}
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        aria-label="Messages"
+        className="flex-1 overflow-y-auto overscroll-contain z-10 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border/40 hover:[&::-webkit-scrollbar-thumb]:bg-border/60 [&::-webkit-scrollbar-thumb]:rounded-full">
         <div className="px-4 py-3">
           {hasMoreMessages && !loadingMessages && (
             <div className="flex justify-center py-3">
-              <button onClick={loadEarlierMessages} disabled={loadingEarlier}
-                className="flex items-center gap-2 text-xs text-muted-foreground border rounded-full px-4 py-1.5 bg-background hover:bg-muted transition-colors disabled:opacity-50">
+              <button type="button" onClick={loadEarlierMessages} disabled={loadingEarlier}
+                className="flex items-center gap-2 text-xs text-muted-foreground border rounded-full px-4 py-2 bg-background hover:bg-muted transition-colors disabled:opacity-50">
                 {loadingEarlier && <Loader2 className="h-3 w-3 animate-spin" />}
                 {loadingEarlier ? 'Loading...' : 'Load earlier messages'}
               </button>
@@ -1465,16 +1571,14 @@ export default function ChatSystem({
 
           {!loadingMessages && timeline.map(item => {
             if (item.kind === 'date') return (
-              <div key={item.id} className="flex items-center gap-3 py-4">
-                <div className="flex-1 h-px bg-border/60" />
-                <span className="text-[11px] text-muted-foreground font-medium px-3 py-1 rounded-full border bg-background/90 whitespace-nowrap">{item.label}</span>
-                <div className="flex-1 h-px bg-border/60" />
+              <div key={item.id} className="sticky top-1 z-10 flex justify-center py-3">
+                <span className="text-xs text-muted-foreground font-medium px-3 py-1 rounded-full border bg-card/95 backdrop-blur shadow-sm whitespace-nowrap">{item.label}</span>
               </div>
             )
             if (item.kind === 'unread') return (
               <div key={item.id} className="flex items-center gap-3 py-2">
                 <div className="flex-1 h-px bg-primary/40" />
-                <span className="text-[11px] text-primary font-semibold px-3 py-1 rounded-full bg-primary/10 whitespace-nowrap">New messages below</span>
+                <span className="text-xs text-primary font-semibold px-3 py-1 rounded-full bg-primary/10 whitespace-nowrap">New messages</span>
                 <div className="flex-1 h-px bg-primary/40" />
               </div>
             )
@@ -1484,7 +1588,7 @@ export default function ChatSystem({
             const displayName = getDisplayName(msg.users)
             const msgTime = msg.created_at ? new Date(msg.created_at).getTime() : NaN
             const isEditable = isOwn && !isNaN(msgTime) && (Date.now() - msgTime) < 3 * 60 * 1000
-            const repliedMsg = (msg as any).reply_to_id ? messages.find(m => m.id === (msg as any).reply_to_id) : null
+            const repliedMsg = msg.reply_to_id ? messageById.get(msg.reply_to_id) ?? null : null
             const msgReactions = reactions[msg.id] ?? []
 
             return (
@@ -1498,9 +1602,9 @@ export default function ChatSystem({
                 isEditable={isEditable}
                 repliedMsg={repliedMsg}
                 msgReactions={msgReactions}
-                highlightedMessageId={highlightedMessageId}
+                isHighlighted={highlightedMessageId === msg.id}
+                isPickerOpen={showReactionPicker === msg.id}
                 searchQuery={searchQuery}
-                showReactionPicker={showReactionPicker}
                 currentUserRole={currentUser?.role}
                 currentUserId={currentUser?.id}
                 setShowReactionPicker={setShowReactionPicker}
@@ -1514,12 +1618,7 @@ export default function ChatSystem({
           })}
 
           {typingUserNames.length > 0 && (
-            <div className="flex items-end gap-2 mt-3">
-              <div className="w-8 flex-shrink-0">
-                <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                  <span className="text-[10px] font-bold text-muted-foreground">{typingUserNames[0]?.[0]?.toUpperCase()}</span>
-                </div>
-              </div>
+            <div className="flex items-center gap-2 mt-3" aria-hidden="true">
               <div className="bg-muted/60 border border-border/50 rounded-2xl rounded-bl-sm px-4 py-3">
                 <div className="flex gap-1 items-center h-3">
                   {[0, 150, 300].map(delay => (
@@ -1527,6 +1626,7 @@ export default function ChatSystem({
                   ))}
                 </div>
               </div>
+              <span className="text-xs text-muted-foreground">{typingLabel}</span>
             </div>
           )}
 
@@ -1536,9 +1636,10 @@ export default function ChatSystem({
 
       {/* Jump to bottom */}
       {!isAtBottom && (
-        <button onClick={jumpToBottom}
-          className="absolute bottom-[5.5rem] right-4 flex items-center gap-1.5 rounded-full bg-primary text-primary-foreground shadow-lg px-3 py-1.5 text-xs font-semibold hover:bg-primary/90 active:scale-95 transition-all z-20 animate-in slide-in-from-bottom-2 duration-200">
-          {newMsgCount > 0 && <span className="bg-white/25 rounded-full px-1.5 py-0.5 leading-tight">{newMsgCount}</span>}
+        <button type="button" onClick={jumpToBottom}
+          aria-label={newMsgCount > 0 ? `Jump to latest, ${newMsgCount} new` : 'Jump to latest messages'}
+          className="absolute bottom-[6.5rem] right-4 flex h-10 items-center gap-1.5 rounded-full bg-primary text-primary-foreground shadow-lg px-3 text-xs font-semibold hover:bg-primary/90 active:scale-95 transition-all z-20 animate-in slide-in-from-bottom-2 duration-200">
+          {newMsgCount > 0 && <span className="bg-white/25 rounded-full px-1.5 py-0.5 leading-tight">{newMsgCount} new</span>}
           <ChevronDown className="h-4 w-4" />
         </button>
       )}
@@ -1577,20 +1678,20 @@ export default function ChatSystem({
       )}
 
       {/* Input area */}
-      <div className="flex-none border-t border-border/50 bg-card/80 backdrop-blur-xl px-4 pt-3 pb-4 shadow-[0_-8px_30px_-15px_rgba(0,0,0,0.1)] z-10">
+      <div className="flex-none border-t border-border/50 bg-card px-3 sm:px-4 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] z-10">
         {replyTo && (
           <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-xl px-3 py-2 mb-2 text-xs">
             <div className="flex items-center gap-2 text-primary min-w-0">
               <CornerUpLeft className="h-3.5 w-3.5 flex-shrink-0" />
               <span className="truncate">Replying to <strong>{getDisplayName(replyTo.users)}</strong></span>
             </div>
-            <button onClick={cancelReply} className="ml-2 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="h-3.5 w-3.5" /></button>
+            <button type="button" aria-label="Cancel reply" onClick={cancelReply} className="hit-area ml-2 text-muted-foreground hover:text-foreground flex-shrink-0"><X aria-hidden="true" className="h-4 w-4" /></button>
           </div>
         )}
         {editingMessage && (
           <div className="flex items-center justify-between bg-amber-500/5 border border-amber-500/20 rounded-xl px-3 py-2 mb-2 text-xs text-amber-700 dark:text-amber-400">
             <div className="flex items-center gap-2"><Pencil className="h-3.5 w-3.5" /><span className="font-semibold">Editing message</span></div>
-            <button onClick={cancelEdit}><X className="h-3.5 w-3.5" /></button>
+            <button type="button" aria-label="Cancel editing" onClick={cancelEdit} className="hit-area"><X aria-hidden="true" className="h-4 w-4" /></button>
           </div>
         )}
         {selectedMentions.length > 0 && (
@@ -1611,29 +1712,55 @@ export default function ChatSystem({
           <div className="relative flex-1">
             <textarea
               ref={textareaRef}
-              aria-label="Message the team"
-              placeholder={isReadOnlyProgramChat ? 'Read-only: not assigned to this program' : editingMessage ? 'Edit message...' : 'Message the team...'}
+              aria-label={editingMessage ? 'Edit message' : 'Write a message'}
+              aria-autocomplete="list"
+              aria-controls="chat-mention-list"
+              aria-activedescendant={showMentionSuggestions && filteredUsers[mentionIndex] ? `chat-mention-${filteredUsers[mentionIndex].id}` : undefined}
+              placeholder={isReadOnlyProgramChat ? 'Read-only' : editingMessage ? 'Edit message…' : 'Message…  (@ to mention)'}
               value={newMessage}
               onChange={handleMessageChange}
+              enterKeyHint="send"
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                const suggestions = showMentionSuggestions ? filteredUsers.slice(0, 5) : []
+                if (suggestions.length > 0) {
+                  if (event.key === 'ArrowDown') { event.preventDefault(); setMentionIndex(i => (i + 1) % suggestions.length); return }
+                  if (event.key === 'ArrowUp') { event.preventDefault(); setMentionIndex(i => (i - 1 + suggestions.length) % suggestions.length); return }
+                  if (event.key === 'Enter' || event.key === 'Tab') { event.preventDefault(); selectMention(suggestions[Math.min(mentionIndex, suggestions.length - 1)]); return }
+                  if (event.key === 'Escape') { event.preventDefault(); setShowMentionSuggestions(false); return }
+                }
+                if (event.key === 'Escape' && (editingMessage || replyTo)) {
+                  event.preventDefault()
+                  if (editingMessage) cancelEdit(); else cancelReply()
+                  return
+                }
+                // On touch keyboards Enter inserts a newline and the send button sends;
+                // with a physical keyboard Enter sends and Shift+Enter adds a line.
+                const coarse = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches
+                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !coarse) {
                   event.preventDefault()
                   void handleSendMessage()
                 }
               }}
               disabled={isReadOnlyProgramChat}
               rows={1}
-              className="block w-full resize-none rounded-xl border border-border/50 bg-background/50 shadow-inner px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-background transition-all placeholder:text-muted-foreground/60 max-h-32 disabled:opacity-50"
-              style={{ minHeight: '40px', height: '40px', padding: '9px 14px', lineHeight: '22px', boxSizing: 'border-box' }}
+              className="block w-full resize-none rounded-2xl border border-border bg-background px-4 py-2.5 text-base sm:text-sm leading-6 min-h-11 max-h-40 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-shadow placeholder:text-muted-foreground disabled:opacity-50"
             />
             {showMentionSuggestions && filteredUsers.length > 0 && (
-              <div className="absolute bottom-full left-0 right-0 mb-2 bg-background border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in slide-in-from-bottom-2 duration-150">
+              <div id="chat-mention-list" role="listbox" aria-label={mentionType === '@@' ? 'Private mention' : 'Mention'} className="absolute bottom-full left-0 right-0 mb-2 bg-background border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in slide-in-from-bottom-2 duration-150">
                 <div className={`px-3 py-2 border-b flex items-center gap-2 text-xs font-semibold ${mentionType === '@@' ? 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' : 'text-primary bg-primary/5'}`}>
                   {mentionType === '@@' ? <Lock className="h-3.5 w-3.5" /> : <AtSign className="h-3.5 w-3.5" />}
-                  {mentionType === '@@' ? 'Private mention' : 'Mention'} · type first name
+                  {mentionType === '@@' ? 'Private mention' : 'Mention'} · ↑↓ to choose, Enter to pick
                 </div>
-                {filteredUsers.slice(0, 5).map(user => (
-                  <div key={user.id} onClick={() => selectMention(user)} className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 cursor-pointer border-b last:border-0 transition-colors">
+                {filteredUsers.slice(0, 5).map((user, index) => (
+                  <div
+                    key={user.id}
+                    id={`chat-mention-${user.id}`}
+                    role="option"
+                    aria-selected={index === mentionIndex}
+                    onMouseDown={(event) => { event.preventDefault(); selectMention(user) }}
+                    onMouseEnter={() => setMentionIndex(index)}
+                    className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer border-b last:border-0 transition-colors ${index === mentionIndex ? 'bg-primary/10' : 'hover:bg-muted/50'}`}
+                  >
                     <Avatar className="h-7 w-7 flex-shrink-0"><AvatarFallback className="text-[10px] font-bold">{getInitials(user.full_name)}</AvatarFallback></Avatar>
                     <div className="min-w-0"><p className="text-sm font-medium">{user.full_name}</p><p className="text-[11px] text-muted-foreground truncate">{user.oscar || user.role}</p></div>
                     {mentionType === '@@' && <Lock className="h-3.5 w-3.5 text-amber-500 flex-shrink-0 ml-auto" />}
@@ -1646,14 +1773,14 @@ export default function ChatSystem({
             type="button"
             aria-label={editingMessage ? 'Save edited message' : 'Send message'}
             onClick={() => void handleSendMessage()}
-            disabled={isReadOnlyProgramChat || !newMessage.trim()}
-            className="rounded-xl flex-shrink-0 shadow-sm p-0 self-end"
-            style={{ height: '40px', width: '40px', minHeight: '40px', minWidth: '40px' }}
+            disabled={isReadOnlyProgramChat || !newMessage.trim() || sending}
+            aria-busy={sending}
+            className="h-11 w-11 shrink-0 rounded-full p-0 self-end shadow-sm"
           >
-            <Send aria-hidden="true" className="h-4 w-4" />
+            {sending ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Send aria-hidden="true" className="h-4 w-4" />}
           </Button>
         </div>
-        <p className="text-[10px] text-muted-foreground/40 mt-1.5 text-right select-none">Click send to post · Shift+Enter for new line</p>
+        <p className="hidden [@media(pointer:fine)]:block text-xs text-muted-foreground mt-1.5 text-right select-none">Enter to send · Shift+Enter for a new line</p>
       </div>
     </div>
   )
