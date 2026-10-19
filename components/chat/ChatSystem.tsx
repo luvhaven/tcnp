@@ -24,7 +24,6 @@ import { isAdmin, effectiveOscarRole } from '@/lib/utils'
 
 type ChatMessageRow = Database['public']['Tables']['chat_messages']['Row']
 type ChatMessageInsert = Database['public']['Tables']['chat_messages']['Insert']
-type NotificationInsert = Database['public']['Tables']['notifications']['Insert']
 
 type Reaction = { emoji: string; count: number; userIds: string[] }
 type ReactionMap = Record<string, Reaction[]>
@@ -1170,14 +1169,15 @@ export default function ChatSystem({
 
         console.log('Message sent successfully:', data)
 
-        if (Array.isArray(data) && data.length > 0) {
-          const inserted = transformMessage(data[0] as RawMessage)
+        const insertedRow = Array.isArray(data) && data.length > 0 ? (data[0] as RawMessage) : null
+        if (insertedRow) {
+          const inserted = transformMessage(insertedRow)
           setMessages((prev) => upsertMessage(prev, inserted))
         }
 
         // Send notifications to mentioned users
-        if (sanitizedMentions.length > 0) {
-          await createNotifications(sanitizedMentions, newMessage)
+        if (sanitizedMentions.length > 0 && insertedRow?.id) {
+          await notifyMentions(insertedRow.id)
         }
 
         setNewMessage('')
@@ -1191,24 +1191,17 @@ export default function ChatSystem({
     }
   }
 
-  const createNotifications = async (userIds: string[], message: string) => {
-    if (!currentUser?.id || userIds.length === 0) return
-
+  // Mention notifications go through the server, which reads the recipients
+  // from the stored message; the browser cannot write other users' notifications.
+  const notifyMentions = async (messageId: string) => {
     try {
-      const notificationPayloads: NotificationInsert[] = userIds.map((userId) => ({
-        user_id: userId,
-        title: 'New chat message',
-        message,
-        type: 'chat',
-        channel: 'push'
-      }))
-
-      const { error } = await (supabase as any)
-        .from('notifications')
-        .insert(notificationPayloads)
-
-      if (error) {
-        console.error('Error creating notifications:', error)
+      const response = await fetch('/api/chat/mention-notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId })
+      })
+      if (!response.ok) {
+        console.error('Error creating notifications:', response.status)
       }
     } catch (error) {
       console.error('Unexpected error creating notifications:', error)

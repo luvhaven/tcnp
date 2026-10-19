@@ -19,7 +19,7 @@ const ALLOWED_ROLES = [
 export async function POST(req: NextRequest) {
     try {
         // One alarm per two minutes per IP — this is a loud broadcast
-        const limitCheck = checkRateLimit(req, 'welfare-food-ready', 1, 2 * 60 * 1000)
+        const limitCheck = await checkRateLimit(req, 'welfare-food-ready', 1, 2 * 60 * 1000)
         if (!limitCheck.success) {
             return NextResponse.json({ error: 'Food alarm was just sent. Please wait before sending again.' }, { status: 429 })
         }

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { checkRateLimit } from '@/lib/security/rate-limit'
+import { checkRateLimit, getClientIp } from '@/lib/security/rate-limit'
 import {
   generateResetToken,
   hashResetToken,
@@ -28,7 +28,7 @@ function submittedResponse(token: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    const rateCheck = checkRateLimit(request, 'auth-reset-request', 5, 10 * 60 * 1000)
+    const rateCheck = await checkRateLimit(request, 'auth-reset-request', 5, 10 * 60 * 1000)
     if (!rateCheck.success) {
       return NextResponse.json(
         { error: 'Too many reset requests. Please wait a few minutes before trying again.' },
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS).toISOString()
 
     // Capture client metadata so administrators can judge whether the request is genuine
-    const ip = request.headers.get('x-real-ip') || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null
+    const ip = getClientIp(request.headers)
     const userAgent = request.headers.get('user-agent') || null
 
     const { data: newRequest, error: insertError } = await db

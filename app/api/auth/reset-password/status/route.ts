@@ -5,7 +5,7 @@ import { hashResetToken, readResetToken } from '@/lib/security/reset-token'
 
 export async function GET(request: NextRequest) {
   try {
-    const rateCheck = checkRateLimit(request, 'auth-reset-status', 120, 60 * 1000)
+    const rateCheck = await checkRateLimit(request, 'auth-reset-status', 120, 60 * 1000)
     if (!rateCheck.success) {
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
     }

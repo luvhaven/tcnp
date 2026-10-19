@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
-import { canModerateTeamChat, cn, OFFICER_TEAMS, isAdmin, effectiveOscarRole } from "@/lib/utils"
+import { canModerateTeamChat, cn, OFFICER_TEAMS, isAdmin, effectiveOscarRole, isPlatformAdministrator } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -361,7 +361,7 @@ export default function TeamChatRoom() {
               </Badge>
             )}
             {currentUser && (isAdmin(currentUser.role) || isAdmin(effectiveOscarRole(currentUser.role, currentUser.oscar))) && (
-              <AdminChatControls team={team} teamName={theme?.label || `Team ${team}`} />
+              <AdminChatControls team={team} teamName={theme?.label || `Team ${team}`} canManageAll={isPlatformAdministrator(currentUser.role)} />
             )}
             <Button variant="ghost" size="sm" className="h-8 gap-1 text-white hover:bg-white/10" onClick={() => setShowMembers(v => !v)}>
               <Users className="h-4 w-4" /> {showMembers ? "Hide" : "Members"}

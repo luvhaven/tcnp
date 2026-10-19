@@ -26,9 +26,11 @@ interface AdminChatControlsProps {
     programName?: string | null
     team?: string | null
     teamName?: string | null
+    /** Platform administrators can archive chats and destroy every chat. */
+    canManageAll?: boolean
 }
 
-export function AdminChatControls({ programId, programName, team, teamName }: AdminChatControlsProps) {
+export function AdminChatControls({ programId, programName, team, teamName, canManageAll = false }: AdminChatControlsProps) {
     const [loading, setLoading] = useState(false)
     const confirm = useConfirm()
     const supabase = createClient()
@@ -255,15 +257,19 @@ export function AdminChatControls({ programId, programName, team, teamName }: Ad
 
                 <DropdownMenuSeparator />
 
-                <DropdownMenuItem onClick={handleArchive} disabled={loading}>
-                    <Archive className="mr-2 h-4 w-4 text-amber-600" />
-                    <span className="text-amber-600 font-medium">Archive Chats</span>
-                </DropdownMenuItem>
+                {canManageAll && (
+                    <DropdownMenuItem onClick={handleArchive} disabled={loading}>
+                        <Archive className="mr-2 h-4 w-4 text-amber-600" />
+                        <span className="text-amber-600 font-medium">Archive Chats</span>
+                    </DropdownMenuItem>
+                )}
 
-                <DropdownMenuItem onClick={handleDelete} disabled={loading}>
-                    <Trash2 className="mr-2 h-4 w-4 text-destructive" />
-                    <span className="text-destructive font-bold">Destroy Chats</span>
-                </DropdownMenuItem>
+                {(canManageAll || programId || team) && (
+                    <DropdownMenuItem onClick={handleDelete} disabled={loading}>
+                        <Trash2 className="mr-2 h-4 w-4 text-destructive" />
+                        <span className="text-destructive font-bold">Destroy Chats</span>
+                    </DropdownMenuItem>
+                )}
             </DropdownMenuContent>
         </DropdownMenu>
     )

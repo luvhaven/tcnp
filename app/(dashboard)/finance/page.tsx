@@ -23,6 +23,7 @@ import { useConfirm } from "@/components/providers/ConfirmProvider"
 import {
   Banknote, Upload, Download, Trash2, FileText, Lock, Loader2, FileSpreadsheet, Receipt, FileBarChart,
 } from "lucide-react"
+import { UPLOAD_RULES, validateUploadFiles } from "@/lib/security/upload-validation"
 
 // ─── Singleton client ───
 const supabase = createClient()
@@ -109,6 +110,11 @@ export default function FinancePage() {
     e.preventDefault()
     if (!form.file || !form.title.trim()) {
       toast.error("Title and file are required")
+      return
+    }
+    const fileError = validateUploadFiles([form.file], UPLOAD_RULES.financeDocument)
+    if (fileError) {
+      toast.error(fileError)
       return
     }
     setUploading(true)

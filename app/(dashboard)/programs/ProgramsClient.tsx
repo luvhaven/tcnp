@@ -19,7 +19,7 @@ import ProgramExport from "@/components/programs/ProgramExport"
 import ProgramSchedule from "@/components/programs/ProgramSchedule"
 import { RequestAvailabilityButton, AvailabilityRosterButton } from "@/components/missions/MissionAvailability"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
-import { isAdmin } from "@/lib/utils"
+import { isAdmin, isPlatformAdministrator } from "@/lib/utils"
 
 type Program = {
   id: string
@@ -463,7 +463,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                         {['planning', 'active'].includes(program.status) && (
                           <>
                             <RequestAvailabilityButton programId={program.id} programName={program.name} />
-                            <AvailabilityRosterButton programId={program.id} programName={program.name} />
+                            <AvailabilityRosterButton programId={program.id} programName={program.name} canAssign={isPlatformAdministrator(currentUser?.role)} />
                           </>
                         )}
 
