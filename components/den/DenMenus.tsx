@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
+import { notifyError, UserFacingError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -158,7 +159,7 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
         vendor_id: form.vendor_id || null,
         updated_at: new Date().toISOString(),
       }
-      if (!payload.title) throw new Error("Menu title is required")
+      if (!payload.title) throw new UserFacingError("Menu title is required")
       const schemaNotReady = (error: { code?: string } | null) =>
         !!error && ["PGRST200", "PGRST204", "PGRST205", "42703", "42P01"].includes(error.code ?? "")
       if (editing) {
@@ -168,7 +169,7 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
           const legacyResult = await supabase.from("program_menus").update(legacyPayload).eq("id", editing.id)
           if (legacyResult.error) throw legacyResult.error
         } else if (schemaNotReady(error)) {
-          throw new Error("Vendor assignment is unavailable until the vendor database migration is applied.")
+          throw new UserFacingError("Vendor assignment is unavailable until the vendor database migration is applied.")
         } else if (error) throw error
       } else {
         const insertPayload = { ...payload, created_by: currentUserId ?? null }
@@ -178,7 +179,7 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
           const legacyResult = await supabase.from("program_menus").insert(legacyPayload)
           if (legacyResult.error) throw legacyResult.error
         } else if (schemaNotReady(error)) {
-          throw new Error("Vendor assignment is unavailable until the vendor database migration is applied.")
+          throw new UserFacingError("Vendor assignment is unavailable until the vendor database migration is applied.")
         } else if (error) throw error
       }
     },
@@ -188,7 +189,7 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
       setEditing(null)
       queryClient.invalidateQueries({ queryKey: ["program-menus"] })
     },
-    onError: (err: any) => toast.error(err.message || "Failed to save menu"),
+    onError: (err: any) => notifyError(err, "Failed to save menu"),
   })
 
   const deleteMutation = useMutation({
@@ -200,7 +201,7 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
       toast.success("Menu removed")
       queryClient.invalidateQueries({ queryKey: ["program-menus"] })
     },
-    onError: (err: any) => toast.error(err.message || "Failed to delete menu"),
+    onError: (err: any) => notifyError(err, "Failed to delete menu"),
   })
 
   const openCreate = () => {
@@ -243,8 +244,8 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
               <span className="truncate">{menu.title}</span>
             </CardTitle>
             <CardDescription className="mt-1 flex flex-wrap items-center gap-1">
-              <Badge variant="secondary" className="text-[10px] uppercase">{MEAL_TYPES.find(m => m.value === menu.meal_type)?.label ?? menu.meal_type}</Badge>
-              {menu.programs?.name && <Badge variant="outline" className="text-[10px]">{menu.programs.name}</Badge>}
+              <Badge variant="secondary" className="text-xs uppercase">{MEAL_TYPES.find(m => m.value === menu.meal_type)?.label ?? menu.meal_type}</Badge>
+              {menu.programs?.name && <Badge variant="outline" className="text-xs">{menu.programs.name}</Badge>}
               {menu.vendors?.name && (
                 <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                   <Store className="h-3 w-3" />{menu.vendors.name}
@@ -258,8 +259,8 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
           </div>
           {canEdit && (
             <div className="flex shrink-0 gap-1">
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(menu)}><Pencil className="h-3.5 w-3.5" /></Button>
-              <Button
+              <Button aria-label="Edit menu" variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(menu)}><Pencil className="h-3.5 w-3.5" /></Button>
+              <Button aria-label="Delete menu"
                 variant="ghost" size="icon" className="h-7 w-7 text-red-500"
                 onClick={async () => {
                   const ok = await confirm({ title: "Delete menu?", message: `"${menu.title}" will be removed for everyone.` })

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
+import { notifyError, UserFacingError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -77,7 +78,7 @@ export default function VendorDirectory({ canEdit, currentUserId }: Props) {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const name = form.name.trim()
-      if (!name) throw new Error("Vendor name is required")
+      if (!name) throw new UserFacingError("Vendor name is required")
       const payload = {
         name,
         contact_name: form.contact_name.trim() || null,
@@ -108,10 +109,11 @@ export default function VendorDirectory({ canEdit, currentUserId }: Props) {
     onError: (err: any) => {
       // The case-insensitive unique index is the likeliest failure here, and
       // "duplicate key value violates unique constraint" tells an officer nothing.
-      const message = err?.code === "23505" || /duplicate key/i.test(err?.message ?? "")
-        ? "A vendor with that name already exists"
-        : err?.message || "Failed to save vendor"
-      toast.error(message)
+      if (err?.code === "23505" || /duplicate key/i.test(err?.message ?? "")) {
+        toast.error("A vendor with that name already exists")
+      } else {
+        notifyError(err, "Failed to save vendor")
+      }
     },
   })
 
@@ -125,7 +127,7 @@ export default function VendorDirectory({ canEdit, currentUserId }: Props) {
       queryClient.invalidateQueries({ queryKey: ["vendors"] })
       queryClient.invalidateQueries({ queryKey: ["program-menus"] })
     },
-    onError: (err: any) => toast.error(err?.message || "Failed to delete vendor"),
+    onError: (err: any) => notifyError(err, "Failed to delete vendor"),
   })
 
   const openCreate = () => {
@@ -210,7 +212,7 @@ export default function VendorDirectory({ canEdit, currentUserId }: Props) {
                       <div className="min-w-0">
                         <CardTitle className="truncate text-base">{vendor.name}</CardTitle>
                         <CardDescription className="mt-1 flex flex-wrap items-center gap-1">
-                          {!vendor.is_active && <Badge variant="outline" className="text-[10px] uppercase">Retired</Badge>}
+                          {!vendor.is_active && <Badge variant="outline" className="text-xs uppercase">Retired</Badge>}
                           {vendor.cuisine_note && (
                             <span className="text-[11px] text-muted-foreground">{vendor.cuisine_note}</span>
                           )}

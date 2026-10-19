@@ -26,6 +26,7 @@ import {
   UserCheck,
 } from "lucide-react"
 import { toast } from "sonner"
+import { notifyError } from '@/lib/notify'
 import PapaFormTabs from "@/components/papas/PapaFormTabs"
 import { canManagePapas, effectiveOscarRole } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
@@ -147,7 +148,7 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
     },
     onError: (error: any) => {
       console.error('Error saving papa:', error)
-      toast.error(error.message || 'Failed to save Papa')
+      notifyError(error, 'Failed to save Papa')
     }
   })
 
@@ -342,7 +343,7 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
                               {papa.title} {papa.full_name}
                             </h3>
                             {programName && (
-                              <Badge variant="outline" className="text-[10px] font-medium bg-primary/5 text-primary border-primary/20">
+                              <Badge variant="outline" className="text-xs font-medium bg-primary/5 text-primary border-primary/20">
                                 {programName}
                               </Badge>
                             )}
@@ -452,6 +453,7 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
               setEditingPapa(null)
             }}
             isEditing={!!editingPapa}
+            pending={saveMutation.isPending}
           />
         </DialogContent>
       </Dialog>

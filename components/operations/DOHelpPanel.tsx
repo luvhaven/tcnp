@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -13,45 +13,74 @@ import { SITREP_CODES } from '@/lib/constants/call-signs'
 import Link from 'next/link'
 
 // ─── SITREP Timer ────────────────────────────────────────────────────────────
+// Deadline-based rather than counting interval ticks: phones throttle or pause
+// setInterval in a backgrounded tab, so a tick counter drifts minutes behind
+// real time — exactly when an officer has the screen off between SITREPs.
+const SITREP_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
+
 function SitrepTimer() {
-    const [seconds, setSeconds] = useState(0)
-    const [running, setRunning] = useState(false)
-    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-    const SITREP_INTERVAL = 5 * 60 // 5 minutes
+    // While running: the wall-clock deadline. While paused: the time left.
+    const [deadline, setDeadline] = useState<number | null>(null)
+    const [pausedRemaining, setPausedRemaining] = useState(SITREP_INTERVAL_MS)
+    const [now, setNow] = useState(() => Date.now())
+    const running = deadline !== null
 
     useEffect(() => {
-        if (running) {
-            intervalRef.current = setInterval(() => {
-                setSeconds(s => {
-                    const nextSec = s + 1
-                    if (nextSec >= SITREP_INTERVAL) {
-                        // Play a gentle alert by utilizing the browser notification API
-                        if (typeof window !== 'undefined' && 'Notification' in window) {
-                            try {
-                                new Notification('SITREP Due', { body: '5 minutes elapsed — send your SITREP now.', icon: '/icon-192.png' })
-                            } catch (_) { /* ignore */ }
-                        }
-                        return 0 // reset
-                    }
-                    return nextSec
-                })
-            }, 1000)
-        } else {
-            if (intervalRef.current) clearInterval(intervalRef.current)
+        if (deadline === null) return
+        const tick = () => {
+            const t = Date.now()
+            if (t >= deadline) {
+                // Side effects live here, not inside a state updater (which
+                // React may call twice).
+                if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+                    try {
+                        new Notification('SITREP Due', { body: '5 minutes elapsed — send your SITREP now.', icon: '/icon-192.png' })
+                    } catch { /* ignore */ }
+                }
+                if (typeof navigator !== 'undefined') navigator.vibrate?.([200, 100, 200])
+                // Next cycle starts from the missed deadline, not from "now", so
+                // the cadence stays on the 5-minute grid.
+                const missed = Math.floor((t - deadline) / SITREP_INTERVAL_MS) + 1
+                setDeadline(deadline + missed * SITREP_INTERVAL_MS)
+            }
+            setNow(t)
         }
-        return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
-    }, [running])
+        tick()
+        const id = setInterval(tick, 500)
+        // Catch up immediately when the officer turns the screen back on
+        const onVisible = () => { if (document.visibilityState === 'visible') tick() }
+        document.addEventListener('visibilitychange', onVisible)
+        return () => {
+            clearInterval(id)
+            document.removeEventListener('visibilitychange', onVisible)
+        }
+    }, [deadline])
 
-    const remaining = SITREP_INTERVAL - seconds
+    const remainingMs = deadline !== null ? Math.max(0, deadline - now) : pausedRemaining
+    const remaining = Math.ceil(remainingMs / 1000)
     const mins = Math.floor(remaining / 60).toString().padStart(2, '0')
     const secs = (remaining % 60).toString().padStart(2, '0')
-    const pctElapsed = (seconds / SITREP_INTERVAL) * 100
+    const pctElapsed = ((SITREP_INTERVAL_MS - remainingMs) / SITREP_INTERVAL_MS) * 100
     const isCritical = remaining <= 120 // last 2 min
+
+    const toggle = () => {
+        if (deadline !== null) {
+            setPausedRemaining(Math.max(0, deadline - Date.now()))
+            setDeadline(null)
+        } else {
+            setNow(Date.now())
+            setDeadline(Date.now() + pausedRemaining)
+        }
+    }
+    const reset = () => {
+        setDeadline(null)
+        setPausedRemaining(SITREP_INTERVAL_MS)
+    }
 
     return (
         <div className="space-y-3">
             <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">5-Min SITREP Timer</span>
+                <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">5-Min SITREP Timer</span>
                 <Badge variant="outline" className="text-[9px] font-mono">SOP § SITREP</Badge>
             </div>
 
@@ -60,13 +89,17 @@ function SitrepTimer() {
                 'rounded-xl p-4 text-center transition-all',
                 isCritical && running ? 'bg-red-500/10 border border-red-500/30' : 'bg-muted/30 border border-border/40'
             )}>
-                <div className={cn(
-                    'text-4xl font-mono font-bold tracking-widest',
-                    isCritical && running ? 'text-red-500 animate-pulse' : 'text-foreground'
-                )}>
+                <div
+                    role="timer"
+                    aria-label={`${mins} minutes ${secs} seconds until next SITREP`}
+                    className={cn(
+                        'text-4xl font-mono font-bold tracking-widest tabular-nums',
+                        isCritical && running ? 'text-red-500' : 'text-foreground'
+                    )}
+                >
                     {mins}:{secs}
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-1">Time until next SITREP</p>
+                <p className="text-sm text-muted-foreground mt-1">Time until next SITREP</p>
             </div>
 
             {/* Progress bar */}
@@ -78,11 +111,11 @@ function SitrepTimer() {
             </div>
 
             <div className="flex gap-2">
-                <Button size="sm" variant={running ? 'destructive' : 'default'} onClick={() => setRunning(!running)} className="flex-1 gap-1 text-xs">
-                    {running ? <><Pause className="h-3 w-3" />Pause</> : <><Play className="h-3 w-3" />Start</>}
+                <Button variant={running ? 'destructive' : 'default'} onClick={toggle} className="flex-1 gap-1 min-h-11 text-sm">
+                    {running ? <><Pause className="h-4 w-4" />Pause</> : <><Play className="h-4 w-4" />Start</>}
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => { setSeconds(0); setRunning(false) }} className="gap-1 text-xs">
-                    <RotateCcw className="h-3 w-3" />Reset
+                <Button variant="outline" onClick={reset} className="gap-1 min-h-11 text-sm">
+                    <RotateCcw className="h-4 w-4" />Reset
                 </Button>
             </div>
         </div>

@@ -117,6 +117,8 @@ export async function POST(request: Request) {
             'head_compliance_oscar': 'COMPLIANCE_OSCAR_LEAD',
             'welfare_oscar': 'WELFARE_OSCAR',
             'head_welfare_oscar': 'WELFARE_OSCAR_LEAD',
+            'training_oscar': 'TRAINING_OSCAR',
+            'head_training_oscar': 'TRAINING_OSCAR_LEAD',
             'captain': 'CAPTAIN',
             'vice_captain': 'VICE_CAPTAIN',
             'head_of_command': 'HEAD_OF_COMMAND',

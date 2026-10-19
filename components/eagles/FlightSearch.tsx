@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import { toast } from "sonner"
+import { notifyError } from '@/lib/notify'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -56,7 +57,7 @@ export default function FlightSearch() {
         if (updated) setTracked(updated)
       }
     } catch (err: any) {
-      if (!silent) toast.error(err.message || "Flight search failed")
+      if (!silent) notifyError(err, "Flight search failed")
     } finally {
       if (!silent) setSearching(false)
     }
@@ -135,7 +136,7 @@ export default function FlightSearch() {
             Search
           </Button>
           {results.length > 0 && (
-            <Button type="button" variant="outline" size="icon" title="Refresh" onClick={() => void runSearch()}>
+            <Button aria-label="Refresh" type="button" variant="outline" size="icon" title="Refresh" onClick={() => void runSearch()}>
               <RefreshCw className="h-4 w-4" />
             </Button>
           )}

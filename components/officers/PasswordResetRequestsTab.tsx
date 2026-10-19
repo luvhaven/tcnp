@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase/client"
+import { uniqueTopic } from "@/lib/realtime/topic"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -12,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { formatDistanceToNow } from "date-fns"
 import { Check, X, KeyRound, Clock, Search, RefreshCw, AlertCircle, ShieldAlert, CheckCircle2 } from "lucide-react"
 import { toast } from "sonner"
+import { notifyError, UserFacingError } from '@/lib/notify'
 import type { PasswordResetRequest } from "@/types/database.types"
 
 export function PasswordResetRequestsTab() {
@@ -28,7 +30,7 @@ export function PasswordResetRequestsTab() {
       const res = await fetch('/api/admin/password-resets')
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'Failed to load password reset requests')
+        throw new UserFacingError(err.error || 'Failed to load password reset requests')
       }
       const data = await res.json()
       return data.requests || []
@@ -41,32 +43,24 @@ export function PasswordResetRequestsTab() {
     const supabase = createClient()
     if (!supabase) return
 
+    // Database change events respect RLS, so only administrators receive them. (The
+    // server's broadcasts go to a public topic and were never received here anyway.)
     const channel = supabase
-      .channel('admin-password-resets-listener')
+      .channel(uniqueTopic('admin-password-resets-listener'))
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'password_reset_requests',
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['admin-password-resets'] })
-        }
-      )
-      .on(
-        'broadcast',
-        { event: 'new_request' },
+        { event: 'INSERT', schema: 'public', table: 'password_reset_requests' },
         (payload) => {
           queryClient.invalidateQueries({ queryKey: ['admin-password-resets'] })
+          const email = (payload.new as { email?: string } | null)?.email
           toast.info('New Password Reset Request', {
-            description: `${payload.payload?.email || 'A user'} requested a password reset.`,
+            description: `${email || 'A user'} requested a password reset.`,
           })
         }
       )
       .on(
-        'broadcast',
-        { event: 'request_updated' },
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'password_reset_requests' },
         () => {
           queryClient.invalidateQueries({ queryKey: ['admin-password-resets'] })
         }
@@ -87,7 +81,7 @@ export function PasswordResetRequestsTab() {
         body: JSON.stringify({ requestId }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to approve request')
+      if (!res.ok) throw new UserFacingError(data.error || 'Failed to approve request')
       return data
     },
     onSuccess: (data, requestId) => {
@@ -99,7 +93,7 @@ export function PasswordResetRequestsTab() {
       toast.success('Reset request approved. The user can now set their new password.')
     },
     onError: (err: any) => {
-      toast.error(err.message || 'Failed to approve request')
+      notifyError(err, 'Failed to approve request')
     },
   })
 
@@ -112,7 +106,7 @@ export function PasswordResetRequestsTab() {
         body: JSON.stringify({ requestId, reason }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to reject request')
+      if (!res.ok) throw new UserFacingError(data.error || 'Failed to reject request')
       return data
     },
     onSuccess: (data, { requestId }) => {
@@ -126,7 +120,7 @@ export function PasswordResetRequestsTab() {
       setRejectReason("")
     },
     onError: (err: any) => {
-      toast.error(err.message || 'Failed to reject request')
+      notifyError(err, 'Failed to reject request')
     },
   })
 

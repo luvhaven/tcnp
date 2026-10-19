@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { audioManager } from '@/lib/audio/AudioManager'
+import { uniqueTopic } from '@/lib/realtime/topic'
 
 export type NotificationType =
   | 'info'
@@ -89,7 +90,6 @@ function vibrateDevice(type: NotificationType = 'info') {
 export function useNotifications() {
   const supabase = createClient()
   const [notifications, setNotifications] = useState<AppNotification[]>([])
-  const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
@@ -107,7 +107,6 @@ export function useNotifications() {
 
       const notifs = (data || []) as unknown as AppNotification[]
       setNotifications(notifs)
-      setUnreadCount(notifs.filter((n) => !n.is_read).length)
     } catch (err) {
       console.warn('[useNotifications] load failed:', err)
     } finally {
@@ -126,10 +125,12 @@ export function useNotifications() {
 
         setUserId(user.id)
         await loadNotifications(user.id)
+        // Unmounted while loading: creating the channel now would leak it.
+        if (cancelled) return
 
         // Real-time subscription
         const channel = supabase
-          .channel(`notifications:${user.id}`)
+          .channel(uniqueTopic(`notifications:${user.id}`))
           .on(
             'postgres_changes',
             {
@@ -141,8 +142,11 @@ export function useNotifications() {
             (payload) => {
               if (cancelled) return
               const incoming = payload.new as AppNotification
-              setNotifications((prev) => [incoming, ...prev.slice(0, NOTIFICATION_PAGE_SIZE - 1)])
-              setUnreadCount((c) => c + 1)
+              setNotifications((prev) =>
+                prev.some((n) => n.id === incoming.id)
+                  ? prev
+                  : [incoming, ...prev.slice(0, NOTIFICATION_PAGE_SIZE - 1)]
+              )
 
               // Teams-quality alerts — route through AudioManager (BrokenArrowAlert owns broken_arrow audio)
               audioManager.playChime(resolveChimeKey(incoming))
@@ -180,13 +184,14 @@ export function useNotifications() {
               setNotifications((prev) =>
                 prev.map((n) => (n.id === updated.id ? { ...n, ...updated } : n))
               )
-              setUnreadCount((prev) =>
-                Math.max(0, prev - (updated.is_read ? 1 : 0))
-              )
             }
           )
           .subscribe()
 
+        if (cancelled) {
+          void supabase.removeChannel(channel)
+          return
+        }
         channelRef.current = channel
       } catch (err) {
         console.warn('[useNotifications] init error (non-fatal):', err)
@@ -214,7 +219,6 @@ export function useNotifications() {
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
       )
-      setUnreadCount((prev) => Math.max(0, prev - 1))
     } catch (err) {
       console.error('[useNotifications] markAsRead failed:', err)
     }
@@ -229,7 +233,6 @@ export function useNotifications() {
         .eq('is_read', false)
 
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
-      setUnreadCount(0)
     } catch (err) {
       console.error('[useNotifications] markAllAsRead failed:', err)
       toast.error('Failed to mark notifications as read')
@@ -241,15 +244,16 @@ export function useNotifications() {
       const { error } = await (supabase.from('notifications') as any).delete().eq('id', id)
       if (error) throw error
       setNotifications((prev) => prev.filter((n) => n.id !== id))
-      setUnreadCount((prev) => {
-        const wasUnread = notifications.find((n) => n.id === id && !n.is_read)
-        return wasUnread ? Math.max(0, prev - 1) : prev
-      })
+      // Realtime can't filter DELETEs by user, so tell the sidebar badge directly.
+      window.dispatchEvent(new Event('tcnp:notifications-changed'))
     } catch (err) {
       console.error('[useNotifications] delete failed:', err)
       toast.error('Failed to delete notification')
     }
-  }, [supabase, notifications])
+  }, [supabase])
+
+  // Derived, so a local mark-as-read followed by its realtime echo can't count twice.
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.is_read).length, [notifications])
 
   return {
     notifications,

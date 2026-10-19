@@ -17,7 +17,8 @@ import { useChatNotifications } from "@/hooks/useChatNotifications"
 
 // Core layout components - loaded normally but wrapped in error boundaries
 import { Header } from "@/components/layout/header"
-import { WorkNavigation } from '@/components/layout/WorkNavigation'
+import { BottomNav } from '@/components/layout/BottomNav'
+import { FloatingStack } from '@/components/layout/FloatingStack'
 
 // Dynamically import ALL potentially problematic components with SSR disabled
 const Sidebar = dynamic(
@@ -200,13 +201,6 @@ export default function DashboardLayout({
         {/* Dev tools - DISABLED on iOS */}
         {canMountExtras && !isIOS && <DevLoggerInit />}
 
-        {/* Location tracking — enabled on ALL devices including iOS */}
-        {canMountTracker && (
-          <ErrorBoundary>
-            <LocationTracker />
-          </ErrorBoundary>
-        )}
-
         {/* Location enforcer — prompts users who haven't granted permission.
             Mounted on ALL devices (incl. iOS): its Enable button provides the
             user gesture iOS requires for the native geolocation prompt. */}
@@ -285,19 +279,23 @@ export default function DashboardLayout({
           >
             <div className="mx-auto max-w-6xl min-w-0 space-y-6 animate-fade-in">
               <ErrorBoundary>
-                <WorkNavigation />
                 {children}
               </ErrorBoundary>
             </div>
           </main>
         </div>
-        {/* Floating UI safe on every platform (install prompt is how iOS users
-            learn about Add to Home Screen; password enforcer is plain UI) */}
+        {/* Phone tab bar (hidden from the nav breakpoint up). "More" opens the
+            same drawer as the header's hamburger. */}
+        <ErrorBoundary>
+          <BottomNav
+            moreOpen={mobileSidebarOpen}
+            onOpenMore={() => setMobileSidebarOpen((o) => !o)}
+          />
+        </ErrorBoundary>
+
+        {/* Enforcers are full-screen dialogs, not floating notices */}
         {canMountTracker && (
           <>
-            <ErrorBoundary>
-              <PWAInstallPrompt />
-            </ErrorBoundary>
             <ErrorBoundary>
               <PasswordEnforcer />
             </ErrorBoundary>
@@ -307,20 +305,40 @@ export default function DashboardLayout({
           </>
         )}
 
-        {/* Floating UI still disabled on iOS (Notification API / IndexedDB limits) */}
-        {canMountExtras && !isIOS && (
-          <>
+        {/* Every floating notice shares one bottom column so they never
+            overlap and all clear the tab bar and home indicator. Top of the
+            column = most urgent. */}
+        <FloatingStack>
+          {/* Notification API / IndexedDB limits keep these off iOS */}
+          {canMountExtras && !isIOS && (
+            <>
+              <ErrorBoundary>
+                <MissionNotificationHandler />
+              </ErrorBoundary>
+              <ErrorBoundary>
+                <NotificationPermissionBanner />
+              </ErrorBoundary>
+            </>
+          )}
+          {/* The install prompt is how iOS users learn about Add to Home Screen */}
+          {canMountTracker && (
             <ErrorBoundary>
-              <NotificationPermissionBanner />
+              <PWAInstallPrompt />
             </ErrorBoundary>
-            <ErrorBoundary>
-              <MissionNotificationHandler />
-            </ErrorBoundary>
+          )}
+          {canMountExtras && !isIOS && (
             <ErrorBoundary>
               <SyncStatusBadge />
             </ErrorBoundary>
-          </>
-        )}
+          )}
+          {/* Location tracking — enabled on ALL devices including iOS; renders
+              the live-location pill while sharing is active */}
+          {canMountTracker && (
+            <ErrorBoundary>
+              <LocationTracker />
+            </ErrorBoundary>
+          )}
+        </FloatingStack>
       </div>
     </ErrorBoundary>
   )

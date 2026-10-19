@@ -10,12 +10,21 @@ import { Toaster } from "sonner"
 import { useIsClient } from "@/hooks/useIsClient"
 
 /** Sonner wired to the app theme — otherwise toasts stay light-styled in dark
- *  mode. closeButton lets users dismiss long-duration operational toasts. */
+ *  mode. closeButton lets users dismiss long-duration operational toasts.
+ *
+ *  top-center keeps toasts clear of the bottom tab bar and floating notices
+ *  on phones; the offset clears the notch/status bar in the installed app;
+ *  visibleToasts 3 stops a burst of failures from burying the page. */
+const TOAST_OFFSET = 'calc(env(safe-area-inset-top) + 0.75rem)'
+
 function ThemedToaster() {
     const { theme } = useTheme()
     return (
         <Toaster
-            position="top-right"
+            position="top-center"
+            offset={TOAST_OFFSET}
+            mobileOffset={{ top: TOAST_OFFSET, left: '1rem', right: '1rem' }}
+            visibleToasts={3}
             richColors
             closeButton
             theme={theme === 'auto' ? 'system' : theme}

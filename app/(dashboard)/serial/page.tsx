@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
+import { notifyError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { canAccessSierra, canManageSierra, cn } from "@/lib/utils"
@@ -164,7 +165,7 @@ export default function SerialPage() {
       setForm({ title: "", caption: "", category: "arrival", program_id: "", files: [] })
       queryClient.invalidateQueries({ queryKey: ["serial-media"] })
     } catch (err: any) {
-      toast.error(err.message || "Upload failed")
+      notifyError(err, "Upload failed")
     } finally {
       setUploading(false)
     }
@@ -182,7 +183,7 @@ export default function SerialPage() {
       if (error) throw error
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["serial-media"] }),
-    onError: (err: any) => toast.error(err.message || "Update failed"),
+    onError: (err: any) => notifyError(err, "Update failed"),
   })
 
   const deleteMutation = useMutation({
@@ -195,7 +196,7 @@ export default function SerialPage() {
       toast.success("Asset deleted")
       queryClient.invalidateQueries({ queryKey: ["serial-media"] })
     },
-    onError: (err: any) => toast.error(err.message || "Delete failed"),
+    onError: (err: any) => notifyError(err, "Delete failed"),
   })
 
   if (userLoading) {
@@ -224,7 +225,7 @@ export default function SerialPage() {
             <div className="flex items-center gap-2">
               <Camera className="h-6 w-6 text-orange-300" />
               <h1 className="text-2xl font-bold tracking-tight">Serial</h1>
-              <Badge className="bg-primary/20 text-orange-200 border-0 uppercase text-[10px] tracking-wider">Social Media Unit</Badge>
+              <Badge className="bg-primary/20 text-orange-200 border-0 uppercase text-xs tracking-wider">Social Media Unit</Badge>
             </div>
             <p className="mt-1 max-w-xl text-sm text-slate-300">
               Capture, curate and publish Papa arrivals, pickups and theatre moments — from lens to Instagram.
@@ -309,9 +310,9 @@ export default function SerialPage() {
                         <img src={publicUrl(asset.storage_path)} alt={asset.title ?? "Serial media"} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" loading="lazy" />
                       )}
                       <div className="absolute left-2 top-2 flex gap-1">
-                        <Badge className={cn("border-0 text-[10px] uppercase tracking-wide", meta.color)}>{meta.label}</Badge>
+                        <Badge className={cn("border-0 text-xs uppercase tracking-wide", meta.color)}>{meta.label}</Badge>
                         {asset.media_type === "video" && (
-                          <Badge className="border-0 bg-black/60 text-white text-[10px]"><Film className="mr-1 h-3 w-3" />Video</Badge>
+                          <Badge className="border-0 bg-black/60 text-white text-xs"><Film className="mr-1 h-3 w-3" />Video</Badge>
                         )}
                       </div>
                     </div>
@@ -339,11 +340,11 @@ export default function SerialPage() {
                               {STATUSES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
                             </SelectContent>
                           </Select>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Set Instagram link"
+                          <Button aria-label="Set Instagram link" variant="ghost" size="icon" className="h-8 w-8" title="Set Instagram link"
                             onClick={() => { setIgEditing(asset); setIgUrl(asset.instagram_url ?? "") }}>
                             <Link2 className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="ml-auto h-8 w-8 text-red-500 hover:text-red-600" title="Delete"
+                          <Button aria-label="Delete asset" variant="ghost" size="icon" className="ml-auto h-8 w-8 text-red-500 hover:text-red-600" title="Delete"
                             onClick={() => deleteMutation.mutate(asset)}>
                             <Trash2 className="h-4 w-4" />
                           </Button>

@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import { usePathname, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { audioManager } from '@/lib/audio/AudioManager'
+import { uniqueTopic } from '@/lib/realtime/topic'
+import { showSystemNotification } from '@/lib/services/system-notification'
 
 // Audio is handled by the global AudioManager singleton (respects global mute)
 
@@ -17,13 +19,16 @@ export function useChatNotifications(currentUserId: string | null) {
   const supabase = useMemo(() => createClient(), [])
   const pathname = usePathname()
   const router = useRouter()
-  const permissionRequestedRef = useRef(false)
+  // Read through a ref: with pathname as a dependency the channel was torn down and
+  // rebuilt on every navigation, and the rebuilt one never received events.
+  const pathnameRef = useRef(pathname)
+  useEffect(() => { pathnameRef.current = pathname }, [pathname])
 
   useEffect(() => {
     if (!currentUserId) return
 
     const channel = supabase
-      .channel('global-chat-notify')
+      .channel(uniqueTopic('global-chat-notify'))
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'chat_messages' },
@@ -41,7 +46,7 @@ export function useChatNotifications(currentUserId: string | null) {
 
           const mentions = Array.isArray(msg.mentions) ? msg.mentions : []
           const isMentioned = mentions.includes(currentUserId)
-          const isOnChatPage = pathname?.startsWith('/chat') ?? false
+          const isOnChatPage = pathnameRef.current?.startsWith('/chat') ?? false
 
           // Skip toast if user is on chat page and not mentioned
           if (isOnChatPage && !isMentioned) return
@@ -77,29 +82,14 @@ export function useChatNotifications(currentUserId: string | null) {
             },
           })
 
-          // Browser notification when tab is hidden
-          if (document.hidden && 'Notification' in window) {
-            if (
-              !permissionRequestedRef.current &&
-              Notification.permission === 'default'
-            ) {
-              permissionRequestedRef.current = true
-              await Notification.requestPermission()
-            }
-
-            if (Notification.permission === 'granted') {
-              const n = new Notification(`TCNP — ${toastTitle}`, {
-                body: preview,
-                icon: '/icon-192.png',
-                tag: `chat-${msg.id}`,
-                requireInteraction: isMentioned,
-              })
-              n.onclick = () => {
-                window.focus()
-                router.push('/chat')
-                n.close()
-              }
-            }
+          // System notification while the tab is in the background
+          if (document.hidden) {
+            void showSystemNotification(`TCNP — ${toastTitle}`, {
+              body: preview,
+              tag: `chat-${msg.id}`,
+              requireInteraction: isMentioned,
+              onClickUrl: '/chat',
+            })
           }
         }
       )
@@ -108,5 +98,5 @@ export function useChatNotifications(currentUserId: string | null) {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [currentUserId, pathname, supabase, router])
+  }, [currentUserId, supabase, router])
 }

@@ -277,7 +277,7 @@ export default function ProgramSchedule({
                                                         <User className="h-4 w-4 mr-1" /> Add Speaker
                                                     </Button>
 
-                                                    <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete('program_sessions', session.id)}>
+                                                    <Button aria-label="Delete session" variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete('program_sessions', session.id)}>
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                 </div>
@@ -299,7 +299,7 @@ export default function ProgramSchedule({
                                                                     <p className="text-xs text-muted-foreground">{speaker.topic} • {speaker.time_slot?.slice(0, 5)} ({speaker.duration_minutes}m)</p>
                                                                 </div>
                                                             </div>
-                                                            <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => handleDelete('session_speakers', speaker.id)}>
+                                                            <Button aria-label="Remove speaker" variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => handleDelete('session_speakers', speaker.id)}>
                                                                 <Trash2 className="h-3 w-3" />
                                                             </Button>
                                                         </div>

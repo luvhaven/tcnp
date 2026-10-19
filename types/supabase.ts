@@ -5228,6 +5228,8 @@ export type Database = {
       | "head_welfare_oscar"
       | "hospitality_oscar"
       | "head_hospitality_oscar"
+      | "training_oscar"
+      | "head_training_oscar"
       vehicle_status:
       | "idle"
       | "on_mission"

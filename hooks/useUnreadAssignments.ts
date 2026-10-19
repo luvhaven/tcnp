@@ -1,7 +1,9 @@
 "use client"
 
 import { useEffect, useState } from 'react'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
+import { uniqueTopic } from '@/lib/realtime/topic'
 
 /**
  * Returns the count of unread assignment notifications for the current user.
@@ -34,12 +36,13 @@ export function useUnreadAssignments() {
 
     void fetchCount()
 
-    // Subscribe to real-time changes on notifications table
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
-
-      const channel = supabase
-        .channel(`unread-assignments-${user.id}`)
+    // The cleanup must belong to the effect itself; returned from inside .then() it
+    // never ran, and the leaked channel left later mounts with dead bindings.
+    let channel: RealtimeChannel | null = null
+    void supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user || !mounted) return
+      channel = supabase
+        .channel(uniqueTopic(`unread-assignments-${user.id}`))
         .on(
           'postgres_changes',
           {
@@ -53,14 +56,18 @@ export function useUnreadAssignments() {
           }
         )
         .subscribe()
-
-      return () => {
-        mounted = false
-        supabase.removeChannel(channel)
-      }
     })
 
-    return () => { mounted = false }
+    // Deletes aren't filterable server-side, so the notification list announces them.
+    const onLocalChange = () => { void fetchCount() }
+    window.addEventListener('tcnp:notifications-changed', onLocalChange)
+
+    return () => {
+      mounted = false
+      window.removeEventListener('tcnp:notifications-changed', onLocalChange)
+      if (channel) void supabase.removeChannel(channel)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return { count }

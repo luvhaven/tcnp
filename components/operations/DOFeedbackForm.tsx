@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -30,20 +30,56 @@ const FEEDBACK_FIELDS = [
     { key: 'incidents', label: 'Additional Notes / Incidents', placeholder: 'Any Broken Arrow situations or other observations.', required: false },
 ]
 
+const EMPTY_FIELDS: Record<string, string> = {
+    principal_wellbeing: '',
+    what_went_well: '',
+    what_didnt_go_as_plan: '',
+    team_feedback: '',
+    finance_expenses: '',
+    improvements: '',
+    incidents: '',
+}
+
+// Reports are long and written on a phone after a shift — a reload, a dropped
+// tab or an accidental navigation must not lose them. Drafts stay on this
+// device only and are cleared once the report is accepted.
+const draftKey = (journeyId: string) => `tcnp:do-feedback-draft:${journeyId}`
+
+type Draft = { rating: string; fields: Record<string, string> }
+
+function readDraft(journeyId: string): Draft | null {
+    try {
+        const raw = window.localStorage.getItem(draftKey(journeyId))
+        if (!raw) return null
+        const parsed = JSON.parse(raw) as Partial<Draft>
+        return { rating: parsed.rating ?? '', fields: { ...EMPTY_FIELDS, ...(parsed.fields ?? {}) } }
+    } catch {
+        return null
+    }
+}
+
+function clearDraft(journeyId: string) {
+    try { window.localStorage.removeItem(draftKey(journeyId)) } catch { /* storage unavailable */ }
+}
+
 export default function DOFeedbackForm({ journeyId, papaNme, onSubmit }: DOFeedbackFormProps) {
     const supabase = createClient()
     const [saving, setSaving] = useState(false)
     const [submitted, setSubmitted] = useState(false)
-    const [rating, setRating] = useState('')
-    const [fields, setFields] = useState<Record<string, string>>({
-        principal_wellbeing: '',
-        what_went_well: '',
-        what_didnt_go_as_plan: '',
-        team_feedback: '',
-        finance_expenses: '',
-        improvements: '',
-        incidents: '',
-    })
+    // Only ever rendered client-side after the page's data load, so reading
+    // storage in the initializer cannot cause a hydration mismatch.
+    const [initialDraft] = useState(() => (typeof window === 'undefined' ? null : readDraft(journeyId)))
+    const [rating, setRating] = useState(initialDraft?.rating ?? '')
+    const [fields, setFields] = useState<Record<string, string>>(initialDraft?.fields ?? EMPTY_FIELDS)
+
+    useEffect(() => {
+        if (submitted) return
+        const hasContent = rating || Object.values(fields).some(v => v.trim())
+        try {
+            if (hasContent) window.localStorage.setItem(draftKey(journeyId), JSON.stringify({ rating, fields }))
+            else window.localStorage.removeItem(draftKey(journeyId))
+        } catch { /* storage unavailable — the form still works, just without a draft */ }
+    }, [journeyId, rating, fields, submitted])
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -65,8 +101,11 @@ export default function DOFeedbackForm({ journeyId, papaNme, onSubmit }: DOFeedb
                 ...fields,
                 submitted_at: new Date().toISOString(),
             }])
-            if (error) throw error
+            // 23505 = a report for this journey already exists (double submit or
+            // another device) — the officer's obligation is met either way.
+            if (error && error.code !== '23505') throw error
 
+            clearDraft(journeyId)
             setSubmitted(true)
             toast.success('Post-operation feedback submitted', { description: 'Report has been logged to Command Centre.' })
             onSubmit?.()
@@ -85,7 +124,7 @@ export default function DOFeedbackForm({ journeyId, papaNme, onSubmit }: DOFeedb
                     Post-Operation DO Report
                     <Badge variant="secondary" className="text-[9px] font-mono">TCNP.01.08</Badge>
                 </CardTitle>
-                <p className="text-[10px] text-muted-foreground mt-0.5">
+                <p className="text-sm text-muted-foreground mt-0.5">
                     Papa: <span className="font-medium text-foreground">{papaNme}</span>
                 </p>
             </CardHeader>
@@ -95,17 +134,17 @@ export default function DOFeedbackForm({ journeyId, papaNme, onSubmit }: DOFeedb
                 ) : <form onSubmit={handleSubmit} className="space-y-4">
                     {/* Overall Rating */}
                     <div className="space-y-1.5">
-                        <Label className="text-xs flex items-center gap-1.5">
+                        <Label className="text-sm flex items-center gap-1.5">
                             <Star className="h-3 w-3 text-yellow-500" />
                             Overall Operation Rating
                         </Label>
                         <Select value={rating} onValueChange={setRating}>
-                            <SelectTrigger className="text-xs h-8">
+                            <SelectTrigger className="text-base min-h-11">
                                 <SelectValue placeholder="Select rating…" />
                             </SelectTrigger>
                             <SelectContent>
                                 {RATING_OPTIONS.map(r => (
-                                    <SelectItem key={r} value={r} className="text-xs">{r}</SelectItem>
+                                    <SelectItem key={r} value={r} className="text-base min-h-11">{r}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -114,22 +153,24 @@ export default function DOFeedbackForm({ journeyId, papaNme, onSubmit }: DOFeedb
                     {/* Feedback fields */}
                     {FEEDBACK_FIELDS.map(({ key, label, placeholder, required }) => (
                         <div key={key} className="space-y-1.5">
-                            <Label className="text-xs flex items-center gap-1">
+                            <Label htmlFor={`${journeyId}-${key}`} className="text-sm flex items-center gap-1">
                                 {label}
-                                {required && <span className="text-red-500 text-[10px]">*</span>}
+                                {required && <span className="text-destructive text-sm" aria-hidden>*</span>}
                             </Label>
                             <Textarea
+                                id={`${journeyId}-${key}`}
                                 placeholder={placeholder}
                                 value={fields[key]}
                                 onChange={e => setFields(prev => ({ ...prev, [key]: e.target.value }))}
-                                className="text-xs min-h-[60px] resize-none"
+                                className="text-base min-h-[88px]"
                                 required={required}
                             />
                         </div>
                     ))}
 
-                    <Button type="submit" disabled={saving} className="w-full gap-2 text-xs">
-                        <Send className="h-3 w-3" />
+                    <p className="text-sm text-muted-foreground">Draft is saved on this device as you type.</p>
+                    <Button type="submit" disabled={saving} className="w-full gap-2 min-h-12 text-base">
+                        <Send className="h-4 w-4" />
                         {saving ? 'Submitting…' : 'Submit Post-Op Report'}
                     </Button>
                 </form>}

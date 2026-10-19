@@ -143,7 +143,7 @@ export default function CommandPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-2xl font-bold tracking-tight">Command Centre</h1>
-                  <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     LIVE OPS
                   </span>
@@ -244,7 +244,7 @@ export default function CommandPage() {
                       <div className={`flex h-11 w-11 items-center justify-center rounded-xl shadow-xs ${mod.iconBg}`}>
                         <mod.icon className="h-5 w-5" />
                       </div>
-                      <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider bg-background/80">
+                      <Badge variant="outline" className="text-xs font-semibold uppercase tracking-wider bg-background/80">
                         {mod.tag}
                       </Badge>
                     </div>
@@ -268,7 +268,7 @@ export default function CommandPage() {
       </div>
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground rounded-xl bg-muted/40 p-3 border border-border/40">
-        <Badge variant="outline" className="text-[10px] uppercase tracking-wide bg-background">Note</Badge>
+        <Badge variant="outline" className="text-xs uppercase tracking-wide bg-background">Note</Badge>
         <span>Echo is integrated under Command for pre-op equipment logistics and AV readiness checklists.</span>
       </div>
     </div>

@@ -759,10 +759,47 @@ pulse-once tokens
 
 /* ─── iOS Safe Area (notch/home-bar support) ─────────────────────────────── */
 
+/* Bottom inset is NOT applied to body: the app shell is h-dvh, so body
+   padding pushed it past the viewport and the whole page scrolled. The bottom
+   inset is handled where it matters instead: main's padding, the bottom tab
+   bar and the floating stack (below). */
 body {
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
+}
+
+/* Height of the phone bottom tab bar (components/layout/BottomNav). Zero from
+   the `nav` breakpoint (860px, tailwind.config.ts) up, where it is hidden. */
+:root {
+  --bottom-nav-h: 4rem;
+}
+@media (min-width: 860px) {
+  :root {
+    --bottom-nav-h: 0px;
+  }
+}
+
+.bottom-nav {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Main scroll area: leave room for the tab bar and the home indicator so the
+   last row of content can always scroll clear of both. */
+#main-content {
+  padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 1.5rem);
+}
+
+/* components/layout/FloatingStack */
+.floating-stack {
+  bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 0.75rem);
+}
+
+/* On phones, keep floating notices above the My Operations distress bar
+   (components/operations/DistressButton) rather than over it. */
+@media (max-width: 767px) {
+  body:has(.distress-bar) .floating-stack {
+    bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 6rem);
+  }
 }
 
 /* ─── Installed-app (standalone) native feel ─────────────────────────────── */
@@ -869,22 +906,12 @@ main,
 
 /* ─── Accessibility: Reduced Motion ──────────────────────────────────────── */
 
-/* Field operations: readable controls and touch targets on phones. */
-@media (pointer: coarse) {
-  #main-content button,
-  #main-content input,
-  #main-content select,
-  #main-content [role="combobox"] {
-    min-height: 44px;
-  }
-  #main-content input,
-  #main-content select,
-  #main-content textarea { font-size: 16px; }
-}
-
+/* Touch targets and 16px form text on phones now come from the primitives
+   themselves (Button sizes are mobile-first; Input/Textarea/Select use
+   text-base sm:text-sm). The old id-scoped overrides here outranked every
+   utility class, so they also inflated deliberately compact controls, and a
+   second #main-content focus outline fought the primitives' focus ring. */
 #main-content { font-variant-numeric: tabular-nums; }
-#main-content button:focus-visible,
-#main-content a:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 3px; }
 
 @media (prefers-reduced-motion: reduce) {
 

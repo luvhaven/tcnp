@@ -20,6 +20,20 @@ export interface QueuedSubmission {
 class OfflineQueueManager {
     private db: IDBDatabase | null = null
     private isSupported: boolean = false
+    // Lets UI (e.g. the My Operations "N queued" pill) refresh the moment an
+    // entry is saved or replayed instead of waiting for its next poll.
+    private changeListeners: Set<() => void> = new Set()
+
+    onChange(callback: () => void): () => void {
+        this.changeListeners.add(callback)
+        return () => { this.changeListeners.delete(callback) }
+    }
+
+    private notifyChange(): void {
+        this.changeListeners.forEach(callback => {
+            try { callback() } catch (error) { console.warn('Offline queue listener failed:', error) }
+        })
+    }
 
     constructor() {
         // Check if IndexedDB is supported and accessible (iOS Safari private mode blocks it)
@@ -98,7 +112,10 @@ class OfflineQueueManager {
                 const store = transaction.objectStore(STORE_NAME)
                 const request = store.add(submission)
 
-                transaction.oncomplete = () => resolve(submission.id)
+                transaction.oncomplete = () => {
+                    resolve(submission.id)
+                    this.notifyChange()
+                }
                 transaction.onabort = () => reject(new Error('Offline save was not committed.'))
                 request.onerror = () => {
                     console.warn('Failed to add to queue:', request.error)
@@ -135,7 +152,10 @@ class OfflineQueueManager {
             const store = transaction.objectStore(STORE_NAME)
             const request = store.delete(id)
 
-            request.onsuccess = () => resolve()
+            request.onsuccess = () => {
+                resolve()
+                this.notifyChange()
+            }
             request.onerror = () => reject(request.error)
         })
     }
@@ -175,7 +195,10 @@ class OfflineQueueManager {
             const store = transaction.objectStore(STORE_NAME)
             const request = store.clear()
 
-            request.onsuccess = () => resolve()
+            request.onsuccess = () => {
+                resolve()
+                this.notifyChange()
+            }
             request.onerror = () => reject(request.error)
         })
     }

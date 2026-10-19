@@ -93,16 +93,16 @@ export default function AOArrivalTimeline({ papaNme }: { papaNme?: string }) {
                     <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                         <Plane className="h-4 w-4 text-sky-500" />
                         Pre-Arrival Timeline
-                        <Badge variant="secondary" className="text-[9px] font-mono">TCNP.01.06</Badge>
+                        <Badge variant="secondary" className="text-[11px] font-mono">TCNP.01.06</Badge>
                     </CardTitle>
                     <div className="flex items-center gap-1.5">
                         <span className="text-xs font-mono text-muted-foreground">{completedCount}/{totalTasks}</span>
-                        <Badge className={cn('text-[9px]', pct === 100 ? 'bg-green-500/20 text-green-600 border-green-500/30' : 'bg-sky-500/20 text-sky-600 border-sky-500/30')}>
+                        <Badge className={cn('text-[11px]', pct === 100 ? 'bg-green-500/20 text-green-600 border-green-500/30' : 'bg-sky-500/20 text-sky-600 border-sky-500/30')}>
                             {pct}%
                         </Badge>
                     </div>
                 </div>
-                {papaNme && <p className="text-[10px] text-muted-foreground mt-0.5">For: <span className="font-medium text-foreground">{papaNme}</span></p>}
+                {papaNme && <p className="text-xs text-muted-foreground mt-0.5">For: <span className="font-medium text-foreground">{papaNme}</span></p>}
             </CardHeader>
             <CardContent className="p-4 space-y-2">
                 {/* Overall progress bar */}
@@ -122,7 +122,7 @@ export default function AOArrivalTimeline({ papaNme }: { papaNme?: string }) {
                                 onClick={() => setExpandedMilestone(isExpanded ? null : mi)}
                                 className="w-full flex items-center gap-3 p-3 hover:bg-muted/30 transition-colors text-left"
                             >
-                                <div className={cn('w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold border', isDone ? 'bg-green-500 border-green-500 text-white' : 'bg-muted border-border text-muted-foreground')}>
+                                <div className={cn('w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold border', isDone ? 'bg-green-500 border-green-500 text-white' : 'bg-muted border-border text-muted-foreground')}>
                                     {isDone ? '✓' : mi + 1}
                                 </div>
                                 <div className="flex-1 min-w-0">
@@ -132,8 +132,8 @@ export default function AOArrivalTimeline({ papaNme }: { papaNme?: string }) {
                                     </div>
                                     <div className="flex items-center gap-2 mt-0.5">
                                         <Clock className="h-3 w-3 text-muted-foreground" />
-                                        <span className="text-[10px] text-muted-foreground">{milestone.deadline}</span>
-                                        <span className="text-[10px] text-muted-foreground ml-auto">{tasksDone}/{milestone.tasks.length}</span>
+                                        <span className="text-xs text-muted-foreground">{milestone.deadline}</span>
+                                        <span className="text-xs text-muted-foreground ml-auto">{tasksDone}/{milestone.tasks.length}</span>
                                     </div>
                                 </div>
                             </button>
@@ -159,7 +159,7 @@ export default function AOArrivalTimeline({ papaNme }: { papaNme?: string }) {
                         </div>
                     )
                 })}
-                <p className="text-[10px] text-muted-foreground text-center pt-1">Progress is local — reload resets. Log important confirmations in Team Chat.</p>
+                <p className="text-xs text-muted-foreground text-center pt-1">Progress is local — reload resets. Log important confirmations in Team Chat.</p>
             </CardContent>
         </Card>
     )

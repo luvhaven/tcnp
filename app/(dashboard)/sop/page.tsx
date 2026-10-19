@@ -852,7 +852,7 @@ export default function SOPPage() {
                         <Navigation className="h-4 w-4 flex-shrink-0" />
                         <div>
                             <div className="font-bold">DO Quick Reference</div>
-                            <div className="text-[10px] opacity-70">Scripts, SITREPs & Checklists</div>
+                            <div className="text-xs opacity-70">Scripts, SITREPs & Checklists</div>
                         </div>
                     </button>
                 )}
@@ -877,7 +877,7 @@ export default function SOPPage() {
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="truncate">{section.title}</div>
-                                    <div className="text-[9px] opacity-60 font-mono">{section.badge}</div>
+                                    <div className="text-[11px] opacity-60 font-mono">{section.badge}</div>
                                 </div>
                                 {isActive && <ChevronRight className="h-3 w-3 flex-shrink-0" />}
                             </button>
@@ -886,7 +886,7 @@ export default function SOPPage() {
                 </nav>
 
                 {/* Version footer */}
-                <div className="mt-auto rounded-xl border bg-muted/30 p-3 text-[10px] text-muted-foreground">
+                <div className="mt-auto rounded-xl border bg-muted/30 p-3 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1.5 mb-1"><FileText className="h-3 w-3" /><span className="font-medium">TCNP SOP Manual</span></div>
                     <p>Version 1.0 · 2021 Update</p>
                     <p className="mt-1 opacity-60">Strictly Confidential — Protocol Members Only</p>
@@ -910,10 +910,10 @@ export default function SOPPage() {
                             <div>
                                 <div className="flex items-center gap-2 mb-0.5">
                                     <h1 className="text-xl font-bold">{activeSection.title}</h1>
-                                    <Badge variant="secondary" className="text-[9px] font-mono tracking-widest">{activeSection.badge}</Badge>
+                                    <Badge variant="secondary" className="text-[11px] font-mono tracking-widest">{activeSection.badge}</Badge>
                                 </div>
                                 {activeSection.roleGate && (
-                                    <div className="flex items-center gap-1 text-[10px] text-red-500 font-semibold">
+                                    <div className="flex items-center gap-1 text-xs text-red-500 font-semibold">
                                         <Lock className="h-2.5 w-2.5" /> Delta Oscar reference material
                                     </div>
                                 )}

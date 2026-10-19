@@ -1,6 +1,7 @@
 "use client"
 
 import { audioManager } from '@/lib/audio/AudioManager'
+import { showSystemNotification } from '@/lib/services/system-notification'
 
 /**
  * Notification Service
@@ -88,44 +89,28 @@ export class NotificationService {
         requireInteraction?: boolean
         silent?: boolean
     }) {
-        // Request permission if not granted
-        if (this.permission !== 'granted') {
-            const granted = await this.requestPermission()
-            if (!granted) {
-                console.warn('Notification permission not granted')
-                return
-            }
+        // Never prompt from here: these calls come from realtime events, not user
+        // gestures. NotificationPermissionBanner asks for permission instead.
+        if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') {
+            return
         }
 
-        try {
-            // Show browser notification
-            const notification = new Notification(options.title, {
-                body: options.body,
-                icon: options.icon || '/tcnp_logo.png',
-                badge: '/tcnp_logo.png',
-                tag: options.tag,
-                data: options.data,
-                requireInteraction: options.requireInteraction || false,
-                silent: options.silent || false,
-            })
+        // Goes through the service worker where available; `new Notification()`
+        // throws on Android Chrome.
+        const shown = await showSystemNotification(options.title, {
+            body: options.body,
+            icon: options.icon || '/tcnp_logo.png',
+            badge: '/tcnp_logo.png',
+            tag: options.tag,
+            data: options.data,
+            requireInteraction: options.requireInteraction || false,
+            silent: options.silent || false,
+        })
 
-            // Play sound if not silent
-            if (!options.silent) {
-                this.playNotificationSound()
-            }
-
-            // Vibrate on mobile
-            this.vibrate()
-
-            // Auto-close after 5 seconds unless requireInteraction is true
-            if (!options.requireInteraction) {
-                setTimeout(() => notification.close(), 5000)
-            }
-
-            return notification
-        } catch (error) {
-            console.error('Error showing notification:', error)
+        if (shown && !options.silent) {
+            this.playNotificationSound()
         }
+        if (shown) this.vibrate()
     }
 
     /**

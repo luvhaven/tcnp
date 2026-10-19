@@ -258,7 +258,7 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
                 <span className="max-w-[95px] truncate text-xs font-semibold leading-tight text-foreground group-hover:text-primary transition-colors">
                   {firstName}
                 </span>
-                <span className="max-w-[95px] truncate text-[10px] text-muted-foreground leading-tight">
+                <span className="max-w-[95px] truncate text-xs text-muted-foreground leading-tight">
                   {profile?.oscar || (profile?.role ? formatRole(profile.role) : "Officer")}
                 </span>
               </div>

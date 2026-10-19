@@ -16,9 +16,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { UserCircle, Plus, Edit, Trash2, UserCheck, UserX, Award, Search, LayoutGrid, List, Download, Filter, Eye } from "lucide-react"
 import { toast } from "sonner"
+import { notifyError, UserFacingError } from '@/lib/notify'
 import { motion, AnimatePresence } from "framer-motion"
 import { OfficerProfileDialog } from "@/components/officers/OfficerProfileDialog"
-import { isPlatformAdministrator } from "@/lib/utils"
+import { cn, isPlatformAdministrator } from "@/lib/utils"
+import { Skeleton } from "@/components/ui/skeleton"
+import { EmptyState } from "@/components/ui/empty-state"
+import { ErrorState } from "@/components/ui/error-state"
 import { isPermanentOwnerEmail } from "@/lib/platform-owner"
 import { useSearchParams } from "next/navigation"
 import { PasswordResetRequestsTab } from "@/components/officers/PasswordResetRequestsTab"
@@ -65,7 +69,7 @@ type Program = {
   status: string
 }
 
-export default function OfficersClient({ initialOfficers }: { initialOfficers: Officer[] }) {
+export default function OfficersClient({ initialOfficers }: { initialOfficers?: Officer[] }) {
   const supabase = createClient()
   const confirm = useConfirm()
   const queryClient = useQueryClient()
@@ -73,6 +77,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
   const [dialogOpen, setDialogOpen] = useState(false)
   const [titleDialogOpen, setTitleDialogOpen] = useState(false)
   const [assignFromDirectoryOpen, setAssignFromDirectoryOpen] = useState(false)
+  const [assigningFromDirectory, setAssigningFromDirectory] = useState(false)
   const [viewingOfficer, setViewingOfficer] = useState<Officer | null>(null)
   const [editing, setEditing] = useState<Officer | null>(null)
   const [assigningTitleFor, setAssigningTitleFor] = useState<Officer | null>(null)
@@ -140,6 +145,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     { value: 'compliance_oscar', label: 'Compliance Oscar (CO)' },
     { value: 'head_welfare_oscar', label: 'Head, Welfare Oscar' },
     { value: 'welfare_oscar', label: 'Welfare Oscar (WO)' },
+    { value: 'head_training_oscar', label: 'Head, Training Oscar' },
+    { value: 'training_oscar', label: 'Training Oscar' },
     { value: 'viewer', label: 'Viewer' }
   ]
 
@@ -161,6 +168,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     { id: 'serial', label: 'Serial Oscar (SO)', roles: ['head_serial_oscar', 'serial_oscar'] },
     { id: 'compliance', label: 'Compliance Oscar (CO)', roles: ['head_compliance_oscar', 'compliance_oscar'] },
     { id: 'welfare', label: 'Welfare Oscar (WO)', roles: ['head_welfare_oscar', 'welfare_oscar'] },
+    { id: 'training', label: 'Training Oscar', roles: ['head_training_oscar', 'training_oscar'] },
     { id: 'legacy_echo', label: 'Echo (Legacy)', roles: ['head_echo_oscar', 'echo_oscar'] },
     { id: 'others', label: 'Administration & Viewers', roles: ['admin', 'dev_admin', 'viewer'] }
   ]
@@ -229,7 +237,13 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
 
   const pendingResetsCount = resetRequests.filter(r => r.status === 'pending').length
 
-  const { data: officers = [] } = useQuery({
+  const {
+    data: officers = [],
+    isPending: officersPending,
+    isError: officersError,
+    isRefetching: officersRefetching,
+    refetch: refetchOfficers,
+  } = useQuery({
     queryKey: ['officers', 'directory'],
     queryFn: async () => {
       const response = await fetch("/api/officers/list")
@@ -239,6 +253,34 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
     },
     initialData: initialOfficers
   })
+
+  // Loading / failure / empty, checked in that order so a failed or
+  // still-running load never reads as "no officers".
+  const renderOfficersStatus = (visibleCount: number, className?: string) => {
+    if (officersPending) {
+      return (
+        <div className={cn("space-y-3 py-4", className)} aria-busy="true" aria-label="Loading officers">
+          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+        </div>
+      )
+    }
+    if (officersError && officers.length === 0) {
+      return (
+        <ErrorState
+          className={className}
+          title="Couldn't load officers"
+          onRetry={() => refetchOfficers()}
+          retrying={officersRefetching}
+        />
+      )
+    }
+    if (visibleCount === 0) {
+      return officers.length === 0
+        ? <EmptyState className={className} icon={UserCircle} title="No officers yet" />
+        : <EmptyState className={className} icon={UserCircle} title="No officers match filters" description="Try clearing the search or filters." />
+    }
+    return null
+  }
 
   // Filter officers based on global search & filters
   const filteredOfficers = officers.filter((officer: Officer) => {
@@ -318,7 +360,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
         body: JSON.stringify(payload),
       })
       const result = await response.json()
-      if (!response.ok) throw new Error(result.error || "Failed to create officer")
+      if (!response.ok) throw new UserFacingError(result.error || "Failed to create officer")
       return result
     },
     onSuccess: () => {
@@ -327,7 +369,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       setDialogOpen(false)
       resetForm()
     },
-    onError: (error: any) => toast.error(error.message || "Failed to create officer")
+    onError: (error: any) => notifyError(error, "Failed to create officer")
   })
 
   const updateOfficerMutation = useMutation({
@@ -338,7 +380,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
         body: JSON.stringify(payload),
       })
       const result = await response.json()
-      if (!response.ok) throw new Error(result.error || "Failed to update officer")
+      if (!response.ok) throw new UserFacingError(result.error || "Failed to update officer")
       return result
     },
     onSuccess: () => {
@@ -347,21 +389,21 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       setDialogOpen(false)
       resetForm()
     },
-    onError: (error: any) => toast.error(error.message || 'Failed to update officer')
+    onError: (error: any) => notifyError(error, 'Failed to update officer')
   })
 
   const deleteOfficerMutation = useMutation({
     mutationFn: async (id: string) => {
       const response = await fetch(`/api/admin/delete-user?id=${id}`, { method: 'DELETE' })
       const result = await response.json()
-      if (!response.ok) throw new Error(result.error || 'Failed to delete officer')
+      if (!response.ok) throw new UserFacingError(result.error || 'Failed to delete officer')
       return result
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['officers'] })
       toast.success('Officer deleted successfully!')
     },
-    onError: (error: any) => toast.error(error.message || 'Failed to delete officer')
+    onError: (error: any) => notifyError(error, 'Failed to delete officer')
   })
 
   const toggleActivationMutation = useMutation({
@@ -372,7 +414,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
         body: JSON.stringify({ officerId: officer.id, isActive: officer.is_active }),
       })
       const result = await response.json()
-      if (!response.ok) throw new Error(result.error || 'Failed to update officer status')
+      if (!response.ok) throw new UserFacingError(result.error || 'Failed to update officer status')
       return { is_active: result.is_active, activation_status: result.activation_status }
     },
     onSuccess: (updatedData, variables) => {
@@ -399,7 +441,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
 
       toast.success(`Officer ${updatedData.is_active ? 'activated' : 'deactivated'}!`)
     },
-    onError: (error: any) => toast.error(error.message || 'Failed to update officer status')
+    onError: (error: any) => notifyError(error, 'Failed to update officer status')
   })
 
   const assignTitleMutation = useMutation({
@@ -412,7 +454,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
         })
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}))
-          throw new Error(errData.error || "Failed to update officer role")
+          throw new UserFacingError(errData.error || "Failed to update officer role")
         }
       }
 
@@ -470,7 +512,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       setTitleFormData({ title_id: '', program_id: '', role: '' })
       setAssignForm({ officer_ids: [], program_id: '' })
     },
-    onError: (error: any) => toast.error(error.message || 'Failed to update officer')
+    onError: (error: any) => notifyError(error, 'Failed to update officer')
   })
 
   const getInitials = (name: string) => {
@@ -523,12 +565,15 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       setFormData(prev => ({ ...prev, photo_url: publicUrl }))
       toast.success('Photo uploaded successfully')
     } catch (error: any) {
-      toast.error(error.message || 'Failed to upload photo')
+      notifyError(error, 'Failed to upload photo')
     }
   }
 
+  const officerSavePending = createOfficerMutation.isPending || updateOfficerMutation.isPending
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (officerSavePending) return
     if (!editing) {
       createOfficerMutation.mutate(formData)
     } else {
@@ -564,7 +609,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
 
   const handleAssignTitle = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!assigningTitleFor) return
+    if (!assigningTitleFor || assignTitleMutation.isPending) return
     const isUnassigning = !titleFormData.title_id || titleFormData.title_id === 'unassigned'
     const selectedTitle = titles.find(t => t.id === titleFormData.title_id)
 
@@ -588,7 +633,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
 
   const handleAssignOfficialOscar = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!assigningTitleFor) return
+    if (!assigningTitleFor || assignTitleMutation.isPending) return
     assignTitleMutation.mutate({
       roleUpdate: { id: assigningTitleFor.id, role: titleFormData.role, currentRole: assigningTitleFor.role },
       titleData: { title_id: '', program_id: '' },
@@ -604,6 +649,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       return
     }
 
+    if (assigningFromDirectory) return
+    setAssigningFromDirectory(true)
     try {
       const response = await fetch("/api/admin/bulk-assign-program", {
         method: "POST",
@@ -614,7 +661,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
         }),
       })
       const result = await response.json()
-      if (!response.ok) throw new Error(result.error || "Failed to batch assign officers")
+      if (!response.ok) throw new UserFacingError(result.error || "Failed to batch assign officers")
 
       queryClient.invalidateQueries({ queryKey: ['officers'] })
       toast.success(`Successfully assigned ${assignForm.officer_ids.length - Number(result.inactive_count ?? 0)} officer(s) to program!`)
@@ -625,7 +672,9 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       setAssignForm({ officer_ids: [], program_id: '' })
       setSelectedOfficers([])
     } catch (error: any) {
-      toast.error(error.message || 'Failed to batch assign officers')
+      notifyError(error, 'Failed to batch assign officers')
+    } finally {
+      setAssigningFromDirectory(false)
     }
   }
 
@@ -649,14 +698,14 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       try {
         const response = await fetch('/api/officers/remove-my-profile', { method: 'POST' })
         const result = await response.json()
-        if (!response.ok) throw new Error(result.error || 'Failed to remove officer profile')
+        if (!response.ok) throw new UserFacingError(result.error || 'Failed to remove officer profile')
         queryClient.setQueryData(['officers', 'directory'], (current: Officer[] | undefined) =>
           current?.filter((item) => item.id !== officer.id)
         )
         setViewingOfficer(null)
         toast.success('Your officer profile was removed. Your Super Admin account remains active.')
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Failed to remove officer profile')
+        notifyError(error, 'Failed to remove officer profile')
       }
       return
     }
@@ -705,7 +754,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
       setSelectedOfficers([])
       toast.success(`Batch deletion of ${officersToDelete.length} officers complete.`)
     } catch (e: any) {
-      toast.error('Bulk delete encountered an error: ' + e.message)
+      notifyError(e, 'Bulk delete encountered an error')
     }
   }
 
@@ -818,7 +867,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
             {canManageOfficers && <TabsTrigger value="pending">
               Pending
               {filteredOfficers.filter(o => o.activation_status === 'pending').length > 0 && (
-                <Badge variant="destructive" className="ml-2 px-1 text-[10px]">
+                <Badge variant="destructive" className="ml-2 px-1 text-xs">
                   {filteredOfficers.filter(o => o.activation_status === 'pending').length}
                 </Badge>
               )}
@@ -826,7 +875,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
             {canManageOfficers && <TabsTrigger value="resets">
               Password Resets
               {pendingResetsCount > 0 && (
-                <Badge variant="destructive" className="ml-2 px-1 text-[10px] bg-amber-500 text-black">
+                <Badge variant="destructive" className="ml-2 px-1 text-xs bg-amber-500 text-black">
                   {pendingResetsCount}
                 </Badge>
               )}
@@ -925,12 +974,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
               <CardDescription>Protocol staff directory</CardDescription>
             </CardHeader>
             <CardContent>
-              {filteredOfficers.filter((o: Officer) => o.activation_status !== 'pending').length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <UserCircle className="h-12 w-12 text-muted-foreground/50" />
-                  <p className="mt-4 text-sm font-medium">No officers match filters</p>
-                </div>
-              ) : viewMode === 'table' ? (
+              {renderOfficersStatus(filteredOfficers.filter((o: Officer) => o.activation_status !== 'pending').length) ?? (viewMode === 'table' ? (
                 <div className="rounded-md border table-scroll-wrapper">
                   <Table>
                     <TableHeader className="bg-muted/50">
@@ -984,7 +1028,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                               </TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <Badge className={`text-[10px] uppercase tracking-wide ${getRoleBadgeColor(officer.role)}`}>
+                                  <Badge className={`text-xs uppercase tracking-wide ${getRoleBadgeColor(officer.role)}`}>
                                     {getRoleLabel(officer.role)}
                                   </Badge>
                                   {officer.oscar && (
@@ -996,7 +1040,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                               </TableCell>
                               <TableCell>
                                 {officer.team ? (
-                                  <Badge variant="outline" className="text-[10px] uppercase tracking-wide border-primary/40 text-primary">
+                                  <Badge variant="outline" className="text-xs uppercase tracking-wide border-primary/40 text-primary">
                                     {officer.is_team_head ? '★ ' : ''}{officer.team}
                                   </Badge>
                                 ) : (
@@ -1012,7 +1056,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                                     </span>
                                   </div>
                                   {!officer.is_active && (
-                                    <Badge variant="outline" className="text-[10px] bg-destructive/10 text-destructive border-destructive/30">
+                                    <Badge variant="outline" className="text-xs bg-destructive/10 text-destructive border-destructive/30">
                                       Inactive
                                     </Badge>
                                   )}
@@ -1068,18 +1112,18 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                         <p className="truncate text-xs text-muted-foreground">{officer.email}</p>
                         <div className="mt-2 flex min-w-0 items-center justify-between gap-2">
                           <div className="flex min-w-0 flex-wrap items-center gap-1">
-                            <Badge className={`max-w-full truncate text-[10px] uppercase tracking-wide ${getRoleBadgeColor(officer.role)}`}>
+                            <Badge className={`max-w-full truncate text-xs uppercase tracking-wide ${getRoleBadgeColor(officer.role)}`}>
                               {getRoleLabel(officer.role)}
                             </Badge>
                             {officer.team && (
-                              <Badge variant="outline" className="text-[10px] uppercase tracking-wide border-primary/40 text-primary">
+                              <Badge variant="outline" className="text-xs uppercase tracking-wide border-primary/40 text-primary">
                                 {officer.is_team_head ? '★ ' : ''}{officer.team}
                               </Badge>
                             )}
                           </div>
                           <div className="flex items-center space-x-1 shrink-0">
                             <div className={`h-2 w-2 rounded-full ${officer.is_online ? 'bg-green-500' : 'bg-zinc-300 dark:bg-zinc-700'}`} />
-                            <span className="text-[10px] text-muted-foreground hidden sm:inline">
+                            <span className="text-xs text-muted-foreground hidden sm:inline">
                               {officer.is_online ? 'online' : 'offline'}
                             </span>
                           </div>
@@ -1088,7 +1132,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                     </motion.div>
                   )
                 )
-              )}
+              ))}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1128,12 +1172,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
               </div>
             </div>
 
-            {filteredOfficers.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center border rounded-lg bg-card">
-                <UserCircle className="h-12 w-12 text-muted-foreground/50" />
-                <p className="mt-4 text-sm font-medium">No officers match filters</p>
-              </div>
-            ) : viewMode === 'table' ? (
+            {renderOfficersStatus(filteredOfficers.length, "border rounded-lg bg-card") ?? (viewMode === 'table' ? (
               <div className="rounded-md border table-scroll-wrapper">
                 <Table>
                   <TableHeader className="bg-muted/50">
@@ -1188,7 +1227,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                           )}
                         </TableCell>
                         <TableCell>
-                          <Badge className={`text-[10px] uppercase tracking-wide ${getRoleBadgeColor(officer.role)}`}>
+                          <Badge className={`text-xs uppercase tracking-wide ${getRoleBadgeColor(officer.role)}`}>
                             {getRoleLabel(officer.role)}
                           </Badge>
                           {officer.oscar && <span className="ml-2 text-xs text-muted-foreground">{officer.oscar}</span>}
@@ -1322,7 +1361,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                   </motion.div>
                 )
               )
-            )}
+            ))}
           </TabsContent>
         )}
 
@@ -1575,7 +1614,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
             </div>
             <div className="flex gap-2 pt-4">
               <Button type="button" variant="outline" onClick={() => { setDialogOpen(false); setEditing(null); resetForm() }} className="flex-1">Cancel</Button>
-              <Button type="submit" className="flex-1">{editing ? 'Update Officer' : 'Create Officer'}</Button>
+              <Button type="submit" className="flex-1" pending={officerSavePending}>{editing ? 'Update Officer' : 'Create Officer'}</Button>
             </div>
           </form>
         </DialogContent>
@@ -1673,7 +1712,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                   </div>
                   <div className="flex gap-2 pt-4">
                     <Button type="button" variant="outline" onClick={() => { setTitleDialogOpen(false); setAssigningTitleFor(null); setTitleFormData({ title_id: '', program_id: '', role: '' }) }} className="flex-1">Cancel</Button>
-                    <Button type="submit" className="flex-1">Assign Program Role</Button>
+                    <Button type="submit" className="flex-1" pending={assignTitleMutation.isPending}>Assign Program Role</Button>
                   </div>
                 </form>
               </TabsContent>
@@ -1693,7 +1732,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                   </div>
                   <div className="flex gap-2 pt-4">
                     <Button type="button" variant="outline" onClick={() => { setTitleDialogOpen(false); setAssigningTitleFor(null); setTitleFormData({ title_id: '', program_id: '', role: '' }) }} className="flex-1">Cancel</Button>
-                    <Button type="submit" className="flex-1 text-white bg-amber-600 hover:bg-amber-700">Set Official Oscar</Button>
+                    <Button type="submit" className="flex-1 text-white bg-amber-600 hover:bg-amber-700" pending={assignTitleMutation.isPending}>Set Official Oscar</Button>
                   </div>
                 </form>
               </TabsContent>
@@ -1733,7 +1772,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
                         />
                         <div className="flex flex-col">
                           <span className="text-sm font-medium leading-none mb-1">{officer.full_name || officer.email}</span>
-                          <span className="text-[10px] text-muted-foreground flex gap-1 items-center">
+                          <span className="text-xs text-muted-foreground flex gap-1 items-center">
                             {getRoleLabel(officer.role)}
                             {officer.oscar && <span className="opacity-50">• {officer.oscar}</span>}
                             {!officer.is_active && <span className="text-orange-500 font-medium">• Pending</span>}
@@ -1758,7 +1797,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers: O
               </div>
               <div className="flex gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => { setAssignFromDirectoryOpen(false); setAssignForm({ officer_ids: [], program_id: '' }) }} className="flex-1">Cancel</Button>
-                <Button type="submit" className="flex-1">Assign to Program</Button>
+                <Button type="submit" className="flex-1" pending={assigningFromDirectory}>Assign to Program</Button>
               </div>
             </form>
           </DialogContent>

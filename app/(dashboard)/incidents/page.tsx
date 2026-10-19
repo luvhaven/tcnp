@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { isAdmin, effectiveOscarRole } from '@/lib/utils'
 import { toast } from 'sonner'
+import { notifyError, UserFacingError } from '@/lib/notify'
 import { format } from 'date-fns'
 
 type Incident = {
@@ -89,6 +90,7 @@ export default function IncidentsPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState<Incident | null>(null)
   const [canManage, setCanManage] = useState(false)
   const [formData, setFormData] = useState<{
@@ -220,7 +222,7 @@ export default function IncidentsPage() {
 
         if (error) throw error
         if (count === 0) {
-          throw new Error('Deletion failed: You may lack permissions or the incident was already removed.')
+          throw new UserFacingError('Deletion failed: You may lack permissions or the incident was already removed.')
         }
 
         await createAuditLog('delete_incident', 'incident', incident.id, {
@@ -232,7 +234,7 @@ export default function IncidentsPage() {
         toast.success('Incident deleted successfully')
       } catch (error: any) {
         console.error('Error deleting incident:', error)
-        toast.error(error.message || 'Failed to delete incident')
+        notifyError(error, 'Failed to delete incident')
         // Rollback — reload to restore if delete failed
         await loadData()
       }
@@ -257,7 +259,7 @@ export default function IncidentsPage() {
       toast.success('Incident marked as resolved')
       await createAuditLog('resolve_incident', 'incident', incident.id, { previous_status: incident.status })
     } catch (err: any) {
-      toast.error(err.message || 'Failed to resolve incident')
+      notifyError(err, 'Failed to resolve incident')
       await loadData() // rollback
     }
   }, [supabase, createAuditLog, loadData])
@@ -290,6 +292,8 @@ export default function IncidentsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    if (saving) return
+    setSaving(true)
     try {
       if (editing) {
         const { error } = await (supabase as any)
@@ -329,7 +333,9 @@ export default function IncidentsPage() {
       loadData()
     } catch (error: any) {
       console.error('❌ Error saving incident:', error)
-      toast.error(error.message || 'Failed to save incident')
+      notifyError(error, 'Failed to save incident')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -411,7 +417,7 @@ export default function IncidentsPage() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Incident Management</h1>
-              <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider bg-destructive/10 text-destructive border-destructive/20">
+              <Badge variant="outline" className="text-xs font-semibold uppercase tracking-wider bg-destructive/10 text-destructive border-destructive/20">
                 Safety & Distress
               </Badge>
             </div>
@@ -551,7 +557,7 @@ export default function IncidentsPage() {
                               }`}>
                               {isBrokenArrow && '🚨 '}{incident.type}
                             </span>
-                            <Badge className={`${severityConfig.color} text-white text-[10px] w-fit`}>
+                            <Badge className={`${severityConfig.color} text-white text-xs w-fit`}>
                               {severityConfig.label}
                             </Badge>
                           </div>
@@ -564,7 +570,7 @@ export default function IncidentsPage() {
                             {statusConfig.label}
                           </span>
                           {incident.resolved_at && (
-                            <div className="text-[10px] text-muted-foreground mt-1">
+                            <div className="text-xs text-muted-foreground mt-1">
                               {format(new Date(incident.resolved_at), 'dd/MM HH:mm')}
                             </div>
                           )}
@@ -725,7 +731,7 @@ export default function IncidentsPage() {
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" className="bg-primary hover:bg-primary/90">
+              <Button type="submit" className="bg-primary hover:bg-primary/90" pending={saving}>
                 {editing ? 'Update Incident' : 'Report Incident'}
               </Button>
             </div>

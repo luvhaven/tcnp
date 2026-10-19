@@ -20,6 +20,7 @@ const UNIT_OSCAR_ROLE_KEYS: ReadonlySet<string> = new Set([
   'serial_oscar', 'head_serial_oscar',
   'compliance_oscar', 'head_compliance_oscar',
   'welfare_oscar', 'head_welfare_oscar',
+  'training_oscar', 'head_training_oscar',
   'delta_oscar',
 ])
 
@@ -32,6 +33,7 @@ export const SIGNUP_OSCAR_OPTIONS = [
   'November (Nest)',
   'Serial Oscar',
   'Tango Oscar',
+  'Training Oscar',
   'Victor Oscar',
   'Welfare Oscar',
 ] as const
@@ -53,6 +55,7 @@ export function oscarToRole(oscar: string | null | undefined): string | null {
   if (norm.includes('head_sierra') || norm.includes('head sierra') || norm.includes('head_serial') || norm.includes('head serial')) return 'head_serial_oscar'
   if (norm.includes('head_compliance') || norm.includes('head compliance')) return 'head_compliance_oscar'
   if (norm.includes('head_welfare') || norm.includes('head welfare')) return 'head_welfare_oscar'
+  if (norm.includes('head_training') || norm.includes('head training')) return 'head_training_oscar'
   if (norm.includes('head_hospitality') || norm.includes('head hospitality')) return 'head_noscar_nest'
 
   // Tango Oscar — Transport
@@ -74,6 +77,8 @@ export function oscarToRole(oscar: string | null | undefined): string | null {
   if (['co', 'compliance', 'compliance_oscar', 'compliance oscar'].includes(norm)) return 'compliance_oscar'
   // Welfare Oscar — Meals / Officer welfare
   if (['wo', 'welfare', 'welfare_oscar', 'welfare oscar'].includes(norm)) return 'welfare_oscar'
+  // Training Oscar — Training schedules / SOP
+  if (['training', 'training_oscar', 'training oscar'].includes(norm)) return 'training_oscar'
   // Legacy Hospitality profile values resolve to November (Nest); Hospitality is not a standalone Oscar.
   if (['ho', 'hospitality', 'hospitality_oscar', 'hospitality oscar'].includes(norm)) return 'noscar_nest'
   // Command — HQ/leadership staff (not a phonetic Oscar, but selectable at signup/profile)
@@ -181,6 +186,53 @@ export function isUnitHeadRole(
   return expected[unit].includes(resolved)
     || normalizedOscar.includes(`head ${unit.replace('_', ' ')}`)
     || normalizedOscar.includes(`head_${unit}`)
+}
+
+/**
+ * Which unit heads may approve a self-registration, keyed by the member role
+ * the applicant's chosen Oscar resolves to. Legacy umbrella "November Oscar"
+ * signups can be approved by either November sub-unit head.
+ */
+const SIGNUP_APPROVER_HEADS: Record<string, string[]> = {
+  alpha_oscar: ['head_alpha_oscar'],
+  tango_oscar: ['head_tango_oscar'],
+  victor_oscar: ['head_victor_oscar'],
+  noscar_den: ['head_noscar_den'],
+  noscar_nest: ['head_noscar_nest'],
+  november_oscar: ['head_noscar_den', 'head_noscar_nest'],
+  serial_oscar: ['head_serial_oscar'],
+  compliance_oscar: ['head_compliance_oscar'],
+  welfare_oscar: ['head_welfare_oscar'],
+  training_oscar: ['head_training_oscar'],
+  command: ['head_of_command'],
+}
+
+const SIGNUP_APPROVER_HEAD_ROLES = new Set(Object.values(SIGNUP_APPROVER_HEADS).flat())
+
+/** Unit-head roles a caller holds, from either their role or their permanent Oscar. */
+function heldUnitHeadRoles(role: string | null | undefined, oscar: string | null | undefined): string[] {
+  return [role, oscarToRole(oscar)].filter((r): r is string => !!r && SIGNUP_APPROVER_HEAD_ROLES.has(r))
+}
+
+/** True when the caller can approve at least some pending signups (admin or a unit head). */
+export function canApproveSignups(role: string | null | undefined, oscar?: string | null): boolean {
+  return isPlatformAdministrator(role) || heldUnitHeadRoles(role, oscar).length > 0
+}
+
+/**
+ * Admins approve any signup. A unit head approves only signups whose chosen
+ * Oscar belongs to their own unit.
+ */
+export function canApproveSignupFor(
+  callerRole: string | null | undefined,
+  callerOscar: string | null | undefined,
+  applicantOscar: string | null | undefined,
+): boolean {
+  if (isPlatformAdministrator(callerRole)) return true
+  const applicantUnit = oscarToRole(applicantOscar)
+  if (!applicantUnit) return false
+  const allowedHeads = SIGNUP_APPROVER_HEADS[applicantUnit] ?? []
+  return heldUnitHeadRoles(callerRole, callerOscar).some(r => allowedHeads.includes(r))
 }
 
 /**

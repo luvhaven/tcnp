@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { notifyError, UserFacingError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -81,12 +82,12 @@ export function RequestAvailabilityButton({ programId, programName }: { programI
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Failed to send")
+      if (!res.ok) throw new UserFacingError(data.error || "Failed to send")
       toast.success(`Mission request broadcast to ${data.recipients} officers 🎖️`)
       setOpen(false)
       queryClient.invalidateQueries({ queryKey: ["mission-requests"] })
     } catch (err: any) {
-      toast.error(err.message || "Failed to send mission request")
+      notifyError(err, "Failed to send mission request")
     } finally {
       setSending(false)
     }
@@ -218,7 +219,7 @@ export function AvailabilityRosterButton({ programId, programName, canAssign = f
         body: JSON.stringify({ officer_ids: selected, program_id: programId }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Assignment failed")
+      if (!res.ok) throw new UserFacingError(data.error || "Assignment failed")
       const assignedCount = Number(data.assigned_count ?? selected.length)
       const alreadyAssignedCount = Number(data.already_assigned_count ?? 0)
       const confirmedAssignedIds = [...(data.assigned_ids ?? []), ...(data.already_assigned_ids ?? [])]
@@ -243,7 +244,7 @@ export function AvailabilityRosterButton({ programId, programName, canAssign = f
       queryClient.invalidateQueries({ queryKey: ["program-assignments", programId] })
       queryClient.invalidateQueries({ queryKey: ["mission-responses", latestRequest?.id] })
     } catch (err: any) {
-      toast.error(err.message || "Assignment failed")
+      notifyError(err, "Assignment failed")
     } finally {
       setAssigning(false)
     }
@@ -264,7 +265,7 @@ export function AvailabilityRosterButton({ programId, programName, canAssign = f
               {latestRequest ? (
                 <span className="inline-flex flex-wrap items-center gap-2">
                   <span>{latestRequest.title}</span>
-                  <Badge variant="outline" className="gap-1 text-[10px]">
+                  <Badge variant="outline" className="gap-1 text-xs">
                     <Clock className="h-3 w-3" /> closes {new Date(latestRequest.deadline).toLocaleString()}
                   </Badge>
                 </span>
@@ -338,12 +339,12 @@ export function AvailabilityRosterButton({ programId, programName, canAssign = f
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{r.users?.full_name ?? r.users?.email ?? "Officer"}</p>
                         <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                          {r.users?.role && <Badge variant="secondary" className="text-[9px] uppercase">{r.users.role.replace(/_/g, " ")}</Badge>}
-                          {r.users?.team && <Badge variant="outline" className="text-[9px] uppercase text-primary border-primary/40">{r.users.team}</Badge>}
+                          {r.users?.role && <Badge variant="secondary" className="text-[11px] uppercase">{r.users.role.replace(/_/g, " ")}</Badge>}
+                          {r.users?.team && <Badge variant="outline" className="text-[11px] uppercase text-primary border-primary/40">{r.users.team}</Badge>}
                         </div>
                         {r.note && <p className="mt-0.5 truncate text-xs text-muted-foreground">“{r.note}”</p>}
                       </div>
-                      <Badge className={cn("border-0 text-[10px]", r.response === "yes" ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-red-500/15 text-red-600 dark:text-red-400")}>
+                      <Badge className={cn("border-0 text-xs", r.response === "yes" ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-red-500/15 text-red-600 dark:text-red-400")}>
                         {r.response === "yes" ? "Available" : "Unavailable"}
                       </Badge>
                       </label>
@@ -402,7 +403,7 @@ export function MissionRequestPrompt({ currentUserId }: { currentUserId: string 
 
   const respondMutation = useMutation({
     mutationFn: async ({ request, response, note }: { request: MissionRequest; response: "yes" | "no"; note?: string }) => {
-      if (!currentUserId) throw new Error("Not signed in")
+      if (!currentUserId) throw new UserFacingError("Not signed in")
       const { error } = await supabase.from("mission_responses").insert({
         request_id: request.id,
         user_id: currentUserId,
@@ -417,7 +418,7 @@ export function MissionRequestPrompt({ currentUserId }: { currentUserId: string 
       setNote("")
       queryClient.invalidateQueries({ queryKey: ["my-mission-requests"] })
     },
-    onError: (err: any) => toast.error(err.message || "Failed to record response"),
+    onError: (err: any) => notifyError(err, "Failed to record response"),
   })
 
   if (!currentUserId || openRequests.length === 0) return null

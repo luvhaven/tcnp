@@ -22,10 +22,10 @@ export default async function PendingApprovalPage() {
 
                 <div className="space-y-4 text-zinc-400">
                     <p>
-                        Your account (<span className="text-white font-medium">{user.email}</span>) has been created successfully, but it requires approval from Command before you can access the operational dashboard.
+                        Your account (<span className="text-white font-medium">{user.email}</span>) has been created successfully, but it needs approval from your unit head or an admin before you can access the operational dashboard.
                     </p>
                     <p>
-                        Please contact your Team Lead or Command Center to expedite your activation.
+                        To speed things up, contact the head of the unit you signed up for.
                     </p>
                 </div>
 

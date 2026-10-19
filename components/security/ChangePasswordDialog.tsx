@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
+import { notifyError } from '@/lib/notify'
 
 export function ChangePasswordDialog() {
     const [open, setOpen] = useState(false)
@@ -51,7 +52,7 @@ export function ChangePasswordDialog() {
             setPassword("")
             setConfirmPassword("")
         } catch (error: any) {
-            toast.error(error.message || "Failed to update password")
+            notifyError(error, "Failed to update password")
         } finally {
             setLoading(false)
         }

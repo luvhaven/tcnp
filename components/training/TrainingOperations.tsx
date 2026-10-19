@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { notifyError, UserFacingError } from '@/lib/notify'
 import {
   BookOpen,
   CalendarCheck,
@@ -279,11 +280,11 @@ function TrackedYouTubeLesson({
       <div className="aspect-video overflow-hidden rounded-xl bg-black">
         {playerError ? <div className="grid h-full place-items-center px-6 text-center text-xs text-white/75">{playerError}</div> : <div ref={mountRef} className="h-full w-full" title={`${title} training video`} />}
       </div>
-      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-emerald-500 transition-[width]" style={{ width: `${percent}%` }} /></div>
         <span className="w-9 text-right font-mono tabular-nums">{percent}%</span>
       </div>
-      <p className="text-[10px] text-muted-foreground">Completion is recorded after at least 90% of the lesson has been watched in this window.</p>
+      <p className="text-xs text-muted-foreground">Completion is recorded after at least 90% of the lesson has been watched in this window.</p>
     </div>
   )
 }
@@ -474,8 +475,8 @@ export default function TrainingOperations() {
 
   const createCourse = useMutation({
     mutationFn: async () => {
-      if (!courseForm.title.trim()) throw new Error("Course title is required")
-      if (courseForm.visibility === "target_unit" && !courseForm.target_unit_id) throw new Error("Choose the unit this course is for")
+      if (!courseForm.title.trim()) throw new UserFacingError("Course title is required")
+      if (courseForm.visibility === "target_unit" && !courseForm.target_unit_id) throw new UserFacingError("Choose the unit this course is for")
       const { error } = await (supabase as any).from("training_courses").insert({
         title: courseForm.title.trim(),
         description: courseForm.description.trim() || null,
@@ -493,15 +494,15 @@ export default function TrainingOperations() {
       setCourseForm({ title: "", description: "", visibility: "all_members", target_unit_id: "", status: "published", estimated_minutes: "" })
       queryClient.invalidateQueries({ queryKey: ["training-courses"] })
     },
-    onError: (error: any) => toast.error(error.message || "Course could not be created"),
+    onError: (error: any) => notifyError(error, "Course could not be created"),
   })
 
   const createLesson = useMutation({
     mutationFn: async () => {
-      if (!selectedCourse) throw new Error("Select a course first")
-      if (!lessonForm.title.trim()) throw new Error("Lesson title is required")
+      if (!selectedCourse) throw new UserFacingError("Select a course first")
+      if (!lessonForm.title.trim()) throw new UserFacingError("Lesson title is required")
       const videoId = extractYouTubeId(lessonForm.youtube)
-      if (!videoId) throw new Error("Enter a valid YouTube video URL or video ID")
+      if (!videoId) throw new UserFacingError("Enter a valid YouTube video URL or video ID")
       const { error } = await (supabase as any).from("training_lessons").insert({
         course_id: selectedCourse.id,
         title: lessonForm.title.trim(),
@@ -519,12 +520,12 @@ export default function TrainingOperations() {
       setLessonForm({ title: "", description: "", youtube: "", duration_minutes: "", is_required: "true" })
       queryClient.invalidateQueries({ queryKey: ["training-lessons"] })
     },
-    onError: (error: any) => toast.error(error.message || "Lesson could not be added"),
+    onError: (error: any) => notifyError(error, "Lesson could not be added"),
   })
 
   const assignCourse = useMutation({
     mutationFn: async () => {
-      if (!selectedCourse || !assignmentForm.user_id || !currentUser?.id) throw new Error("Choose a learner")
+      if (!selectedCourse || !assignmentForm.user_id || !currentUser?.id) throw new UserFacingError("Choose a learner")
       const { error } = await (supabase as any).from("training_course_assignments").upsert({
         course_id: selectedCourse.id,
         user_id: assignmentForm.user_id,
@@ -540,12 +541,12 @@ export default function TrainingOperations() {
       setAssignmentForm({ user_id: "", due_at: "" })
       queryClient.invalidateQueries({ queryKey: ["training-course-assignments"] })
     },
-    onError: (error: any) => toast.error(error.message || "Course could not be assigned"),
+    onError: (error: any) => notifyError(error, "Course could not be assigned"),
   })
 
   const recordWatch = useMutation({
     mutationFn: async ({ lessonId, seconds }: { lessonId: string; seconds: number }) => {
-      if (!currentUser?.id) throw new Error("Sign in to record progress")
+      if (!currentUser?.id) throw new UserFacingError("Sign in to record progress")
       const { data, error } = await (supabase as any).rpc("record_training_watch", {
         target_lesson_id: lessonId,
         watched_increment_seconds: seconds,
@@ -564,7 +565,7 @@ export default function TrainingOperations() {
 
   const setAttendance = useMutation({
     mutationFn: async ({ userId, status }: { userId: string; status: string }) => {
-      if (!selectedSchedule || !currentUser?.id) throw new Error("Choose a training session")
+      if (!selectedSchedule || !currentUser?.id) throw new UserFacingError("Choose a training session")
       const { error } = await (supabase as any).from("training_attendance").upsert(
         {
           training_schedule_id: selectedSchedule,
@@ -578,13 +579,13 @@ export default function TrainingOperations() {
       if (error) throw error
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["training-attendance"] }),
-    onError: (error: any) => toast.error(error.message || "Attendance could not be updated"),
+    onError: (error: any) => notifyError(error, "Attendance could not be updated"),
   })
 
   const broadcastTraining = useMutation({
     mutationFn: async () => {
       const schedule = schedules.find((item) => item.id === selectedSchedule)
-      if (!schedule || !trainingUnit?.id || !currentUser?.id) throw new Error("Choose a training session")
+      if (!schedule || !trainingUnit?.id || !currentUser?.id) throw new UserFacingError("Choose a training session")
       const { error } = await (supabase as any).rpc("broadcast_training_schedule", {
         target_schedule_id: schedule.id,
       })
@@ -594,12 +595,12 @@ export default function TrainingOperations() {
       toast.success("Training announcement broadcast")
       queryClient.invalidateQueries({ queryKey: ["training-schedules"] })
     },
-    onError: (error: any) => toast.error(error.message || "Training announcement could not be sent"),
+    onError: (error: any) => notifyError(error, "Training announcement could not be sent"),
   })
 
   const saveMember = useMutation({
     mutationFn: async () => {
-      if (!trainingUnit?.id || !memberForm.user_id) throw new Error("Choose an officer")
+      if (!trainingUnit?.id || !memberForm.user_id) throw new UserFacingError("Choose an officer")
       const { error } = await (supabase as any).from("unit_memberships").upsert(
         { unit_id: trainingUnit.id, user_id: memberForm.user_id, access_level: memberForm.access_level, status: "active" },
         { onConflict: "unit_id,user_id" }
@@ -612,7 +613,7 @@ export default function TrainingOperations() {
       setMemberForm({ user_id: "", access_level: "member" })
       queryClient.invalidateQueries({ queryKey: ["unit-members"] })
     },
-    onError: (error: any) => toast.error(error.message || "Member could not be added"),
+    onError: (error: any) => notifyError(error, "Member could not be added"),
   })
 
   const updateMemberLevel = useMutation({
@@ -625,7 +626,7 @@ export default function TrainingOperations() {
       if (error) throw error
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["unit-members"] }),
-    onError: (error: any) => toast.error(error.message || "Access level could not be updated"),
+    onError: (error: any) => notifyError(error, "Access level could not be updated"),
   })
 
   const removeMember = useMutation({
@@ -641,12 +642,12 @@ export default function TrainingOperations() {
       toast.success("Training access removed")
       queryClient.invalidateQueries({ queryKey: ["unit-members"] })
     },
-    onError: (error: any) => toast.error(error.message || "Member could not be removed"),
+    onError: (error: any) => notifyError(error, "Member could not be removed"),
   })
 
   const createEvaluation = useMutation({
     mutationFn: async () => {
-      if (!evaluationForm.subject_user_id) throw new Error("Choose a member")
+      if (!evaluationForm.subject_user_id) throw new UserFacingError("Choose a member")
       const { error } = await (supabase as any).from("training_evaluations").insert({
         subject_user_id: evaluationForm.subject_user_id,
         member_stage: evaluationForm.member_stage,
@@ -664,15 +665,15 @@ export default function TrainingOperations() {
       setEvaluationForm({ subject_user_id: "", member_stage: "new", training_schedule_id: "", due_at: "", score: "", reflection: "", feedback: "", strengths: "", growth_areas: "" })
       queryClient.invalidateQueries({ queryKey: ["training-evaluations"] })
     },
-    onError: (error: any) => toast.error(error.message || "Evaluation could not be created"),
+    onError: (error: any) => notifyError(error, "Evaluation could not be created"),
   })
 
   const saveEvaluation = useMutation({
     mutationFn: async () => {
       if (!editingEvaluation) return
-      if (!canManage && editingEvaluation.evaluator_id !== currentUser?.id) throw new Error("Only the assigned evaluator can update this review")
+      if (!canManage && editingEvaluation.evaluator_id !== currentUser?.id) throw new UserFacingError("Only the assigned evaluator can update this review")
       const submittedReflection = typeof editingEvaluation.responses?.reflection === "string" ? editingEvaluation.responses.reflection.trim() : ""
-      if (submittedReflection.length < 10) throw new Error("The member must submit their reflection before the evaluation can be completed")
+      if (submittedReflection.length < 10) throw new UserFacingError("The member must submit their reflection before the evaluation can be completed")
       const { error } = await (supabase as any).from("training_evaluations").update({
         status: "completed",
         submitted_at: new Date().toISOString(),
@@ -688,12 +689,12 @@ export default function TrainingOperations() {
       setEditingEvaluation(null)
       queryClient.invalidateQueries({ queryKey: ["training-evaluations"] })
     },
-    onError: (error: any) => toast.error(error.message || "Evaluation could not be saved"),
+    onError: (error: any) => notifyError(error, "Evaluation could not be saved"),
   })
 
   const saveReflection = useMutation({
     mutationFn: async () => {
-      if (!editingEvaluation || editingEvaluation.subject_user_id !== currentUser?.id) throw new Error("This reflection is not assigned to you")
+      if (!editingEvaluation || editingEvaluation.subject_user_id !== currentUser?.id) throw new UserFacingError("This reflection is not assigned to you")
       const { error } = await (supabase as any).rpc("submit_training_evaluation_reflection", {
         target_evaluation_id: editingEvaluation.id,
         reflection_text: evaluationForm.reflection,
@@ -705,7 +706,7 @@ export default function TrainingOperations() {
       setEditingEvaluation(null)
       queryClient.invalidateQueries({ queryKey: ["training-evaluations"] })
     },
-    onError: (error: any) => toast.error(error.message || "Reflection could not be submitted"),
+    onError: (error: any) => notifyError(error, "Reflection could not be submitted"),
   })
 
   const openEvaluation = (evaluation: Evaluation) => {
@@ -747,7 +748,7 @@ export default function TrainingOperations() {
             ].map(([value, label]) => (
               <div key={label} className="bg-background/90 px-3 py-4 text-center">
                 <p className="font-mono text-xl font-semibold tabular-nums">{value}</p>
-                <p className="mt-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+                <p className="mt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
               </div>
             ))}
           </div>
@@ -803,7 +804,7 @@ export default function TrainingOperations() {
                 <article className="overflow-hidden rounded-2xl border bg-card/70">
                   <header className="border-b px-5 py-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div><div className="flex flex-wrap items-center gap-2"><h4 className="text-lg font-semibold tracking-tight">{selectedCourse.title}</h4><Badge className={cn("border-0 text-[10px]", statusTone(selectedCourse.status))}>{selectedCourse.status}</Badge>{selectedCourse.target_unit_id && <Badge variant="outline" className="text-[10px]">{units.find((unit) => unit.id === selectedCourse.target_unit_id)?.name || "Unit specific"}</Badge>}</div><p className="mt-1 max-w-[65ch] text-sm text-muted-foreground">{selectedCourse.description || "A focused learning path for protocol readiness."}</p></div>
+                      <div><div className="flex flex-wrap items-center gap-2"><h4 className="text-lg font-semibold tracking-tight">{selectedCourse.title}</h4><Badge className={cn("border-0 text-xs", statusTone(selectedCourse.status))}>{selectedCourse.status}</Badge>{selectedCourse.target_unit_id && <Badge variant="outline" className="text-xs">{units.find((unit) => unit.id === selectedCourse.target_unit_id)?.name || "Unit specific"}</Badge>}</div><p className="mt-1 max-w-[65ch] text-sm text-muted-foreground">{selectedCourse.description || "A focused learning path for protocol readiness."}</p></div>
                       {canManage && <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" className="gap-1.5" onClick={() => setAssignmentOpen(true)}><UserPlus className="h-3.5 w-3.5" />Assign</Button><Button size="sm" variant="outline" className="gap-1.5" onClick={() => setLessonOpen(true)}><Plus className="h-3.5 w-3.5" />Add lesson</Button></div>}
                     </div>
                     <div className="mt-4 flex items-center gap-3"><div className="h-2 flex-1 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary transition-[width] duration-500" style={{ width: `${selectedPercent}%` }} /></div><span className="font-mono text-xs tabular-nums text-muted-foreground">{selectedPercent}%</span></div>
@@ -817,7 +818,7 @@ export default function TrainingOperations() {
                         <div key={lesson.id} className="grid gap-4 p-4 sm:p-5 xl:grid-cols-[minmax(0,1fr)_15rem]">
                           <div className="flex gap-3">
                             <div className={cn("mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg text-xs font-semibold", complete ? "bg-emerald-500/12 text-emerald-600" : "bg-muted text-muted-foreground")}>{complete ? <Check className="h-4 w-4" /> : index + 1}</div>
-                            <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{lesson.title}</p>{lesson.is_required && <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">required</span>}</div>{lesson.description && <p className="mt-1 text-sm leading-5 text-muted-foreground">{lesson.description}</p>}<div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">{lesson.duration_minutes ? <span className="inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" />{lesson.duration_minutes} min</span> : null}{safeVideo ? <span className="inline-flex items-center gap-1"><PlayCircle className="h-3.5 w-3.5" />Tracked video lesson</span> : null}</div><Badge variant={complete ? "success" : "outline"} className="mt-3 gap-1.5">{complete ? <CheckCircle2 className="h-3.5 w-3.5" /> : <PlayCircle className="h-3.5 w-3.5" />}{complete ? "Completed" : `${progressRow?.percent_complete || 0}% watched`}</Badge></div>
+                            <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{lesson.title}</p>{lesson.is_required && <span className="text-xs font-semibold uppercase tracking-wide text-primary">required</span>}</div>{lesson.description && <p className="mt-1 text-sm leading-5 text-muted-foreground">{lesson.description}</p>}<div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">{lesson.duration_minutes ? <span className="inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" />{lesson.duration_minutes} min</span> : null}{safeVideo ? <span className="inline-flex items-center gap-1"><PlayCircle className="h-3.5 w-3.5" />Tracked video lesson</span> : null}</div><Badge variant={complete ? "success" : "outline"} className="mt-3 gap-1.5">{complete ? <CheckCircle2 className="h-3.5 w-3.5" /> : <PlayCircle className="h-3.5 w-3.5" />}{complete ? "Completed" : `${progressRow?.percent_complete || 0}% watched`}</Badge></div>
                           </div>
                           {safeVideo ? <TrackedYouTubeLesson lessonId={lesson.id} videoId={safeVideo} title={lesson.title} initialPercent={progressRow?.percent_complete || 0} onWatch={recordLessonWatch} /> : <div className="grid min-h-28 place-items-center rounded-xl bg-muted/50 text-center text-xs text-muted-foreground"><span>No valid video attached</span></div>}
                         </div>
@@ -832,7 +833,7 @@ export default function TrainingOperations() {
 
         {canManage && <TabsContent value="progress" className="mt-0 space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 className="text-lg font-semibold tracking-tight">Learner progress</h3><p className="text-sm text-muted-foreground">See who has started, what is complete and when each assignment is due.</p></div><Select value={selectedCourse?.id || ""} onValueChange={setActiveCourseId}><SelectTrigger className="w-full sm:w-[20rem]"><SelectValue placeholder="Choose a course" /></SelectTrigger><SelectContent>{courses.map((course) => <SelectItem key={course.id} value={course.id}>{course.title}</SelectItem>)}</SelectContent></Select></div>
-          {!selectedCourse ? <div className="empty-state rounded-2xl border"><BookOpen className="h-9 w-9" /><p className="font-medium">Create a course first</p></div> : assignments.filter((assignment) => assignment.course_id === selectedCourse.id).length === 0 ? <div className="empty-state rounded-2xl border"><UserPlus className="h-9 w-9" /><p className="font-medium">No learners assigned</p><p className="text-sm text-muted-foreground">Assign this course to begin tracking individual completion.</p><Button variant="outline" onClick={() => setAssignmentOpen(true)}>Assign learner</Button></div> : <div className="overflow-hidden rounded-2xl border bg-card/70"><div className="grid grid-cols-[minmax(0,1fr)_auto] border-b bg-muted/35 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:grid-cols-[minmax(0,1fr)_8rem_8rem]"><span>Learner</span><span>Progress</span><span className="hidden sm:block">Due</span></div><div className="divide-y">{assignments.filter((assignment) => assignment.course_id === selectedCourse.id).map((assignment) => { const officer = officers.find((item) => item.id === assignment.user_id); const lessonIds = selectedLessons.map((lesson) => lesson.id); const complete = progress.filter((item) => item.user_id === assignment.user_id && lessonIds.includes(item.lesson_id) && (item.completed_at || item.percent_complete >= 100)).length; const percent = lessonIds.length ? Math.round((complete / lessonIds.length) * 100) : 0; const overdue = Boolean(assignment.due_at && new Date(assignment.due_at) < new Date() && percent < 100); return <div key={assignment.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_8rem_8rem]"><div className="min-w-0"><p className="truncate text-sm font-medium">{officer?.full_name || officer?.email || "Protocol officer"}</p><p className="text-xs text-muted-foreground">{complete} of {lessonIds.length} lessons</p></div><div className="flex items-center gap-2"><div className="h-1.5 w-14 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} /></div><span className="w-8 text-right font-mono text-xs tabular-nums">{percent}%</span></div><div className="hidden sm:block"><Badge className={cn("border-0 text-[10px]", statusTone(percent === 100 ? "completed" : overdue ? "overdue" : assignment.status))}>{percent === 100 ? "completed" : overdue ? "overdue" : assignment.status.replaceAll("_", " ")}</Badge>{assignment.due_at && <p className="mt-1 text-[10px] text-muted-foreground">{new Date(assignment.due_at).toLocaleDateString()}</p>}</div></div> })}</div></div>}
+          {!selectedCourse ? <div className="empty-state rounded-2xl border"><BookOpen className="h-9 w-9" /><p className="font-medium">Create a course first</p></div> : assignments.filter((assignment) => assignment.course_id === selectedCourse.id).length === 0 ? <div className="empty-state rounded-2xl border"><UserPlus className="h-9 w-9" /><p className="font-medium">No learners assigned</p><p className="text-sm text-muted-foreground">Assign this course to begin tracking individual completion.</p><Button variant="outline" onClick={() => setAssignmentOpen(true)}>Assign learner</Button></div> : <div className="overflow-hidden rounded-2xl border bg-card/70"><div className="grid grid-cols-[minmax(0,1fr)_auto] border-b bg-muted/35 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:grid-cols-[minmax(0,1fr)_8rem_8rem]"><span>Learner</span><span>Progress</span><span className="hidden sm:block">Due</span></div><div className="divide-y">{assignments.filter((assignment) => assignment.course_id === selectedCourse.id).map((assignment) => { const officer = officers.find((item) => item.id === assignment.user_id); const lessonIds = selectedLessons.map((lesson) => lesson.id); const complete = progress.filter((item) => item.user_id === assignment.user_id && lessonIds.includes(item.lesson_id) && (item.completed_at || item.percent_complete >= 100)).length; const percent = lessonIds.length ? Math.round((complete / lessonIds.length) * 100) : 0; const overdue = Boolean(assignment.due_at && new Date(assignment.due_at) < new Date() && percent < 100); return <div key={assignment.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_8rem_8rem]"><div className="min-w-0"><p className="truncate text-sm font-medium">{officer?.full_name || officer?.email || "Protocol officer"}</p><p className="text-xs text-muted-foreground">{complete} of {lessonIds.length} lessons</p></div><div className="flex items-center gap-2"><div className="h-1.5 w-14 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} /></div><span className="w-8 text-right font-mono text-xs tabular-nums">{percent}%</span></div><div className="hidden sm:block"><Badge className={cn("border-0 text-xs", statusTone(percent === 100 ? "completed" : overdue ? "overdue" : assignment.status))}>{percent === 100 ? "completed" : overdue ? "overdue" : assignment.status.replaceAll("_", " ")}</Badge>{assignment.due_at && <p className="mt-1 text-xs text-muted-foreground">{new Date(assignment.due_at).toLocaleDateString()}</p>}</div></div> })}</div></div>}
         </TabsContent>}
 
         <TabsContent value="attendance" className="mt-0 space-y-4">
@@ -865,7 +866,7 @@ export default function TrainingOperations() {
 
       <Dialog open={evaluationOpen} onOpenChange={setEvaluationOpen}><DialogContent className="max-w-lg"><DialogHeader><DialogTitle>Start member evaluation</DialogTitle><DialogDescription>Create a visible review flow with a clear due date.</DialogDescription></DialogHeader><form onSubmit={(event: FormEvent) => { event.preventDefault(); createEvaluation.mutate() }} className="space-y-4"><div className="space-y-2"><Label>Member</Label><Select value={evaluationForm.subject_user_id} onValueChange={(subject_user_id) => setEvaluationForm({ ...evaluationForm, subject_user_id })}><SelectTrigger><SelectValue placeholder="Choose a member" /></SelectTrigger><SelectContent>{officers.map((officer) => <SelectItem key={officer.id} value={officer.id}>{officer.full_name || officer.email}</SelectItem>)}</SelectContent></Select></div><div className="grid grid-cols-2 gap-3"><div className="space-y-2"><Label>Member stage</Label><Select value={evaluationForm.member_stage} onValueChange={(member_stage) => setEvaluationForm({ ...evaluationForm, member_stage })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="new">New member</SelectItem><SelectItem value="existing">Existing member</SelectItem></SelectContent></Select></div><div className="space-y-2"><Label>Due date</Label><Input type="datetime-local" value={evaluationForm.due_at} onChange={(event) => setEvaluationForm({ ...evaluationForm, due_at: event.target.value })} /></div></div><div className="space-y-2"><Label>Training session</Label><Select value={evaluationForm.training_schedule_id || "none"} onValueChange={(value) => setEvaluationForm({ ...evaluationForm, training_schedule_id: value === "none" ? "" : value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">General evaluation</SelectItem>{schedules.map((schedule) => <SelectItem key={schedule.id} value={schedule.id}>{schedule.topic}</SelectItem>)}</SelectContent></Select></div><Button className="w-full" disabled={createEvaluation.isPending}>Open evaluation</Button></form></DialogContent></Dialog>
 
-      <Dialog open={Boolean(editingEvaluation)} onOpenChange={(open) => !open && setEditingEvaluation(null)}><DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto"><DialogHeader><DialogTitle>Member evaluation</DialogTitle><DialogDescription>{editingEvaluation ? (editingEvaluation.subject_user_id === currentUser?.id ? `Your ${editingEvaluation.member_stage} member review` : `${personName(editingEvaluation.subject_user_id, officers)} · ${editingEvaluation.member_stage} member review`) : "Review"}</DialogDescription></DialogHeader><form onSubmit={(event: FormEvent) => { event.preventDefault(); if (canEditEvaluation) saveEvaluation.mutate() }} className="space-y-4"><div className="space-y-2"><div className="flex items-center justify-between gap-3"><Label>Member reflection</Label>{Boolean(editingEvaluation?.responses?.reflection_submitted_at) ? <Badge variant="success" className="text-[10px]">Submitted</Badge> : null}</div><Textarea rows={4} disabled={!canSubmitReflection} value={evaluationForm.reflection} onChange={(event) => setEvaluationForm({ ...evaluationForm, reflection: event.target.value })} placeholder="What was learned, applied and found challenging?" />{canSubmitReflection && <Button type="button" variant="outline" className="w-full" disabled={saveReflection.isPending || evaluationForm.reflection.trim().length < 10} onClick={() => saveReflection.mutate()}>{saveReflection.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardCheck className="mr-2 h-4 w-4" />}Submit my reflection</Button>}</div>{canEditEvaluation && <><div className="border-t pt-4"><p className="text-sm font-semibold">Evaluator review</p><p className="text-xs text-muted-foreground">Reviewer notes remain private until this evaluation is completed.</p></div><div className="space-y-2"><Label>Score (0–100)</Label><Input type="number" min="0" max="100" value={evaluationForm.score} onChange={(event) => setEvaluationForm({ ...evaluationForm, score: event.target.value })} /></div><div className="grid gap-3 sm:grid-cols-2"><div className="space-y-2"><Label>Strengths</Label><Textarea rows={3} value={evaluationForm.strengths} onChange={(event) => setEvaluationForm({ ...evaluationForm, strengths: event.target.value })} /></div><div className="space-y-2"><Label>Growth areas</Label><Textarea rows={3} value={evaluationForm.growth_areas} onChange={(event) => setEvaluationForm({ ...evaluationForm, growth_areas: event.target.value })} /></div></div><div className="space-y-2"><Label>Reviewer feedback</Label><Textarea rows={4} value={evaluationForm.feedback} onChange={(event) => setEvaluationForm({ ...evaluationForm, feedback: event.target.value })} /></div><Button className="w-full" disabled={saveEvaluation.isPending}>{saveEvaluation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}Complete evaluation</Button></>}{!canEditEvaluation && !canSubmitReflection ? <Button type="button" variant="outline" className="w-full" onClick={() => setEditingEvaluation(null)}>Close review</Button> : null}</form></DialogContent></Dialog>
+      <Dialog open={Boolean(editingEvaluation)} onOpenChange={(open) => !open && setEditingEvaluation(null)}><DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto"><DialogHeader><DialogTitle>Member evaluation</DialogTitle><DialogDescription>{editingEvaluation ? (editingEvaluation.subject_user_id === currentUser?.id ? `Your ${editingEvaluation.member_stage} member review` : `${personName(editingEvaluation.subject_user_id, officers)} · ${editingEvaluation.member_stage} member review`) : "Review"}</DialogDescription></DialogHeader><form onSubmit={(event: FormEvent) => { event.preventDefault(); if (canEditEvaluation) saveEvaluation.mutate() }} className="space-y-4"><div className="space-y-2"><div className="flex items-center justify-between gap-3"><Label>Member reflection</Label>{Boolean(editingEvaluation?.responses?.reflection_submitted_at) ? <Badge variant="success" className="text-xs">Submitted</Badge> : null}</div><Textarea rows={4} disabled={!canSubmitReflection} value={evaluationForm.reflection} onChange={(event) => setEvaluationForm({ ...evaluationForm, reflection: event.target.value })} placeholder="What was learned, applied and found challenging?" />{canSubmitReflection && <Button type="button" variant="outline" className="w-full" disabled={saveReflection.isPending || evaluationForm.reflection.trim().length < 10} onClick={() => saveReflection.mutate()}>{saveReflection.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardCheck className="mr-2 h-4 w-4" />}Submit my reflection</Button>}</div>{canEditEvaluation && <><div className="border-t pt-4"><p className="text-sm font-semibold">Evaluator review</p><p className="text-xs text-muted-foreground">Reviewer notes remain private until this evaluation is completed.</p></div><div className="space-y-2"><Label>Score (0–100)</Label><Input type="number" min="0" max="100" value={evaluationForm.score} onChange={(event) => setEvaluationForm({ ...evaluationForm, score: event.target.value })} /></div><div className="grid gap-3 sm:grid-cols-2"><div className="space-y-2"><Label>Strengths</Label><Textarea rows={3} value={evaluationForm.strengths} onChange={(event) => setEvaluationForm({ ...evaluationForm, strengths: event.target.value })} /></div><div className="space-y-2"><Label>Growth areas</Label><Textarea rows={3} value={evaluationForm.growth_areas} onChange={(event) => setEvaluationForm({ ...evaluationForm, growth_areas: event.target.value })} /></div></div><div className="space-y-2"><Label>Reviewer feedback</Label><Textarea rows={4} value={evaluationForm.feedback} onChange={(event) => setEvaluationForm({ ...evaluationForm, feedback: event.target.value })} /></div><Button className="w-full" disabled={saveEvaluation.isPending}>{saveEvaluation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}Complete evaluation</Button></>}{!canEditEvaluation && !canSubmitReflection ? <Button type="button" variant="outline" className="w-full" onClick={() => setEditingEvaluation(null)}>Close review</Button> : null}</form></DialogContent></Dialog>
     </section>
   )
 }

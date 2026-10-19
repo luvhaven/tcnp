@@ -67,6 +67,8 @@ type PapaFormTabsProps = {
   onSubmit: (data: PapaFormData) => Promise<void>
   onCancel: () => void
   isEditing?: boolean
+  /** The parent's save is in flight (e.g. mutation.isPending). */
+  pending?: boolean
 }
 
 export default function PapaFormTabs({
@@ -74,9 +76,12 @@ export default function PapaFormTabs({
   events,
   onSubmit,
   onCancel,
-  isEditing = false
+  isEditing = false,
+  pending = false,
 }: PapaFormTabsProps) {
   const [activeTab, setActiveTab] = useState('basic')
+  const [submitting, setSubmitting] = useState(false)
+  const busy = pending || submitting
   const [formData, setFormData] = useState<PapaFormData>({
     event_id: initialData?.event_id || '',
     title: initialData?.title || '',
@@ -113,7 +118,13 @@ export default function PapaFormTabs({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    await onSubmit(formData)
+    if (busy) return
+    setSubmitting(true)
+    try {
+      await onSubmit(formData)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const addSpeakingSchedule = () => {
@@ -666,7 +677,7 @@ export default function PapaFormTabs({
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit">
+        <Button type="submit" pending={busy}>
           {isEditing ? 'Update' : 'Create'} Papa
         </Button>
       </div>

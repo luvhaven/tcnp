@@ -349,7 +349,7 @@ export default function GuidePage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h1 className="text-xl font-bold">{activeSection.title}</h1>
-                    <Badge variant="secondary" className="text-[10px]">
+                    <Badge variant="secondary" className="text-xs">
                       {activeSection.badge}
                     </Badge>
                   </div>

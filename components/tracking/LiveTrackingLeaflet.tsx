@@ -626,7 +626,7 @@ export default function LiveTrackingLeaflet({
           type="button"
           onClick={fitAllMarkers}
           disabled={locations.length === 0}
-          className="flex h-9 items-center justify-center rounded-md border border-black/10 bg-white px-2 text-[10px] font-semibold text-slate-700 shadow-md transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          className="flex h-9 items-center justify-center rounded-md border border-black/10 bg-white px-2 text-xs font-semibold text-slate-700 shadow-md transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
           title="Fit all markers in view"
         >
           FIT ALL

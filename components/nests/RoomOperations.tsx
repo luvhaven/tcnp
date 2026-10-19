@@ -35,6 +35,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
+import { notifyError, UserFacingError } from '@/lib/notify'
 
 type RoomOperationsProps = {
   nests: any[]
@@ -263,8 +264,8 @@ export default function RoomOperations({ nests, selectedProgram, legacyCanManage
 
   const createRoom = useMutation({
     mutationFn: async () => {
-      if (!userId) throw new Error("Sign in again before adding a room")
-      if (!roomForm.nest_id || !roomForm.room_number.trim()) throw new Error("Choose a Nest and enter the room number")
+      if (!userId) throw new UserFacingError("Sign in again before adding a room")
+      if (!roomForm.nest_id || !roomForm.room_number.trim()) throw new UserFacingError("Choose a Nest and enter the room number")
       const { error } = await (supabase as any).from("nest_rooms").insert({
         nest_id: roomForm.nest_id,
         room_number: roomForm.room_number.trim(),
@@ -278,7 +279,7 @@ export default function RoomOperations({ nests, selectedProgram, legacyCanManage
       if (error) throw error
     },
     onSuccess: () => { toast.success("Room added to Nest"); resetRoomForm(); void queryClient.invalidateQueries({ queryKey: ["nest-rooms"] }) },
-    onError: (error: any) => toast.error(error.message || "Room could not be added"),
+    onError: (error: any) => notifyError(error, "Room could not be added"),
   })
 
   const updateRoomStatus = useMutation({
@@ -287,17 +288,17 @@ export default function RoomOperations({ nests, selectedProgram, legacyCanManage
       if (error) throw error
     },
     onSuccess: () => { toast.success("Room status updated"); void queryClient.invalidateQueries({ queryKey: ["nest-rooms"] }) },
-    onError: (error: any) => toast.error(error.message || "Room status could not be updated"),
+    onError: (error: any) => notifyError(error, "Room status could not be updated"),
   })
 
   const createStay = useMutation({
     mutationFn: async () => {
-      if (!userId) throw new Error("Sign in again before assigning a room")
-      if (!stayForm.room_id || !stayForm.papa_id || !stayForm.planned_check_in || !stayForm.planned_check_out) throw new Error("Room, Papa and planned dates are required")
-      if (new Date(stayForm.planned_check_out) <= new Date(stayForm.planned_check_in)) throw new Error("Check-out must be after check-in")
+      if (!userId) throw new UserFacingError("Sign in again before assigning a room")
+      if (!stayForm.room_id || !stayForm.papa_id || !stayForm.planned_check_in || !stayForm.planned_check_out) throw new UserFacingError("Room, Papa and planned dates are required")
+      if (new Date(stayForm.planned_check_out) <= new Date(stayForm.planned_check_in)) throw new UserFacingError("Check-out must be after check-in")
       const room = roomById.get(stayForm.room_id)
       if (room?.status === "out_of_service" || blockedRoomIds.has(stayForm.room_id)) {
-        throw new Error("Resolve the room's blocking issue before assigning another stay")
+        throw new UserFacingError("Resolve the room's blocking issue before assigning another stay")
       }
       const programId = stayForm.program_id || nestById.get(room?.nest_id)?.program_id || papaById.get(stayForm.papa_id)?.program_id
       const { data: stay, error } = await (supabase as any).from("nest_room_stays").insert({
@@ -325,7 +326,7 @@ export default function RoomOperations({ nests, selectedProgram, legacyCanManage
       }
     },
     onSuccess: () => { toast.success("Room stay and guests assigned"); resetStayForm(); void queryClient.invalidateQueries({ queryKey: ["nest-room-stays"] }); void queryClient.invalidateQueries({ queryKey: ["nest-room-guests"] }) },
-    onError: (error: any) => toast.error(error.message || "Room stay could not be created"),
+    onError: (error: any) => notifyError(error, "Room stay could not be created"),
   })
 
   const updateStayStatus = useMutation({
@@ -335,13 +336,13 @@ export default function RoomOperations({ nests, selectedProgram, legacyCanManage
       if (error) throw error
     },
     onSuccess: (_, variables) => { toast.success(variables.status === "checked_in" ? "Guest checked in" : "Guest checked out"); void queryClient.invalidateQueries({ queryKey: ["nest-room-stays"] }) },
-    onError: (error: any) => toast.error(error.message || "Stay could not be updated"),
+    onError: (error: any) => notifyError(error, "Stay could not be updated"),
   })
 
   const createInspection = useMutation({
     mutationFn: async () => {
-      if (!userId) throw new Error("Sign in again before assigning an inspection")
-      if (!inspectionForm.room_id || !inspectionForm.assigned_to || !inspectionForm.due_at) throw new Error("Room, inspector and due time are required")
+      if (!userId) throw new UserFacingError("Sign in again before assigning an inspection")
+      if (!inspectionForm.room_id || !inspectionForm.assigned_to || !inspectionForm.due_at) throw new UserFacingError("Room, inspector and due time are required")
       const { error } = await (supabase as any).from("nest_room_inspections").insert({
         room_id: inspectionForm.room_id,
         stay_id: inspectionForm.stay_id || null,
@@ -354,12 +355,12 @@ export default function RoomOperations({ nests, selectedProgram, legacyCanManage
       if (error) throw error
     },
     onSuccess: () => { toast.success("Room inspection assigned"); resetInspectionForm(); void queryClient.invalidateQueries({ queryKey: ["nest-room-inspections"] }) },
-    onError: (error: any) => toast.error(error.message || "Inspection could not be assigned"),
+    onError: (error: any) => notifyError(error, "Inspection could not be assigned"),
   })
 
   const completeInspection = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: "passed" | "attention" }) => {
-      if (!userId) throw new Error("Sign in again before confirming the inspection")
+      if (!userId) throw new UserFacingError("Sign in again before confirming the inspection")
       const checksPassed = status === "passed"
       const { error } = await (supabase as any).from("nest_room_inspections").update({
         inspected_by: userId,
@@ -370,13 +371,13 @@ export default function RoomOperations({ nests, selectedProgram, legacyCanManage
       if (error) throw error
     },
     onSuccess: (_, variables) => { toast.success(variables.status === "passed" ? "Room inspection confirmed" : "Room flagged for attention"); void queryClient.invalidateQueries({ queryKey: ["nest-room-inspections"] }) },
-    onError: (error: any) => toast.error(error.message || "Inspection could not be completed"),
+    onError: (error: any) => notifyError(error, "Inspection could not be completed"),
   })
 
   const createItem = useMutation({
     mutationFn: async () => {
-      if (!userId) throw new Error("Sign in again before adding room contents")
-      if (!itemForm.room_id || !itemForm.item_name.trim()) throw new Error("Room and item name are required")
+      if (!userId) throw new UserFacingError("Sign in again before adding room contents")
+      if (!itemForm.room_id || !itemForm.item_name.trim()) throw new UserFacingError("Room and item name are required")
       let photoPath: string | null = null
       if (itemPhoto) {
         const extension = itemPhoto.name.split(".").pop()?.toLowerCase() || "jpg"
@@ -401,13 +402,13 @@ export default function RoomOperations({ nests, selectedProgram, legacyCanManage
       }
     },
     onSuccess: () => { toast.success("Room contents recorded"); resetItemForm(); void queryClient.invalidateQueries({ queryKey: ["nest-room-items"] }) },
-    onError: (error: any) => toast.error(error.message || "Room contents could not be saved"),
+    onError: (error: any) => notifyError(error, "Room contents could not be saved"),
   })
 
   const createIssue = useMutation({
     mutationFn: async () => {
-      if (!userId) throw new Error("Sign in again before reporting an issue")
-      if (!issueForm.room_id || !issueForm.title.trim() || !issueForm.description.trim()) throw new Error("Room, title and description are required")
+      if (!userId) throw new UserFacingError("Sign in again before reporting an issue")
+      if (!issueForm.room_id || !issueForm.title.trim() || !issueForm.description.trim()) throw new UserFacingError("Room, title and description are required")
       const { error } = await (supabase as any).from("nest_room_issues").insert({
         room_id: issueForm.room_id,
         stay_id: issueForm.stay_id || null,
@@ -422,18 +423,18 @@ export default function RoomOperations({ nests, selectedProgram, legacyCanManage
       if (error) throw error
     },
     onSuccess: () => { toast.success("Room issue reported"); resetIssueForm(); void queryClient.invalidateQueries({ queryKey: ["nest-room-issues"] }) },
-    onError: (error: any) => toast.error(error.message || "Room issue could not be reported"),
+    onError: (error: any) => notifyError(error, "Room issue could not be reported"),
   })
 
   const resolveIssue = useMutation({
     mutationFn: async (id: string) => {
       const notes = (resolutionDrafts[id] || "").trim()
-      if (!notes) throw new Error("Add resolution notes before closing the issue")
+      if (!notes) throw new UserFacingError("Add resolution notes before closing the issue")
       const { error } = await (supabase as any).from("nest_room_issues").update({ status: "resolved", resolved_at: new Date().toISOString(), resolution_notes: notes, next_use_blocked: false }).eq("id", id)
       if (error) throw error
     },
     onSuccess: (_, id) => { toast.success("Issue resolved and room history updated"); setResolutionDrafts((current) => ({ ...current, [id]: "" })); void queryClient.invalidateQueries({ queryKey: ["nest-room-issues"] }); void queryClient.invalidateQueries({ queryKey: ["nest-room-blocking-issues"] }) },
-    onError: (error: any) => toast.error(error.message || "Issue could not be resolved"),
+    onError: (error: any) => notifyError(error, "Issue could not be resolved"),
   })
 
   const arrivalRows = useMemo(() => {
@@ -459,7 +460,7 @@ export default function RoomOperations({ nests, selectedProgram, legacyCanManage
       <div className="overflow-hidden rounded-2xl border bg-card">
         <div className="grid gap-5 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
           <div className="max-w-2xl"><div className="flex items-center gap-2"><BedDouble className="h-4 w-4 text-primary" /><p className="text-xs font-semibold tracking-[0.16em] text-primary">ROOM OPERATIONS</p></div><h2 id="room-operations-title" className="mt-2 text-xl font-semibold tracking-tight">Guest readiness and Nest history</h2><p className="mt-1 text-sm leading-relaxed text-muted-foreground">Prepare rooms, assign shared stays, confirm inspections, photograph gifts and close defects before the next guest arrives.</p></div>
-          <div className="flex items-center gap-4 rounded-xl bg-primary/5 px-4 py-3"><div><p className="text-3xl font-semibold tabular-nums">{roomReadiness}%</p><p className="text-[10px] text-muted-foreground">rooms ready</p></div><div className="h-10 w-px bg-border" /><div className="space-y-1 text-xs"><p><strong>{visibleRooms.length}</strong> rooms tracked</p><p className={openIssues.length ? "text-amber-600" : "text-muted-foreground"}><strong>{openIssues.length}</strong> open issues</p></div></div>
+          <div className="flex items-center gap-4 rounded-xl bg-primary/5 px-4 py-3"><div><p className="text-3xl font-semibold tabular-nums">{roomReadiness}%</p><p className="text-xs text-muted-foreground">rooms ready</p></div><div className="h-10 w-px bg-border" /><div className="space-y-1 text-xs"><p><strong>{visibleRooms.length}</strong> rooms tracked</p><p className={openIssues.length ? "text-amber-600" : "text-muted-foreground"}><strong>{openIssues.length}</strong> open issues</p></div></div>
         </div>
       </div>
 

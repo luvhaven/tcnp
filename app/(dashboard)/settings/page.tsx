@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Settings, Save, RotateCcw, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { notifyError, UserFacingError } from '@/lib/notify'
 import { useTheme } from "@/components/theme/ThemeProvider"
 import { settingsSchema, defaultSettings, type SettingsFormValues } from "./schema"
 import { cn, isAdmin } from "@/lib/utils"
@@ -117,7 +118,7 @@ export default function SettingsPage() {
     setSaving(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('User not authenticated')
+      if (!user) throw new UserFacingError('User not authenticated')
 
       // Map form fields to database columns
       const settingsUpdate = {
@@ -138,7 +139,7 @@ export default function SettingsPage() {
 
     } catch (error: any) {
       console.error('Error saving settings:', error)
-      toast.error(error.message || 'Failed to save settings')
+      notifyError(error, 'Failed to save settings')
     } finally {
       setSaving(false)
     }

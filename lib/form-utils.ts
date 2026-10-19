@@ -4,6 +4,7 @@
 
 import { toast } from 'sonner'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { notifyError, friendlyErrorMessage } from '@/lib/notify'
 
 export interface FormSubmitOptions<T = any> {
   supabase: SupabaseClient
@@ -100,8 +101,7 @@ export async function handleFormSubmit<T = any>({
     console.error('Error type:', typeof error)
     console.error('Error keys:', Object.keys(error || {}))
     
-    const message = error.message || error.hint || error.details || errorMessage || `Failed to save ${table}`
-    toast.error(message)
+    notifyError(error, errorMessage || `Failed to save ${table}`)
     
     if (onError) onError(error)
     return { success: false, error }
@@ -152,8 +152,7 @@ export async function handleFormDelete({
   } catch (error: any) {
     console.error(`❌ Error deleting ${table}:`, error)
     
-    const message = error.message || error.hint || error.details || errorMessage || `Failed to delete ${table}`
-    toast.error(message)
+    notifyError(error, errorMessage || `Failed to delete ${table}`)
     
     if (onError) onError(error)
     return { success: false, error }
@@ -189,28 +188,10 @@ function capitalize(str: string): string {
 }
 
 /**
- * Format Supabase error for display
+ * Format Supabase error for display. Delegates to lib/notify so every surface
+ * uses the same friendly wording and never shows raw database text.
  */
 export function formatSupabaseError(error: any): string {
   if (!error) return 'An unknown error occurred'
-  
-  // Check for common error patterns
-  if (error.code === '23505') {
-    return 'This record already exists. Please use a different value.'
-  }
-  
-  if (error.code === '23503') {
-    return 'Cannot delete this record because it is referenced by other records.'
-  }
-  
-  if (error.code === '42P01') {
-    return 'Database table not found. Please contact support.'
-  }
-  
-  if (error.code === '42501') {
-    return 'You do not have permission to perform this action.'
-  }
-  
-  // Return the most informative message available
-  return error.message || error.hint || error.details || 'An error occurred'
+  return friendlyErrorMessage(error, 'Something went wrong. Please try again.')
 }

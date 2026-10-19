@@ -19,11 +19,14 @@ Avatar.displayName = "Avatar"
 const AvatarImage = React.forwardRef<
   HTMLImageElement,
   React.ImgHTMLAttributes<HTMLImageElement>
->(({ className, ...props }, ref) => (
+>(({ className, alt = "", ...props }, ref) => (
   // object-cover: without it, non-square uploads (phone photos are almost
   // never square) stretched to fit and distorted every face in the app
   <img
     ref={ref}
+    // Decorative by default: the name is always rendered beside the avatar,
+    // so a screen reader announcing the image too would just repeat it.
+    alt={alt}
     className={cn("aspect-square h-full w-full object-cover", className)}
     {...props}
   />

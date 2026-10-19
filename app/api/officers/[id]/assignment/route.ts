@@ -11,6 +11,7 @@ const OSCAR_UNITS = [
   'November (Nest)',
   'Serial Oscar',
   'Tango Oscar',
+  'Training Oscar',
   'Victor Oscar',
   'Welfare Oscar',
 ]

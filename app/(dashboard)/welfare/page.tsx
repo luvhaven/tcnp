@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { notifyError, UserFacingError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { canManageWelfare, canAccessWelfareDirectory } from "@/lib/utils"
@@ -65,12 +66,12 @@ export default function WelfarePage() {
         body: JSON.stringify({ program_id: alarmProgram || activeProgram?.id || null, note: alarmNote.trim() || null }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Failed to send alarm")
+      if (!res.ok) throw new UserFacingError(data.error || "Failed to send alarm")
       toast.success(`Food alarm sent to ${data.recipients} officer${data.recipients === 1 ? "" : "s"} 🍽️`)
       setAlarmOpen(false)
       setAlarmNote("")
     } catch (err: any) {
-      toast.error(err.message || "Failed to send alarm")
+      notifyError(err, "Failed to send alarm")
     } finally {
       setSending(false)
     }
@@ -88,7 +89,7 @@ export default function WelfarePage() {
             <div className="flex items-center gap-2">
               <HeartHandshake className="h-6 w-6 text-amber-300" />
               <h1 className="text-2xl font-bold tracking-tight">Welfare</h1>
-              <Badge className="border-0 bg-amber-500/20 text-amber-200 uppercase text-[10px] tracking-wider">Meals & Officer Care</Badge>
+              <Badge className="border-0 bg-amber-500/20 text-amber-200 uppercase text-xs tracking-wider">Meals & Officer Care</Badge>
             </div>
             <p className="mt-1 max-w-xl text-sm text-slate-300">
               Menu of the day, program meal plans — and the famous Food-is-Ready alarm.

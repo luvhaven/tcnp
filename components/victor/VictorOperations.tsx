@@ -22,6 +22,7 @@ import {
   Users,
 } from "lucide-react"
 import { toast } from "sonner"
+import { notifyError, UserFacingError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -260,14 +261,14 @@ export default function VictorOperations({ canManage: legacyCanManage, currentUs
       toast.success(success)
       await loadOperations()
     } catch (error: any) {
-      toast.error(error?.message || "The operation could not be completed.")
+      notifyError(error, "The operation could not be completed.")
     } finally {
       setBusy(null)
     }
   }
 
   const initialiseVenue = () => action("initialise", "Victor posts A–F are ready.", async () => {
-    if (!selectedVenue || !data.victorUnitId) throw new Error("Select a programme venue before setting up posts.")
+    if (!selectedVenue || !data.victorUnitId) throw new UserFacingError("Select a programme venue before setting up posts.")
     const { error: deploymentError } = await db.from("unit_deployments").upsert({
       program_venue_id: selectedVenue.id,
       unit_id: data.victorUnitId,
@@ -297,7 +298,7 @@ export default function VictorOperations({ canManage: legacyCanManage, currentUs
     void action("venue:new", "Theatre added to the programme workspace.", async () => {
       const theatre = theatreById.get(venueForm.theatreId)
       const label = venueForm.label.trim() || theatre?.name
-      if (!venueForm.programId || !venueForm.theatreId || !label) throw new Error("Choose a programme and theatre.")
+      if (!venueForm.programId || !venueForm.theatreId || !label) throw new UserFacingError("Choose a programme and theatre.")
       const { error } = await db.from("program_venues").insert({
         program_id: venueForm.programId,
         theatre_id: venueForm.theatreId,
@@ -329,7 +330,7 @@ export default function VictorOperations({ canManage: legacyCanManage, currentUs
   })
 
   const updateDeployment = (patch: Row) => action("deployment", "Venue readiness updated.", async () => {
-    if (!deployment) throw new Error("Set up Victor operations for this venue first.")
+    if (!deployment) throw new UserFacingError("Set up Victor operations for this venue first.")
     const { error } = await db.from("unit_deployments").update(patch).eq("id", deployment.id)
     if (error) throw error
   })
@@ -337,7 +338,7 @@ export default function VictorOperations({ canManage: legacyCanManage, currentUs
   const createParty = (event: FormEvent) => {
     event.preventDefault()
     void action("party:new", "Welcome party created.", async () => {
-      if (!selectedVenue || !partyForm.label.trim() || !partyForm.startsAt) throw new Error("A welcome-party label and start time are required.")
+      if (!selectedVenue || !partyForm.label.trim() || !partyForm.startsAt) throw new UserFacingError("A welcome-party label and start time are required.")
       const { error } = await db.from("welcome_parties").insert({
         program_venue_id: selectedVenue.id,
         papa_id: partyForm.papaId === "none" ? null : partyForm.papaId,
@@ -371,7 +372,7 @@ export default function VictorOperations({ canManage: legacyCanManage, currentUs
   const createEntourageMember = (event: FormEvent) => {
     event.preventDefault()
     void action("entourage:new", "Entourage member added to the Papa dossier.", async () => {
-      if (!entouragePapaId || !entourageForm.fullName.trim()) throw new Error("Choose a Papa and enter the member's name.")
+      if (!entouragePapaId || !entourageForm.fullName.trim()) throw new UserFacingError("Choose a Papa and enter the member's name.")
       const { error } = await db.from("papa_entourage_members").insert({
         papa_id: entouragePapaId,
         category: entourageForm.category,
@@ -390,10 +391,10 @@ export default function VictorOperations({ canManage: legacyCanManage, currentUs
   const addMinister = (event: FormEvent) => {
     event.preventDefault()
     void action("minister:new", "Senior minister accredited for this programme.", async () => {
-      if (!selectedVenue) throw new Error("Choose a programme venue.")
+      if (!selectedVenue) throw new UserFacingError("Choose a programme venue.")
       let ministerId = ministerForm.existingId
       if (ministerId === "new") {
-        if (!ministerForm.fullName.trim()) throw new Error("Enter the senior minister's name.")
+        if (!ministerForm.fullName.trim()) throw new UserFacingError("Enter the senior minister's name.")
         const { data: created, error } = await db.from("senior_ministers").insert({
           title: ministerForm.title.trim() || null,
           full_name: ministerForm.fullName.trim(),
@@ -436,10 +437,10 @@ export default function VictorOperations({ canManage: legacyCanManage, currentUs
   const uploadPresentation = (event: FormEvent) => {
     event.preventDefault()
     void action("asset:upload", "Presentation uploaded securely.", async () => {
-      if (!selectedVenue || !assetPapaId || !assetFile || !currentUserId) throw new Error("Choose a Papa and a presentation file after your profile has loaded.")
-      if (assetFile.size > 25 * 1024 * 1024) throw new Error("Presentation files must be 25 MB or smaller.")
+      if (!selectedVenue || !assetPapaId || !assetFile || !currentUserId) throw new UserFacingError("Choose a Papa and a presentation file after your profile has loaded.")
+      if (assetFile.size > 25 * 1024 * 1024) throw new UserFacingError("Presentation files must be 25 MB or smaller.")
       const extension = assetFile.name.split(".").pop()?.toLowerCase()
-      if (!extension || !["pdf", "ppt", "pptx"].includes(extension)) throw new Error("Upload a PDF, PPT, or PPTX presentation.")
+      if (!extension || !["pdf", "ppt", "pptx"].includes(extension)) throw new UserFacingError("Upload a PDF, PPT, or PPTX presentation.")
       const safeName = assetFile.name.replace(/[^a-zA-Z0-9._-]/g, "-")
       // Papa id is deliberately the first path segment. Storage RLS uses it to
       // let the Papa's assigned DO upload while keeping the bucket private.
@@ -471,7 +472,7 @@ export default function VictorOperations({ canManage: legacyCanManage, currentUs
       if (error) throw error
       window.open(signed.signedUrl, "_blank", "noopener,noreferrer")
     } catch (error: any) {
-      toast.error(error?.message || "A secure download link could not be created.")
+      notifyError(error, "A secure download link could not be created.")
     } finally {
       setBusy(null)
     }
@@ -483,7 +484,7 @@ export default function VictorOperations({ canManage: legacyCanManage, currentUs
       const quantity = Number(bookForm.quantity)
       const unitPrice = Number(bookForm.unitPrice)
       if (!selectedVenue || !bookForm.papaId || !bookForm.title.trim() || !Number.isInteger(quantity) || quantity <= 0 || unitPrice < 0) {
-        throw new Error("Choose a Papa and provide a title, positive whole quantity, and valid unit price.")
+        throw new UserFacingError("Choose a Papa and provide a title, positive whole quantity, and valid unit price.")
       }
       const { error } = await db.from("papa_book_batches").insert({
         papa_id: bookForm.papaId,
@@ -515,9 +516,9 @@ export default function VictorOperations({ canManage: legacyCanManage, currentUs
     const quantity = Number(movementQuantities[batch.id])
     const totals = bookTotals(batch)
     const normalizedType = movementType === "return" ? "return_to_papa" : movementType
-    if (!Number.isInteger(quantity) || quantity <= 0) throw new Error("Enter a positive whole quantity.")
-    if (movementType === "sale" && quantity > totals.remaining) throw new Error("The sale quantity is greater than the remaining stock.")
-    if (normalizedType === "return_to_papa" && quantity > totals.remaining) throw new Error("The return quantity is greater than the remaining stock.")
+    if (!Number.isInteger(quantity) || quantity <= 0) throw new UserFacingError("Enter a positive whole quantity.")
+    if (movementType === "sale" && quantity > totals.remaining) throw new UserFacingError("The sale quantity is greater than the remaining stock.")
+    if (normalizedType === "return_to_papa" && quantity > totals.remaining) throw new UserFacingError("The return quantity is greater than the remaining stock.")
     const { error } = await db.from("papa_book_movements").insert({
       batch_id: batch.id,
       movement_type: normalizedType,

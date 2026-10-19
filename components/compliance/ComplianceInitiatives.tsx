@@ -3,6 +3,7 @@
 import { useMemo, useState, type FormEvent } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { notifyError, UserFacingError } from '@/lib/notify'
 import {
   Award,
   CalendarRange,
@@ -228,7 +229,7 @@ export default function ComplianceInitiatives() {
 
   const saveProjectMutation = useMutation({
     mutationFn: async () => {
-      if (!unitQuery.data?.id || !currentUser?.id) throw new Error("Compliance unit is not available")
+      if (!unitQuery.data?.id || !currentUser?.id) throw new UserFacingError("Compliance unit is not available")
       const payload = {
         unit_id: unitQuery.data.id,
         project_type: projectForm.project_type,
@@ -255,12 +256,12 @@ export default function ComplianceInitiatives() {
       setEditingProject(null)
       invalidateOperations()
     },
-    onError: (error: Error) => toast.error(error.message || "Could not save initiative"),
+    onError: (error: Error) => notifyError(error, "Could not save initiative"),
   })
 
   const createTaskMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedProject || !currentUser?.id) throw new Error("Choose an initiative first")
+      if (!selectedProject || !currentUser?.id) throw new UserFacingError("Choose an initiative first")
       const { error } = await (supabase as any).from("unit_tasks").insert({
         project_id: selectedProject.id,
         title: taskForm.title.trim(),
@@ -278,7 +279,7 @@ export default function ComplianceInitiatives() {
       setTaskForm({ title: "", description: "", assigned_to: "", due_at: "" })
       invalidateOperations()
     },
-    onError: (error: Error) => toast.error(error.message || "Could not add task"),
+    onError: (error: Error) => notifyError(error, "Could not add task"),
   })
 
   const toggleTaskMutation = useMutation({
@@ -291,7 +292,7 @@ export default function ComplianceInitiatives() {
       if (error) throw error
     },
     onSuccess: invalidateOperations,
-    onError: (error: Error) => toast.error(error.message || "Could not update task"),
+    onError: (error: Error) => notifyError(error, "Could not update task"),
   })
 
   const openNewProject = (type: UnitProject["project_type"] = "year_end_party") => {
@@ -323,7 +324,7 @@ export default function ComplianceInitiatives() {
     })
     if (!approved) return
     const { error } = await (supabase as any).from("unit_projects").update({ status: "cancelled" }).eq("id", project.id)
-    if (error) toast.error(error.message || "Could not archive initiative")
+    if (error) notifyError(error, "Could not archive initiative")
     else {
       if (selectedProjectId === project.id) setSelectedProjectId(null)
       toast.success("Initiative archived")

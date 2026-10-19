@@ -16,7 +16,7 @@ test('sidebar uses the same current-user profile source as the header', () => {
 
 test('chat composer and actions have an accessible keyboard path', () => {
   const source = fs.readFileSync('components/chat/ChatSystem.tsx', 'utf8')
-  assert.match(source, /aria-label="Message the team"/)
+  assert.match(source, /aria-label=\{editingMessage \? 'Edit message' : 'Write a message'\}/)
   assert.match(source, /aria-label=\{editingMessage \? 'Save edited message' : 'Send message'\}/)
   assert.match(source, /event\.key === 'Enter' && !event\.shiftKey/)
   assert.match(source, /textareaRef\.current\.setSelectionRange/)

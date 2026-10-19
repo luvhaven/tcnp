@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
+import { notifyError } from '@/lib/notify'
 import {
     Volume2,
     Plus,
@@ -90,6 +91,7 @@ export default function EchoPage() {
     const [programs, setPrograms] = useState<Program[]>([])
     const [loading, setLoading] = useState(true)
     const [dialogOpen, setDialogOpen] = useState(false)
+    const [saving, setSaving] = useState(false)
     const [editing, setEditing] = useState<Equipment | null>(null)
     const [canManage, setCanManage] = useState(false)
     const [userRole, setUserRole] = useState('')
@@ -180,6 +182,8 @@ export default function EchoPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
 
+        if (saving) return
+        setSaving(true)
         try {
             const { data: { user } } = await supabase.auth.getUser()
 
@@ -218,7 +222,9 @@ export default function EchoPage() {
             loadData()
         } catch (error: any) {
             console.error('Error saving equipment:', error)
-            toast.error(error.message || 'Failed to save equipment')
+            notifyError(error, 'Failed to save equipment')
+        } finally {
+            setSaving(false)
         }
     }
 
@@ -251,7 +257,7 @@ export default function EchoPage() {
             toast.success('Equipment deleted')
             loadData()
         } catch (error: any) {
-            toast.error(error.message || 'Failed to delete')
+            notifyError(error, 'Failed to delete')
         }
     }
 
@@ -282,7 +288,7 @@ export default function EchoPage() {
             toast.success(`Status updated to ${STATUS_CONFIG[newStatus as keyof typeof STATUS_CONFIG]?.label}`)
             loadData()
         } catch (error: any) {
-            toast.error(error.message || 'Failed to update status')
+            notifyError(error, 'Failed to update status')
         }
     }
 
@@ -520,7 +526,7 @@ export default function EchoPage() {
                                                             ))}
                                                         </SelectContent>
                                                     </Select>
-                                                    <Button
+                                                    <Button aria-label="Edit equipment"
                                                         variant="outline"
                                                         size="icon"
                                                         className="h-8 w-8"
@@ -528,7 +534,7 @@ export default function EchoPage() {
                                                     >
                                                         <Edit className="h-3 w-3" />
                                                     </Button>
-                                                    <Button
+                                                    <Button aria-label="Delete equipment"
                                                         variant="outline"
                                                         size="icon"
                                                         className="h-8 w-8 text-destructive hover:text-destructive"
@@ -678,7 +684,7 @@ export default function EchoPage() {
                             <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                                 Cancel
                             </Button>
-                            <Button type="submit">
+                            <Button type="submit" pending={saving}>
                                 {editing ? 'Update' : 'Add'} Equipment
                             </Button>
                         </DialogFooter>

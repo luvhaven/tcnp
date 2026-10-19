@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle2, Circle, ClipboardCheck, AlertTriangle, RotateCcw } from 'lucide-react'
 import { toast } from 'sonner'
+import { notifyError, UserFacingError } from '@/lib/notify'
 import { cn } from '@/lib/utils'
 
 const FLOWER_ITEMS = [
@@ -58,7 +59,7 @@ export default function FlowerChecklist({ cheetahId, cheetahCallSign }: { cheeta
         setSaving(true)
         try {
             const { data: { user } } = await supabase.auth.getUser()
-            if (!user) throw new Error('Not authenticated')
+            if (!user) throw new UserFacingError('Not authenticated')
 
             const { data: userData } = await supabase
                 .from('users')
@@ -78,7 +79,7 @@ export default function FlowerChecklist({ cheetahId, cheetahCallSign }: { cheeta
             setLastLog({ performed_at: new Date().toISOString(), officer_name: userData?.full_name || 'You' })
             toast.success(`FLOWER checklist logged for ${cheetahCallSign}`, { description: allChecked ? 'All checks passed ✓' : `${checkedCount}/6 items checked` })
         } catch (err: any) {
-            toast.error(err.message || 'Failed to save checklist')
+            notifyError(err, 'Failed to save checklist')
         } finally {
             setSaving(false)
         }
@@ -95,23 +96,23 @@ export default function FlowerChecklist({ cheetahId, cheetahCallSign }: { cheeta
                     <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                         <ClipboardCheck className="h-4 w-4 text-teal-500" />
                         FLOWER Pre-Op Checklist
-                        <Badge variant="secondary" className="text-[9px] font-mono">TCNP.01.05</Badge>
+                        <Badge variant="secondary" className="text-[11px] font-mono">TCNP.01.05</Badge>
                     </CardTitle>
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground font-mono">{checkedCount}/6</span>
                         {allChecked ? (
-                            <Badge className="bg-green-500/20 text-green-600 border-green-500/30 text-[10px]">
+                            <Badge className="bg-green-500/20 text-green-600 border-green-500/30 text-xs">
                                 <CheckCircle2 className="h-3 w-3 mr-1" />All Clear
                             </Badge>
                         ) : (
-                            <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-500/40">
+                            <Badge variant="outline" className="text-xs text-amber-600 border-amber-500/40">
                                 <AlertTriangle className="h-3 w-3 mr-1" />Pending
                             </Badge>
                         )}
                     </div>
                 </div>
                 {lastLog && (
-                    <p className="text-[10px] text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                         Last logged by <span className="font-medium text-foreground">{lastLog.officer_name}</span> · {new Date(lastLog.performed_at).toLocaleString()}
                     </p>
                 )}

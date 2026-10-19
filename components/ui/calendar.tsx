@@ -52,12 +52,16 @@ function Calendar({
           defaultClassNames.nav
         ),
         button_previous: cn(
-          buttonVariants({ variant: buttonVariant }),
+          // size: null — the cell-size classes below set the size; a default
+          // size would add an sm:h-9 that outranks them on desktop.
+          buttonVariants({ variant: buttonVariant, size: null }),
           "h-[--cell-size] w-[--cell-size] select-none p-0 aria-disabled:opacity-50",
           defaultClassNames.button_previous
         ),
         button_next: cn(
-          buttonVariants({ variant: buttonVariant }),
+          // size: null — the cell-size classes below set the size; a default
+          // size would add an sm:h-9 that outranks them on desktop.
+          buttonVariants({ variant: buttonVariant, size: null }),
           "h-[--cell-size] w-[--cell-size] select-none p-0 aria-disabled:opacity-50",
           defaultClassNames.button_next
         ),

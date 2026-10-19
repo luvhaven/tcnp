@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
+import { notifyError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { canAccessFinance } from "@/lib/utils"
@@ -140,7 +141,7 @@ export default function FinancePage() {
       setForm({ title: "", category: "report", period: "", program_id: "", notes: "", file: null })
       queryClient.invalidateQueries({ queryKey: ["finance-documents"] })
     } catch (err: any) {
-      toast.error(err.message || "Upload failed")
+      notifyError(err, "Upload failed")
     } finally {
       setUploading(false)
     }
@@ -152,7 +153,7 @@ export default function FinancePage() {
       if (error || !data?.signedUrl) throw error ?? new Error("Could not create download link")
       window.open(data.signedUrl, "_blank", "noopener,noreferrer")
     } catch (err: any) {
-      toast.error(err.message || "Download failed")
+      notifyError(err, "Download failed")
     }
   }
 
@@ -166,7 +167,7 @@ export default function FinancePage() {
       toast.success("Document removed")
       queryClient.invalidateQueries({ queryKey: ["finance-documents"] })
     },
-    onError: (err: any) => toast.error(err.message || "Delete failed"),
+    onError: (err: any) => notifyError(err, "Delete failed"),
   })
 
   if (userLoading) {
@@ -195,7 +196,7 @@ export default function FinancePage() {
             <div className="flex items-center gap-2">
               <Banknote className="h-6 w-6 text-primary" />
               <h1 className="text-2xl font-bold tracking-tight">Finance</h1>
-              <Badge variant="outline" className="text-primary uppercase text-[10px] tracking-wider border-primary/20 bg-primary/5">Leadership Only</Badge>
+              <Badge variant="outline" className="text-primary uppercase text-xs tracking-wider border-primary/20 bg-primary/5">Leadership Only</Badge>
             </div>
             <p className="mt-1 max-w-xl text-sm text-muted-foreground">
               Financial reports, budgets and receipts — stored privately, downloads via time-limited signed links.
@@ -245,7 +246,7 @@ export default function FinancePage() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium">{doc.title}</p>
                         <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          <Badge variant="secondary" className="text-[10px] uppercase">{catMeta.label}</Badge>
+                          <Badge variant="secondary" className="text-xs uppercase">{catMeta.label}</Badge>
                           {doc.period && <span>{doc.period}</span>}
                           {doc.programs?.name && <span>· {doc.programs.name}</span>}
                           <span>· {doc.file_name}{doc.file_size ? ` (${formatBytes(doc.file_size)})` : ""}</span>
@@ -257,7 +258,7 @@ export default function FinancePage() {
                         <Button variant="outline" size="sm" className="gap-1" onClick={() => download(doc)}>
                           <Download className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Download</span>
                         </Button>
-                        <Button
+                        <Button aria-label="Delete document"
                           variant="ghost" size="icon" className="h-9 w-9 text-red-500"
                           onClick={async () => {
                             const ok = await confirm({ title: "Delete document?", message: `"${doc.title}" will be permanently removed.` })

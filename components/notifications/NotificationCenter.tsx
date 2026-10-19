@@ -112,7 +112,7 @@ function NotificationItem({
         <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
           {notification.message}
         </p>
-        <p className="mt-1 text-[10px] text-muted-foreground/70">{timeAgo}</p>
+        <p className="mt-1 text-xs text-muted-foreground/70">{timeAgo}</p>
       </div>
 
       {/* Actions.
@@ -248,7 +248,7 @@ export default function NotificationCenter() {
                   <Bell className="h-4 w-4 text-primary" />
                   <h3 className="text-sm font-semibold">Notifications</h3>
                   {unreadCount > 0 && (
-                    <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
+                    <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-primary-foreground">
                       {unreadCount}
                     </span>
                   )}
@@ -300,12 +300,12 @@ export default function NotificationCenter() {
                       />
                     )}
                     {tab === "unread" && unreadCount > 0 && (
-                      <span className="ml-1 rounded-full bg-primary/20 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                      <span className="ml-1 rounded-full bg-primary/20 px-1.5 py-0.5 text-xs font-semibold text-primary">
                         {unreadCount}
                       </span>
                     )}
                     {tab === "broken_arrow" && emergencyCount > 0 && (
-                      <span className="ml-1 rounded-full bg-red-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-red-500">
+                      <span className="ml-1 rounded-full bg-red-500/20 px-1.5 py-0.5 text-xs font-semibold text-red-500">
                         {emergencyCount}
                       </span>
                     )}

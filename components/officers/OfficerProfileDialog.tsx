@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 
 import { toast } from "sonner"
+import { notifyError, UserFacingError } from '@/lib/notify'
 
 export type OfficerProfileData = {
   id: string
@@ -58,7 +59,7 @@ interface OfficerProfileDialogProps {
   onAssignmentUpdated?: (officerId: string, assignment: { oscar: string; team: string | null }) => void
 }
 
-const OSCAR_UNITS = ["Command", "Alpha Oscar", "Compliance Oscar", "November (Den)", "November (Nest)", "Serial Oscar", "Tango Oscar", "Victor Oscar", "Welfare Oscar"]
+const OSCAR_UNITS = ["Command", "Alpha Oscar", "Compliance Oscar", "November (Den)", "November (Nest)", "Serial Oscar", "Tango Oscar", "Training Oscar", "Victor Oscar", "Welfare Oscar"]
 const PROTOCOL_TEAMS = [
   { value: "strength", label: "Team Strength" },
   { value: "wisdom", label: "Team Wisdom" },
@@ -98,11 +99,11 @@ export function OfficerProfileDialog({
         body: JSON.stringify({ oscar: assignmentDraft.oscar, team: assignmentDraft.team || null }),
       })
       const result = await response.json()
-      if (!response.ok) throw new Error(result.error || "Failed to update officer assignment")
+      if (!response.ok) throw new UserFacingError(result.error || "Failed to update officer assignment")
       onAssignmentUpdated?.(officer.id, result.officer)
       toast.success("Officer assignment updated")
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update officer assignment")
+      notifyError(error, "Failed to update officer assignment")
     } finally {
       setSavingAssignment(false)
     }
@@ -113,7 +114,7 @@ export function OfficerProfileDialog({
     queryFn: async () => {
       if (!officer?.id) return null
       const res = await fetch(`/api/officers/${officer.id}/details`)
-      if (!res.ok) throw new Error('Failed to load officer details')
+      if (!res.ok) throw new UserFacingError('Failed to load officer details')
       return res.json()
     },
     enabled: open && !!officer?.id,
@@ -295,15 +296,15 @@ export function OfficerProfileDialog({
                     {mergedOfficer.full_name || "Unnamed Officer"}
                   </h2>
                   {mergedOfficer.activation_status === "pending" ? (
-                    <Badge variant="outline" className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 text-[10px]">
+                    <Badge variant="outline" className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 text-xs">
                       Pending Approval
                     </Badge>
                   ) : mergedOfficer.is_active ? (
-                    <Badge variant="outline" className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px]">
+                    <Badge variant="outline" className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs">
                       Active
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="bg-destructive/15 text-destructive border-destructive/30 text-[10px]">
+                    <Badge variant="outline" className="bg-destructive/15 text-destructive border-destructive/30 text-xs">
                       Inactive
                     </Badge>
                   )}
@@ -315,18 +316,18 @@ export function OfficerProfileDialog({
                 </p>
 
                 <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  <Badge variant="outline" className={`text-[10px] uppercase font-semibold tracking-wider ${getRoleColor(mergedOfficer.role)}`}>
+                  <Badge variant="outline" className={`text-xs uppercase font-semibold tracking-wider ${getRoleColor(mergedOfficer.role)}`}>
                     {formatRole(mergedOfficer.role)}
                   </Badge>
 
                   {mergedOfficer.oscar && (
-                    <Badge variant="secondary" className="text-[10px] font-medium">
+                    <Badge variant="secondary" className="text-xs font-medium">
                       {normalizeOscarLabel(mergedOfficer.oscar)}
                     </Badge>
                   )}
 
                   {mergedOfficer.team && (
-                    <Badge variant="outline" className="text-[10px] uppercase border-primary/40 text-primary bg-primary/5">
+                    <Badge variant="outline" className="text-xs uppercase border-primary/40 text-primary bg-primary/5">
                       {mergedOfficer.is_team_head ? "★ Head of " : ""}{mergedOfficer.team}
                     </Badge>
                   )}
@@ -337,7 +338,7 @@ export function OfficerProfileDialog({
             {/* Completion indicator */}
             <div className="hidden sm:flex flex-col items-center justify-center shrink-0 bg-background/90 backdrop-blur-md px-3.5 py-2.5 rounded-xl border border-border/60 shadow-sm min-w-[90px]">
               <CompletionRing percent={completion.percent} size={54} strokeWidth={5} showLabel={false} />
-              <span className={`text-[10px] font-semibold mt-1 ${completion.isComplete ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+              <span className={`text-xs font-semibold mt-1 ${completion.isComplete ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
                 {completion.isComplete ? "Complete" : `${completion.percent}% Done`}
               </span>
             </div>
@@ -508,7 +509,7 @@ export function OfficerProfileDialog({
                     )}
                     <div className="flex justify-between items-center py-1">
                       <span className="text-muted-foreground">System Role:</span>
-                      <Badge variant="secondary" className="text-[10px]">
+                      <Badge variant="secondary" className="text-xs">
                         {formatRole(mergedOfficer.role)}
                       </Badge>
                     </div>
@@ -526,7 +527,7 @@ export function OfficerProfileDialog({
                       <span className="text-muted-foreground">Email:</span>
                       <div className="flex items-center gap-1.5 font-medium">
                         <span className="truncate max-w-[150px] sm:max-w-[180px]">{mergedOfficer.email}</span>
-                        <Button
+                        <Button aria-label="Copy email"
                           size="icon"
                           variant="ghost"
                           className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
@@ -541,7 +542,7 @@ export function OfficerProfileDialog({
                       <div className="flex items-center gap-1.5 font-medium">
                         <span>{mergedOfficer.phone || "Not provided"}</span>
                         {mergedOfficer.phone && (
-                          <Button
+                          <Button aria-label="Copy phone number"
                             size="icon"
                             variant="ghost"
                             className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
@@ -576,7 +577,7 @@ export function OfficerProfileDialog({
                     </CardTitle>
                     <Badge
                       variant="outline"
-                      className={`text-[10px] font-semibold ${
+                      className={`text-xs font-semibold ${
                         completion.isComplete
                           ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
                           : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30"
@@ -735,16 +736,16 @@ export function OfficerProfileDialog({
                                 {assignment.official_titles?.name || "Assigned Role"}
                               </span>
                               {assignment.official_titles?.is_team_lead && (
-                                <Badge variant="secondary" className="text-[9px] bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                                <Badge variant="secondary" className="text-[11px] bg-amber-500/10 text-amber-600 dark:text-amber-400">
                                   Team Lead
                                 </Badge>
                               )}
                               {assignment.is_active ? (
-                                <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                                <Badge variant="outline" className="text-[11px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
                                   Active Assignment
                                 </Badge>
                               ) : (
-                                <Badge variant="outline" className="text-[9px] text-muted-foreground">
+                                <Badge variant="outline" className="text-[11px] text-muted-foreground">
                                   Past
                                 </Badge>
                               )}
@@ -752,14 +753,14 @@ export function OfficerProfileDialog({
                             <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                               <span>Program: {assignment.programs?.name || "General Permanent"}</span>
                               {assignment.programs?.status && (
-                                <Badge variant="outline" className="text-[9px] capitalize">
+                                <Badge variant="outline" className="text-[11px] capitalize">
                                   {assignment.programs.status}
                                 </Badge>
                               )}
                             </div>
                           </div>
 
-                          <div className="text-right text-[10px] text-muted-foreground">
+                          <div className="text-right text-xs text-muted-foreground">
                             <span>
                               {assignment.assigned_at
                                 ? new Date(assignment.assigned_at).toLocaleDateString()
@@ -818,14 +819,14 @@ export function OfficerProfileDialog({
                                   {journey?.origin || "Origin"} → {journey?.destination || "Destination"}
                                 </span>
                                 {duty.is_lead && (
-                                  <Badge className="text-[9px] bg-primary text-primary-foreground">
+                                  <Badge className="text-[11px] bg-primary text-primary-foreground">
                                     Lead DO
                                   </Badge>
                                 )}
                               </div>
                               <Badge
                                 variant="outline"
-                                className={`text-[9px] capitalize ${
+                                className={`text-[11px] capitalize ${
                                   duty.status === 'acknowledged'
                                     ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
                                     : 'bg-amber-500/10 text-amber-600 border-amber-500/30'

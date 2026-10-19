@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
+import { notifyError, UserFacingError } from '@/lib/notify'
 import { differenceInDays, addDays, isPast } from 'date-fns'
 import { Eye, EyeOff } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -97,7 +98,7 @@ export function PasswordEnforcer() {
             })
 
             const data = await res.json()
-            if (!res.ok) throw new Error(data.error || 'Failed to change password')
+            if (!res.ok) throw new UserFacingError(data.error || 'Failed to change password')
 
             toast.success('Password updated successfully! Redirecting...')
             setMustChange(false)
@@ -108,7 +109,7 @@ export function PasswordEnforcer() {
 
         } catch (err: any) {
             console.error(err)
-            toast.error(err.message || 'An error occurred while changing password')
+            notifyError(err, 'An error occurred while changing password')
         } finally {
             setLoading(false)
         }

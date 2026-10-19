@@ -175,7 +175,7 @@ export function JourneyAlerts() {
                                             {formatTimeLeft(alert.timeLeft)}
                                         </div>
                                     </div>
-                                    <Button variant="ghost" size="icon" className="hidden md:flex">
+                                    <Button variant="ghost" size="icon" className="hidden md:flex" tabIndex={-1} aria-hidden="true">
                                         <ArrowRight className="h-5 w-5 text-muted-foreground" />
                                     </Button>
                                 </div>

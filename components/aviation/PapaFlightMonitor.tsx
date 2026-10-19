@@ -446,10 +446,10 @@ export default function PapaFlightMonitor({
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="h-7 gap-1.5 bg-background text-[10px] font-semibold uppercase tracking-wider">
+              <Badge variant="outline" className="h-7 gap-1.5 bg-background text-xs font-semibold uppercase tracking-wider">
                 <Plane className="h-3 w-3" /> {entries.length} flight{entries.length === 1 ? "" : "s"}
               </Badge>
-              <Badge variant="outline" className="h-7 gap-1.5 border-emerald-500/30 bg-emerald-500/10 text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+              <Badge variant="outline" className="h-7 gap-1.5 border-emerald-500/30 bg-emerald-500/10 text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
                 <Signal className="h-3 w-3" /> {liveCount} live
               </Badge>
               <Button
@@ -540,7 +540,7 @@ export default function PapaFlightMonitor({
                                   <p className="truncate text-sm font-semibold">{entry.papaTitle ? `${entry.papaTitle} ` : ""}{entry.papaName}</p>
                                   <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{entry.programName}</p>
                                 </div>
-                                <Badge variant="outline" className={cn("shrink-0 text-[9px] font-semibold", status.className)}>{status.label}</Badge>
+                                <Badge variant="outline" className={cn("shrink-0 text-[11px] font-semibold", status.className)}>{status.label}</Badge>
                               </div>
                               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
                                 <span className="font-mono font-semibold tabular-nums text-foreground">{entry.flightNumber}</span>
@@ -560,13 +560,13 @@ export default function PapaFlightMonitor({
                 {selectedEntry && selectedStatus ? (
                   <div className="space-y-4">
                     <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Selected flight</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Selected flight</p>
                       <div className="mt-2 flex items-start justify-between gap-2">
                         <div>
                           <p className="font-mono text-xl font-bold tracking-tight tabular-nums">{selectedEntry.flightNumber}</p>
                           <p className="text-xs text-muted-foreground">{selectedEntry.airline || "Airline not supplied"}</p>
                         </div>
-                        <Badge variant="outline" className={cn("text-[9px] font-semibold", selectedStatus.className)}>{selectedStatus.label}</Badge>
+                        <Badge variant="outline" className={cn("text-[11px] font-semibold", selectedStatus.className)}>{selectedStatus.label}</Badge>
                       </div>
                       <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{selectedStatus.detail}</p>
                     </div>
@@ -587,12 +587,12 @@ export default function PapaFlightMonitor({
                       <div className="space-y-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
                         <div className="flex items-center justify-between">
                           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300"><Signal className="h-3.5 w-3.5" /> Live telemetry</span>
-                          <span className="text-[10px] text-muted-foreground">{formatLastContact(selectedLive.state.last_contact)}</span>
+                          <span className="text-xs text-muted-foreground">{formatLastContact(selectedLive.state.last_contact)}</span>
                         </div>
                         <div className="grid grid-cols-3 gap-2">
-                          <div><p className="text-[9px] uppercase tracking-wider text-muted-foreground">Altitude</p><p className="mt-0.5 text-sm font-semibold tabular-nums">{metersToFeet(selectedLive.state.baro_altitude)?.toLocaleString() ?? "—"} <span className="text-[9px] font-normal">ft</span></p></div>
-                          <div><p className="text-[9px] uppercase tracking-wider text-muted-foreground">Speed</p><p className="mt-0.5 text-sm font-semibold tabular-nums">{metersPerSecondToKnots(selectedLive.state.velocity)?.toLocaleString() ?? "—"} <span className="text-[9px] font-normal">kts</span></p></div>
-                          <div><p className="text-[9px] uppercase tracking-wider text-muted-foreground">Heading</p><p className="mt-0.5 text-sm font-semibold tabular-nums">{selectedLive.state.true_track != null ? `${Math.round(selectedLive.state.true_track)}°` : "—"}</p></div>
+                          <div><p className="text-[11px] uppercase tracking-wider text-muted-foreground">Altitude</p><p className="mt-0.5 text-sm font-semibold tabular-nums">{metersToFeet(selectedLive.state.baro_altitude)?.toLocaleString() ?? "—"} <span className="text-[11px] font-normal">ft</span></p></div>
+                          <div><p className="text-[11px] uppercase tracking-wider text-muted-foreground">Speed</p><p className="mt-0.5 text-sm font-semibold tabular-nums">{metersPerSecondToKnots(selectedLive.state.velocity)?.toLocaleString() ?? "—"} <span className="text-[11px] font-normal">kts</span></p></div>
+                          <div><p className="text-[11px] uppercase tracking-wider text-muted-foreground">Heading</p><p className="mt-0.5 text-sm font-semibold tabular-nums">{selectedLive.state.true_track != null ? `${Math.round(selectedLive.state.true_track)}°` : "—"}</p></div>
                         </div>
                         {selectedLive.state.latitude != null && selectedLive.state.longitude != null && (
                           <div className="flex items-center gap-1.5 rounded-lg bg-background/70 px-2.5 py-2 text-[11px] text-muted-foreground">
@@ -619,7 +619,7 @@ export default function PapaFlightMonitor({
                       Check live signal
                     </Button>
 
-                    <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground">
+                    <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                       <div className="rounded-lg bg-muted/50 p-2"><CalendarClock className="mb-1 h-3.5 w-3.5" />{selectedEntry.isLegacy ? "Legacy itinerary" : "Normalized leg"}</div>
                       <div className="rounded-lg bg-muted/50 p-2"><Gauge className="mb-1 h-3.5 w-3.5" />{selectedEntry.configuredConfidence || (selectedLive?.state ? "Live confidence" : "Unverified")}</div>
                     </div>

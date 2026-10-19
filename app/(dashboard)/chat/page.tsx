@@ -303,9 +303,16 @@ function ChatContent() {
                 </div>
               }>
                 <ChatSystem
+                  // A fresh instance per room: no flash of the previous room's messages.
+                  key={`${program?.id ?? 'global'}:${papaId ?? 'all'}`}
                   programId={program?.id}
                   papaId={papaId || undefined}
                   initialMessage={initialMessage}
+                  roomLabel={(() => {
+                    const papa = papaId ? papas.find(item => item.id === papaId) : null
+                    if (papa) return `${papa.title ? `${papa.title} ` : ''}${papa.full_name}`
+                    return program?.name ? `${program.name} · All officers` : undefined
+                  })()}
                 />
               </ErrorBoundary>
             )}

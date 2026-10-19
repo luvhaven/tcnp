@@ -39,7 +39,7 @@ export function PWAInstallPrompt() {
 
   return (
     <>
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-sm animate-in slide-in-from-bottom-4 duration-300">
+      <div className="pointer-events-auto w-full animate-in slide-in-from-bottom-4 duration-300">
         <div className="rounded-xl border bg-card shadow-xl shadow-black/20 p-4 flex items-center gap-3">
           <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
             <Download className="h-5 w-5 text-primary" aria-hidden="true" />

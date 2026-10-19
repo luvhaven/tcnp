@@ -115,7 +115,7 @@ export default function FlightStatusBadge({ flightNumber, departureTime, arrival
         <TooltipProvider>
             <Tooltip>
                 <TooltipTrigger asChild>
-                    <Badge variant="outline" className={cn("px-2 py-0.5 mt-1 cursor-default text-[10px]", color)}>
+                    <Badge variant="outline" className={cn("px-2 py-0.5 mt-1 cursor-default text-xs", color)}>
                         {icon} {displayLabel}
                     </Badge>
                 </TooltipTrigger>

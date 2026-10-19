@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Plane, Plus, Edit, Trash2, Search, RefreshCw, MapPin, Gauge, TrendingUp, Globe, ArrowRight } from "lucide-react"
 import { toast } from "sonner"
+import { notifyError } from '@/lib/notify'
 import dynamic from 'next/dynamic'
 import {
     searchFlightsByCallsign,
@@ -72,7 +73,7 @@ export default function EaglesPage() {
                     <div>
                         <div className="flex items-center gap-2">
                             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Alpha</h1>
-                            <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider bg-primary/10 text-primary border-primary/20">
+                            <Badge variant="outline" className="text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary border-primary/20">
                                 Eagle Squares & Aviation
                             </Badge>
                         </div>
@@ -121,6 +122,7 @@ function ManageSquares() {
     const [airports, setAirports] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [dialogOpen, setDialogOpen] = useState(false)
+    const [saving, setSaving] = useState(false)
     const [editing, setEditing] = useState<any>(null)
     const [formData, setFormData] = useState({
         name: '',
@@ -157,6 +159,8 @@ function ManageSquares() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
 
+        if (saving) return
+        setSaving(true)
         try {
             const data = {
                 ...formData,
@@ -187,7 +191,9 @@ function ManageSquares() {
             loadAirports()
         } catch (error: any) {
             console.error('Error saving airport:', error)
-            toast.error(error.message || 'Failed to save airport')
+            notifyError(error, 'Failed to save airport')
+        } finally {
+            setSaving(false)
         }
     }
 
@@ -205,7 +211,7 @@ function ManageSquares() {
             loadAirports()
         } catch (error: any) {
             console.error('Error deleting airport:', error)
-            toast.error(error.message || 'Failed to delete airport')
+            notifyError(error, 'Failed to delete airport')
         }
     }
 
@@ -433,7 +439,7 @@ function ManageSquares() {
                             <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                                 Cancel
                             </Button>
-                            <Button type="submit">
+                            <Button type="submit" pending={saving}>
                                 {editing ? 'Update' : 'Add'} Airport
                             </Button>
                         </div>
@@ -739,14 +745,14 @@ function TrackEagles() {
                                     <div className="space-y-4">
                                         <div className="flex items-center justify-between p-4 bg-background/50 rounded-lg border border-border/50 shadow-inner">
                                             <div>
-                                                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Flight</p>
+                                                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Flight</p>
                                                 <p className="font-mono font-bold flex items-center gap-2">
                                                     <Plane className="h-4 w-4 text-primary" />
                                                     {papa.airline ? `${papa.airline} ` : ''}{papa.flight_number}
                                                 </p>
                                             </div>
                                             <div className="text-right">
-                                                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Destination</p>
+                                                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Destination</p>
                                                 <p className="font-semibold flex items-center justify-end gap-1.5 text-sm">
                                                     <MapPin className="h-3.5 w-3.5 text-primary" />
                                                     {papa.arrival_city || papa.country || 'N/A'}
@@ -757,21 +763,21 @@ function TrackEagles() {
                                         {flight ? (
                                             <div className="grid grid-cols-3 gap-3 text-center pt-2">
                                                 <div className="p-3 bg-background/30 border border-border/50 rounded-lg">
-                                                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Altitude</p>
+                                                    <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Altitude</p>
                                                     <p className="font-mono font-bold text-lg leading-none">
                                                         {metersToFeet(flight.baro_altitude)?.toLocaleString() || '--'}
-                                                        <span className="text-[10px] text-muted-foreground font-sans ml-1">ft</span>
+                                                        <span className="text-xs text-muted-foreground font-sans ml-1">ft</span>
                                                     </p>
                                                 </div>
                                                 <div className="p-3 bg-background/30 border border-border/50 rounded-lg">
-                                                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Speed</p>
+                                                    <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Speed</p>
                                                     <p className="font-mono font-bold text-lg leading-none">
                                                         {metersPerSecondToKnots(flight.velocity)?.toFixed(0) || '--'}
-                                                        <span className="text-[10px] text-muted-foreground font-sans ml-1">kts</span>
+                                                        <span className="text-xs text-muted-foreground font-sans ml-1">kts</span>
                                                     </p>
                                                 </div>
                                                 <div className="p-3 bg-background/30 border border-border/50 rounded-lg">
-                                                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Heading</p>
+                                                    <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Heading</p>
                                                     <p className="font-mono font-bold text-lg leading-none">
                                                         {flight.true_track?.toFixed(0) || '--'}°
                                                     </p>
@@ -783,14 +789,14 @@ function TrackEagles() {
                                                     <div className="h-px w-full border-t border-dashed border-border/60"></div>
                                                 </div>
                                                 <div className="bg-card z-10 pr-4">
-                                                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Departure</p>
+                                                    <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Departure</p>
                                                     <p className="font-mono font-medium text-sm">
                                                         {papa.flight_departure_time ? new Date(papa.flight_departure_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
                                                     </p>
                                                 </div>
                                                 <ArrowRight className="h-4 w-4 text-muted-foreground/40 z-10 bg-card" />
                                                 <div className="text-right bg-card z-10 pl-4">
-                                                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Arrival</p>
+                                                    <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Arrival</p>
                                                     <p className="font-mono font-medium text-sm">
                                                         {papa.flight_arrival_time ? new Date(papa.flight_arrival_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
                                                     </p>

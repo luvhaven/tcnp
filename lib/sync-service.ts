@@ -39,7 +39,13 @@ class SyncService {
             const { data: { user }, error: authError } = await supabase.auth.getUser()
             if (authError || !user) return
 
-            for (const submission of pending) {
+            // Replay distress first (a queued Broken Arrow must reach Ops before a
+            // routine Cocktail queued earlier), then everything else in the order
+            // the officer sent it so the final status matches their last tap.
+            const ordered = [...pending].sort((a, b) =>
+                Number(!!b.isEmergency) - Number(!!a.isEmergency) || (a.timestamp ?? 0) - (b.timestamp ?? 0))
+
+            for (const submission of ordered) {
                 // Legacy entries without ownership remain recoverable but must
                 // never be replayed under an unrelated account.
                 if (submission.ownerId !== user.id) continue
@@ -100,10 +106,25 @@ class SyncService {
                 await checked(supabase.from('chat_messages').upsert([submission.data], { onConflict: 'id', ignoreDuplicates: true }))
                 break
 
-            case 'journey_update':
+            case 'journey_update': {
+                // A status update queued offline must not clobber a newer one
+                // another officer (or this one, from another device) sent while
+                // this device was disconnected. Dropping it is correct: the
+                // journey_event queued alongside still records what was reported.
+                const queuedAt = submission.data.updates?.status_updated_at
+                if (queuedAt) {
+                    const current = await supabase.from('journeys').select('status_updated_at').eq('id', submission.data.id).maybeSingle()
+                    if (current.error) throw current.error
+                    const serverAt = current.data?.status_updated_at
+                    if (serverAt && new Date(serverAt).getTime() > new Date(queuedAt).getTime()) {
+                        console.info(`Skipping stale queued status for journey ${submission.data.id}`)
+                        break
+                    }
+                }
                 const result = await supabase.from('journeys').update(submission.data.updates).eq('id', submission.data.id).select('id').single()
                 if (result.error || !result.data) throw result.error || new Error('Journey update was not applied.')
                 break
+            }
 
             case 'journey_event':
                 await checked(supabase.from('journey_events').upsert([submission.data], { onConflict: 'id', ignoreDuplicates: true }))

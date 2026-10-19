@@ -42,7 +42,7 @@ export function CompletionRing({
       ? "text-base font-bold"
       : size >= 55
       ? "text-xs font-bold"
-      : "text-[10px] font-bold"
+      : "text-xs font-bold"
 
   const showInnerLabel = showLabel && !!label && size >= 80
 
@@ -72,7 +72,7 @@ export function CompletionRing({
       <div className="absolute inset-0 flex flex-col items-center justify-center p-0.5 text-center pointer-events-none">
         <AnimatedPercent spring={spring} className={fontSizeClass} />
         {showInnerLabel && (
-          <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground leading-none mt-0.5">
+          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground leading-none mt-0.5">
             {label}
           </span>
         )}

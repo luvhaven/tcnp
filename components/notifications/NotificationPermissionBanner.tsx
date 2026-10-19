@@ -53,7 +53,7 @@ export default function NotificationPermissionBanner() {
     }
 
     return (
-        <div className="fixed bottom-4 right-4 z-50 max-w-md animate-in slide-in-from-bottom-5">
+        <div className="pointer-events-auto w-full animate-in slide-in-from-bottom-5">
             <Card className="border-primary/50 shadow-lg">
                 <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-base">

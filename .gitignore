@@ -54,3 +54,6 @@ tsc_errors.log
 public/sw.js.map
 public/workbox-*.js.map
 public/fallback-*.js.map
+
+# generated reports (contain personal data)
+/exports/

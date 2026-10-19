@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Car, Plus, Edit, Trash2, ChevronDown, AlertTriangle, Gauge } from "lucide-react"
 import { toast } from "sonner"
+import { notifyError } from '@/lib/notify'
 import { motion, AnimatePresence } from "framer-motion"
 import TangoOperations from "@/components/tango/TangoOperations"
 
@@ -142,7 +143,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
     },
     onError: (error: any) => {
       console.error('Error saving cheetah:', error)
-      toast.error(error.message || 'Failed to save Cheetah')
+      notifyError(error, 'Failed to save Cheetah')
     }
   })
 
@@ -200,6 +201,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
       next_maintenance: trimmedNextMaintenance ? trimmedNextMaintenance : null
     }
 
+    if (saveMutation.isPending) return
     saveMutation.mutate({ isEdit: !!editingCheetah, data: basePayload })
   }
 
@@ -271,7 +273,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Tango</h1>
-              <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+              <Badge variant="outline" className="text-xs font-semibold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
                 Cheetah Fleet & Transport
               </Badge>
             </div>
@@ -375,15 +377,15 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
                         </Badge>
                         {canManage && (
                           <>
-                            <Button variant="ghost" size="icon" onClick={() => handleEdit(cheetah)} className="hover:bg-primary/10">
+                            <Button aria-label="Edit Cheetah" variant="ghost" size="icon" onClick={() => handleEdit(cheetah)} className="hover:bg-primary/10">
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDelete(cheetah.id)} className="hover:bg-destructive/10">
+                            <Button aria-label="Delete Cheetah" variant="ghost" size="icon" onClick={() => handleDelete(cheetah.id)} className="hover:bg-destructive/10">
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                           </>
                         )}
-                        <Button
+                        <Button aria-label="Toggle FLOWER checklist"
                           variant="ghost"
                           size="icon"
                           className="hover:bg-teal-500/10"
@@ -611,7 +613,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">
+              <Button type="submit" pending={saveMutation.isPending}>
                 {editingCheetah ? 'Update Cheetah' : 'Add Cheetah'}
               </Button>
             </div>
