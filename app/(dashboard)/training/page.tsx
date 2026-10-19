@@ -65,6 +65,7 @@ const TARGET_OSCARS = [
   { id: "november_oscar", name: "November Oscar" },
   { id: "serial_oscar", name: "Serial Oscar" },
   { id: "tango_oscar", name: "Tango Oscar" },
+  { id: "training_oscar", name: "Training Oscar" },
   { id: "victor_oscar", name: "Victor Oscar" },
   { id: "welfare_oscar", name: "Welfare Oscar" },
   { id: "all", name: "All Units (Global)" }

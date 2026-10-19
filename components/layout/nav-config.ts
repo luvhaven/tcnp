@@ -135,6 +135,8 @@ const ROLE_EXTRA: Record<string, string[]> = {
   head_compliance_oscar: ["/compliance"],
   welfare_oscar: ["/welfare"],
   head_welfare_oscar: ["/welfare"],
+  training_oscar: ["/training"],
+  head_training_oscar: ["/training"],
   // Echo is no longer a standalone unit — legacy echo officers keep base access only
   echo_oscar: [],
   head_echo_oscar: [],

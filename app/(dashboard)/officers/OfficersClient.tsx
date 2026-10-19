@@ -145,6 +145,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
     { value: 'compliance_oscar', label: 'Compliance Oscar (CO)' },
     { value: 'head_welfare_oscar', label: 'Head, Welfare Oscar' },
     { value: 'welfare_oscar', label: 'Welfare Oscar (WO)' },
+    { value: 'head_training_oscar', label: 'Head, Training Oscar' },
+    { value: 'training_oscar', label: 'Training Oscar' },
     { value: 'viewer', label: 'Viewer' }
   ]
 
@@ -166,6 +168,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
     { id: 'serial', label: 'Serial Oscar (SO)', roles: ['head_serial_oscar', 'serial_oscar'] },
     { id: 'compliance', label: 'Compliance Oscar (CO)', roles: ['head_compliance_oscar', 'compliance_oscar'] },
     { id: 'welfare', label: 'Welfare Oscar (WO)', roles: ['head_welfare_oscar', 'welfare_oscar'] },
+    { id: 'training', label: 'Training Oscar', roles: ['head_training_oscar', 'training_oscar'] },
     { id: 'legacy_echo', label: 'Echo (Legacy)', roles: ['head_echo_oscar', 'echo_oscar'] },
     { id: 'others', label: 'Administration & Viewers', roles: ['admin', 'dev_admin', 'viewer'] }
   ]

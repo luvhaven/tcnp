@@ -38,6 +38,7 @@ const OSCAR_OPTIONS = [
   { value: "November (Nest)", label: "November (Nest)", sub: "Hotels, rooms & guest experience" },
   { value: "Serial Oscar", label: "Serial Oscar", sub: "Social Media" },
   { value: "Tango Oscar", label: "Tango Oscar", sub: "Transport" },
+  { value: "Training Oscar", label: "Training Oscar", sub: "Training & SOP" },
   { value: "Victor Oscar", label: "Victor Oscar", sub: "Theatre" },
   { value: "Welfare Oscar", label: "Welfare Oscar", sub: "Meals & Welfare" },
 ];

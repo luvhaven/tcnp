@@ -28,6 +28,7 @@ export function oscarToRole(oscar: string | null | undefined): string | null {
   if (norm.includes('head_sierra') || norm.includes('head sierra') || norm.includes('head_serial') || norm.includes('head serial')) return 'head_serial_oscar'
   if (norm.includes('head_compliance') || norm.includes('head compliance')) return 'head_compliance_oscar'
   if (norm.includes('head_welfare') || norm.includes('head welfare')) return 'head_welfare_oscar'
+  if (norm.includes('head_training') || norm.includes('head training')) return 'head_training_oscar'
   if (norm.includes('head_hospitality') || norm.includes('head hospitality')) return 'head_noscar_nest'
 
   // Tango Oscar — Transport
@@ -49,6 +50,8 @@ export function oscarToRole(oscar: string | null | undefined): string | null {
   if (['co', 'compliance', 'compliance_oscar', 'compliance oscar'].includes(norm)) return 'compliance_oscar'
   // Welfare Oscar — Meals / Officer welfare
   if (['wo', 'welfare', 'welfare_oscar', 'welfare oscar'].includes(norm)) return 'welfare_oscar'
+  // Training Oscar — Training schedules / SOP
+  if (['training', 'training_oscar', 'training oscar'].includes(norm)) return 'training_oscar'
   // Legacy Hospitality profile values resolve to November (Nest); Hospitality is not a standalone Oscar.
   if (['ho', 'hospitality', 'hospitality_oscar', 'hospitality oscar'].includes(norm)) return 'noscar_nest'
   // Command — HQ/leadership staff (not a phonetic Oscar, but selectable at signup/profile)
@@ -172,6 +175,7 @@ const SIGNUP_APPROVER_HEADS: Record<string, string[]> = {
   serial_oscar: ['head_serial_oscar'],
   compliance_oscar: ['head_compliance_oscar'],
   welfare_oscar: ['head_welfare_oscar'],
+  training_oscar: ['head_training_oscar'],
   command: ['head_of_command'],
 }
 

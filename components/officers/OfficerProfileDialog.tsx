@@ -59,7 +59,7 @@ interface OfficerProfileDialogProps {
   onAssignmentUpdated?: (officerId: string, assignment: { oscar: string; team: string | null }) => void
 }
 
-const OSCAR_UNITS = ["Command", "Alpha Oscar", "Compliance Oscar", "November (Den)", "November (Nest)", "Serial Oscar", "Tango Oscar", "Victor Oscar", "Welfare Oscar"]
+const OSCAR_UNITS = ["Command", "Alpha Oscar", "Compliance Oscar", "November (Den)", "November (Nest)", "Serial Oscar", "Tango Oscar", "Training Oscar", "Victor Oscar", "Welfare Oscar"]
 const PROTOCOL_TEAMS = [
   { value: "strength", label: "Team Strength" },
   { value: "wisdom", label: "Team Wisdom" },
