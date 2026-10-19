@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { AnimatePresence, motion } from "framer-motion"
 import { ShieldAlert, CheckCircle2, XCircle } from "lucide-react"
 import { toast } from "sonner"
+import { notifyError } from '@/lib/notify'
 import { Button } from "@/components/ui/button"
 
   function playAlarm() {
@@ -124,7 +125,7 @@ export default function MissionNotificationHandler() {
             // Here you would also log to audit_logs in a robust way
         },
         onError: (e: any) => {
-            toast.error(e.message || "Failed to accept mission")
+            notifyError(e, "Failed to accept mission")
         }
     })
 
@@ -146,7 +147,7 @@ export default function MissionNotificationHandler() {
     if (pendingAssignments.length === 0) return null
 
     return (
-        <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-4 max-w-sm w-full">
+        <div className="pointer-events-auto flex max-h-[60dvh] w-full flex-col gap-4 overflow-y-auto overscroll-contain">
             <AnimatePresence>
                 {pendingAssignments.map((assignment: any) => {
                     const papaName = assignment.journeys?.papas?.full_name || 'Unknown Principal'
