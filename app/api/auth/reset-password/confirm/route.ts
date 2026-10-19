@@ -11,7 +11,7 @@ const confirmSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const rateCheck = checkRateLimit(request, 'auth-reset-confirm', 6, 5 * 60 * 1000)
+    const rateCheck = await checkRateLimit(request, 'auth-reset-confirm', 6, 5 * 60 * 1000)
     if (!rateCheck.success) {
       return NextResponse.json({ error: 'Too many attempts. Please wait a few minutes.' }, { status: 429 })
     }

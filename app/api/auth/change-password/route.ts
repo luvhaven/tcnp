@@ -12,7 +12,7 @@ const bodySchema = z.object({
 
 export async function POST(request: Request) {
     try {
-        const limitCheck = checkRateLimit(request, 'auth-change-password', 5, 5 * 60 * 1000)
+        const limitCheck = await checkRateLimit(request, 'auth-change-password', 5, 5 * 60 * 1000)
         if (!limitCheck.success) {
             return NextResponse.json({ error: 'Too many attempts. Please try again later.' }, { status: 429 })
         }

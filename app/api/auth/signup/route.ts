@@ -8,7 +8,7 @@ import { SIGNUP_OSCAR_OPTIONS } from '@/lib/utils'
 export async function POST(request: Request) {
     try {
         // Enforce strict rate limit (5 signups per IP per 5 minutes)
-        const limitCheck = checkRateLimit(request, 'auth-signup', 5, 5 * 60 * 1000)
+        const limitCheck = await checkRateLimit(request, 'auth-signup', 5, 5 * 60 * 1000)
         if (!limitCheck.success) {
             return NextResponse.json({ error: 'Too many signup attempts. Please try again later.' }, { status: 429 })
         }

@@ -6,7 +6,7 @@ import { checkRateLimit } from '@/lib/security/rate-limit'
 import { isAdmin, effectiveOscarRole, isPlatformAdministrator } from '@/lib/utils'
 
 export async function DELETE(request: Request) {
-    const limitCheck = checkRateLimit(request, 'admin-chat-delete', 20, 60000)
+    const limitCheck = await checkRateLimit(request, 'admin-chat-delete', 20, 60000)
     if (!limitCheck.success) {
         return NextResponse.json({ error: 'Rate limit exceeded for admin chat operations.' }, { status: 429 })
     }
@@ -130,7 +130,7 @@ export async function DELETE(request: Request) {
 }
 
 export async function POST(request: Request) {
-    const limitCheck = checkRateLimit(request, 'admin-chat-action', 30, 60000)
+    const limitCheck = await checkRateLimit(request, 'admin-chat-action', 30, 60000)
     if (!limitCheck.success) {
         return NextResponse.json({ error: 'Rate limit exceeded for chat actions.' }, { status: 429 })
     }

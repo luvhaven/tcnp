@@ -28,7 +28,7 @@ function submittedResponse(token: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    const rateCheck = checkRateLimit(request, 'auth-reset-request', 5, 10 * 60 * 1000)
+    const rateCheck = await checkRateLimit(request, 'auth-reset-request', 5, 10 * 60 * 1000)
     if (!rateCheck.success) {
       return NextResponse.json(
         { error: 'Too many reset requests. Please wait a few minutes before trying again.' },

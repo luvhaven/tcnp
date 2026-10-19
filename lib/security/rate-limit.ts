@@ -72,12 +72,47 @@ export function getClientIp(headers: Headers): string {
     return '127.0.0.1';
 }
 
+type RateLimitResult = { success: boolean; limit: number; remaining: number };
+
 /**
- * Convenience wrapper for Next.js Request object: keys the sliding window on
- * the platform-provided client IP.
+ * Counts one hit in the shared store (public.rate_limit_hit), so limits hold
+ * across server instances. Returns null if the store is unavailable, e.g.
+ * before the migration is applied or during a database outage.
  */
-export function checkRateLimit(req: Request, endpointName: string = 'api', limit: number = 5, windowMs: number = 60000) {
+async function sharedRateLimit(key: string, limit: number, windowMs: number): Promise<RateLimitResult | null> {
+    try {
+        const { createAdminClient } = await import('@/lib/supabase/admin');
+        const { data, error } = await (createAdminClient() as any).rpc('rate_limit_hit', {
+            p_key: key,
+            p_limit: limit,
+            p_window_ms: windowMs,
+        });
+        const row = Array.isArray(data) ? data[0] : data;
+        if (error || !row || typeof row.allowed !== 'boolean') return null;
+        return { success: row.allowed, limit, remaining: Number(row.remaining ?? 0) };
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Rate-limits a request by endpoint and platform-provided client IP.
+ * The per-instance counter always runs as a cheap first line; the shared
+ * store is authoritative when reachable. Pass `shared: false` for very
+ * high-volume, low-risk endpoints where a database round trip per call
+ * is not worth it.
+ */
+export async function checkRateLimit(
+    req: Request,
+    endpointName: string = 'api',
+    limit: number = 5,
+    windowMs: number = 60000,
+    options: { shared?: boolean } = {}
+): Promise<RateLimitResult> {
     const key = `${endpointName}:${getClientIp(req.headers)}`;
 
-    return rateLimit(key, limit, windowMs);
+    const local = rateLimit(key, limit, windowMs);
+    if (!local.success || options.shared === false) return local;
+
+    return (await sharedRateLimit(key, limit, windowMs)) ?? local;
 }

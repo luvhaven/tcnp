@@ -8,7 +8,7 @@ import { isPermanentOwnerEmail } from '@/lib/platform-owner'
 
 export async function DELETE(request: Request) {
     // Enforce strict rate limit (20 deletes per IP per minute)
-    const limitCheck = checkRateLimit(request, 'admin-delete', 20, 60000)
+    const limitCheck = await checkRateLimit(request, 'admin-delete', 20, 60000)
     if (!limitCheck.success) {
         return NextResponse.json({ error: 'Rate limit exceeded for admin operations.' }, { status: 429 })
     }

@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 const OPENSKY_BASE_URL = 'https://opensky-network.org/api'
 
 export async function GET(request: Request) {
-    const rateLimit = checkRateLimit(request, 'flight-search', 30, 60_000)
+    const rateLimit = await checkRateLimit(request, 'flight-search', 30, 60_000)
     if (!rateLimit.success) {
         return NextResponse.json({ error: 'Too many flight searches. Try again shortly.' }, {
             status: 429,

@@ -14,7 +14,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
  */
 export async function POST(req: NextRequest) {
   try {
-    const limitCheck = checkRateLimit(req, 'chat-mention-notify', 30, 60 * 1000)
+    const limitCheck = await checkRateLimit(req, 'chat-mention-notify', 30, 60 * 1000)
     if (!limitCheck.success) {
       return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
     }

@@ -15,7 +15,7 @@ const loginSchema = z.object({
 const LOGIN_SUPABASE_DEADLINE_MS = 7_000
 
 export async function POST(request: Request) {
-  if (!checkRateLimit(request, 'login', 10, 60_000).success) return NextResponse.json({ error: 'Too many attempts. Please wait a minute.' }, { status: 429 })
+  if (!(await checkRateLimit(request, 'login', 10, 60_000)).success) return NextResponse.json({ error: 'Too many attempts. Please wait a minute.' }, { status: 429 })
   let payload: unknown
   try {
     payload = await request.json()
