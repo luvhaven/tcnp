@@ -158,6 +158,52 @@ export function isUnitHeadRole(
 }
 
 /**
+ * Which unit heads may approve a self-registration, keyed by the member role
+ * the applicant's chosen Oscar resolves to. Legacy umbrella "November Oscar"
+ * signups can be approved by either November sub-unit head.
+ */
+const SIGNUP_APPROVER_HEADS: Record<string, string[]> = {
+  alpha_oscar: ['head_alpha_oscar'],
+  tango_oscar: ['head_tango_oscar'],
+  victor_oscar: ['head_victor_oscar'],
+  noscar_den: ['head_noscar_den'],
+  noscar_nest: ['head_noscar_nest'],
+  november_oscar: ['head_noscar_den', 'head_noscar_nest'],
+  serial_oscar: ['head_serial_oscar'],
+  compliance_oscar: ['head_compliance_oscar'],
+  welfare_oscar: ['head_welfare_oscar'],
+  command: ['head_of_command'],
+}
+
+const SIGNUP_APPROVER_HEAD_ROLES = new Set(Object.values(SIGNUP_APPROVER_HEADS).flat())
+
+/** Unit-head roles a caller holds, from either their role or their permanent Oscar. */
+function heldUnitHeadRoles(role: string | null | undefined, oscar: string | null | undefined): string[] {
+  return [role, oscarToRole(oscar)].filter((r): r is string => !!r && SIGNUP_APPROVER_HEAD_ROLES.has(r))
+}
+
+/** True when the caller can approve at least some pending signups (admin or a unit head). */
+export function canApproveSignups(role: string | null | undefined, oscar?: string | null): boolean {
+  return isPlatformAdministrator(role) || heldUnitHeadRoles(role, oscar).length > 0
+}
+
+/**
+ * Admins approve any signup. A unit head approves only signups whose chosen
+ * Oscar belongs to their own unit.
+ */
+export function canApproveSignupFor(
+  callerRole: string | null | undefined,
+  callerOscar: string | null | undefined,
+  applicantOscar: string | null | undefined,
+): boolean {
+  if (isPlatformAdministrator(callerRole)) return true
+  const applicantUnit = oscarToRole(applicantOscar)
+  if (!applicantUnit) return false
+  const allowedHeads = SIGNUP_APPROVER_HEADS[applicantUnit] ?? []
+  return heldUnitHeadRoles(callerRole, callerOscar).some(r => allowedHeads.includes(r))
+}
+
+/**
  * Check if a user can view an officer's full profile (personal info, titles and duty history).
  * Admins, Captain, Vice Captain, Command leadership, and Head of Welfare have full access.
  */

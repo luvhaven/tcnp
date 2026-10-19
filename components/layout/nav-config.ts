@@ -3,7 +3,7 @@
  * both always agree on which destinations a role can see.
  */
 import type { ComponentType } from "react"
-import { oscarToRole } from "@/lib/utils"
+import { canApproveSignups, oscarToRole } from "@/lib/utils"
 import {
   LayoutDashboard,
   Users,
@@ -28,6 +28,7 @@ import {
   Banknote,
   GraduationCap,
   Radar,
+  UserCheck,
 } from "lucide-react"
 
 export type NavItem = { name: string; href: string; icon: ComponentType<{ className?: string }> }
@@ -74,6 +75,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "People",
     items: [
       { name: "Officers", href: "/officers", icon: UserCircle },
+      { name: "Signup Approvals", href: "/approvals", icon: UserCheck },
     ],
   },
   {
@@ -196,6 +198,11 @@ export function getVisibleNav(role: string | null, oscar?: string | null, unitSl
   if (!canAccessCommand) {
     visibleList = visibleList.filter(n => n.href !== "/command")
   }
+
+  // Signup approvals: admins see everyone, unit heads see their own unit
+  visibleList = canApproveSignups(role, oscar)
+    ? (visibleList.some(n => n.href === "/approvals") ? visibleList : [...visibleList, ...ALL_NAV.filter(n => n.href === "/approvals")])
+    : visibleList.filter(n => n.href !== "/approvals")
 
   return visibleList
 }
