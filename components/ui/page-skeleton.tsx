@@ -22,8 +22,9 @@ export function TablePageSkeleton({ rows = 6 }: { rows?: number }) {
       {/* Table */}
       <div className="border rounded-xl overflow-hidden">
         <div className="bg-muted/50 px-4 py-3 flex gap-4">
-          {[40, 28, 20, 20, 16].map((w, i) => (
-            <Skeleton key={i} className={`h-4 w-${w}`} />
+          {/* Static class names: Tailwind cannot see a w-${n} built at runtime. */}
+          {['w-40', 'w-28', 'w-20', 'w-20', 'w-16'].map((w, i) => (
+            <Skeleton key={i} className={cn('h-4', w)} />
           ))}
         </div>
         {Array.from({ length: rows }).map((_, i) => (

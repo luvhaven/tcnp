@@ -2,6 +2,7 @@
 import { offlineQueue } from './offline-queue'
 import { syncService } from './sync-service'
 import { toast } from 'sonner'
+import { notifyError } from '@/lib/notify'
 
 export interface SubmitOptions {
     onSuccess?: () => void
@@ -62,7 +63,7 @@ export async function submitWithOfflineSupport<T = any>(
 
         // Other errors
         console.error('Submission error:', error)
-        toast.error(error.message || 'Submission failed')
+        notifyError(error, 'Submission failed')
         onError?.(error)
         throw error
     }
