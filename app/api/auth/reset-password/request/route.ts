@@ -52,11 +52,12 @@ export async function POST(request: NextRequest) {
     const adminClient = createAdminClient()
     const db = adminClient as any
 
-    // 1. Find user in database
+    // 1. Find user in database. Stored emails may carry uppercase letters, so match
+    // case-insensitively (escaping LIKE wildcards so "_" or "%" stay literal).
     const { data: user, error: userError } = await db
       .from('users')
       .select('id, full_name, email, role, is_active, activation_status, oscar, unit')
-      .eq('email', email)
+      .ilike('email', email.replace(/[\\%_]/g, '\\$&'))
       .maybeSingle()
 
     if (userError) {
