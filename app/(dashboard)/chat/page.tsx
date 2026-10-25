@@ -281,7 +281,7 @@ function ChatContent() {
       <Tabs defaultValue="program" className="space-y-3">
         <TabsList>
           <TabsTrigger value="program"><Radio className="mr-2 h-4 w-4" />Program Chat</TabsTrigger>
-          <TabsTrigger value="team"><MessagesSquare className="mr-2 h-4 w-4" />My Team</TabsTrigger>
+          <TabsTrigger value="team"><MessagesSquare className="mr-2 h-4 w-4" />{isPlatformAdministrator(role) ? 'Team Chats' : 'My Team'}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="program">
