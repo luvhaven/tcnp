@@ -42,6 +42,11 @@ function initials(name: string | null) {
   return (name || 'Officer').trim().split(/\s+/).map(part => part[0]).slice(0, 2).join('').toUpperCase()
 }
 
+function mentionPattern(mention: Mention) {
+  const escapedName = mention.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(^|\\s)${mention.restricted ? '@@' : '@'}${escapedName}(?=$|[\\s.,!?;:()\\[\\]{}'"/])`, 'gu')
+}
+
 function dayLabel(value: string) {
   const date = new Date(value)
   if (isToday(date)) return 'Today'
@@ -90,7 +95,7 @@ export default function ChatSystem({ programId, papaId, team, initialMessage, ro
   const admin = isPlatformAdministrator(chat.me?.role)
   const canModerate = admin || Boolean(team && chat.me?.team === team && chat.me?.is_team_head)
   const beforeCursor = draft.slice(0, mentionCursor)
-  const token = mentionOpen ? beforeCursor.match(/(?:^|\s)(@@?)([^@\n]{0,40})$/u) : null
+  const token = !editingMessage && mentionOpen ? beforeCursor.match(/(?:^|\s)(@@?)([^@\n]{0,40})$/u) : null
   const mentionQuery = token?.[2].toLocaleLowerCase()
   const candidates = useMemo(() => {
     if (mentionQuery === undefined) return []
@@ -98,8 +103,8 @@ export default function ChatSystem({ programId, papaId, team, initialMessage, ro
   }, [chat.members, chat.me?.id, mentionQuery])
   const visibleMessages = useMemo(() => chat.messages.filter(message => !search.trim() || message.content.toLocaleLowerCase().includes(search.toLocaleLowerCase())), [chat.messages, search])
   const messageMap = useMemo(() => new Map(chat.messages.map(message => [message.id, message])), [chat.messages])
-  const activeMentions = mentions.filter(mention => draft.includes(`${mention.restricted ? '@@' : '@'}${mention.name}`))
-  const restricted = editingMessage?.is_private || activeMentions.some(mention => mention.restricted)
+  const activeMentions = mentions.filter(mention => mentionPattern(mention).test(draft))
+  const restricted = editingMessage ? Boolean(editingMessage.is_private) : activeMentions.some(mention => mention.restricted)
   const { markRead } = chat
 
   useLayoutEffect(() => {
@@ -238,12 +243,35 @@ export default function ChatSystem({ programId, papaId, team, initialMessage, ro
   const send = async () => {
     if (!draft.trim() || sendingRef.current || failedMessageRef.current || !chat.allowed || chat.connection === 'offline') return
     if (editingMessage) {
+      if (draft.trim() === editingMessage.content.trim()) {
+        setEditingMessage(null); setDraft(''); setMentions([]); setMentionOpen(false)
+        return
+      }
+      // Existing literal @@ text may remain, but an edit cannot introduce a
+      // recipient or make a public message private: its audience is immutable.
+      const originalMarkers: string[] = editingMessage.content.match(/@@[^\s@]*/gu) ?? []
+      const introducedMarker = (draft.match(/@@[^\s@]*/gu) ?? []).some(marker => {
+        const existing = originalMarkers.indexOf(marker)
+        if (existing < 0) return true
+        originalMarkers.splice(existing, 1)
+        return false
+      })
+      if (introducedMarker) {
+        toast.error('Editing keeps the original audience. Send a new message to use @@ restricted mentions.')
+        return
+      }
       sendingRef.current = true; setSending(true)
       try {
         await chat.editMessage(editingMessage.id, draft)
-        setEditingMessage(null); setDraft(''); setMentions([])
+        setEditingMessage(null); setDraft(''); setMentions([]); setMentionOpen(false)
       } catch { toast.error('This edit could not be saved. Your draft is still here.') }
       finally { sendingRef.current = false; setSending(false) }
+      return
+    }
+    const unresolvedDraft = activeMentions.filter(mention => mention.restricted)
+      .reduce((text, mention) => text.replace(mentionPattern(mention), '$1'), draft)
+    if (/(?:^|\s)@@/u.test(unresolvedDraft)) {
+      toast.error('Choose each @@ recipient from the suggestions before sending a restricted message.')
       return
     }
     const message: OutgoingChatMessage = {
@@ -315,7 +343,7 @@ export default function ChatSystem({ programId, papaId, team, initialMessage, ro
                   {dateChange && <div className="my-5 flex items-center justify-center"><span className="rounded-md border border-border/60 bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground">{dayLabel(message.created_at)}</span></div>}
                   <MessageBubble msg={message} isFirst={first} isLast={last} isOwn={message.sender_id === chat.me?.id} displayName={message.users.full_name} isEditable={message.sender_id === chat.me?.id && !message.deleted_at && Date.now() - Date.parse(message.created_at) < 180_000}
                     repliedMsg={message.reply_to_id ? messageMap.get(message.reply_to_id) : null} msgReactions={chat.reactions[message.id] || []} isHighlighted={message.id === highlightId} isPickerOpen={pickerId === message.id} searchQuery={search} currentUserRole={chat.me?.role || undefined} currentUserId={chat.me?.id} canModerate={canModerate}
-                    setShowReactionPicker={setPickerId} handleReply={message => { setReplyTo(message); setEditingMessage(null); textareaRef.current?.focus() }} handleEdit={message => { setEditingMessage(message); setReplyTo(null); setDraft(message.content); setMentions([]); textareaRef.current?.focus() }} handleDeleteMessage={remove} toggleReaction={react} confirm={confirm} />
+                    setShowReactionPicker={setPickerId} handleReply={message => { setReplyTo(message); setEditingMessage(null); textareaRef.current?.focus() }} handleEdit={message => { setEditingMessage(message); setReplyTo(null); setDraft(message.content); setMentions([]); setMentionOpen(false); textareaRef.current?.focus() }} handleDeleteMessage={remove} toggleReaction={react} confirm={confirm} />
                 </div>
               )
             })}
@@ -342,9 +370,9 @@ export default function ChatSystem({ programId, papaId, team, initialMessage, ro
           )}
           {(replyTo || editingMessage) && <div className="mb-2 flex items-center justify-between gap-3 rounded-xl border-l-2 border-primary bg-muted/40 px-3 py-2 text-xs"><div className="min-w-0"><p className="flex items-center gap-1.5 font-semibold text-primary">{editingMessage ? <Pencil className="h-3 w-3" /> : <CornerUpLeft className="h-3 w-3" />}{editingMessage ? 'Editing message' : `Replying to ${replyTo?.users.full_name}`}</p>{replyTo && <p className="mt-0.5 truncate text-muted-foreground">{replyTo.deleted_at ? 'Message removed' : replyTo.content}</p>}</div><button type="button" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg hover:bg-muted" aria-label={editingMessage ? 'Cancel editing' : 'Cancel reply'} onClick={() => { if (editingMessage) setDraft(''); setEditingMessage(null); setReplyTo(null) }}><X className="h-4 w-4" /></button></div>}
           <div className="relative flex items-end gap-2 rounded-2xl border bg-background p-1.5 shadow-xs focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10">
-            <textarea ref={textareaRef} aria-label={editingMessage ? 'Edit message' : 'Write a message'} aria-autocomplete="list" aria-controls={candidates.length ? 'chat-mention-list' : undefined} aria-activedescendant={mentionOpen && candidates[mentionIndex] ? `chat-mention-${candidates[mentionIndex].id}` : undefined}
+            <textarea ref={textareaRef} aria-label={editingMessage ? 'Edit message' : 'Write a message'} aria-autocomplete={editingMessage ? undefined : 'list'} aria-controls={candidates.length ? 'chat-mention-list' : undefined} aria-activedescendant={mentionOpen && candidates[mentionIndex] ? `chat-mention-${candidates[mentionIndex].id}` : undefined}
               value={draft} placeholder={chat.denied ? 'You don’t have access to this room' : `Message ${roomLabel}…`} maxLength={4000} rows={1} disabled={!chat.allowed || (sending && Boolean(editingMessage))}
-              onChange={event => { setDraft(event.target.value); setMentionCursor(event.target.selectionStart); setMentionIndex(0); setMentionOpen(true); typing.announce() }}
+              onChange={event => { setDraft(event.target.value); setMentionCursor(event.target.selectionStart); setMentionIndex(0); setMentionOpen(!editingMessage); typing.announce() }}
               onKeyDown={event => {
                 if (event.nativeEvent.isComposing) return
                 if (candidates.length && mentionOpen) {
@@ -360,7 +388,7 @@ export default function ChatSystem({ programId, papaId, team, initialMessage, ro
             <Button type="button" aria-label={editingMessage ? 'Save edited message' : 'Send message'} disabled={!chat.allowed || !draft.trim() || sending || Boolean(failedMessage) || chat.connection === 'offline'} aria-busy={sending} className="h-11 w-11 shrink-0 rounded-xl p-0" onClick={() => void send()}>{sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</Button>
             {mentionOpen && candidates.length > 0 && <div id="chat-mention-list" role="listbox" aria-label={token?.[1] === '@@' ? 'Restricted message recipients' : 'Mention a participant'} className="absolute bottom-full left-0 right-0 z-30 mb-2 overflow-hidden rounded-xl border bg-popover p-1 shadow-elevation-lg"><p className="px-3 py-2 text-xs font-medium text-muted-foreground">{token?.[1] === '@@' ? 'Mentioned participants and executives can read this message' : 'Mention a participant'}</p>{candidates.map((member, index) => <button type="button" role="option" id={`chat-mention-${member.id}`} aria-selected={index === mentionIndex} key={member.id} onMouseDown={event => event.preventDefault()} onClick={() => pickMention(member)} onMouseEnter={() => setMentionIndex(index)} className={cn('flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left', index === mentionIndex ? 'bg-accent' : 'hover:bg-muted/50')}><Avatar className="h-8 w-8"><AvatarFallback className="text-xs">{initials(member.full_name)}</AvatarFallback></Avatar><span className="min-w-0"><span className="block truncate text-sm font-medium">{member.full_name}</span><span className="block text-xs text-muted-foreground">{member.accessType === 'executive' ? 'Executive access' : (member.oscar || member.role || 'Room member').replaceAll('_', ' ')}</span></span></button>)}</div>}
           </div>
-          <div className="mt-2 flex min-h-4 items-center justify-between gap-3 text-xs text-muted-foreground"><span aria-live="polite" className="min-w-0 truncate">{restricted ? <><LockKeyhole className="mr-1 inline h-3 w-3" />Only mentioned members and executives can read this</> : typing.names.length ? `${typing.names.slice(0, 2).join(' and ')} ${typing.names.length > 1 ? 'are' : 'is'} typing…` : <><AtSign className="mr-1 inline h-3 w-3" />Mention someone with @</>}</span><span className="hidden shrink-0 [@media(pointer:fine)]:inline">Enter to send · Shift+Enter for a new line</span>{draft.length > 3600 && <span className="tabular-nums">{draft.length}/4000</span>}</div>
+          <div className="mt-2 flex min-h-4 items-center justify-between gap-3 text-xs text-muted-foreground"><span aria-live="polite" className={cn('min-w-0', editingMessage ? 'leading-relaxed' : 'truncate')}>{editingMessage ? 'Editing keeps the original audience. Send a new message to change it.' : restricted ? <><LockKeyhole className="mr-1 inline h-3 w-3" />Only mentioned members and executives can read this</> : typing.names.length ? `${typing.names.slice(0, 2).join(' and ')} ${typing.names.length > 1 ? 'are' : 'is'} typing…` : <><AtSign className="mr-1 inline h-3 w-3" />Mention someone with @</>}</span><span className="hidden shrink-0 [@media(pointer:fine)]:inline">Enter to send · Shift+Enter for a new line</span>{draft.length > 3600 && <span className="tabular-nums">{draft.length}/4000</span>}</div>
         </div>
       </div>
 
