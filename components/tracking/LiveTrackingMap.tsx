@@ -18,6 +18,9 @@ import { cn } from '@/lib/utils'
 import { CallSignKey, getCallSignLabel, getCallSignColor, CALL_SIGNS } from '@/lib/constants/call-signs'
 import { useLocationTracking } from '@/hooks/useLocationTracking'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { useLocationSharing } from '@/hooks/useLocationSharing'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 
 type UserLocation = {
   user_id: string
@@ -149,6 +152,7 @@ function SidebarSection({
 }
 
 export default function LiveTrackingMap() {
+  const { enabled: sharingEnabled, setEnabled: setSharingEnabled } = useLocationSharing()
   const supabase = createClient()
   const [userLocations, setUserLocations] = useState<UserLocation[]>([])
   const [journeys, setJourneys] = useState<Journey[]>([])
@@ -181,6 +185,7 @@ export default function LiveTrackingMap() {
   }, [])
 
   const handleEnableLocation = async () => {
+    setSharingEnabled(true)
     const granted = await requestPermission()
     if (granted) {
       startTracking()
@@ -379,8 +384,14 @@ export default function LiveTrackingMap() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 rounded-full border px-3 py-1.5">
+            <Label htmlFor="map-location-sharing" className="text-xs">Share my location</Label>
+            <Switch id="map-location-sharing" checked={sharingEnabled} onCheckedChange={setSharingEnabled} />
+          </div>
           {/* Location sharing indicator */}
-          {isTracking ? (
+          {!sharingEnabled ? (
+            <span className="text-xs text-muted-foreground" role="status">Location sharing is off</span>
+          ) : isTracking ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 select-none">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />

@@ -40,6 +40,9 @@ export default async function OfficersPage() {
       date_of_birth,
       gender,
       address,
+      local_government_area,
+      state,
+      nearest_bus_stop_landmark,
       city,
       bio,
       profile_completed_at
