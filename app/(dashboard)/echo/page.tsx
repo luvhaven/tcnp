@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
 import EOChecklist from "@/components/echo/EOChecklist"
 import { createClient } from "@/lib/supabase/client"
+import { isPlatformAdministrator } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
@@ -140,7 +141,7 @@ export default function EchoPage() {
                 .eq('id', user.id)
                 .single()
 
-            if (data && ALLOWED_ROLES.includes(data.role)) {
+            if (data && (isPlatformAdministrator(data.role) || ALLOWED_ROLES.includes(data.role))) {
                 setCanManage(true)
             }
             if (data) setUserRole(data.role)

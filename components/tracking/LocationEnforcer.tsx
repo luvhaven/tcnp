@@ -17,6 +17,7 @@ import { createClient } from '@/lib/supabase/client'
 import { MapPin, AlertTriangle, X, WifiOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import { createLocationSharingGuard } from '@/lib/location-sharing'
 
 // Roles that can always dismiss the prompt
 const SKIPPABLE_ROLES = [
@@ -39,8 +40,16 @@ export function LocationEnforcer() {
   const isIOS = typeof navigator !== 'undefined' && detectIOS()
 
   useEffect(() => {
+    let cancelled = false
+    let permission: PermissionStatus | null = null
+    const canShare = createLocationSharingGuard()
+    const isActive = () => !cancelled && canShare()
+    const handlePermissionChange = () => {
+      if (isActive() && permission?.state === 'granted') setShow(false)
+    }
     const check = async () => {
       try {
+        if (!isActive()) return
         if (typeof navigator === 'undefined') return
         if (!('geolocation' in navigator)) return
 
@@ -55,6 +64,7 @@ export function LocationEnforcer() {
           .single()
 
         const userRole = (data as any)?.role ?? null
+        if (!isActive()) return
         setRole(userRole)
 
         // Check permission via Permissions API where available
@@ -62,15 +72,16 @@ export function LocationEnforcer() {
         if ('permissions' in nav && nav.permissions) {
           try {
             const result = await nav.permissions.query({ name: 'geolocation' })
+            if (!isActive()) return
             if (result.state === 'granted') return  // Already tracking — hide enforcer
 
             if (result.state === 'denied') setLocationMode('denied')
             setShow(true)
 
-            result.addEventListener('change', () => {
-              if (result.state === 'granted') setShow(false)
-            })
+            permission = result
+            permission?.addEventListener('change', handlePermissionChange)
           } catch {
+            if (!isActive()) return
             // Permissions API threw (e.g. Firefox private mode).
             // On iOS never fire a silent probe — getCurrentPosition without a
             // user gesture triggers an ill-timed native prompt. Show the banner
@@ -79,8 +90,8 @@ export function LocationEnforcer() {
               setShow(true)
             } else {
               nav.geolocation.getCurrentPosition(
-                () => setShow(false),
-                () => setShow(true),
+                () => { if (isActive()) setShow(false) },
+                () => { if (isActive()) setShow(true) },
                 { timeout: 3000, maximumAge: 60000 }
               )
             }
@@ -90,8 +101,8 @@ export function LocationEnforcer() {
           setShow(true)
         } else {
           nav.geolocation.getCurrentPosition(
-            () => setShow(false),
-            () => setShow(true),
+            () => { if (isActive()) setShow(false) },
+            () => { if (isActive()) setShow(true) },
             { timeout: 3000, maximumAge: 60000 }
           )
         }
@@ -101,10 +112,16 @@ export function LocationEnforcer() {
     }
 
     const timer = setTimeout(check, 2000)
-    return () => clearTimeout(timer)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+      permission?.removeEventListener('change', handlePermissionChange)
+    }
   }, [])
 
   const handleEnable = useCallback(async () => {
+    const canShare = createLocationSharingGuard()
+    if (!canShare()) return
     setRequesting(true)
 
     // ── Step 1: Try hardware GPS ───────────────────────────────────────────
@@ -120,6 +137,7 @@ export function LocationEnforcer() {
 
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
+      if (!canShare()) return
       if (user) {
         await (supabase as any).rpc('upsert_user_location', {
           p_user_id: user.id,
@@ -133,12 +151,14 @@ export function LocationEnforcer() {
         })
       }
 
+      if (!canShare()) return
       setLocationMode('gps')
       toast.success('Location sharing enabled — you are now visible on the live map.')
       setShow(false)
       setRequesting(false)
       return
     } catch (gpsErr: any) {
+      if (!canShare()) return
       console.warn('Hardware GPS unavailable:', gpsErr?.message)
       // code 1 = PERMISSION_DENIED — user (or OS) has blocked it; surface recovery steps
       if (gpsErr?.code === 1) setLocationMode('denied')
@@ -146,12 +166,14 @@ export function LocationEnforcer() {
 
     // ── Step 2: IP-based network fallback (via local proxy) ───────────────
     try {
+      if (!canShare()) return
       const ipRes = await fetch('/api/geoip', { signal: AbortSignal.timeout(8000) })
       if (ipRes.ok) {
         const ipData = await ipRes.json()
         if (ipData?.latitude && ipData?.longitude) {
           const supabase = createClient()
           const { data: { user } } = await supabase.auth.getUser()
+          if (!canShare()) return
           if (user) {
             await (supabase as any).rpc('upsert_user_location', {
               p_user_id: user.id,
@@ -164,6 +186,7 @@ export function LocationEnforcer() {
               p_battery_level: null
             })
           }
+          if (!canShare()) return
           setLocationMode('ip')
           toast.warning('Using approximate network location. Enable GPS for precision tracking.')
           setShow(false)
@@ -176,6 +199,7 @@ export function LocationEnforcer() {
     }
 
     // ── Step 3: Both failed — handle gracefully by role ───────────────────
+    if (!canShare()) return
     setLocationMode('unavailable')
     const isSkippable = role ? SKIPPABLE_ROLES.includes(role) : true
 
@@ -283,7 +307,7 @@ export function LocationEnforcer() {
         <p className="text-center text-[11px] text-muted-foreground">
           {canSkip
             ? 'You may close this prompt without enabling location.'
-            : 'You can revoke location access at any time via your browser settings.'}
+            : 'You can turn location sharing off at any time in Profile → Location.'}
         </p>
       </div>
     </div>

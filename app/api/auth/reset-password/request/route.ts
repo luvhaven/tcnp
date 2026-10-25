@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { PLATFORM_ADMIN_ROLES } from '@/lib/utils'
 import { checkRateLimit, getClientIp } from '@/lib/security/rate-limit'
 import {
   generateResetToken,
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest) {
     const { data: admins } = await db
       .from('users')
       .select('id, full_name, email')
-      .in('role', ['admin', 'super_admin', 'dev_admin'])
+      .in('role', [...PLATFORM_ADMIN_ROLES])
       .eq('is_active', true)
       .eq('activation_status', 'active')
 

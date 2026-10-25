@@ -11,7 +11,7 @@ import {
     Clock, CheckSquare, Navigation, Volume2, Landmark, Lock, Star,
     ChevronDown, Info, Terminal
 } from 'lucide-react'
-import { cn, effectiveOscarRole } from '@/lib/utils'
+import { cn, effectiveOscarRole, isAdmin as hasAdminAccess } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SubSection = { heading: string; body?: string; list?: string[]; table?: { cols: string[]; rows: string[][] }; highlight?: string; script?: string[] }
@@ -729,7 +729,7 @@ export default function SOPPage() {
 
     // Always show DO section to DOs, admins, captains
     const isDO = userRole === 'delta_oscar'
-    const isAdmin = ['super_admin', 'dev_admin', 'admin', 'captain', 'head_of_command', 'head_of_operations', 'command'].includes(userRole ?? '')
+    const isAdmin = hasAdminAccess(userRole)
 
     const filtered = useMemo(() =>
         dynamicSections.filter(s => {

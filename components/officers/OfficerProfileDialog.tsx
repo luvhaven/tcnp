@@ -40,6 +40,9 @@ export type OfficerProfileData = {
   date_of_birth?: string | null
   gender?: string | null
   address?: string | null
+  local_government_area?: string | null
+  state?: string | null
+  nearest_bus_stop_landmark?: string | null
   city?: string | null
   bio?: string | null
   profile_completed_at?: string | null
@@ -137,6 +140,7 @@ export function OfficerProfileDialog({
   const completion = useMemo(() => {
     if (!mergedOfficer) return { percent: 0, isComplete: false, missing: [], missingRequired: [] }
     return computeProfileCompletion({
+      role: mergedOfficer.role,
       full_name: mergedOfficer.full_name,
       photo_url: mergedOfficer.photo_url,
       phone: mergedOfficer.phone,
@@ -144,7 +148,9 @@ export function OfficerProfileDialog({
       team: mergedOfficer.team,
       date_of_birth: mergedOfficer.date_of_birth,
       gender: mergedOfficer.gender,
-      address: mergedOfficer.address,
+      local_government_area: mergedOfficer.local_government_area,
+      state: mergedOfficer.state,
+      nearest_bus_stop_landmark: mergedOfficer.nearest_bus_stop_landmark,
       city: mergedOfficer.city,
       bio: mergedOfficer.bio,
     })
@@ -622,7 +628,7 @@ export function OfficerProfileDialog({
                       <span>Birthday</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      {mergedOfficer.address || mergedOfficer.city ? (
+                      {mergedOfficer.local_government_area?.trim() && mergedOfficer.state?.trim() && mergedOfficer.nearest_bus_stop_landmark?.trim() ? (
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                       ) : (
                         <Circle className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
@@ -657,10 +663,24 @@ export function OfficerProfileDialog({
                       <span className="text-muted-foreground">City:</span>
                       <span className="font-medium">{mergedOfficer.city || "Not specified"}</span>
                     </div>
-                    <div className="flex justify-between items-start py-1">
-                      <span className="text-muted-foreground shrink-0">Address:</span>
-                      <span className="font-medium text-right ml-2">{mergedOfficer.address || "Not specified"}</span>
+                    <div className="flex justify-between items-start py-1 border-b border-border/40">
+                      <span className="text-muted-foreground shrink-0">Local government area:</span>
+                      <span className="font-medium text-right ml-2">{mergedOfficer.local_government_area || "Not specified"}</span>
                     </div>
+                    <div className="flex justify-between items-start py-1 border-b border-border/40">
+                      <span className="text-muted-foreground shrink-0">State:</span>
+                      <span className="font-medium text-right ml-2">{mergedOfficer.state || "Not specified"}</span>
+                    </div>
+                    <div className="flex justify-between items-start py-1">
+                      <span className="text-muted-foreground">Nearest bus stop / landmark:</span>
+                      <span className="font-medium text-right ml-2">{mergedOfficer.nearest_bus_stop_landmark || "Not specified"}</span>
+                    </div>
+                    {mergedOfficer.address && (
+                      <div className="flex justify-between items-start py-1 border-t border-border/40">
+                        <span className="text-muted-foreground shrink-0">Previous address:</span>
+                        <span className="font-medium text-right ml-2">{mergedOfficer.address}</span>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 

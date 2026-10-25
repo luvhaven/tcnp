@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { devLog } from '@/lib/utils/devLogger'
+import { useLocationSharing } from '@/hooks/useLocationSharing'
+import { createLocationSharingGuard, isLocationSharingEnabled } from '@/lib/location-sharing'
 
 interface LocationData {
   latitude: number
@@ -26,6 +28,7 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
   } = options
 
   const supabase = createClient()
+  const { enabled: sharingEnabled } = useLocationSharing()
   const [location, setLocation] = useState<LocationData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [permissionStatus, setPermissionStatus] = useState<PermissionState | null>(null)
@@ -33,12 +36,16 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
   const [ipFallbackCache, setIpFallbackCache] = useState<LocationData | null>(null)
   const watchIdRef = useRef<number | null>(null)
   const updateIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const generationRef = useRef(0)
+  const startingRef = useRef(false)
 
   // Update location in database
   const updateLocationInDB = useCallback(async (locationData: LocationData) => {
+    const canShare = createLocationSharingGuard()
+    if (!canShare()) return
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
+      if (!user || !canShare()) {
         console.warn('⚠️ User not authenticated, skipping location update')
         return
       }
@@ -54,6 +61,7 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
         }
       }
 
+      if (!canShare()) return
       const { error: rpcError } = await (supabase as any).rpc('upsert_user_location', {
         p_user_id: user.id,
         p_latitude: locationData.latitude,
@@ -77,6 +85,7 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
 
   // Handle successful position
   const handlePosition = useCallback((position: GeolocationPosition) => {
+    if (!isLocationSharingEnabled()) return
     const locationData: LocationData = {
       latitude: position.coords.latitude,
       longitude: position.coords.longitude,
@@ -99,6 +108,7 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
 
   // Handle position error
   const handleError = useCallback((err: GeolocationPositionError) => {
+    if (!isLocationSharingEnabled()) return
     let errorMessage = 'Unable to get your location'
 
     switch (err.code) {
@@ -121,6 +131,8 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
 
   // IP Fallback mechanism for devices without GPS mapping headers or restricted browser/OS
   const executeIPFallback = useCallback(async () => {
+    const canShare = createLocationSharingGuard()
+    if (!canShare()) return false
     if (ipFallbackCache) {
       handlePosition({
         coords: { ...ipFallbackCache, altitude: null, heading: null, speed: null, altitudeAccuracy: null },
@@ -132,6 +144,7 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
     try {
       const ipRes = await fetch('/api/geoip')
       const ipData = await ipRes.json()
+      if (!canShare()) return false
       if (ipData && ipData.latitude && ipData.longitude) {
         const fallbackData = {
           latitude: ipData.latitude,
@@ -157,6 +170,8 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
 
   // Request permission
   const requestPermission = useCallback(async (): Promise<boolean> => {
+    const canShare = createLocationSharingGuard()
+    if (!canShare()) return false
     try {
       if (typeof window === 'undefined' || !('geolocation' in navigator)) {
         toast.error('Geolocation is not supported by your browser')
@@ -181,13 +196,8 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
       if ('permissions' in navigator && !isIOS) {
         try {
           const result = await navigator.permissions.query({ name: 'geolocation' as PermissionName })
+          if (!canShare()) return false
           setPermissionStatus(result.state)
-
-          // Listen for permission changes
-          result.addEventListener('change', () => {
-            setPermissionStatus(result.state)
-            console.log('📍 Permission changed:', result.state)
-          })
 
           // If explicitly denied, don't even try to request
           if (result.state === 'denied') {
@@ -207,6 +217,7 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
           navigator.geolocation.getCurrentPosition(
             resolve,
             (error) => {
+              if (!canShare()) { reject(error); return }
               // If timeout and we wanted high accuracy, try again with low accuracy
               if (error.code === error.TIMEOUT && highAccuracy) {
                 console.warn('⚠️ High accuracy timed out, falling back to low accuracy')
@@ -238,13 +249,16 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
 
       try {
         const position = await getPosition()
+        if (!canShare()) return false
         console.log('✅ Location permission granted (forced)')
         setPermissionStatus('granted')
         handlePosition(position)
         return true
       } catch (error: any) {
+        if (!canShare()) return false
         if (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE) {
           const fallbackSuccess = await executeIPFallback()
+          if (!canShare()) return false
           if (fallbackSuccess) {
             setPermissionStatus('granted') // Mock success so the app keeps tracking
             return true
@@ -271,7 +285,8 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
 
   // Start tracking
   const startTracking = useCallback(async () => {
-    if (isTracking) {
+    if (!isLocationSharingEnabled() || startingRef.current) return
+    if (watchIdRef.current !== null) {
       console.log('ℹ️ Tracking already active')
       return
     }
@@ -281,75 +296,89 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
       return
     }
 
-    // Request permission first
-    const hasPermission = await requestPermission()
-    if (!hasPermission) {
-      console.warn('⚠️ Cannot start tracking without permission')
-      return
-    }
-
-    // iOS detection for special handling
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-
-    console.log('🚀 Starting location tracking...', isIOS ? '(iOS device detected)' : '')
-
-    // iOS requires longer timeouts due to Safari's power-saving behavior
-    const watchTimeout = isIOS ? 60000 : 30000
-    const updateFrequency = isIOS ? 15000 : 10000 // Slightly longer interval for iOS battery
-
-    // Use watchPosition for continuous tracking
-    const watchId = navigator.geolocation.watchPosition(
-      handlePosition,
-      async (error) => {
-        // On iOS, timeout errors often resolve on retry, so handle gracefully
-        if (isIOS && error.code === error.TIMEOUT) {
-          console.log('📍 iOS timeout - will retry automatically')
-          return
-        }
-
-        if (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE) {
-          await executeIPFallback()
-          return
-        }
-
-        handleError(error)
-      },
-      {
-        enableHighAccuracy: highAccuracy,
-        timeout: watchTimeout,
-        maximumAge: isIOS ? 5000 : 0 // Allow slightly stale data on iOS to reduce battery drain
+    const canShare = createLocationSharingGuard()
+    const generation = ++generationRef.current
+    const isActive = () => canShare() && generation === generationRef.current
+    startingRef.current = true
+    try {
+      // Request permission first
+      const hasPermission = await requestPermission()
+      if (!isActive()) return
+      if (!hasPermission) {
+        console.warn('⚠️ Cannot start tracking without permission')
+        return
       }
-    )
 
-    watchIdRef.current = watchId
-    setIsTracking(true)
-    console.log('✅ Location tracking started (watchId:', watchId, ')')
+      // iOS detection for special handling
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 
-    // Also update periodically to ensure fresh data
-    updateIntervalRef.current = setInterval(() => {
-      navigator.geolocation.getCurrentPosition(
-        handlePosition,
+      console.log('🚀 Starting location tracking...', isIOS ? '(iOS device detected)' : '')
+
+      // iOS requires longer timeouts due to Safari's power-saving behavior
+      const watchTimeout = isIOS ? 60000 : 30000
+      const updateFrequency = isIOS ? 15000 : 10000 // Slightly longer interval for iOS battery
+
+      // Use watchPosition for continuous tracking
+      const watchId = navigator.geolocation.watchPosition(
+        (position) => { if (isActive()) handlePosition(position) },
         async (error) => {
-          if (error.code !== error.TIMEOUT) {
-            if (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE) {
-              await executeIPFallback()
-            } else {
-              handleError(error)
-            }
+          if (!isActive()) return
+          // On iOS, timeout errors often resolve on retry, so handle gracefully
+          if (isIOS && error.code === error.TIMEOUT) {
+            console.log('📍 iOS timeout - will retry automatically')
+            return
           }
+
+          if (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE) {
+            await executeIPFallback()
+            return
+          }
+
+          handleError(error)
         },
         {
           enableHighAccuracy: highAccuracy,
           timeout: watchTimeout,
-          maximumAge: isIOS ? 5000 : 0
+          maximumAge: isIOS ? 5000 : 0 // Allow slightly stale data on iOS to reduce battery drain
         }
       )
-    }, updateFrequency)
-  }, [isTracking, highAccuracy, updateInterval, requestPermission, handlePosition, handleError])
+
+      watchIdRef.current = watchId
+      setIsTracking(true)
+      console.log('✅ Location tracking started (watchId:', watchId, ')')
+
+      // Also update periodically to ensure fresh data
+      updateIntervalRef.current = setInterval(() => {
+        if (!isActive()) return
+        navigator.geolocation.getCurrentPosition(
+          (position) => { if (isActive()) handlePosition(position) },
+          async (error) => {
+            if (!isActive()) return
+            if (error.code !== error.TIMEOUT) {
+              if (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE) {
+                await executeIPFallback()
+              } else {
+                handleError(error)
+              }
+            }
+          },
+          {
+            enableHighAccuracy: highAccuracy,
+            timeout: watchTimeout,
+            maximumAge: isIOS ? 5000 : 0
+          }
+        )
+      }, Math.max(updateInterval, updateFrequency))
+    } finally {
+      if (generation === generationRef.current) startingRef.current = false
+    }
+  }, [highAccuracy, updateInterval, requestPermission, handlePosition, handleError, executeIPFallback])
 
   // Stop tracking
   const stopTracking = useCallback(() => {
+    generationRef.current += 1
+    startingRef.current = false
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current)
       watchIdRef.current = null
@@ -362,11 +391,12 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
     }
 
     setIsTracking(false)
+    setLocation(null)
   }, [])
 
   // Auto-start tracking when component mounts
   useEffect(() => {
-    if (enableTracking && !isTracking) {
+    if (enableTracking && sharingEnabled && !isTracking) {
       // Check if iOS to prevent aggressive prompts/crashes on load
       const isIOS = typeof navigator !== 'undefined' &&
         (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -384,14 +414,15 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
 
       return () => clearTimeout(timer)
     }
-  }, [enableTracking, isTracking, startTracking])
+  }, [enableTracking, sharingEnabled, isTracking, startTracking])
 
-  // Cleanup on unmount
+  // Stop immediately on opt-out, including pending requests and periodic reads.
   useEffect(() => {
+    if (!sharingEnabled || !enableTracking) stopTracking()
     return () => {
       stopTracking()
     }
-  }, [stopTracking])
+  }, [sharingEnabled, enableTracking, stopTracking])
 
   return {
     location,

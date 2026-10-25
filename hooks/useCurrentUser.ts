@@ -22,6 +22,9 @@ export type CurrentUser = {
     date_of_birth: string | null
     gender: string | null
     address: string | null
+    local_government_area: string | null
+    state: string | null
+    nearest_bus_stop_landmark: string | null
     city: string | null
     profile_completed_at: string | null
 }
@@ -60,7 +63,7 @@ export function useCurrentUser() {
 
             const { data: profile, error } = await supabase
                 .from('users')
-                .select('id, full_name, role, oscar, photo_url, is_active, team, is_team_head, phone, job_title, bio, date_of_birth, gender, address, city, profile_completed_at')
+                .select('id, full_name, role, oscar, photo_url, is_active, team, is_team_head, phone, job_title, bio, date_of_birth, gender, address, local_government_area, state, nearest_bus_stop_landmark, city, profile_completed_at')
                 .eq('id', user.id)
                 .single()
 
@@ -101,6 +104,9 @@ export function useCurrentUser() {
                         date_of_birth: null,
                         gender: null,
                         address: null,
+                        local_government_area: null,
+                        state: null,
+                        nearest_bus_stop_landmark: null,
                         city: null,
                         profile_completed_at: null,
                     }
@@ -127,6 +133,9 @@ export function useCurrentUser() {
                 date_of_birth: p.date_of_birth ?? null,
                 gender: p.gender ?? null,
                 address: p.address ?? null,
+                local_government_area: p.local_government_area ?? null,
+                state: p.state ?? null,
+                nearest_bus_stop_landmark: p.nearest_bus_stop_landmark ?? null,
                 city: p.city ?? null,
                 profile_completed_at: p.profile_completed_at ?? null,
             }

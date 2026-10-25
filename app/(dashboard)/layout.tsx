@@ -9,6 +9,7 @@ import { PresenceHeartbeat } from "@/components/utils/PresenceHeartbeat"
 import { SentryUserContext } from "@/components/monitoring/SentryUserContext"
 import { BrokenArrowAlert } from "@/components/operations/BrokenArrowAlert"
 import { createClient } from "@/lib/supabase/client"
+import { useLocationSharing } from "@/hooks/useLocationSharing"
 
 // ─── Singleton client — always the same instance, safe to use in effects ───
 const supabase = createClient()
@@ -97,6 +98,7 @@ export default function DashboardLayout({
   const drawerRef = useRef<HTMLDivElement>(null)
   const drawerTriggerRef = useRef<HTMLElement | null>(null)
   const isClient = useIsClient()
+  const { enabled: locationSharingEnabled } = useLocationSharing()
   const isIOS = useIsIOS()
   const [canMountExtras, setCanMountExtras] = useState(false)
   const [canMountTracker, setCanMountTracker] = useState(false)
@@ -204,7 +206,7 @@ export default function DashboardLayout({
         {/* Location enforcer — prompts users who haven't granted permission.
             Mounted on ALL devices (incl. iOS): its Enable button provides the
             user gesture iOS requires for the native geolocation prompt. */}
-        {canMountTracker && (
+        {canMountTracker && locationSharingEnabled && (
           <ErrorBoundary>
             <LocationEnforcer />
           </ErrorBoundary>
@@ -321,7 +323,7 @@ export default function DashboardLayout({
             </>
           )}
           {/* The install prompt is how iOS users learn about Add to Home Screen */}
-          {canMountTracker && (
+          {canMountTracker && locationSharingEnabled && (
             <ErrorBoundary>
               <PWAInstallPrompt />
             </ErrorBoundary>

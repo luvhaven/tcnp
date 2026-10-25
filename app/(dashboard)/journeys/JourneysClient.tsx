@@ -139,7 +139,7 @@ export default function JourneysClient({
   // Start in the loading state when the server could not supply the first
   // page, so "No active journeys" is never shown for a list we never read.
   const serverJourneysMissing = useRef(initialJourneys == null)
-  const [loading, setLoading] = useState(serverJourneysMissing.current)
+  const [loading, setLoading] = useState(initialJourneys == null)
   const [journeysLoadFailed, setJourneysLoadFailed] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const { page, from, to, hasMore, setHasMore, nextPage, resetPage } = usePagination({ pageSize: 50 })
