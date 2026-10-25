@@ -166,7 +166,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
             <ul aria-labelledby={`nav-section-${sectionId(section.label)}`} className="space-y-1">
               {section.items.map((item, index) => {
                 const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
-                const isChat = item.name === "Team Chat"
+                const isChat = item.href === "/chat"
                 const isOps = item.name === "My Operations"
                 return (
                   <li key={item.href}>

@@ -44,7 +44,7 @@ function ChatContent() {
     ? room.papaId === requestedPapa && (!requestedProgram || room.programId === requestedProgram)
     : requestedProgram ? room.programId === requestedProgram && !room.papaId
       : requestedTeam ? room.team === requestedTeam : false)
-  const active = selected ? rooms.find(room => room.id === selected) : requestedRoom || (!hasRequestedRoom ? rooms[0] : undefined)
+  const active = selected ? rooms.find(room => room.id === selected) : requestedRoom || (!hasRequestedRoom ? rooms.find(room => room.kind === 'program') || rooms.find(room => room.kind === 'papa') || rooms[0] : undefined)
   const selectRoom = (room: ChatRoomSummary) => { setSelection({ id: room.id, requestKey }); setMembersOpen(false) }
   const platform = isPlatformAdministrator(me?.role)
   const loading = userLoading || (Boolean(me) && query.isPending)
@@ -55,7 +55,7 @@ function ChatContent() {
 
   return <div className="min-w-0 space-y-4">
     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl border bg-card text-primary"><MessagesSquare className="h-5 w-5" /></span><div><h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Chat</h1><p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">Stay connected. Keep everyone in step.</p></div></div>
-    {!loading && !query.isError && hasRequestedRoom && !requestedRoom && !selected && <p role="status" className="rounded-xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">This conversation is unavailable. It may be archived, or you may need an invitation. Choose another room below.</p>}
+    {!loading && !query.isError && hasRequestedRoom && !requestedRoom && !selected && <p role="status" className="rounded-xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">This conversation is unavailable. It may be archived, or you may need an invitation. Choose another conversation from the dropdowns.</p>}
     {!loading && me && !me.team && !platform && <details className="rounded-xl border bg-card px-4 py-3"><summary className="cursor-pointer text-sm font-medium">Choose your team</summary><div className="pt-3"><TeamChatRoom joinOnly /></div></details>}
     <ChatWorkspace key={`${me?.id}:${requestKey}`} rooms={rooms} selectedRoomId={active?.id ?? null} loading={loading}
       error={query.isError ? 'Conversations could not load. Check your connection and retry.' : !me && !userLoading ? 'Sign in to load your conversations.' : null}

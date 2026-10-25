@@ -29,7 +29,7 @@ The migration deliberately does not backfill invitations from assignments or pas
 
 ## Interface
 
-The workspace uses existing TCNP colors and shared controls, a searchable room rail grouped by program, a compact active-room header, quieter message bubbles, visible focus states, accessible composer labels, full-name mentions, and distinct loading, empty, unavailable, offline, and retry states. Restricted mentions explicitly disclose that executives can also read them.
+The workspace uses existing TCNP colors and shared controls, compact Program and Room dropdowns above a full-width conversation, quieter message bubbles, visible focus states, accessible composer labels, full-name mentions, and distinct loading, empty, unavailable, offline, and retry states. A Programs/Teams switch changes the conversation category without partitioning the screen. Restricted mentions explicitly disclose that executives can also read them. Navigation labels this workspace “Chat.”
 
 Bulk permanent destruction is removed from the room menu. Existing authorized per-message deletion remains available. Team selection for unassigned officers remains available without making executives choose a team.
 
