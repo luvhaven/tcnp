@@ -188,6 +188,14 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
 
   const handleLogout = async () => {
     setMenuOpen(false)
+    if (currentUser) {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 1500)
+      try {
+        await supabase.from('users').update({ is_online: false, last_seen: new Date().toISOString() }).eq('id', currentUser.id).abortSignal(controller.signal)
+      } catch { /* Presence must never prevent signing out. */ }
+      finally { clearTimeout(timeout) }
+    }
     await supabase.auth.signOut()
     router.push("/login")
   }

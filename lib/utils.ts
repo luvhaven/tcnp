@@ -132,23 +132,18 @@ export function normalizeOscarLabel(oscar: string | null | undefined): string | 
   return value
 }
 
-/**
- * Explicit platform authority for new workspaces. Legacy `isAdmin` remains for
- * existing screens, but it intentionally groups several operational leadership
- * roles. New unit administration follows the requested hierarchy:
- * super admin > admin > unit head > unit member.
- */
+/** These roles have full Admin privileges while keeping their own role names. */
+export const PLATFORM_ADMIN_ROLES = [
+  'super_admin', 'dev_admin', 'admin', 'head_of_command', 'captain', 'vice_captain',
+] as const
+
+/** Super Admin retains owner authority above the Admin and leadership tier. */
 export function platformAuthorityRank(role: string | null | undefined): number {
+  if (role && (PLATFORM_ADMIN_ROLES as readonly string[]).includes(role)) {
+    return role === 'super_admin' ? 100 : 80
+  }
   switch (role) {
-    case 'super_admin': return 100
-    // dev_admin is a technical administrator, not a higher organisational
-    // authority. Only Super Admin outranks the Admin tier.
-    case 'dev_admin': return 80
-    case 'admin': return 80
-    case 'captain':
-    case 'vice_captain':
     case 'head_of_operations':
-    case 'head_of_command':
     case 'command':
     case 'hod':
     case 'hop':
@@ -264,6 +259,7 @@ export function canViewLiveTracking(role: string | null | undefined, oscar?: str
  * Exclusively for Admin and Command roles.
  */
 export function canAccessCommandCentre(role: string | null | undefined, oscar?: string | null | undefined): boolean {
+  if (isPlatformAdministrator(role)) return true
   if (!role) return false
   const effective = effectiveOscarRole(role, oscar) || role
   return ['super_admin', 'dev_admin', 'admin', 'command', 'head_of_command'].includes(effective)

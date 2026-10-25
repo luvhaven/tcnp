@@ -10,8 +10,7 @@ export async function POST(request: Request) {
         const adminClient = createAdminClient()
         const db = adminClient as any
 
-        // Verify platform authority. Operational leaders manage programmes,
-        // while unit heads manage their own membership lists.
+        // Platform administrators include Captain, Vice Captain and Head of Command.
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {

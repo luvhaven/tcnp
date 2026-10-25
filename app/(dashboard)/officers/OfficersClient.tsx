@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { isPermanentOwnerEmail } from "@/lib/platform-owner"
+import { OFFICER_PRESENCE_REFRESH_MS } from "@/lib/presence"
 import { useSearchParams } from "next/navigation"
 import { PasswordResetRequestsTab } from "@/components/officers/PasswordResetRequestsTab"
 
@@ -76,6 +77,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
   const supabase = createClient()
   const confirm = useConfirm()
   const queryClient = useQueryClient()
+  const searchParams = useSearchParams()
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [titleDialogOpen, setTitleDialogOpen] = useState(false)
@@ -110,7 +112,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
   const [selectedOfficers, setSelectedOfficers] = useState<string[]>([])
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
   const [filterRole, setFilterRole] = useState('all')
-  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterStatus, setFilterStatus] = useState(searchParams.get('status') === 'online' ? 'online' : 'all')
   const [filterTeam, setFilterTeam] = useState('all')
 
   useEffect(() => {
@@ -216,7 +218,6 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
 
   const canManageOfficers = Boolean(currentUser && isPlatformAdministrator(currentUser.role))
 
-  const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'directory')
 
   useEffect(() => {
@@ -224,6 +225,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
     if (tabParam && ['directory', 'manage', 'pending', 'resets'].includes(tabParam)) {
       setActiveTab(tabParam)
     }
+    if (searchParams.get('status') === 'online') setFilterStatus('online')
   }, [searchParams])
 
   const { data: resetRequests = [] } = useQuery<any[]>({
@@ -254,8 +256,19 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
       const body = await response.json()
       return (body.officers || []) as Officer[]
     },
-    initialData: initialOfficers
+    initialData: initialOfficers,
+    staleTime: 0,
+    refetchInterval: OFFICER_PRESENCE_REFRESH_MS,
+    refetchOnWindowFocus: true,
   })
+
+  const showOnlineOfficers = () => {
+    setActiveTab('directory')
+    setFilterStatus('online')
+    setFilterRole('all')
+    setFilterTeam('all')
+    setGlobalSearch('')
+  }
 
   // Loading / failure / empty, checked in that order so a failed or
   // still-running load never reads as "no officers".
@@ -838,13 +851,19 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-3xl font-bold tracking-tight">Officers</h1>
-          <p className="text-sm text-muted-foreground max-w-xl">Directory and management of all Protocol Officers</p>
+          <p className="text-sm text-muted-foreground max-w-xl">Directory and management of all Protocol Officers. Online status refreshes every 30 seconds.</p>
         </div>
         {canManageOfficers && (
-          <Button onClick={() => { setEditing(null); resetForm(); setDialogOpen(true) }} className="shrink-0 gap-2 self-start sm:self-auto">
-            <Plus className="h-4 w-4" />
-            <span>Add Officer</span>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={showOnlineOfficers} className="gap-2" aria-pressed={activeTab === 'directory' && filterStatus === 'online'}>
+              <UserCheck className="h-4 w-4" /> Online officers
+              <Badge variant="secondary">{officers.filter(o => o.is_online).length}</Badge>
+            </Button>
+            <Button onClick={() => { setEditing(null); resetForm(); setDialogOpen(true) }} className="shrink-0 gap-2 self-start sm:self-auto">
+              <Plus className="h-4 w-4" />
+              <span>Add Officer</span>
+            </Button>
+          </div>
         )}
       </motion.div>
 
