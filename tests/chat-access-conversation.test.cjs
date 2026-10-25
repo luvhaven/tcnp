@@ -292,12 +292,13 @@ function ui(options = {}) {
   const browser = surface()
   let activeRunner
   const react = Object.fromEntries(['useState', 'useRef', 'useMemo', 'useCallback', 'useEffect', 'useLayoutEffect'].map(name => [name, (...args) => activeRunner.react[name](...args)]))
-  const markCalls = [], sends = []
+  const markCalls = [], sends = [], edits = [], errors = []
   const chat = {
     me: { id: ME, role: 'tango_oscar' }, members: [], messages: [row(MESSAGE, { read_by: [ME] })],
     allowed: true, denied: false, loading: false, connection: 'connected', reactions: {},
     async markRead(ids) { markCalls.push(ids) },
     async sendMessage(message) { sends.push(message); if (options.failSend) throw new Error('Offline') },
+    async editMessage(id, content) { edits.push({ id, content }) },
     ...options.chat,
   }
   const jsx = (type, props) => ({ type, props })
@@ -305,7 +306,7 @@ function ui(options = {}) {
     react, 'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
     'next/navigation': { useSearchParams: () => new URLSearchParams() },
     'lucide-react': new Proxy({}, { get: (_target, name) => name }),
-    sonner: { toast: { error() {} } },
+    sonner: { toast: { error(message) { errors.push(message) } } },
     '@/hooks/useChatConversation': { useChatConversation: () => chat },
     '@/hooks/useChatTyping': { useChatTyping: () => ({ names: [], announce() {} }) },
     '@/lib/chat-conversation': conversation, '@/lib/utils': utils,
@@ -321,7 +322,7 @@ function ui(options = {}) {
     return [node, ...elements(node.props?.children)]
   }
   return {
-    chat, browser, markCalls, sends,
+    chat, browser, markCalls, sends, edits, errors,
     mount(props = {}) {
       const runner = lifecycle()
       runner.setRender(() => { activeRunner = runner; return componentModule.default({ programId: PROGRAM, ...props }) })
@@ -408,5 +409,111 @@ test('failed messages block new sends and draft snapshots survive room unmounts 
   await runner.flush()
   assert.equal(runner.find(node => node.type === 'textarea').props.value, '')
   assert.equal(runner.find(node => node.props?.children === 'First unsent message'), undefined)
+  runner.unmount()
+})
+
+test('public edits cannot add restricted recipients or imply a changed audience', async () => {
+  const message = row(MESSAGE, { sender_id: ME, content: 'Public update', is_private: false })
+  const app = ui({ chat: { messages: [message], members: [{ id: MEMBER, full_name: 'Member' }] } })
+  const runner = app.mount()
+  await runner.flush()
+  runner.find(node => node.type === 'MessageBubble').props.handleEdit(message)
+  await runner.flush()
+  runner.find(node => node.type === 'textarea').props.onChange({ target: { value: '@@Member confidential update', selectionStart: 8 } })
+  await runner.flush()
+  assert.equal(runner.find(node => node.props?.role === 'listbox'), undefined)
+  assert.equal(runner.find(node => node.type === 'textarea').props['aria-autocomplete'], undefined)
+  assert.ok(runner.find(node => node.props?.children === 'Editing keeps the original audience. Send a new message to change it.'))
+  assert.equal(runner.find(node => node.props?.children === 'Only mentioned members and executives can read this'), undefined)
+  runner.find(node => node.props?.['aria-label'] === 'Save edited message').props.onClick()
+  await runner.flush()
+  assert.equal(app.edits.length, 0)
+  assert.equal(app.sends.length, 0)
+  assert.match(app.errors[0], /original audience.*new message.*@@/)
+  assert.equal(runner.find(node => node.type === 'textarea').props.value, '@@Member confidential update')
+  runner.unmount()
+})
+
+test('unchanged trimmed edits exit editing without a write or a validation error', async () => {
+  const message = row(MESSAGE, { sender_id: ME, content: 'Literal @@example remains', is_private: false })
+  const app = ui({ chat: { messages: [message] } }), runner = app.mount()
+  await runner.flush()
+  runner.find(node => node.type === 'MessageBubble').props.handleEdit(message)
+  await runner.flush()
+  runner.find(node => node.type === 'textarea').props.onChange({ target: { value: `  ${message.content}  `, selectionStart: 1 } })
+  await runner.flush()
+  runner.find(node => node.props?.['aria-label'] === 'Save edited message').props.onClick()
+  await runner.flush()
+  assert.equal(app.edits.length, 0)
+  assert.equal(app.errors.length, 0)
+  assert.ok(runner.find(node => node.props?.['aria-label'] === 'Send message'))
+  assert.equal(runner.find(node => node.type === 'textarea').props.value, '')
+  runner.unmount()
+})
+
+test('existing literal @@ text may stay during a real edit, while additional or renamed markers are rejected', async () => {
+  for (const [content, expectedWrites] of [['Literal @@example remains available', 1], ['Literal @@example remains @@Member', 0], ['Literal @@newRecipient remains', 0]]) {
+    const message = row(MESSAGE, { sender_id: ME, content: 'Literal @@example remains', is_private: false })
+    const app = ui({ chat: { messages: [message] } }), runner = app.mount()
+    await runner.flush()
+    runner.find(node => node.type === 'MessageBubble').props.handleEdit(message)
+    await runner.flush()
+    runner.find(node => node.type === 'textarea').props.onChange({ target: { value: content, selectionStart: content.length } })
+    await runner.flush()
+    runner.find(node => node.props?.['aria-label'] === 'Save edited message').props.onClick()
+    await runner.flush()
+    assert.equal(app.edits.length, expectedWrites)
+    if (expectedWrites) assert.equal(app.edits[0].content, content)
+    else assert.equal(app.errors.length, 1)
+    runner.unmount()
+  }
+})
+
+test('manual unresolved restricted mentions never send publicly; email text remains ordinary text', async () => {
+  for (const text of ['@@John confidential update', 'Please check @@John', '@@']) {
+    const app = ui({ chat: { members: [{ id: MEMBER, full_name: 'John' }] } }), runner = app.mount()
+    await runner.flush()
+    runner.find(node => node.type === 'textarea').props.onChange({ target: { value: text, selectionStart: text.length } })
+    await runner.flush()
+    runner.find(node => node.props?.['aria-label'] === 'Send message').props.onClick()
+    await runner.flush()
+    assert.equal(app.sends.length, 0)
+    assert.match(app.errors[0], /Choose each @@ recipient from the suggestions/)
+    assert.equal(runner.find(node => node.type === 'textarea').props.value, text)
+    runner.unmount()
+  }
+  const app = ui(), runner = app.mount()
+  await runner.flush()
+  const text = 'Contact user@@example.com about the update'
+  runner.find(node => node.type === 'textarea').props.onChange({ target: { value: text, selectionStart: text.length } })
+  await runner.flush()
+  runner.find(node => node.props?.['aria-label'] === 'Send message').props.onClick()
+  await runner.flush()
+  assert.equal(app.sends.length, 1)
+  assert.equal(app.sends[0].isPrivate, false)
+  assert.equal(app.errors.length, 0)
+  runner.unmount()
+})
+
+test('editing a selected restricted name breaks its binding instead of matching a name substring', async () => {
+  const app = ui({ chat: { members: [{ id: MEMBER, full_name: 'John' }] } }), runner = app.mount()
+  await runner.flush()
+  runner.find(node => node.type === 'textarea').props.onChange({ target: { value: '@@John', selectionStart: 6 } })
+  await runner.flush()
+  runner.find(node => node.props?.role === 'option').props.onClick()
+  await runner.flush()
+  runner.find(node => node.type === 'textarea').props.onChange({ target: { value: '@@Johnny confidential', selectionStart: 21 } })
+  await runner.flush()
+  runner.find(node => node.props?.['aria-label'] === 'Send message').props.onClick()
+  await runner.flush()
+  assert.equal(app.sends.length, 0)
+  assert.match(app.errors[0], /Choose each @@ recipient from the suggestions/)
+  runner.find(node => node.type === 'textarea').props.onChange({ target: { value: '@@John, confidential', selectionStart: 20 } })
+  await runner.flush()
+  runner.find(node => node.props?.['aria-label'] === 'Send message').props.onClick()
+  await runner.flush()
+  assert.equal(app.sends.length, 1)
+  assert.equal(app.sends[0].isPrivate, true)
+  assert.deepEqual(Array.from(app.sends[0].mentions), [MEMBER])
   runner.unmount()
 })
