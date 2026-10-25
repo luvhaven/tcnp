@@ -19,7 +19,7 @@ test('chat composer and actions have an accessible keyboard path', () => {
   assert.match(source, /aria-label=\{editingMessage \? 'Edit message' : 'Write a message'\}/)
   assert.match(source, /aria-label=\{editingMessage \? 'Save edited message' : 'Send message'\}/)
   assert.match(source, /event\.key === 'Enter' && !event\.shiftKey/)
-  assert.match(source, /textareaRef\.current\.setSelectionRange/)
+  assert.match(source, /textareaRef\.current\??\.setSelectionRange/)
   assert.doesNotMatch(source, /inputRef\.current/)
 })
 

@@ -1,274 +1,166 @@
-import { createClient } from '@supabase/supabase-js'
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { checkRateLimit } from '@/lib/security/rate-limit'
-import { isAdmin, effectiveOscarRole, isPlatformAdministrator } from '@/lib/utils'
+import { isPlatformAdministrator, OFFICER_TEAMS } from '@/lib/utils'
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const TEAMS: readonly string[] = OFFICER_TEAMS.map(team => team.value)
+type Scope = { programId: string | null; papaId: string | null; team: string | null; messageId: string | null; all: boolean }
+
+function parseScope(input: Record<string, unknown>): Scope | null {
+  const scope: Scope = { programId: null, papaId: null, team: null, messageId: null, all: input.all === true }
+  for (const key of ['programId', 'papaId', 'messageId'] as const) {
+    const value = input[key]
+    if (value != null && value !== '') {
+      if (typeof value !== 'string' || !UUID.test(value)) return null
+      scope[key] = value
+    }
+  }
+  if (input.team != null && input.team !== '') {
+    if (typeof input.team !== 'string' || !TEAMS.includes(input.team)) return null
+    scope.team = input.team
+  }
+  if (scope.papaId && !scope.programId) return null
+  const targets = Number(!!scope.programId) + Number(!!scope.team) + Number(!!scope.messageId) + Number(scope.all)
+  if (targets !== 1) return null
+  return scope
+}
+
+function scoped(query: any, scope: Scope) {
+  if (scope.messageId) return query.eq('id', scope.messageId)
+  if (scope.programId) {
+    query = query.eq('program_id', scope.programId).is('team', null)
+    return scope.papaId ? query.eq('papa_id', scope.papaId) : query.is('papa_id', null)
+  }
+  if (scope.team) return query.eq('team', scope.team).is('program_id', null).is('papa_id', null)
+  return query
+}
+
+async function caller() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) } as const
+  const { data: profile, error } = await supabase.from('users')
+    .select('role, full_name, team, is_team_head, activation_status, is_active')
+    .eq('id', user.id).maybeSingle()
+  if (error || !profile || profile.activation_status !== 'active' || profile.is_active !== true) {
+    return { error: NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 }) } as const
+  }
+  return { supabase, user, profile } as const
+}
 
 export async function DELETE(request: Request) {
+  try {
     const limitCheck = await checkRateLimit(request, 'admin-chat-delete', 20, 60000)
-    if (!limitCheck.success) {
-        return NextResponse.json({ error: 'Rate limit exceeded for admin chat operations.' }, { status: 429 })
+    if (!limitCheck.success) return NextResponse.json({ error: 'Too many chat actions. Please try again shortly.' }, { status: 429 })
+    const auth = await caller()
+    if ('error' in auth) return auth.error
+    const { profile: callerData, user } = auth
+    if (!isPlatformAdministrator(callerData.role)) {
+      return NextResponse.json({ error: 'Forbidden: only platform administrators can permanently delete chats' }, { status: 403 })
     }
+    const params = new URL(request.url).searchParams
+    const scope = parseScope({ programId: params.get('programId'), papaId: params.get('papaId'), team: params.get('team'), messageId: params.get('messageId'), all: params.get('all') === 'true' })
+    if (!scope) return NextResponse.json({ error: 'Choose exactly one valid chat room, message, or all chats.' }, { status: 400 })
 
-    const cookieStore = await cookies()
-
-    // 1. Authenticate caller
-    const supabaseAuth = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            cookies: {
-                get(name: string) { return cookieStore.get(name)?.value },
-                set(name: string, value: string, options: CookieOptions) { cookieStore.set({ name, value, ...options }) },
-                remove(name: string, options: CookieOptions) { cookieStore.set({ name, value: '', ...options }) },
-            },
-        }
-    )
-
-    const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const db = createAdminClient() as any
+    // Snapshot and page all ids instead of silently deleting only the first
+    // PostgREST page. New messages are excluded from bulk deletion.
+    const startedAt = new Date().toISOString()
+    const ids: string[] = []
+    for (let offset = 0; ; offset += 500) {
+      let query = scoped(db.from('chat_messages').select('id'), scope)
+      if (!scope.messageId) query = query.lte('created_at', startedAt)
+      const { data, error } = await query.order('id').range(offset, offset + 499)
+      if (error) throw error
+      ids.push(...(data ?? []).map((message: { id: string }) => message.id))
+      if (!data || data.length < 500) break
     }
-
-    // 2. Check caller role
-    const { data: callerData } = await supabaseAuth
-        .from('users')
-        .select('role, oscar, full_name, team, is_team_head')
-        .eq('id', user.id)
-        .eq('activation_status', 'active')
-        .or('is_active.is.null,is_active.eq.true')
-        .single()
-
-    if (!callerData) return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
-    const isUserAdmin = callerData && (isAdmin(callerData.role) || isAdmin(effectiveOscarRole(callerData.role, callerData.oscar)))
-    if (!isUserAdmin) {
-        return NextResponse.json({ error: 'Forbidden: only administrators can permanently delete chats' }, { status: 403 })
+    for (let offset = 0; offset < ids.length; offset += 500) {
+      const batch = ids.slice(offset, offset + 500)
+      const reactions = await db.from('message_reactions').delete().in('message_id', batch)
+      if (reactions.error) throw reactions.error
+      const replies = await db.from('chat_messages').update({ reply_to_id: null }).in('reply_to_id', batch)
+      if (replies.error) throw replies.error
+      const removed = await db.from('chat_messages').delete().in('id', batch)
+      if (removed.error) throw removed.error
     }
-
-    const { searchParams } = new URL(request.url)
-    const programId = searchParams.get('programId')
-    const team = searchParams.get('team')
-    const messageId = searchParams.get('messageId')
-    const deleteAll = searchParams.get('all') === 'true'
-
-    // Platform-wide destruction is reserved for platform administrators.
-    if (!messageId && !programId && !team && !isPlatformAdministrator(callerData.role)) {
-        return NextResponse.json({ error: 'Forbidden: only platform administrators can delete every chat' }, { status: 403 })
+    if (ids.length) {
+      const audit = await db.from('audit_logs').insert({
+        user_id: user.id, action: 'destroy_chats', target_type: 'chat_messages',
+        target_id: scope.messageId || scope.papaId || scope.programId || scope.team || 'all',
+        description: `Permanently deleted ${ids.length} chat messages`,
+        metadata: { scope, deletedCount: ids.length },
+      })
+      if (audit.error) console.warn('[admin-chat-delete] Audit record could not be saved')
     }
-
-    const supabaseAdmin = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
-
-    try {
-        // Find matching messages to delete
-        let query = supabaseAdmin.from('chat_messages').select('id')
-
-        if (messageId) {
-            query = query.eq('id', messageId)
-        } else if (programId) {
-            query = query.eq('program_id', programId)
-        } else if (team) {
-            query = query.eq('team', team)
-        } else if (!deleteAll) {
-            return NextResponse.json({ error: 'Target scope (programId, team, messageId, or all) is required' }, { status: 400 })
-        }
-
-        const { data: targetMessages, error: selectError } = await query
-        if (selectError) throw selectError
-
-        if (!targetMessages || targetMessages.length === 0) {
-            return NextResponse.json({ success: true, count: 0, message: 'No messages found to delete' })
-        }
-
-        const targetIds = targetMessages.map(m => m.id)
-
-        // 1. Delete associated message reactions
-        await supabaseAdmin
-            .from('message_reactions')
-            .delete()
-            .in('message_id', targetIds)
-
-        // 2. Nullify self-referencing reply_to_id
-        await supabaseAdmin
-            .from('chat_messages')
-            .update({ reply_to_id: null })
-            .in('reply_to_id', targetIds)
-
-        // 3. Delete messages permanently
-        const { error: deleteError } = await supabaseAdmin
-            .from('chat_messages')
-            .delete()
-            .in('id', targetIds)
-
-        if (deleteError) throw deleteError
-
-        // 4. Record audit log
-        try {
-            await supabaseAdmin.from('audit_logs').insert({
-                user_id: user.id,
-                action: 'destroy_chats',
-                target_type: 'chat_messages',
-                target_id: messageId || programId || team || 'all',
-                description: `Permanently destroyed ${targetIds.length} chat message(s) by ${callerData?.full_name || user.email} (scope: ${messageId ? `message ${messageId}` : programId ? `program ${programId}` : team ? `team ${team}` : 'all'})`,
-                metadata: {
-                    scope: { programId, team, messageId, deleteAll },
-                    deletedCount: targetIds.length
-                }
-            })
-        } catch (auditErr) {
-            console.warn('[admin-chat-delete] Non-fatal audit log error:', auditErr)
-        }
-
-        return NextResponse.json({ success: true, count: targetIds.length })
-    } catch (err: any) {
-        console.error('[admin-chat-delete] Error permanently deleting chats:', err)
-        return NextResponse.json({ error: err.message || 'Failed to delete chats' }, { status: 500 })
-    }
+    return NextResponse.json({ success: true, count: ids.length })
+  } catch (error) {
+    console.error('[admin-chat-delete] Failed:', error)
+    return NextResponse.json({ error: 'Could not delete chats. Please try again.' }, { status: 500 })
+  }
 }
 
 export async function POST(request: Request) {
+  try {
     const limitCheck = await checkRateLimit(request, 'admin-chat-action', 30, 60000)
-    if (!limitCheck.success) {
-        return NextResponse.json({ error: 'Rate limit exceeded for chat actions.' }, { status: 429 })
+    if (!limitCheck.success) return NextResponse.json({ error: 'Too many chat actions. Please try again shortly.' }, { status: 429 })
+    const auth = await caller()
+    if ('error' in auth) return auth.error
+    const { supabase, user, profile: callerData } = auth
+    const body = await request.json().catch(() => null)
+    if (!body || !['archive', 'soft_delete', 'flag', 'unflag'].includes(body.action)) {
+      return NextResponse.json({ error: 'Choose a valid chat action.' }, { status: 400 })
+    }
+    const { action, messageId } = body
+    if (action === 'archive') {
+      if (!isPlatformAdministrator(callerData.role)) {
+        return NextResponse.json({ error: 'Forbidden: only platform administrators can archive chats' }, { status: 403 })
+      }
+      const scope = parseScope(body)
+      if (!scope || scope.messageId) return NextResponse.json({ error: 'Choose one valid chat room or all chats.' }, { status: 400 })
+      const db = createAdminClient() as any
+      const { error } = await scoped(db.from('chat_messages').update({ is_archived: true }), scope)
+      if (error) throw error
+      return NextResponse.json({ success: true })
+    }
+    if (typeof messageId !== 'string' || !UUID.test(messageId)) {
+      return NextResponse.json({ error: 'A valid messageId is required.' }, { status: 400 })
     }
 
-    const cookieStore = await cookies()
-
-    const supabaseAuth = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            cookies: {
-                get(name: string) { return cookieStore.get(name)?.value },
-                set(name: string, value: string, options: CookieOptions) { cookieStore.set({ name, value, ...options }) },
-                remove(name: string, options: CookieOptions) { cookieStore.set({ name, value: '', ...options }) },
-            },
-        }
-    )
-
-    const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const platformAdmin = isPlatformAdministrator(callerData.role)
+    if (!platformAdmin) {
+      // auth.uid() must be the actual caller, not the service-role identity.
+      const { data: allowed, error } = await (supabase as any).rpc('can_access_chat_message', { target_message_id: messageId })
+      if (error || allowed !== true) return NextResponse.json({ error: 'Message not found or no longer accessible.' }, { status: 404 })
     }
+    const db = createAdminClient() as any
+    const reader = platformAdmin ? db : supabase
+    const { data: message, error: readError } = await reader.from('chat_messages')
+      .select('id, sender_id, team, flagged, flagged_by, deleted_at').eq('id', messageId).maybeSingle()
+    if (readError || !message) return NextResponse.json({ error: 'Message not found or no longer accessible.' }, { status: 404 })
+    const isAuthor = message.sender_id === user.id
+    const isTeamModerator = !!message.team && callerData.team === message.team && callerData.is_team_head === true
 
-    const { data: callerData } = await supabaseAuth
-        .from('users')
-        .select('role, oscar, full_name, team, is_team_head')
-        .eq('id', user.id)
-        .eq('activation_status', 'active')
-        .or('is_active.is.null,is_active.eq.true')
-        .single()
-
-    if (!callerData) return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
-    const isUserAdmin = callerData && (isAdmin(callerData.role) || isAdmin(effectiveOscarRole(callerData.role, callerData.oscar)))
-
-    const body = await request.json()
-    const { action, programId, team, messageId } = body
-
-    if (!action) {
-        return NextResponse.json({ error: 'Action is required' }, { status: 400 })
+    if (action === 'soft_delete') {
+      if (!platformAdmin && !isAuthor && !isTeamModerator) {
+        return NextResponse.json({ error: 'You cannot delete this message.' }, { status: 403 })
+      }
+      const deletedAt = message.deleted_at || new Date().toISOString()
+      const { error } = await db.from('chat_messages').update({ deleted_at: deletedAt, deleted_by_admin: !isAuthor }).eq('id', messageId)
+      if (error) throw error
+      return NextResponse.json({ success: true, deleted_at: deletedAt, deleted_by_admin: !isAuthor })
     }
-
-    const supabaseAdmin = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
-
-    try {
-        if (action === 'archive') {
-            if (!isPlatformAdministrator(callerData.role)) {
-                return NextResponse.json({ error: 'Forbidden: only platform administrators can archive chats' }, { status: 403 })
-            }
-
-            let updateQuery = supabaseAdmin.from('chat_messages').update({ is_archived: true })
-            if (programId) {
-                updateQuery = updateQuery.eq('program_id', programId)
-            } else if (team) {
-                updateQuery = updateQuery.eq('team', team)
-            } else {
-                updateQuery = updateQuery.neq('id', '00000000-0000-0000-0000-000000000000')
-            }
-
-            const { error: archiveError } = await updateQuery
-            if (archiveError) throw archiveError
-
-            return NextResponse.json({ success: true })
-        }
-
-        if (action === 'soft_delete') {
-            if (!messageId) {
-                return NextResponse.json({ error: 'messageId is required for soft delete' }, { status: 400 })
-            }
-
-            // Allowed if user is admin, team head for team messages, or author
-            const { data: msg } = await supabaseAdmin.from('chat_messages').select('sender_id, team').eq('id', messageId).single()
-            if (!msg) {
-                return NextResponse.json({ error: 'Message not found' }, { status: 404 })
-            }
-
-            const isAuthor = msg.sender_id === user.id
-            const isTeamModerator = msg.team && callerData?.team === msg.team && (callerData?.is_team_head || isUserAdmin)
-
-            if (!isUserAdmin && !isAuthor && !isTeamModerator) {
-                return NextResponse.json({ error: 'Forbidden: not authorized to delete this message' }, { status: 403 })
-            }
-
-            const deletedAt = new Date().toISOString()
-            const { error: updateError } = await supabaseAdmin
-                .from('chat_messages')
-                .update({
-                    deleted_at: deletedAt,
-                    deleted_by_admin: !isAuthor
-                })
-                .eq('id', messageId)
-
-            if (updateError) throw updateError
-            return NextResponse.json({ success: true, deleted_at: deletedAt, deleted_by_admin: !isAuthor })
-        }
-
-        if (action === 'flag' || action === 'unflag') {
-            if (!messageId) {
-                return NextResponse.json({ error: 'messageId is required' }, { status: 400 })
-            }
-
-            // Read through the caller's own client so RLS decides whether they can see the message.
-            const { data: msg } = await supabaseAuth
-                .from('chat_messages')
-                .select('id, team, flagged, flagged_by')
-                .eq('id', messageId)
-                .maybeSingle()
-            if (!msg) {
-                return NextResponse.json({ error: 'Message not found' }, { status: 404 })
-            }
-
-            if (action === 'flag') {
-                // Keep the original reporter if the message is already flagged.
-                if (msg.flagged) return NextResponse.json({ success: true })
-            } else {
-                const isTeamModerator = msg.team && callerData.team === msg.team && callerData.is_team_head
-                if (!isUserAdmin && !isTeamModerator && msg.flagged_by !== user.id) {
-                    return NextResponse.json({ error: 'Forbidden: not authorized to unflag this message' }, { status: 403 })
-                }
-            }
-
-            const { error: flagError } = await supabaseAdmin
-                .from('chat_messages')
-                .update({
-                    flagged: action === 'flag',
-                    flagged_by: action === 'flag' ? user.id : null
-                })
-                .eq('id', messageId)
-
-            if (flagError) throw flagError
-            return NextResponse.json({ success: true })
-        }
-
-        return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
-    } catch (err: any) {
-        console.error('[admin-chat-action] Error:', err)
-        return NextResponse.json({ error: err.message || 'Failed to execute chat action' }, { status: 500 })
+    if (action === 'unflag' && !platformAdmin && !isTeamModerator && message.flagged_by !== user.id) {
+      return NextResponse.json({ error: 'You cannot remove this report.' }, { status: 403 })
     }
+    if (action === 'flag' && message.flagged) return NextResponse.json({ success: true })
+    const { error } = await db.from('chat_messages').update({ flagged: action === 'flag', flagged_by: action === 'flag' ? user.id : null }).eq('id', messageId)
+    if (error) throw error
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('[admin-chat-action] Failed:', error)
+    return NextResponse.json({ error: 'Could not update this message. Please try again.' }, { status: 500 })
+  }
 }

@@ -2,7 +2,7 @@ import React, { memo, useState } from 'react'
 import { format } from 'date-fns'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Smile, CornerUpLeft, Pencil, Trash2, Lock, Check, CheckCheck } from 'lucide-react'
-import { cn, isAdmin } from '@/lib/utils'
+import { cn, isPlatformAdministrator } from '@/lib/utils'
 
 // Types (mirrored from ChatSystem to prevent circular dependencies while keeping it simple)
 export type MessageUserMeta = {
@@ -44,6 +44,7 @@ export interface MessageBubbleProps {
     searchQuery: string
     currentUserRole: string | undefined
     currentUserId: string | undefined
+    canModerate?: boolean
     // Actions
     setShowReactionPicker: (id: string | null) => void
     handleReply: (msg: Message) => void
@@ -106,7 +107,7 @@ const resolveDisplayName = (
 export const getDisplayName = (users?: MessageUserMeta | null) =>
     resolveDisplayName(users?.full_name, users?.oscar, users?.role)
 
-const actionButton = 'h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground transition-colors'
+const actionButton = 'hit-area h-9 w-9 rounded-lg flex items-center justify-center text-muted-foreground transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary sm:h-8 sm:w-8'
 
 export const MessageBubble = memo(({
     msg,
@@ -122,6 +123,7 @@ export const MessageBubble = memo(({
     searchQuery,
     currentUserRole,
     currentUserId,
+    canModerate = isPlatformAdministrator(currentUserRole),
     setShowReactionPicker,
     handleReply,
     handleEdit,
@@ -132,13 +134,13 @@ export const MessageBubble = memo(({
     // Touch screens have no hover, so a tap on the bubble reveals its actions instead.
     const [actionsOpen, setActionsOpen] = useState(false)
     const mentionsMe = !isOwn && !!currentUserId && msg.mentions.includes(currentUserId)
-    const canDelete = isOwn || isAdmin(currentUserRole)
+    const canDelete = isOwn || canModerate
     const time = safeFormatTime(msg.created_at)
     const readCount = msg.read_by.filter(id => id !== msg.sender_id).length
 
     const bubbleClasses = isOwn
         ? cn('bg-primary text-primary-foreground', isLast && 'rounded-br-md')
-        : cn('bg-card text-foreground border', isLast && 'rounded-bl-md', mentionsMe && 'border-amber-500/50 bg-amber-500/10')
+        : cn('bg-card text-foreground border border-border/70', isLast && 'rounded-bl-md', mentionsMe && 'border-primary/30 bg-primary/5')
 
     const toggleActionsOnTouch = () => {
         if (typeof window !== 'undefined' && window.matchMedia?.('(hover: none)').matches) {
@@ -154,7 +156,7 @@ export const MessageBubble = memo(({
     const meta = (
         <span
             className={cn(
-                'float-right ml-2 mt-1.5 inline-flex translate-y-0.5 items-center gap-1 text-[11px] leading-none tabular-nums select-none',
+                'float-right ml-3 mt-1.5 inline-flex translate-y-0.5 items-center gap-1 text-xs leading-none tabular-nums select-none',
                 isOwn ? 'text-primary-foreground/75' : 'text-muted-foreground'
             )}
         >
@@ -191,19 +193,19 @@ export const MessageBubble = memo(({
                 {!isOwn && isFirst && (
                     <div className="mb-1 px-1 text-xs font-semibold text-primary">
                         {displayName}
-                        {msg.is_private && <span className="ml-1 inline-flex items-center gap-0.5 font-medium text-amber-700 dark:text-amber-400"><Lock aria-hidden="true" className="h-3 w-3" />private</span>}
+                        {msg.is_private && <span title="Visible to mentioned members and executives" className="ml-2 inline-flex items-center gap-1 font-medium text-muted-foreground"><Lock aria-hidden="true" className="h-3 w-3" />Restricted</span>}
                     </div>
                 )}
                 {isOwn && isFirst && msg.is_private && (
                     <div className="mb-1 flex items-center gap-0.5 px-1 text-xs font-medium text-amber-700 dark:text-amber-400">
-                        <Lock aria-hidden="true" className="h-3 w-3" />Private
+                        <Lock aria-hidden="true" className="h-3 w-3" />Mentioned members + executives
                     </div>
                 )}
 
-                {repliedMsg && (
+                {msg.reply_to_id && (
                     <div className="mb-1 max-w-full truncate rounded-lg border-l-2 border-primary/60 bg-muted/60 px-2.5 py-1.5 text-xs text-muted-foreground">
-                        <strong className="text-foreground/80">{getDisplayName(repliedMsg.users)}: </strong>
-                        <span>{repliedMsg.content}</span>
+                        <strong className="text-foreground/80">{repliedMsg ? getDisplayName(repliedMsg.users) : 'Earlier message'}: </strong>
+                        <span>{repliedMsg?.deleted_at ? 'Message removed' : repliedMsg?.content || 'Original message unavailable'}</span>
                     </div>
                 )}
 
@@ -211,7 +213,7 @@ export const MessageBubble = memo(({
                     <div
                         onClick={toggleActionsOnTouch}
                         className={cn(
-                            'relative rounded-2xl px-3 py-2 text-[15px] sm:text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm',
+                            'relative rounded-2xl px-3.5 py-2.5 text-[15px] sm:text-sm leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]',
                             bubbleClasses,
                             msg.is_private && !isOwn && 'border-l-4 border-l-amber-500',
                             msg.deleted_at && 'opacity-70'
@@ -220,11 +222,6 @@ export const MessageBubble = memo(({
                         {msg.deleted_at ? (
                             msg.deleted_by_admin ? (
                                 <span className="italic text-xs">This message was removed by an admin</span>
-                            ) : isAdmin(currentUserRole) ? (
-                                <>
-                                    <span>{renderContent(msg.content, searchQuery, isOwn)}</span>
-                                    <span className="block italic text-xs opacity-80">(Deleted by {displayName})</span>
-                                </>
                             ) : (
                                 <span className="italic text-xs">This message was deleted</span>
                             )
@@ -234,7 +231,7 @@ export const MessageBubble = memo(({
                         {meta}
                     </div>
 
-                    {(!msg.deleted_at || isAdmin(currentUserRole)) && (
+                    {(!msg.deleted_at || isPlatformAdministrator(currentUserRole)) && (
                         <div
                             className={cn(
                                 'absolute -top-10 z-20 flex gap-0.5 rounded-xl border bg-popover p-1 shadow-lg transition-opacity',
