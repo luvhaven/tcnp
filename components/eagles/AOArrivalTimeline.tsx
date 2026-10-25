@@ -159,7 +159,7 @@ export default function AOArrivalTimeline({ papaNme }: { papaNme?: string }) {
                         </div>
                     )
                 })}
-                <p className="text-xs text-muted-foreground text-center pt-1">Progress is local — reload resets. Log important confirmations in Team Chat.</p>
+                <p className="text-xs text-muted-foreground text-center pt-1">Progress is local — reload resets. Log important confirmations in Chat.</p>
             </CardContent>
         </Card>
     )

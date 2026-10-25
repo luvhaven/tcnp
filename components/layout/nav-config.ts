@@ -67,7 +67,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: "Live Ops",
     items: [
-      { name: "Team Chat", href: "/chat", icon: MessageCircle },
+      { name: "Chat", href: "/chat", icon: MessageCircle },
       { name: "Incidents", href: "/incidents", icon: AlertTriangle },
     ],
   },

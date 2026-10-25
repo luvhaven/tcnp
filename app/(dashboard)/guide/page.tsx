@@ -120,7 +120,7 @@ const sections = [
     icon: MessageCircle,
     color: 'text-primary',
     bg: 'bg-primary/10',
-    title: 'Team Chat',
+    title: 'Chat',
     badge: 'Communications',
     content: [
       {
