@@ -71,7 +71,8 @@ const MODULES = [
   },
 ]
 
-import { canAccessCommandCentre } from "@/lib/utils"
+import { canAccessCommandCentre, isPlatformAdministrator } from "@/lib/utils"
+import { OFFICER_ONLINE_WINDOW_MS, OFFICER_PRESENCE_REFRESH_MS } from "@/lib/presence"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 
 export default function CommandPage() {
@@ -83,10 +84,10 @@ export default function CommandPage() {
     if (!hasAccess) return
     const load = async () => {
       try {
-        const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+        const onlineSince = new Date(Date.now() - OFFICER_ONLINE_WINDOW_MS).toISOString()
         const [journeys, officers, incidents] = await Promise.all([
           supabase.from("journeys").select("id", { count: "exact", head: true }).eq("status", "active").eq("is_deleted", false),
-          supabase.from("users").select("id", { count: "exact", head: true }).gte("last_seen", fiveMinAgo),
+          supabase.from("users").select("id", { count: "exact", head: true }).gte("last_seen", onlineSince).eq("is_online", true).eq("is_active", true).eq("activation_status", "active").eq("is_directory_hidden", false),
           supabase.from("incidents").select("id", { count: "exact", head: true }).neq("status", "resolved"),
         ])
         setStats({
@@ -99,6 +100,8 @@ export default function CommandPage() {
       }
     }
     void load()
+    const timer = setInterval(() => void load(), OFFICER_PRESENCE_REFRESH_MS)
+    return () => clearInterval(timer)
   }, [hasAccess])
 
   if (userLoading) {
@@ -200,6 +203,11 @@ export default function CommandPage() {
               <p className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400 mt-0.5">
                 <CountUp value={stats.onlineOfficers} />
               </p>
+              {isPlatformAdministrator(currentUser?.role) && (
+                <Link href="/officers?status=online" className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                  View online officers <ArrowRight className="h-3 w-3" />
+                </Link>
+              )}
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
               <ShieldCheck className="h-5 w-5" />

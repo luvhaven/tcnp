@@ -3,7 +3,7 @@
  * both always agree on which destinations a role can see.
  */
 import type { ComponentType } from "react"
-import { canApproveSignups, oscarToRole } from "@/lib/utils"
+import { canAccessCommandCentre, canApproveSignups, oscarToRole } from "@/lib/utils"
 import {
   LayoutDashboard,
   Users,
@@ -148,11 +148,6 @@ const ADMIN_ROLES = new Set([
   "hod", "hop",
 ])
 
-const COMMAND_CENTRE_ROLES = new Set([
-  "super_admin", "dev_admin", "admin",
-  "command", "head_of_command",
-])
-
 const UNIT_HREFS: Record<string, string[]> = {
   alpha: ["/alpha"],
   command: ["/command"],
@@ -169,8 +164,7 @@ export function getVisibleNav(role: string | null, oscar?: string | null, unitSl
   const effectiveRole = role === 'delta_oscar' ? (oscarRole || role) : (role || oscarRole)
   const membershipHrefs = unitSlugs.flatMap(slug => UNIT_HREFS[slug] ?? [])
   const canAccessCommand = Boolean(
-    (role && COMMAND_CENTRE_ROLES.has(role))
-    || (effectiveRole && COMMAND_CENTRE_ROLES.has(effectiveRole))
+    canAccessCommandCentre(role, oscar)
     || unitSlugs.includes('command')
   )
 
@@ -196,7 +190,7 @@ export function getVisibleNav(role: string | null, oscar?: string | null, unitSl
     visibleList = ALL_NAV.filter(n => allowed.has(n.href))
   }
 
-  // Command Centre is exclusively for Admin and Command
+  // Command Centre includes platform administrators and Command members.
   if (!canAccessCommand) {
     visibleList = visibleList.filter(n => n.href !== "/command")
   }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isPlatformAdministrator } from '@/lib/utils'
+import { isOfficerOnline } from '@/lib/presence'
 
 export async function GET() {
   try {
@@ -32,7 +33,7 @@ export async function GET() {
     // Fetch all officers via admin client (bypasses RLS)
     const { data: officers, error } = await adminClient
       .from('users')
-      .select('id, full_name, email, phone, role, oscar, activation_status, unit, current_title_id, last_seen, created_at, photo_url, team, is_team_head, date_of_birth, gender, address, local_government_area, state, nearest_bus_stop_landmark, city, bio, profile_completed_at, updated_at')
+      .select('id, full_name, email, phone, role, oscar, activation_status, is_active, is_online, unit, current_title_id, last_seen, created_at, photo_url, team, is_team_head, date_of_birth, gender, address, local_government_area, state, nearest_bus_stop_landmark, city, bio, profile_completed_at, updated_at')
       .eq('is_directory_hidden', false)
       .order('full_name')
 
@@ -64,14 +65,13 @@ export async function GET() {
       }
     }
 
-    // Compute is_online: last_seen within the last 5 minutes
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+    const now = Date.now()
 
     // Map officers with computed is_active and is_online
     const enrichedOfficers = (officers || []).map((officer: any) => ({
       ...officer,
       is_active: activeUserIds.has(officer.id),
-      is_online: officer.last_seen != null && officer.last_seen >= fiveMinutesAgo,
+      is_online: isOfficerOnline(officer, now),
     }))
 
     return NextResponse.json({ officers: enrichedOfficers }, {

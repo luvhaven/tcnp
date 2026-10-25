@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { isPlatformAdministrator } from '@/lib/utils'
+import { isOfficerOnline } from '@/lib/presence'
 import OfficersClient from './OfficersClient'
 
 export default async function OfficersPage() {
@@ -29,6 +30,7 @@ export default async function OfficersPage() {
       unit,
       phone,
       is_active,
+      is_online,
       oscar,
       last_seen,
       created_at,
@@ -47,19 +49,19 @@ export default async function OfficersPage() {
       bio,
       profile_completed_at
     `)
+    .eq('is_directory_hidden', false)
     .order('full_name')
 
   if (error) {
     console.error('Officers fetch error:', error)
   }
 
-  // Compute is_online from last_seen freshness so the first paint (before the
-  // client re-fetches via /api/officers/list) already shows correct counts —
-  // this column isn't selected/derived above, so it was always undefined here.
-  const fiveMinutesAgo = new Date(new Date().getTime() - 5 * 60 * 1000).toISOString()
+  // Use the same presence rule for the first paint and subsequent API refreshes.
+  // eslint-disable-next-line react-hooks/purity -- Request-time snapshot in an async Server Component.
+  const now = Date.now()
   const enrichedInitialOfficers = (initialOfficers || []).map((officer: any) => ({
     ...officer,
-    is_online: officer.last_seen != null && officer.last_seen >= fiveMinutesAgo,
+    is_online: isOfficerOnline(officer, now),
   }))
 
   return (
