@@ -12,7 +12,7 @@ The migration deliberately does not backfill invitations from assignments or pas
 | --- | --- |
 | Active officers could discover every operational program | Server-provided directory based on exact room invitations |
 | Legacy permissive policies allowed cross-program access | Restrictive database policies, exact scope checks, guarded legacy RPCs |
-| Program/Papa selectors raced and retained the wrong transcript | One room directory and a fresh conversation instance per account/room |
+| Program/Papa selectors raced and retained the wrong transcript | Authorized dropdown choices and a fresh conversation instance per account/room |
 | Team and program chat used separate implementations | Shared conversation, composer, reactions, receipts, and moderation |
 | Member lists contained unrelated officers | Exact room audience; eligible invite candidates visible only to managers |
 | Archived programs remained selectable | Directory filtering plus database enforcement |
@@ -25,7 +25,7 @@ The migration deliberately does not backfill invitations from assignments or pas
 | Repeated broadcasts used inconsistent topics | Private deterministic room topics; no draft text broadcast |
 | Export/archive scope included unrelated Papa rooms | Exact team/program/Papa scope, paged exports, formula-safe CSV |
 | Deleted replies exposed original text | Deleted/unavailable reply placeholders |
-| Mobile navigation competed with the conversation | Separate directory/conversation views, independent scrolling, keyboard-aware sizing |
+| Mobile navigation competed with the conversation | Compact dropdowns above one full-width conversation, independent scrolling, keyboard-aware sizing |
 
 ## Interface
 
