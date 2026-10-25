@@ -458,3 +458,9 @@ export const OFFICER_TEAMS = [
 
 export type OfficerTeam = (typeof OFFICER_TEAMS)[number]['value']
 
+/** Administrators and senior leadership can chat without joining a team. */
+export function getAccessibleTeamChats(role: string | null | undefined, assignedTeam?: string | null) {
+  if (isPlatformAdministrator(role)) return OFFICER_TEAMS
+  return OFFICER_TEAMS.filter(team => team.value === assignedTeam)
+}
+

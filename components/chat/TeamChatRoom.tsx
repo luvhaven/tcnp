@@ -5,8 +5,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
-import { useCurrentUser } from "@/hooks/useCurrentUser"
-import { canModerateTeamChat, cn, OFFICER_TEAMS, isAdmin, effectiveOscarRole, isPlatformAdministrator } from "@/lib/utils"
+import { useCurrentUser, type CurrentUser } from "@/hooks/useCurrentUser"
+import { canModerateTeamChat, cn, OFFICER_TEAMS, isAdmin, effectiveOscarRole, isPlatformAdministrator, getAccessibleTeamChats } from "@/lib/utils"
+import { uniqueTopic } from "@/lib/realtime/topic"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -106,6 +107,43 @@ const TEAM_THEME: Record<string, { label: string; gradient: string; accent: stri
 
 export default function TeamChatRoom() {
   const { data: currentUser, isLoading: userLoading } = useCurrentUser()
+  const [selectedTeam, setSelectedTeam] = useState<string | null>(null)
+  const rooms = getAccessibleTeamChats(currentUser?.role, currentUser?.team)
+  const team = rooms.find(room => room.value === selectedTeam)?.value
+    ?? rooms.find(room => room.value === currentUser?.team)?.value
+    ?? rooms[0]?.value
+    ?? null
+
+  if (userLoading) {
+    return <div className="flex items-center justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+  }
+  if (!currentUser) return null
+
+  return (
+    <div className="space-y-3">
+      {rooms.length > 1 && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Team chat rooms">
+            {rooms.map(room => (
+              <Button
+                key={room.value}
+                variant={team === room.value ? "default" : "outline"}
+                aria-pressed={team === room.value}
+                onClick={() => setSelectedTeam(room.value)}
+              >
+                {room.label}
+              </Button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">You can read and send messages in every team room.</p>
+        </div>
+      )}
+      <TeamChatChannel key={`${currentUser.id}:${team ?? "unassigned"}`} currentUser={currentUser} team={team} />
+    </div>
+  )
+}
+
+function TeamChatChannel({ currentUser, team }: { currentUser: CurrentUser; team: string | null }) {
   const queryClient = useQueryClient()
   const confirm = useConfirm()
   const [draft, setDraft] = useState("")
@@ -118,12 +156,11 @@ export default function TeamChatRoom() {
   const [joiningTeam, setJoiningTeam] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const team = currentUser?.team ?? null
   const theme = team ? TEAM_THEME[team] : null
   const canModerate = canModerateTeamChat(currentUser?.role, currentUser?.is_team_head)
 
   const { data: messages = [], isLoading } = useQuery({
-    queryKey: ["team-chat", team],
+    queryKey: ["team-chat", currentUser.id, team],
     queryFn: async () => {
       if (!team) return []
       const { data, error } = await supabase
@@ -141,7 +178,7 @@ export default function TeamChatRoom() {
   })
 
   const { data: members = [] } = useQuery({
-    queryKey: ["team-members", team],
+    queryKey: ["team-members", currentUser.id, team],
     queryFn: async () => {
       if (!team) return []
       const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
@@ -168,13 +205,13 @@ export default function TeamChatRoom() {
   useEffect(() => {
     if (!team) return
     const channel = supabase
-      .channel(`team-chat-${team}`)
+      .channel(uniqueTopic(`team-chat-${team}`))
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages", filter: `team=eq.${team}` }, () => {
-        queryClient.invalidateQueries({ queryKey: ["team-chat", team] })
+        queryClient.invalidateQueries({ queryKey: ["team-chat", currentUser.id, team] })
       })
       .subscribe()
     return () => { void supabase.removeChannel(channel) }
-  }, [team, queryClient])
+  }, [team, currentUser.id, queryClient])
 
   // Follow new messages only while the reader is already at the bottom, and scroll
   // the message pane itself: scrollIntoView would also drag the whole page on phones.
@@ -257,7 +294,7 @@ export default function TeamChatRoom() {
       setDraft("")
       setMentionQuery(null)
       stickToBottomRef.current = true
-      queryClient.invalidateQueries({ queryKey: ["team-chat", team] })
+      queryClient.invalidateQueries({ queryKey: ["team-chat", currentUser.id, team] })
       inputRef.current?.focus()
     } catch {
       // The draft stays in the composer so it can simply be sent again.
@@ -281,7 +318,7 @@ export default function TeamChatRoom() {
       if (!response.ok) throw new Error(res.error || 'Moderation failed')
       return res
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-chat", team] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-chat", currentUser.id, team] }),
     onError: (err: any) => toast.error(err.message || "Moderation failed"),
   })
 
@@ -300,14 +337,10 @@ export default function TeamChatRoom() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Failed to remove member")
       toast.success("Officer removed from team")
-      queryClient.invalidateQueries({ queryKey: ["team-members", team] })
+      queryClient.invalidateQueries({ queryKey: ["team-members", currentUser.id, team] })
     } catch (err: any) {
       toast.error(err.message || "Failed to remove member")
     }
-  }
-
-  if (userLoading) {
-    return <div className="flex items-center justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
   }
 
   const handleJoinTeam = async (selectedTeam: string) => {
