@@ -36,6 +36,7 @@ export function ChatWorkspace({ rooms, selectedRoomId, loading, error, onSelectR
     onSelectRoom(room)
   }
   const switchMode = (next: 'team' | 'program') => {
+    if (active && next === mode) return
     if (active) setRemembered(previous => ({ ...previous, [mode]: active.id }))
     const options = next === 'team' ? teams : programRooms
     select(options.find(room => room.id === remembered[next]) || options[0])

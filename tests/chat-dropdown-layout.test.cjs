@@ -39,6 +39,9 @@ test('program and Papa dropdowns select exact authorized rooms in a single conve
 
 test('switching between programs and teams preserves the selected Papa room', () => {
   const ui = app([team, program, papa], papa.id)
+  ui.render().find(node => node.type === 'button' && node.props.children === 'Programs').props.onClick()
+  assert.equal(ui.selected, undefined)
+  assert.equal(ui.render().find(node => node.props?.id === 'chat-room').props.value, papa.id)
   ui.render().find(node => node.type === 'button' && node.props.children === 'Teams').props.onClick()
   assert.equal(ui.selected, team)
   ui.render().find(node => node.type === 'button' && node.props.children === 'Programs').props.onClick()
