@@ -402,7 +402,7 @@ export default function DashboardPage() {
     if (canCmd) {
       actions.push({ href: "/command", label: "Command Centre", sub: "Live ops & tracking", Icon: Radio, color: "text-sky-500", bg: "bg-sky-500/10" })
     } else {
-      actions.push({ href: "/chat", label: "Team Chat", sub: "Program rooms & team channel", Icon: MessageSquare, color: "text-sky-500", bg: "bg-sky-500/10" })
+      actions.push({ href: "/chat", label: "Chat", sub: "Program rooms & team channel", Icon: MessageSquare, color: "text-sky-500", bg: "bg-sky-500/10" })
     }
     return actions
   }, [currentUser])
@@ -428,7 +428,7 @@ export default function DashboardPage() {
   const officerUnitAction = getUnitActionForRole(currentUser?.role, currentUser?.oscar)
   const officerQuickActions = [
     { href: "/my-operations", label: "My Operations", sub: "Your assignments & call-sign", Icon: Zap, color: "text-orange-500", bg: "bg-orange-500/10" },
-    { href: "/chat", label: "Team Chat", sub: "Program rooms & team channel", Icon: MessageSquare, color: "text-sky-500", bg: "bg-sky-500/10" },
+    { href: "/chat", label: "Chat", sub: "Program rooms & team channel", Icon: MessageSquare, color: "text-sky-500", bg: "bg-sky-500/10" },
     ...(officerUnitAction ? [officerUnitAction] : []),
   ]
 
