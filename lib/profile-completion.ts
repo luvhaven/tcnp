@@ -4,6 +4,7 @@
  */
 
 export type ProfileFields = {
+  role?: string | null
   full_name?: string | null
   photo_url?: string | null
   phone?: string | null
@@ -11,7 +12,9 @@ export type ProfileFields = {
   team?: string | null
   date_of_birth?: string | null
   gender?: string | null
-  address?: string | null
+  local_government_area?: string | null
+  state?: string | null
+  nearest_bus_stop_landmark?: string | null
   city?: string | null
   bio?: string | null
 }
@@ -34,7 +37,9 @@ export const PROFILE_FIELD_SPECS: ProfileFieldSpec[] = [
   { key: 'date_of_birth', label: 'Birthday', weight: 1, required: false, group: 'personal' },
   { key: 'gender', label: 'Gender', weight: 1, required: false, group: 'personal' },
   { key: 'city', label: 'City', weight: 1, required: false, group: 'personal' },
-  { key: 'address', label: 'Address', weight: 1, required: false, group: 'personal' },
+  { key: 'local_government_area', label: 'Local government area', weight: 1, required: false, group: 'personal' },
+  { key: 'state', label: 'State', weight: 1, required: false, group: 'personal' },
+  { key: 'nearest_bus_stop_landmark', label: 'Nearest bus stop / landmark', weight: 1, required: false, group: 'personal' },
   { key: 'bio', label: 'Short bio', weight: 1, required: false, group: 'personal' },
 ]
 
@@ -54,7 +59,7 @@ export type CompletionResult = {
 }
 
 export function computeProfileCompletion(profile: ProfileFields | null | undefined): CompletionResult {
-  const specs = PROFILE_FIELD_SPECS
+  const specs = PROFILE_FIELD_SPECS.filter(spec => spec.key !== 'team' || requiresProtocolTeam(profile?.role))
   const totalWeight = specs.reduce((s, f) => s + f.weight, 0)
 
   let filledWeight = 0
@@ -80,4 +85,8 @@ export function computeProfileCompletion(profile: ProfileFields | null | undefin
     missing,
     missingRequired,
   }
+}
+
+export function requiresProtocolTeam(role?: string | null): boolean {
+  return role !== 'captain' && role !== 'vice_captain'
 }

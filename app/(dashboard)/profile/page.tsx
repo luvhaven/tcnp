@@ -9,7 +9,8 @@ import { notifyError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { cn, normalizeOscarLabel } from "@/lib/utils"
-import { computeProfileCompletion, type ProfileFields } from "@/lib/profile-completion"
+import { computeProfileCompletion, requiresProtocolTeam, type ProfileFields } from "@/lib/profile-completion"
+import { LocationSharingControl } from "@/components/tracking/LocationSharingControl"
 import { CompletionRing } from "@/components/profile/CompletionRing"
 import { useCelebrate } from "@/components/providers/CelebrateProvider"
 import { HeadshotCropDialog } from "@/components/profile/HeadshotCropDialog"
@@ -83,6 +84,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!currentUser) return
     setForm({
+      role: currentUser.role,
       full_name: currentUser.full_name,
       phone: currentUser.phone,
       oscar: normalizeOscarLabel(currentUser.oscar),
@@ -90,7 +92,9 @@ export default function ProfilePage() {
       date_of_birth: currentUser.date_of_birth,
       gender: currentUser.gender,
       city: currentUser.city,
-      address: currentUser.address,
+      local_government_area: currentUser.local_government_area,
+      state: currentUser.state,
+      nearest_bus_stop_landmark: currentUser.nearest_bus_stop_landmark,
       bio: currentUser.bio,
     })
     setPhotoUrl(currentUser.photo_url)
@@ -179,7 +183,9 @@ export default function ProfilePage() {
         date_of_birth: form.date_of_birth || null,
         gender: form.gender || null,
         city: form.city?.trim() || null,
-        address: form.address?.trim() || null,
+        local_government_area: form.local_government_area?.trim() || null,
+        state: form.state?.trim() || null,
+        nearest_bus_stop_landmark: form.nearest_bus_stop_landmark?.trim() || null,
         bio: form.bio?.trim() || null,
         profile_completed_at: result.isComplete ? new Date().toISOString() : null,
         updated_at: new Date().toISOString(),
@@ -308,7 +314,7 @@ export default function ProfilePage() {
             <Field label="Email" icon={Mail}>
               <Input value={currentUser.email ?? ""} disabled className="opacity-70" />
             </Field>
-            <Field label="Protocol team" icon={ShieldCheck} required>
+            <Field label="Protocol team" icon={ShieldCheck} required={requiresProtocolTeam(currentUser.role)}>
               <Select value={form.team ?? ""} disabled>
                 <SelectTrigger><SelectValue placeholder="Select your team" /></SelectTrigger>
                 <SelectContent>
@@ -316,7 +322,9 @@ export default function ProfilePage() {
                 </SelectContent>
               </Select>
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Prayer and protocol teams are assigned by Welfare or an administrator.
+                {requiresProtocolTeam(currentUser.role)
+                  ? "Prayer and protocol teams are assigned by Welfare or an administrator."
+                  : "A protocol team is not required for your role."}
               </p>
             </Field>
           </CardContent>
@@ -357,14 +365,29 @@ export default function ProfilePage() {
             <Field label="City" icon={MapPin}>
               <Input value={form.city ?? ""} onChange={e => set("city", e.target.value)} placeholder="Lagos" />
             </Field>
-            <Field label="Address" icon={MapPin}>
-              <Input value={form.address ?? ""} onChange={e => set("address", e.target.value)} placeholder="Street, area" />
+            <Field label="Local government area" icon={MapPin} htmlFor="profile-lga">
+              <Input id="profile-lga" autoComplete="address-level2" value={form.local_government_area ?? ""} onChange={e => set("local_government_area", e.target.value)} placeholder="e.g. Ikeja" />
+            </Field>
+            <Field label="State" icon={MapPin} htmlFor="profile-state">
+              <Input id="profile-state" autoComplete="address-level1" value={form.state ?? ""} onChange={e => set("state", e.target.value)} placeholder="e.g. Lagos" />
+            </Field>
+            <Field label="Nearest bus stop / landmark" icon={MapPin} htmlFor="profile-landmark">
+              <Input id="profile-landmark" value={form.nearest_bus_stop_landmark ?? ""} onChange={e => set("nearest_bus_stop_landmark", e.target.value)} placeholder="e.g. Allen Junction" />
             </Field>
             <div className="sm:col-span-2">
               <Field label="Short bio" icon={Sparkles}>
                 <Textarea rows={3} value={form.bio ?? ""} onChange={e => set("bio", e.target.value)} placeholder="A sentence or two about your protocol experience…" />
               </Field>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base"><MapPin className="h-4 w-4 text-primary" /> Location</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LocationSharingControl />
           </CardContent>
         </Card>
 
@@ -390,16 +413,17 @@ export default function ProfilePage() {
 }
 
 function Field({
-  label, icon: Icon, required, children,
+  label, icon: Icon, required, htmlFor, children,
 }: {
   label: string
   icon: React.ComponentType<{ className?: string }>
   required?: boolean
+  htmlFor?: string
   children: React.ReactNode
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="flex items-center gap-1.5 text-xs">
+      <Label htmlFor={htmlFor} className="flex items-center gap-1.5 text-xs">
         <Icon className="h-3.5 w-3.5 text-muted-foreground" />
         {label}
         {required && <span className="text-amber-500">*</span>}

@@ -46,6 +46,9 @@ type Officer = {
   date_of_birth?: string | null
   gender?: string | null
   address?: string | null
+  local_government_area?: string | null
+  state?: string | null
+  nearest_bus_stop_landmark?: string | null
   city?: string | null
   bio?: string | null
   profile_completed_at?: string | null

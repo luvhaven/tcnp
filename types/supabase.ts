@@ -3555,6 +3555,9 @@ export type Database = {
         Row: {
           activation_status: string | null
           address: string | null
+          local_government_area: string | null
+          state: string | null
+          nearest_bus_stop_landmark: string | null
           avatar_url: string | null
           bio: string | null
           city: string | null
@@ -3590,6 +3593,9 @@ export type Database = {
         Insert: {
           activation_status?: string | null
           address?: string | null
+          local_government_area?: string | null
+          state?: string | null
+          nearest_bus_stop_landmark?: string | null
           avatar_url?: string | null
           bio?: string | null
           city?: string | null
@@ -3625,6 +3631,9 @@ export type Database = {
         Update: {
           activation_status?: string | null
           address?: string | null
+          local_government_area?: string | null
+          state?: string | null
+          nearest_bus_stop_landmark?: string | null
           avatar_url?: string | null
           bio?: string | null
           city?: string | null

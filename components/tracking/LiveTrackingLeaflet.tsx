@@ -5,6 +5,8 @@ import L from 'leaflet'
 import { detachTileLayer } from '@/lib/maps/tile-layer-detach'
 import 'leaflet/dist/leaflet.css'
 import { Layers, Locate, Maximize, Minimize, WifiOff } from 'lucide-react'
+import { useLocationSharing } from '@/hooks/useLocationSharing'
+import { createLocationSharingGuard } from '@/lib/location-sharing'
 
 export type LiveTrackingLeafletLocation = {
   user_id: string
@@ -172,6 +174,7 @@ export default function LiveTrackingLeaflet({
   })
   const [layerMenuOpen, setLayerMenuOpen] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const { enabled: sharingEnabled } = useLocationSharing()
   const [tilesFailing, setTilesFailing] = useState(false)
   const [activeStyleLabel, setActiveStyleLabel] = useState<string | null>(null)
   const tileTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -436,10 +439,13 @@ export default function LiveTrackingLeaflet({
   }
 
   const locateMe = () => {
+    const canShare = createLocationSharingGuard()
+    if (!canShare()) return
     const map = mapRef.current
     if (!map || !('geolocation' in navigator)) return
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        if (!canShare()) return
         try {
           const lat = pos.coords.latitude
           const lng = pos.coords.longitude
@@ -615,9 +621,10 @@ export default function LiveTrackingLeaflet({
         <button
           type="button"
           onClick={locateMe}
-          className="flex h-9 w-9 items-center justify-center rounded-md border border-black/10 bg-white text-slate-700 shadow-md transition-colors hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          disabled={!sharingEnabled}
+          className="flex h-9 w-9 items-center justify-center rounded-md border border-black/10 bg-white text-slate-700 shadow-md transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
           aria-label="Center on my location"
-          title="Locate me"
+          title={sharingEnabled ? "Locate me" : "Turn on location sharing to locate yourself"}
         >
           <Locate className="h-4 w-4" />
         </button>

@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useIsClient } from '@/hooks/useIsClient'
 import { toast } from 'sonner'
+import { createLocationSharingGuard, isLocationSharingEnabled } from '@/lib/location-sharing'
 
 /**
  * LocationTracker Component - Clean Permission Flow
@@ -21,6 +22,7 @@ export function LocationTracker() {
   const [permissionRequested, setPermissionRequested] = useState(false)
   const [hasEverTracked, setHasEverTracked] = useState(false) // NEW: Track if we've successfully tracked before
   const watchIdRef = useRef<number | null>(null)
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mountedRef = useRef(true)
   const lastPositionRef = useRef<{ latitude: number; longitude: number; timestamp: number } | null>(null)
 
@@ -28,11 +30,13 @@ export function LocationTracker() {
   const audioContextRef = useRef<AudioContext | null>(null)
 
   const sendAdminAlert = async (type: 'LOCATION_LOSS' | 'BATTERY_CRITICAL') => {
+    const canShare = createLocationSharingGuard()
+    if (!canShare() || !mountedRef.current) return
     try {
       const { createClient } = await import('@/lib/supabase/client')
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user || !canShare() || !mountedRef.current) return
 
       await (supabase as any).from('notifications').insert({
         user_id: user.id,
@@ -49,6 +53,7 @@ export function LocationTracker() {
   }
 
   const playAlert = (type: 'location_lost' | 'network_lost') => {
+    if (!isLocationSharingEnabled() || !mountedRef.current) return
     if (type === 'location_lost') {
       sendAdminAlert('LOCATION_LOSS')
     }
@@ -101,11 +106,13 @@ export function LocationTracker() {
   // Network Monitoring
   useEffect(() => {
     const handleOffline = () => {
+      if (!isLocationSharingEnabled()) return
       console.warn('⚠️ Network connection lost')
       toast.error('Network lost. Tracking paused.')
       if (hasEverTracked) playAlert('network_lost') // Only alert if we've been tracking
     }
     const handleOnline = () => {
+      if (!isLocationSharingEnabled()) return
       console.log('✅ Network restored')
       toast.success('Network restored. Resuming tracking.')
     }
@@ -121,10 +128,13 @@ export function LocationTracker() {
   // Wake Lock API (Keep screen on)
   useEffect(() => {
     let wakeLock: any = null;
+    let cancelled = false;
     const requestWakeLock = async () => {
       try {
         if ('wakeLock' in navigator) {
-          wakeLock = await (navigator as any).wakeLock.request('screen');
+          const lock = await (navigator as any).wakeLock.request('screen');
+          if (cancelled || !isLocationSharingEnabled()) { await lock.release(); return }
+          wakeLock = lock;
           console.log('💡 Screen Wake Lock active');
         }
       } catch (err: any) {
@@ -142,6 +152,7 @@ export function LocationTracker() {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
+      cancelled = true;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (wakeLock) wakeLock.release();
     };
@@ -168,6 +179,7 @@ export function LocationTracker() {
     mountedRef.current = true
     return () => {
       mountedRef.current = false
+      if (retryTimerRef.current !== null) clearTimeout(retryTimerRef.current)
       if (watchIdRef.current !== null) {
         try {
           navigator.geolocation.clearWatch(watchIdRef.current)
@@ -205,26 +217,25 @@ export function LocationTracker() {
 
   // Permissions API Listener for robustness (silent - no alerts on permission changes)
   useEffect(() => {
+    let cancelled = false
+    let permission: PermissionStatus | null = null
+    const handleChange = () => {
+      if (cancelled || !isLocationSharingEnabled()) return
+      if (permission?.state === 'granted') setPermissionRequested(false)
+      else if (permission?.state === 'denied') setIsTracking(false)
+    }
     if (typeof navigator !== 'undefined' && 'permissions' in navigator) {
       navigator.permissions.query({ name: 'geolocation' }).then((permissionStatus) => {
-
-        const handleChange = () => {
-          console.log('📍 Permission status changed to:', permissionStatus.state)
-          if (permissionStatus.state === 'granted') {
-            // (Re)start tracking — covers both recovery AND a first-time grant
-            // coming from the LocationEnforcer's gesture-driven prompt
-            setPermissionRequested(false)
-          } else if (permissionStatus.state === 'denied') {
-            setIsTracking(false)
-            // NO ALERT - this might be initial denial, not a loss
-          }
-        }
-
-        permissionStatus.addEventListener('change', handleChange)
-        return () => permissionStatus.removeEventListener('change', handleChange)
-      })
+        if (cancelled) return
+        permission = permissionStatus
+        permission.addEventListener('change', handleChange)
+      }).catch(() => { /* Permissions API is unavailable on some browsers. */ })
     }
-  }, [hasEverTracked])
+    return () => {
+      cancelled = true
+      permission?.removeEventListener('change', handleChange)
+    }
+  }, [])
 
   // Start tracking with permission request - IMMEDIATE, NO DELAY
   useEffect(() => {
@@ -240,10 +251,14 @@ export function LocationTracker() {
           return
         }
 
+        const canShare = createLocationSharingGuard()
+        const isActive = () => mountedRef.current && canShare()
+        if (!isActive()) return
+
         const { createClient } = await import('@/lib/supabase/client')
         const supabase = createClient()
         const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
+        if (!user || !isActive()) return
 
         // iOS: never auto-fire the native prompt without a user gesture.
         // If permission hasn't been decided yet, wait — the LocationEnforcer
@@ -264,9 +279,11 @@ export function LocationTracker() {
           }
         }
 
+        if (!isActive()) return
+
         // Function to update location in database
         const updateLocation = async (position: GeolocationPosition) => {
-          if (!mountedRef.current) return
+          if (!isActive()) return
 
           try {
             let currentBattery = batteryLevel
@@ -279,6 +296,7 @@ export function LocationTracker() {
               } catch (e) { }
             }
 
+            if (!isActive()) return
             let speed = position.coords.speed
             const currentTimestamp = position.timestamp || Date.now()
 
@@ -324,9 +342,11 @@ export function LocationTracker() {
         try {
           // Silent retry - only for background recovery
           const silentRetry = () => {
+            if (!isActive()) return
             console.log('📍 Silent background retry...')
             navigator.geolocation.getCurrentPosition(
               (pos) => {
+                if (!isActive()) return
                 setIsTracking(true)
                 setHasEverTracked(true)
                 updateLocation(pos)
@@ -348,17 +368,18 @@ export function LocationTracker() {
             )
           })
 
-          if (!mountedRef.current) return
+          if (!isActive()) return
 
           console.log('📍 Initial location obtained, starting continuous tracking')
           setHasEverTracked(true)
           await updateLocation(position)
+          if (!isActive()) return
 
           if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current)
 
           watchIdRef.current = navigator.geolocation.watchPosition(
             async (pos) => {
-              if (mountedRef.current) {
+              if (isActive()) {
                 if (!isTracking) {
                   setIsTracking(true)
                   console.log('📍 Tracking recovered via watch.')
@@ -367,6 +388,7 @@ export function LocationTracker() {
               }
             },
             (error) => {
+              if (!isActive()) return
               console.warn('📍 Watch position error:', error.message)
               const wasTracking = isTracking
               setIsTracking(false)
@@ -380,7 +402,8 @@ export function LocationTracker() {
 
               // Silent retry for recovery
               if (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE) {
-                setTimeout(silentRetry, 5000)
+                if (retryTimerRef.current !== null) clearTimeout(retryTimerRef.current)
+                retryTimerRef.current = setTimeout(silentRetry, 5000)
               }
             },
             { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
@@ -389,6 +412,7 @@ export function LocationTracker() {
           setIsTracking(true)
 
         } catch (error: any) {
+          if (!isActive()) return
           console.warn('📍 Initial Location Permission Failed:', error)
           // NO ALERT on initial failure - user hasn't granted permission yet
           // Just show a silent toast
