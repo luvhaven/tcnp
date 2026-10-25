@@ -4,13 +4,14 @@ const fs = require('node:fs')
 const vm = require('node:vm')
 const ts = require('typescript')
 
-function load(path, imports = {}) {
+function load(path, imports = {}, globals = {}) {
   const mod = { exports: {} }
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(path, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX },
   }).outputText, {
     module: mod, exports: mod.exports,
     require: name => name in imports ? imports[name] : require(name),
+    ...globals,
   })
   return mod.exports
 }
@@ -40,103 +41,82 @@ function nodes(element) {
   return [element, ...nodes(element.props?.children)]
 }
 
-function chat(profile) {
-  const parentState = []
-  let channelState = []
-  let state = parentState
+function chat(initialProfile, options = {}) {
+  let profile = initialProfile
+  const state = []
   let cursor = 0
-  let channelKey
-  const writes = []
-  const queries = []
+  const requests = []
   const invalidations = []
+  const successes = []
+  let fetchImpl = async () => ({ ok: true, json: async () => ({ success: true }) })
   const react = {
     useState(initial) {
       const index = cursor++
-      const slots = state
-      if (!(index in slots)) slots[index] = initial
-      return [slots[index], value => { slots[index] = typeof value === 'function' ? value(slots[index]) : value }]
+      if (!(index in state)) state[index] = initial
+      return [state[index], value => { state[index] = typeof value === 'function' ? value(state[index]) : value }]
     },
-    useRef: value => ({ current: value }),
-    useMemo: fn => fn(),
-    useEffect() {},
+    useRef(value) {
+      const index = cursor++
+      if (!(index in state)) state[index] = { current: value }
+      return state[index]
+    },
   }
-  const client = { from: table => ({ insert: async row => { writes.push({ table, row }); return { error: null } } }) }
-  const ui = Object.fromEntries(['Button', 'Badge', 'Input', 'Avatar', 'AvatarFallback', 'AvatarImage'].map(name => [name, name]))
-  const imports = {
+  function SharedChatSystem() { throw Error('Wrapper tests must not invoke the conversation engine') }
+  const Component = load('components/chat/TeamChatRoom.tsx', {
     react,
-    'framer-motion': { motion: { div: 'div' }, AnimatePresence: 'div' },
-    sonner: { toast: { error() {}, success() {} } },
-    '@/lib/supabase/client': { createClient: () => client },
-    '@/hooks/useCurrentUser': { useCurrentUser: () => ({ data: profile, isLoading: false }) },
+    sonner: { toast: { success: text => successes.push(text) } },
+    '@/hooks/useCurrentUser': { useCurrentUser: () => ({ data: profile, isLoading: options.loading ?? false }) },
     '@/lib/utils': utils,
-    '@/lib/realtime/topic': { uniqueTopic: name => `${name}:test` },
-    '@/components/providers/ConfirmProvider': { useConfirm: () => async () => false },
-    '@/components/chat/AdminChatControls': { AdminChatControls: 'AdminChatControls' },
+    '@/components/ui/button': { Button: 'Button' },
+    '@/components/chat/ChatSystem': { default: SharedChatSystem },
     '@tanstack/react-query': {
-      useQuery: options => { queries.push(options); return { data: [], isLoading: false } },
-      useMutation: () => ({}),
-      useQueryClient: () => ({ invalidateQueries: options => invalidations.push(options) }),
+      useQueryClient: () => ({
+        invalidateQueries: async value => { invalidations.push(value) },
+        setQueryData: (_key, update) => { profile = update(profile) },
+      }),
     },
-  }
-  for (const name of ['button', 'badge', 'input', 'avatar']) imports[`@/components/ui/${name}`] = ui
-  const Component = load('components/chat/TeamChatRoom.tsx', imports).default
+  }, {
+    fetch: async (...args) => { requests.push(args); return fetchImpl(...args) },
+  }).default
   function render() {
-    state = parentState
     cursor = 0
-    const tree = Component()
-    const channel = nodes(tree).find(node => typeof node.type === 'function' && node.type.name === 'TeamChatChannel')
-    return { tree, channel, buttons: nodes(tree).filter(node => node.type === 'Button') }
-  }
-  function room() {
-    const { channel } = render()
-    if (channel.key !== channelKey) { channelState = []; channelKey = channel.key }
-    state = channelState
-    cursor = 0
-    return channel.type(channel.props)
+    const tree = Component({ joinOnly: options.joinOnly })
+    return {
+      tree,
+      channel: nodes(tree).find(node => node.type === SharedChatSystem),
+      buttons: nodes(tree).filter(node => node.type === 'Button'),
+    }
   }
   function select(teamLabel) {
     const button = render().buttons.find(button => button.props.children === teamLabel)
-    assert.ok(button, `Missing room selector: ${teamLabel}`)
+    assert.ok(button, `Missing room choice: ${teamLabel}`)
     button.props.onClick()
   }
-  return { render, room, select, writes, queries, invalidations }
+  return { render, select, requests, invalidations, successes, profile: () => profile, setFetch: value => { fetchImpl = value } }
 }
 
-test('an unassigned Captain can switch rooms and send into the selected team without joining it', async () => {
-  const profile = { id: 'captain-id', role: 'captain', team: null, is_team_head: false }
-  const app = chat(profile)
-  assert.equal(app.render().channel.props.team, 'strength')
-  assert.equal(app.render().buttons.length, 3)
+async function settle() { for (let i = 0; i < 15; i++) await Promise.resolve() }
 
-  for (const [team, label] of [['wisdom', 'Team Wisdom'], ['swift', 'Team Swift'], ['strength', 'Team Strength']]) {
-    app.select(label)
-    assert.equal(app.render().channel.props.team, team)
-    let room = app.room()
-    const input = nodes(room).find(node => node.type === 'Input')
-    assert.equal(input.props.value, '')
-    input.props.onChange({ target: { value: `Hello ${team}` } })
-    room = app.room()
-    nodes(room).find(node => node.type === 'form').props.onSubmit({ preventDefault() {} })
-    for (let i = 0; i < 5; i++) await Promise.resolve()
-    assert.equal(app.writes.at(-1).table, 'chat_messages')
-    assert.equal(app.writes.at(-1).row.team, team)
-    assert.equal(app.writes.at(-1).row.sender_id, 'captain-id')
-    assert.equal(app.writes.at(-1).row.content, `Hello ${team}`)
-    assert.equal(profile.team, null)
-  }
-  assert.equal(app.writes.length, 3)
-})
-
-test('switching rooms clears the previous draft and scopes the message and member caches to the current user and team', () => {
-  const app = chat({ id: 'vice-id', role: 'vice_captain', team: null })
-  const first = app.render().channel
-  nodes(app.room()).find(node => node.type === 'Input').props.onChange({ target: { value: 'Private draft for Strength' } })
-  app.select('Team Swift')
-  assert.notEqual(app.render().channel.key, first.key)
-  assert.equal(nodes(app.room()).find(node => node.type === 'Input').props.value, '')
-  assert.deepEqual(Array.from(app.queries.at(-2).queryKey), ['team-chat', 'vice-id', 'swift'])
-  assert.deepEqual(Array.from(app.queries.at(-1).queryKey), ['team-members', 'vice-id', 'swift'])
-})
+for (const role of ['captain', 'vice_captain']) {
+  test(`an unassigned ${role} switches the unified engine to each team without joining`, () => {
+    const profile = { id: `${role}-id`, role, team: null }
+    const app = chat(profile)
+    assert.equal(app.render().channel.props.team, 'strength')
+    assert.equal(app.render().buttons.length, 3)
+    for (const [team, label] of [['wisdom', 'Team Wisdom'], ['swift', 'Team Swift'], ['strength', 'Team Strength']]) {
+      const previousKey = app.render().channel.key
+      app.select(label)
+      const { channel } = app.render()
+      assert.equal(channel.props.team, team)
+      assert.equal(channel.props.programId, undefined)
+      assert.equal(channel.props.papaId, undefined)
+      assert.equal(channel.props.roomLabel, label)
+      assert.notEqual(channel.key, previousKey, 'changing the keyed engine resets drafts and private reply state')
+      assert.equal(profile.team, null)
+    }
+    assert.equal(app.requests.length, 0)
+  })
+}
 
 test('ordinary officers get no cross-team selector and cannot retain an unauthorized selection', () => {
   const profile = { id: 'member', role: 'captain', team: 'wisdom' }
@@ -146,5 +126,47 @@ test('ordinary officers get no cross-team selector and cannot retain an unauthor
   assert.equal(app.render().buttons.length, 0)
   assert.equal(app.render().channel.props.team, 'wisdom')
   profile.team = null
-  assert.equal(app.render().channel.props.team, null)
+  assert.equal(app.render().channel, undefined)
+  assert.equal(app.render().buttons.length, 3, 'unassigned regular officers retain the first-join flow')
+})
+
+test('first join uses the guarded API once and refreshes both profile and room access', async () => {
+  const app = chat({ id: 'member', role: 'tango_oscar', team: null }, { joinOnly: true })
+  let resolveJoin
+  app.setFetch(() => new Promise(resolve => { resolveJoin = resolve }))
+  app.select('Team Wisdom')
+  app.select('Team Swift')
+  assert.equal(app.requests.length, 1, 'immediate duplicate clicks must not send a second membership request')
+  assert.equal(app.requests[0][0], '/api/teams/join')
+  assert.equal(app.requests[0][1].method, 'POST')
+  assert.deepEqual(JSON.parse(app.requests[0][1].body), { team: 'wisdom' })
+  assert.ok(app.render().buttons.every(button => button.props.disabled))
+  resolveJoin({ ok: true, json: async () => ({ success: true, team: 'wisdom' }) })
+  await settle()
+  assert.equal(app.profile().team, 'wisdom')
+  assert.deepEqual(app.invalidations.map(value => Array.from(value.queryKey)), [['currentUser'], ['chat-rooms']])
+  assert.equal(app.render().tree, null, 'joinOnly collapses once membership is confirmed')
+})
+
+test('a failed join keeps the profile unchanged and offers an inline error and retry', async () => {
+  const app = chat({ id: 'member', role: 'tango_oscar', team: null })
+  app.setFetch(async () => ({ ok: false, json: async () => ({ error: 'This team is currently unavailable.' }) }))
+  app.select('Team Strength')
+  await settle()
+  const rendered = app.render()
+  assert.equal(app.profile().team, null)
+  assert.equal(rendered.channel, undefined)
+  assert.equal(nodes(rendered.tree).find(node => node.props?.role === 'alert').props.children, 'This team is currently unavailable.')
+  assert.ok(rendered.buttons.every(button => !button.props.disabled))
+  assert.equal(app.invalidations.length, 0)
+})
+
+test('joinOnly never offers executives or existing members a team reassignment', () => {
+  for (const profile of [
+    { id: 'captain', role: 'captain', team: null },
+    { id: 'vice', role: 'vice_captain', team: 'swift' },
+    { id: 'officer', role: 'tango_oscar', team: 'wisdom' },
+  ]) assert.equal(chat(profile, { joinOnly: true }).render().tree, null)
+  assert.equal(chat(null).render().tree, null)
+  assert.equal(chat({ id: 'loading', role: 'captain', team: null }, { loading: true }).render().channel, undefined)
 })

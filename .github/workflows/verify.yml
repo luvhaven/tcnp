@@ -14,5 +14,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      - name: Install isolated PostgreSQL security test runtime
+        run: npm install --prefix .next/chat-sql-qa --no-audit --no-fund --package-lock=false @electric-sql/pglite@0.3.14
       - run: npm test
       - run: npm run type-check

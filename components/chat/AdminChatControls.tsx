@@ -1,276 +1,75 @@
 'use client'
 
-import React, { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { MoreVertical, Download, Archive, Trash2, FileText, Loader2 } from 'lucide-react'
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-    DropdownMenuSub,
-    DropdownMenuSubContent,
-    DropdownMenuSubTrigger,
-} from '@/components/ui/dropdown-menu'
+import { useState } from 'react'
+import { Archive, Download, Loader2, MoreHorizontal } from 'lucide-react'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useConfirm } from '@/components/providers/ConfirmProvider'
-import { toast } from 'sonner'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import { format } from 'date-fns'
+import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 
 interface AdminChatControlsProps {
-    programId?: string | null
-    programName?: string | null
-    team?: string | null
-    teamName?: string | null
-    /** Platform administrators can archive chats and destroy every chat. */
-    canManageAll?: boolean
+  programId?: string | null
+  papaId?: string | null
+  programName?: string | null
+  team?: string | null
+  teamName?: string | null
+  canManageAll?: boolean
+  onChanged?: () => void
 }
 
-export function AdminChatControls({ programId, programName, team, teamName, canManageAll = false }: AdminChatControlsProps) {
-    const [loading, setLoading] = useState(false)
-    const confirm = useConfirm()
-    const supabase = createClient()
-
-    // Helper to fetch chats
-    const fetchChats = async () => {
-        let query = supabase
-            .from('chat_messages')
-            .select('*, users:sender_id(full_name, role)')
-            .order('created_at', { ascending: true })
-
-        if (programId) {
-            query = query.eq('program_id', programId)
-        } else if (team) {
-            query = query.eq('team', team)
-        }
-
-        const { data, error } = await query
-        if (error) throw error
-        return data
+export function AdminChatControls({ programId, papaId, programName, team, teamName, canManageAll = false, onChanged }: AdminChatControlsProps) {
+  const [loading, setLoading] = useState(false)
+  const confirm = useConfirm()
+  const contextName = programName || teamName || 'this room'
+  const fetchChats = async () => {
+    if ((!programId && !team) || (programId && team) || (papaId && !programId)) throw new Error('Choose a valid room first.')
+    const client = createClient()
+    const rows: { id: string; created_at: string | null; content: string; sender: { full_name: string | null } | null }[] = []
+    for (let offset = 0; ; offset += 500) {
+      let query = client.from('chat_messages').select('id, created_at, content, sender:sender_id(full_name)').is('deleted_at', null).or('is_archived.is.null,is_archived.eq.false').order('created_at').order('id').range(offset, offset + 499)
+      if (team) query = query.eq('team', team).is('program_id', null).is('papa_id', null)
+      else { query = query.eq('program_id', programId!).is('team', null); query = papaId ? query.eq('papa_id', papaId) : query.is('papa_id', null) }
+      const { data, error } = await query
+      if (error) throw error
+      rows.push(...data as unknown as typeof rows)
+      if (data.length < 500) break
     }
-
-    const contextName = programName || teamName || (team ? `Team ${team}` : null)
-
-    const handleDownloadPDF = async () => {
-        try {
-            setLoading(true)
-            const chats = await fetchChats()
-            if (!chats || chats.length === 0) {
-                toast.info('No messages to export.')
-                return
-            }
-
-            const doc = new jsPDF()
-            const title = contextName ? `Chat Log - ${contextName}` : 'All Chats Log'
-            doc.text(title, 14, 15)
-
-            const tableData = chats.map(chat => [
-                format(new Date((chat as any).created_at || new Date().toISOString()), 'yyyy-MM-dd HH:mm:ss'),
-                (chat as any).users?.full_name || 'System / Unknown',
-                chat.content
-            ])
-
-            autoTable(doc, {
-                head: [['Date/Time', 'Sender', 'Message']],
-                body: tableData,
-                startY: 20,
-                styles: { fontSize: 9 },
-                columnStyles: {
-                    0: { cellWidth: 35 },
-                    1: { cellWidth: 40 },
-                    2: { cellWidth: 'auto' }
-                }
-            })
-
-            doc.save(`chat-export-${programId || team || 'all'}-${Date.now()}.pdf`)
-            toast.success('Successfully downloaded PDF.')
-        } catch (err) {
-            console.error(err)
-            toast.error('Failed to export PDF.')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    const handleDownloadCSV = async () => {
-        try {
-            setLoading(true)
-            const chats = await fetchChats()
-            if (!chats || chats.length === 0) {
-                toast.info('No messages to export.')
-                return
-            }
-
-            const headers = ['id', 'created_at', 'sender', 'content']
-            const rows = chats.map(chat => {
-                const sender = (chat as any).users?.full_name || 'Unknown'
-                // Escape quotes
-                const content = `"${(chat.content || '').replace(/"/g, '""')}"`
-                return [chat.id, chat.created_at, `"${sender}"`, content].join(',')
-            })
-
-            const csvContent = [headers.join(','), ...rows].join('\n')
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-            const url = URL.createObjectURL(blob)
-            const link = document.createElement('a')
-            link.href = url
-            link.download = `chat-export-${programId || team || 'all'}-${Date.now()}.csv`
-            document.body.appendChild(link)
-            link.click()
-            document.body.removeChild(link)
-            toast.success('Successfully downloaded CSV.')
-        } catch (err) {
-            console.error(err)
-            toast.error('Failed to export CSV.')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    const handleArchive = async () => {
-        if (
-            !(await confirm({
-                title: 'Confirm Archive',
-                message: `Are you sure you want to archive ${contextName ? `chats in ${contextName}` : 'all chats'}? They will no longer appear in the main chat view.`,
-                variant: 'destructive',
-            }))
-        ) {
-            return
-        }
-
-        try {
-            setLoading(true)
-            const response = await fetch('/api/admin/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'archive',
-                    programId: programId || undefined,
-                    team: team || undefined
-                })
-            })
-
-            const result = await response.json()
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to archive chats')
-            }
-
-            toast.success('Chats successfully archived.')
-            window.location.reload()
-        } catch (err: any) {
-            console.error(err)
-            toast.error(err.message || 'Failed to archive chats.')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    const handleDelete = async () => {
-        const scope = contextName ? contextName : 'ALL programs and teams'
-        if (
-            !(await confirm({
-                title: 'Absolute Danger Zone',
-                message: `You are about to PERMANENTLY DELETE all chat messages in ${scope}. This action is irreversible and no recovery is possible. Are you absolutely certain you want to proceed?`,
-                variant: 'destructive',
-            }))
-        ) {
-            return
-        }
-
-        // Double confirmation for deletion
-        if (
-            !(await confirm({
-                title: 'Final Confirmation',
-                message: 'There is no coming back from this. Last chance to cancel.',
-                variant: 'destructive',
-            }))
-        ) {
-            return
-        }
-
-        try {
-            setLoading(true)
-            let url = '/api/admin/chat?all=true'
-            if (programId) {
-                url = `/api/admin/chat?programId=${encodeURIComponent(programId)}`
-            } else if (team) {
-                url = `/api/admin/chat?team=${encodeURIComponent(team)}`
-            }
-
-            const response = await fetch(url, {
-                method: 'DELETE'
-            })
-
-            const result = await response.json()
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to delete chats')
-            }
-
-            toast.success(`Chats successfully and permanently deleted (${result.count || 0} messages removed).`)
-            window.location.reload()
-        } catch (err: any) {
-            console.error(err)
-            toast.error(err.message || 'Failed to delete chats.')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 gap-1 border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 text-amber-900 dark:text-amber-100 group relative">
-                    {loading ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-amber-600 dark:text-amber-400" />
-                    ) : (
-                        <MoreVertical className="h-4 w-4 text-amber-600 dark:text-amber-400 group-hover:text-amber-700" />
-                    )}
-                    <span>Admin Actions</span>
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel>
-                    {contextName ? `Manage "${contextName}"` : 'Manage All Chats'}
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-
-                <DropdownMenuSub>
-                    <DropdownMenuSubTrigger>
-                        <Download className="mr-2 h-4 w-4" />
-                        <span>Download / Export</span>
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent>
-                        <DropdownMenuItem onClick={handleDownloadPDF} disabled={loading}>
-                            <FileText className="mr-2 h-4 w-4 text-blue-600" />
-                            <span>Export as PDF</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={handleDownloadCSV} disabled={loading}>
-                            <FileText className="mr-2 h-4 w-4 text-green-600" />
-                            <span>Export as CSV</span>
-                        </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                </DropdownMenuSub>
-
-                <DropdownMenuSeparator />
-
-                {canManageAll && (
-                    <DropdownMenuItem onClick={handleArchive} disabled={loading}>
-                        <Archive className="mr-2 h-4 w-4 text-amber-600" />
-                        <span className="text-amber-600 font-medium">Archive Chats</span>
-                    </DropdownMenuItem>
-                )}
-
-                {(canManageAll || programId || team) && (
-                    <DropdownMenuItem onClick={handleDelete} disabled={loading}>
-                        <Trash2 className="mr-2 h-4 w-4 text-destructive" />
-                        <span className="text-destructive font-bold">Destroy Chats</span>
-                    </DropdownMenuItem>
-                )}
-            </DropdownMenuContent>
-        </DropdownMenu>
-    )
+    return rows
+  }
+  const exportChat = async (pdf: boolean) => {
+    if (loading) return
+    setLoading(true)
+    try {
+      const rows = await fetchChats()
+      if (!rows.length) { toast.info('No messages to export.'); return }
+      if (pdf) {
+        const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')])
+        const doc = new jsPDF()
+        doc.setFontSize(14); doc.text(doc.splitTextToSize(`Chat log: ${contextName}`, 180), 14, 16)
+        autoTable(doc, { head: [['Date / time', 'Sender', 'Message']], body: rows.map(row => [row.created_at ? new Date(row.created_at).toLocaleString() : '', row.sender?.full_name || 'Officer', row.content]), startY: 35, styles: { fontSize: 9 }, columnStyles: { 0: { cellWidth: 35 }, 1: { cellWidth: 35 } } })
+        doc.save(`chat-${papaId || programId || team}-${Date.now()}.pdf`)
+      } else {
+        const cell = (value: unknown) => { let text = String(value ?? ''); if (/^[=+@\-\t\r]/.test(text)) text = `'${text}`; return `"${text.replaceAll('"', '""')}"` }
+        const csv = [['id', 'created_at', 'sender', 'content'], ...rows.map(row => [row.id, row.created_at, row.sender?.full_name || 'Officer', row.content])].map(row => row.map(cell).join(',')).join('\r\n')
+        const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8;' }))
+        const link = document.createElement('a'); link.href = url; link.download = `chat-${papaId || programId || team}-${Date.now()}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
+      }
+      toast.success('Chat exported')
+    } catch { toast.error('The export could not finish. Please retry.') }
+    finally { setLoading(false) }
+  }
+  const archive = async () => {
+    if (loading || (!programId && !team)) return
+    if (!await confirm({ title: 'Archive room messages?', message: `Messages in ${contextName} will be hidden from the conversation. Other rooms are unaffected.`, variant: 'destructive' })) return
+    setLoading(true)
+    try {
+      const response = await fetch('/api/admin/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'archive', programId, papaId, team }) })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.error || 'Messages could not be archived.')
+      toast.success('Room messages archived'); onChanged?.()
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Messages could not be archived.') }
+    finally { setLoading(false) }
+  }
+  return <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" disabled={loading} aria-label="Room actions" className="h-10 w-10 rounded-xl">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-5 w-5" />}</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-52"><DropdownMenuLabel>Room actions</DropdownMenuLabel><DropdownMenuItem onClick={() => void exportChat(false)}><Download className="mr-2 h-4 w-4" />Export CSV</DropdownMenuItem><DropdownMenuItem onClick={() => void exportChat(true)}><Download className="mr-2 h-4 w-4" />Export PDF</DropdownMenuItem>{canManageAll && <><DropdownMenuSeparator /><DropdownMenuItem onClick={() => void archive()}><Archive className="mr-2 h-4 w-4" />Archive messages</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu>
 }

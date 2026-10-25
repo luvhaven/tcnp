@@ -51,7 +51,7 @@ test('every signup unit option resolves to a known unit', () => {
 
 test('admin chat archive and delete-all require platform administrators', () => {
   const source = fs.readFileSync('app/api/admin/chat/route.ts', 'utf8')
-  assert.match(source, /!messageId && !programId && !team && !isPlatformAdministrator\(callerData\.role\)/)
+  assert.match(source, /if \(!isPlatformAdministrator\(callerData\.role\)\) \{\s*return NextResponse\.json\(\{ error: 'Forbidden: only platform administrators can permanently delete chats'/)
   assert.match(source, /action === 'archive'\) \{\s*if \(!isPlatformAdministrator\(callerData\.role\)\)/)
 })
 
@@ -70,7 +70,8 @@ test('change-password re-authenticates with the current password', () => {
 })
 
 test('the browser no longer inserts notifications for other users', () => {
-  const chat = fs.readFileSync('components/chat/ChatSystem.tsx', 'utf8')
+  const chat = ['components/chat/ChatSystem.tsx', 'hooks/useChatConversation.ts']
+    .map(file => fs.readFileSync(file, 'utf8')).join('\n')
   assert.doesNotMatch(chat, /from\('notifications'\)\s*\.insert/)
   assert.match(chat, /\/api\/chat\/mention-notifications/)
 })
