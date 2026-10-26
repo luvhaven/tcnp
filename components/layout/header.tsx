@@ -64,8 +64,7 @@ const THEME_OPTIONS: { value: AppTheme; icon: typeof Sun; label: string }[] = [
 ]
 
 function ThemeSegmented() {
-  const { theme, setTheme } = useTheme()
-  const currentTheme = theme === "dark" ? "dark" : "light"
+  const { resolvedTheme: currentTheme, setTheme } = useTheme()
 
   return (
     <div className="flex items-center justify-between px-1 py-1.5">
