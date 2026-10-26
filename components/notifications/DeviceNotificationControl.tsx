@@ -1,42 +1,79 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Bell } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { connectDevicePush, disconnectDevicePush, getPushConfig, pushSupported, pushDisabled } from '@/lib/device-push'
+import { connectDevicePush, disconnectDevicePush, getPushConfig, pushSupported, pushDisabled, sendDeviceNotificationTest, type DevicePushConfig } from '@/lib/device-push'
+
+const ENABLED = 'Enabled on this device, including when TCNP is closed.'
+const TEST_SENT = 'Test notification sent. If it is hidden on Windows, check Settings → System → Notifications and turn off Do not disturb.'
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Could not update device notifications. Please try again.'
 
 export function DeviceNotificationControl({ compact = false }: { compact?: boolean }) {
-  const [config, setConfig] = useState<any>(null)
+  const [config, setConfig] = useState<DevicePushConfig | null>(null)
   const [enabled, setEnabled] = useState(false)
-  const [busy, setBusy] = useState(false)
+  const [supported, setSupported] = useState(true)
+  const [busy, setBusy] = useState(true)
   const [message, setMessage] = useState('Checking this device…')
+  const working = useRef(false)
   useEffect(() => {
     let live = true
     async function sync() {
-      if (!pushSupported()) { if (live) setMessage('On iPhone or iPad, add TCNP to your Home Screen and open it there. Otherwise use a browser that supports Web Push.'); return }
+      working.current = true
       try {
+        if (!pushSupported()) {
+          if (live) {
+            setSupported(false)
+            setMessage('This browser does not support device notifications. Use a browser with Web Push support. On iPhone or iPad, open TCNP from the Home Screen.')
+          }
+          return
+        }
         const next = await getPushConfig()
         if (!live) return
         setConfig(next)
         if (next.ready && Notification.permission === 'granted' && !pushDisabled()) {
-          await connectDevicePush(next)
-          if (live) { setEnabled(true); setMessage('Enabled on this device, including when TCNP is closed.') }
-        } else if (live) { setEnabled(false); setMessage(next.ready ? 'Get room invitations and updates even when TCNP is closed.' : 'Device notifications are being set up. Please try again shortly.') }
-      } catch { if (live) setMessage('Could not check device notifications. Refresh to retry.') }
+          await connectDevicePush(next, false, value => { if (live) setMessage(value) })
+          if (live) { setEnabled(true); setMessage(ENABLED) }
+        } else if (live) {
+          setEnabled(false)
+          setMessage(next.ready ? 'Get room invitations and updates even when TCNP is closed.' : 'Device notifications are temporarily unavailable. Retry setup shortly.')
+        }
+      } catch (error) { if (live) setMessage(errorMessage(error)) }
+      finally { if (live) { working.current = false; setBusy(false) } }
     }
     void sync()
     return () => { live = false }
   }, [])
+  const testNotification = async () => {
+    try { await sendDeviceNotificationTest(); setMessage(TEST_SENT) }
+    catch (error) { setMessage(errorMessage(error)) }
+  }
   return <section className={compact ? 'space-y-3' : 'space-y-3 rounded-xl border p-4'} aria-label="Device notifications">
-    <div><h3 className="flex items-center gap-2 font-medium"><Bell className="h-4 w-4" aria-hidden />Device notifications</h3><p className="mt-1 text-sm text-muted-foreground" role="status">{message}</p></div>
-    <Button variant={enabled ? 'outline' : 'default'} size="sm" disabled={busy || !config?.ready} pending={busy} onClick={async () => {
-      if (busy) return
-      setBusy(true)
-      try {
-        if (enabled) { await disconnectDevicePush(); setEnabled(false); setMessage('Off on this device. Your in-app notification bell still works.') }
-        else { await connectDevicePush(config, true); setEnabled(true); setMessage('Enabled on this device, including when TCNP is closed.') }
-      } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not update device notifications. Please retry.') }
-      finally { setBusy(false) }
-    }}>{enabled ? 'Turn off on this device' : 'Enable on this device'}</Button>
+    <div><h3 className="flex items-center gap-2 font-medium"><Bell className="h-4 w-4" aria-hidden />Device notifications</h3><p className="mt-1 text-sm text-muted-foreground" role="status" aria-live="polite">{message}</p></div>
+    <div className="flex flex-wrap gap-2">
+      <Button type="button" variant={enabled ? 'outline' : 'default'} size="sm" disabled={busy || !supported} pending={busy} onClick={async () => {
+        if (working.current) return
+        working.current = true
+        setBusy(true)
+        try {
+          if (enabled) {
+            await disconnectDevicePush()
+            setEnabled(false)
+            setMessage('Off on this device. Your in-app notification bell still works.')
+          } else if (!config?.ready) {
+            const next = await getPushConfig()
+            setConfig(next)
+            setMessage(next.ready ? 'Ready. Click Enable on this device to allow notifications.' : 'Device notifications are temporarily unavailable. Please retry shortly.')
+          } else {
+            await connectDevicePush(config, true, setMessage)
+            setEnabled(true)
+            setMessage(ENABLED)
+            await testNotification()
+          }
+        } catch (error) { setMessage(errorMessage(error)) }
+        finally { working.current = false; setBusy(false) }
+      }}>{busy ? 'Setting up…' : enabled ? 'Turn off on this device' : config?.ready ? 'Enable on this device' : 'Retry setup'}</Button>
+      {enabled && <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void testNotification()}>Send test notification</Button>}
+    </div>
   </section>
 }

@@ -27,7 +27,7 @@ test('closed-app worker protects shared devices and routes notification clicks',
   const handlers = {}, shown = [], navigated = [], stored = new Map()
   const cache = { put: async (key, response) => stored.set(key, await response.text()), delete: async key => stored.delete(key), match: async key => stored.has(key) ? new Response(stored.get(key)) : undefined }
   const self = { location: { origin: 'https://tcnp.vercel.app' }, addEventListener: (name, fn) => { handlers[name] = fn }, registration: { showNotification: async (title, options) => shown.push({ title, ...options }) }, clients: { matchAll: async () => [], openWindow: async url => navigated.push(url) } }
-  vm.runInNewContext(fs.readFileSync('worker/index.js', 'utf8'), { self, caches: { open: async () => cache }, Response, URL })
+  vm.runInNewContext(fs.readFileSync('public/notification-worker.js', 'utf8'), { self, caches: { open: async () => cache }, Response, URL })
   async function event(name, data) { let pending; handlers[name]({ ...data, waitUntil: p => { pending = p } }); await pending }
   const push = targetUserId => event('push', { data: { json: () => ({ targetUserId, tag: 'one', url: '/chat?programId=abc' }) } })
   await push('officer-a'); assert.equal(shown.length, 0)
