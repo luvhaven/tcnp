@@ -24,6 +24,7 @@ test('real React dialog forms preserve typing, selection, keyboard focus and sub
   const cache = new Map(), writes = [], errors = []
   const programs = [{ id: 'program-1', name: 'Active program', status: 'active' }]
   let vips = []
+  let currentUser = null
   const supabase = { from(table) { assert.equal(table, 'theatre_vips'); return {
     insert: async payload => { writes.push({ operation: 'insert', payload }); return {} },
     update: payload => ({ eq: async (_, id) => { writes.push({ operation: 'update', id, payload }); return {} } }),
@@ -40,12 +41,22 @@ test('real React dialog forms preserve typing, selection, keyboard focus and sub
     if (cache.has(file)) return cache.get(file)
     const mod = { exports: {} }
     cache.set(file, mod.exports)
-    const sourceFile = file === 'components/ui/dialog.tsx' && process.env.FORM_DIALOG_SOURCE ? process.env.FORM_DIALOG_SOURCE : file
+    const overrides = { 'components/ui/dialog.tsx': process.env.FORM_DIALOG_SOURCE, 'app/(dashboard)/profile/page.tsx': process.env.FORM_PROFILE_SOURCE }
+    const sourceFile = overrides[file] || file
     const source = ts.transpileModule(fs.readFileSync(sourceFile, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText
     vm.runInNewContext(source, {
       module: mod, exports: mod.exports, document, window: dom.window, navigator: dom.window.navigator, console,
       require(name) {
-        if (name === '@/lib/utils') return { cn: require('clsx').clsx }
+        if (name === '@/lib/utils') return { cn: require('clsx').clsx, normalizeOscarLabel: value => value }
+        if (name === '@/hooks/useCurrentUser') return { useCurrentUser: () => ({ data: currentUser, isLoading: false }) }
+        if (name === '@/lib/profile-completion') return load('lib/profile-completion.ts')
+        if (name === '@/components/tracking/LocationSharingControl') return { LocationSharingControl: () => null }
+        if (name === '@/components/notifications/DeviceNotificationControl') return { DeviceNotificationControl: () => null }
+        if (name === '@/components/profile/CompletionRing') return { CompletionRing: () => null }
+        if (name === '@/components/profile/HeadshotCropDialog') return { HeadshotCropDialog: () => null }
+        if (name === '@/components/providers/CelebrateProvider') return { useCelebrate: () => () => {} }
+        if (name === 'next/link') return { __esModule: true, default: ({ children, ...props }) => React.createElement('a', props, children) }
+        if (name === 'framer-motion') return { motion: { div: ({ initial: _initial, animate: _animate, children, ...props }) => React.createElement('div', props, children) } }
         if (name === '@/lib/supabase/client') return { createClient: () => supabase }
         if (name === '@/components/providers/ConfirmProvider') return { useConfirm: () => async () => true }
         if (name === '@/components/ui/select') return selectStubs
@@ -111,6 +122,9 @@ test('real React dialog forms preserve typing, selection, keyboard focus and sub
           React.createElement('button', { type: 'button' }, 'Save')))
     }
     await mount(React.createElement(Form))
+    const modal = document.querySelector('[role="dialog"]')
+    assert.equal(document.getElementById(modal.getAttribute('aria-labelledby')).textContent, 'Test form')
+    assert.equal(document.getElementById(modal.getAttribute('aria-describedby')).textContent, 'Complete all fields.')
     const name = document.getElementById('name'), notes = document.getElementById('notes')
     await enter(name, 'Jane Doe')
     await enter(notes, 'VIP guest\nAccess approved')
@@ -185,5 +199,29 @@ test('real React dialog forms preserve typing, selection, keyboard focus and sub
     assert.equal(writes.at(-1).id, 'vip-1')
     assert.equal(writes.at(-1).payload.full_name, 'Jane Smith')
     assert.equal(writes.at(-1).payload.notes, 'Original note — updated')
+  })
+  await t.test('My Profile keeps unsaved text and caret during background/headshot refreshes, but resets for a different officer', async () => {
+    currentUser = { id: 'officer-1', full_name: 'Jane Doe', email: 'jane@example.test', role: 'delta_oscar', oscar: 'Delta', team: 'strength', photo_url: null, local_government_area: 'Ikeja', state: 'Lagos' }
+    const ProfilePage = load('app/(dashboard)/profile/page.tsx').default
+    await mount(React.createElement(ProfilePage))
+    const name = document.querySelector('input[placeholder="John Doe"]')
+    name.focus(); name.setSelectionRange(5, 8)
+    await enter(name, 'Smith')
+    const lga = document.getElementById('profile-lga')
+    lga.setSelectionRange(lga.value.length, lga.value.length)
+    await enter(lga, ' North')
+    const caret = lga.selectionStart
+    currentUser = { ...currentUser, photo_url: 'https://images.example.test/new-headshot.jpg', role: 'captain', oscar: 'Command', team: null }
+    await act(async () => root.render(React.createElement(ProfilePage)))
+    assert.equal(name.value, 'Jane Smith')
+    assert.equal(lga.value, 'Ikeja North')
+    assert.ok(document.activeElement === lga)
+    assert.equal(lga.selectionStart, caret)
+    assert.ok(document.querySelector('img[src="https://images.example.test/new-headshot.jpg"]'))
+    assert.ok(document.querySelector('input[disabled][value="Command"]'))
+    currentUser = { ...currentUser, id: 'officer-2', full_name: 'Another Officer', local_government_area: 'Surulere' }
+    await act(async () => root.render(React.createElement(ProfilePage)))
+    assert.equal(name.value, 'Another Officer')
+    assert.equal(lga.value, 'Surulere')
   })
 })
