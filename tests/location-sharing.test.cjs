@@ -20,6 +20,7 @@ function preference(initial = 'on', storageBlocked = false) {
     localStorage: {
       getItem: key => { if (storageBlocked) throw Error('Unavailable'); return values.get(key) ?? null },
       setItem: (key, value) => { if (storageBlocked) throw Error('Unavailable'); values.set(key, value) },
+      removeItem: key => { if (storageBlocked) throw Error('Unavailable'); values.delete(key) },
     },
     addEventListener: (type, callback) => events.set(type, callback),
     removeEventListener: type => events.delete(type),
@@ -42,43 +43,101 @@ test('fresh signups and unavailable storage default to location off without an o
   assert.equal(p.store.isLocationSharingEnabled(), false)
 })
 
-function toggleDevice() {
+function toggleDevice(config = {}) {
   const p = preference('off')
   const requests = [], errors = [], readyEvents = []
+  const serverRequests = []
+  let serverEnabled = false, failServer = false
+  let releaseOn
   p.window.dispatchEvent = event => readyEvents.push(event.type)
   const navigator = { geolocation: { getCurrentPosition: (success, error) => requests.push({ success, error }) } }
-  const { toggleLocationSharing: toggle } = compile('lib/location-toggle.ts', {
+  const toggleModule = compile('lib/location-toggle.ts', {
     window: p.window, navigator, Event: class { constructor(type) { this.type = type } },
+    AbortSignal,
+    fetch: async (_, options) => {
+      serverRequests.push(options)
+      if (failServer) throw Error('Offline')
+      if (options.method === 'POST' && JSON.parse(options.body).enabled === true && config.holdOn) await new Promise(resolve => { releaseOn = resolve })
+      if (options.method === 'POST') serverEnabled = JSON.parse(options.body).enabled
+      return { ok: true, json: async () => ({ enabled: serverEnabled, userId: 'officer' }) }
+    },
     require: name => { assert.equal(name, '@/lib/location-sharing'); return p.store },
   })
-  return { ...p, requests, errors, readyEvents, toggle: value => toggle(value, message => errors.push(message)) }
+  toggleModule.setLocationSharingUser('officer')
+  return { ...p, requests, errors, readyEvents, serverRequests, toggleModule, setOffline: value => { failServer = value }, releaseOn: () => releaseOn?.(), serverEnabled: () => serverEnabled, toggle: value => toggleModule.toggleLocationSharing(value, message => errors.push(message)) }
 }
 
-test('the profile toggle requests GPS synchronously on opt-in and stays off after denial', () => {
+test('the profile toggle requests GPS synchronously on opt-in and stays off after denial', async () => {
   const p = toggleDevice()
   assert.equal(p.requests.length, 0)
   p.toggle(true)
   assert.equal(p.requests.length, 1)
-  assert.equal(p.store.isLocationSharingEnabled(), true)
+  assert.equal(p.store.isLocationSharingEnabled(), false)
+  assert.equal(p.toggleModule.getLocationSharingStatus().pending, true)
   p.requests[0].error({ code: 1 })
+  await settle()
   assert.equal(p.store.isLocationSharingEnabled(), false)
   assert.match(p.errors[0], /blocked/)
 })
 
-test('a successful toggle wakes the tracker, but delayed results cannot undo off or a newer opt-in', () => {
+test('a successful toggle wakes the tracker, but delayed results cannot undo off or a newer opt-in', async () => {
   const p = toggleDevice()
   p.toggle(true)
   p.requests[0].success({})
+  await settle()
   assert.deepEqual(p.readyEvents, ['tcnp-location-ready'])
   p.toggle(false)
   assert.equal(p.store.isLocationSharingEnabled(), false)
   p.toggle(true)
   p.requests[0].error({ code: 1 })
-  assert.equal(p.store.isLocationSharingEnabled(), true)
+  assert.equal(p.store.isLocationSharingEnabled(), false)
+  assert.equal(p.toggleModule.getLocationSharingStatus().requested, true)
   p.toggle(false)
   p.requests[1].success({})
+  await settle()
   assert.equal(p.store.isLocationSharingEnabled(), false)
   assert.equal(p.readyEvents.length, 1)
+})
+
+test('off unpublishes on the server and retries a failed privacy change after reconnect', async () => {
+  const p = toggleDevice()
+  p.toggle(true); p.requests[0].success({}); await settle()
+  assert.equal(p.serverEnabled(), true)
+  p.setOffline(true)
+  p.toggle(false)
+  assert.equal(p.store.isLocationSharingEnabled(), false)
+  await settle()
+  assert.match(p.toggleModule.getLocationSharingStatus().error, /could not be removed/)
+  assert.equal(p.values.get('tcnp-location-unpublish-pending'), 'officer')
+  p.setOffline(false)
+  await p.toggleModule.refreshLocationSharing()
+  assert.equal(p.serverEnabled(), false)
+  assert.equal(p.toggleModule.getLocationSharingStatus().error, null)
+  assert.equal(p.values.has('tcnp-location-unpublish-pending'), false)
+})
+
+test('off wins over an already-running enable request and never starts its delayed GPS watcher', async () => {
+  const p = toggleDevice({ holdOn: true })
+  p.toggle(true); p.requests[0].success({}); await settle()
+  assert.equal(p.serverRequests.length, 1)
+  p.toggle(false)
+  assert.equal(p.store.isLocationSharingEnabled(), false)
+  p.releaseOn()
+  await settle()
+  assert.equal(p.serverEnabled(), false)
+  assert.deepEqual(p.serverRequests.filter(request => request.method === 'POST').map(request => JSON.parse(request.body).enabled), [true, false])
+  assert.equal(p.readyEvents.length, 0)
+})
+
+test('a server opt-out stops another device locally without silently enabling it again', async () => {
+  const p = toggleDevice()
+  p.toggle(true); p.requests[0].success({}); await settle()
+  p.store.setLocationSharingEnabled(false)
+  p.toggle(false); await settle()
+  p.store.setLocationSharingEnabled(true)
+  await p.toggleModule.refreshLocationSharing()
+  assert.equal(p.store.isLocationSharingEnabled(), false)
+  assert.equal(p.serverEnabled(), false)
 })
 
 test('a saved opt-out survives reloads and synchronizes subscribers', () => {

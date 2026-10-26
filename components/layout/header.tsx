@@ -102,8 +102,8 @@ function ThemeSegmented() {
 }
 
 function MenuLocationSwitch() {
-  const { enabled, setEnabled } = useLocationSharing()
-  return <div className="px-1 py-2"><div className="flex items-center justify-between gap-3"><label htmlFor="profile-location-tracking" className="flex cursor-pointer items-center gap-2 text-xs font-medium text-foreground"><MapPin className="h-4 w-4 text-primary" aria-hidden="true" />Location tracking</label><Switch id="profile-location-tracking" checked={enabled} onCheckedChange={setEnabled} aria-describedby="profile-location-description" /></div><p id="profile-location-description" className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{enabled ? 'On for this device when location permission is allowed.' : 'Off for this device, even when device location is on.'}</p></div>
+  const { enabled, checked, pending, error, setEnabled } = useLocationSharing()
+  return <div className="px-1 py-2"><div className="flex items-center justify-between gap-3"><label htmlFor="profile-location-tracking" className="flex cursor-pointer items-center gap-2 text-xs font-medium text-foreground"><MapPin className="h-4 w-4 text-primary" aria-hidden="true" />Location tracking</label><Switch id="profile-location-tracking" checked={checked} onCheckedChange={setEnabled} aria-describedby="profile-location-description" /></div><p id="profile-location-description" className="mt-1.5 text-xs leading-relaxed text-muted-foreground" role={error ? 'alert' : 'status'}>{error || (pending ? checked ? 'Enabling location sharing…' : 'Hiding your shared location…' : enabled ? 'On — this device can share your location.' : 'Off — your location pin is hidden on this device.')}</p>{error && <button type="button" className="mt-1 text-xs underline" onClick={() => setEnabled(false)}>Retry hiding location</button>}</div>
 }
 
 function getInitials(name?: string | null, email?: string | null) {

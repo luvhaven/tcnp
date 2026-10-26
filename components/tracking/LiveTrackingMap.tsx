@@ -21,6 +21,9 @@ import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { useLocationSharing } from '@/hooks/useLocationSharing'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { visibleSharedLocations } from '@/lib/location-visibility'
+import { isLocationSharingEnabled } from '@/lib/location-sharing'
 
 type UserLocation = {
   user_id: string
@@ -152,9 +155,13 @@ function SidebarSection({
 }
 
 export default function LiveTrackingMap() {
-  const { enabled: sharingEnabled, setEnabled: setSharingEnabled } = useLocationSharing()
+  const { enabled: sharingEnabled, checked: sharingChecked, pending: sharingPending, error: sharingError, setEnabled: setSharingEnabled } = useLocationSharing()
+  const { data: currentUser } = useCurrentUser()
   const supabase = createClient()
-  const [userLocations, setUserLocations] = useState<UserLocation[]>([])
+  const [storedUserLocations, setUserLocations] = useState<UserLocation[]>([])
+  const userLocations = useMemo(() => visibleSharedLocations(storedUserLocations, currentUser?.id, sharingEnabled), [storedUserLocations, currentUser?.id, sharingEnabled])
+  const locationRequest = useRef(0)
+  const ownUserId = useRef(currentUser?.id)
   const [journeys, setJourneys] = useState<Journey[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
@@ -170,7 +177,7 @@ export default function LiveTrackingMap() {
   const [showTraffic, setShowTraffic] = useState(false)
   const [trafficAvailable, setTrafficAvailable] = useState<boolean | null>(null)
 
-  const { permissionStatus, requestPermission, isTracking, startTracking } =
+  const { permissionStatus, isTracking } =
     useLocationTracking({ enableTracking: true, updateInterval: 10000, highAccuracy: true })
 
   useEffect(() => { setIsClient(true) }, [])
@@ -184,16 +191,7 @@ export default function LiveTrackingMap() {
     return () => { cancelled = true }
   }, [])
 
-  const handleEnableLocation = async () => {
-    setSharingEnabled(true)
-    const granted = await requestPermission()
-    if (granted) {
-      startTracking()
-      toast.success('Location sharing enabled — you are now visible on the map.')
-    } else {
-      toast.error('Location access denied. Please allow location in your browser settings and refresh.')
-    }
-  }
+  const handleEnableLocation = () => setSharingEnabled(true)
 
   useEffect(() => {
     loadData()
@@ -228,6 +226,7 @@ export default function LiveTrackingMap() {
   }
 
   const loadUserLocations = async () => {
+    const requestId = ++locationRequest.current
     try {
       const { data, error } = await (supabase as any).rpc('get_active_user_locations')
       if (error) throw error
@@ -250,16 +249,25 @@ export default function LiveTrackingMap() {
           : null
       }))
 
-      setUserLocations(enrichedData)
+      if (requestId !== locationRequest.current) return true
+      setUserLocations(visibleSharedLocations(enrichedData, ownUserId.current, isLocationSharingEnabled()))
       setLocationError(null)
       setLastUpdated(new Date().toLocaleTimeString())
       return true
     } catch (err) {
+      if (requestId !== locationRequest.current) return false
       console.error('❌ Error loading user locations:', err)
       setLocationError('Location service unavailable. Showing last known positions.')
       return false
     }
   }
+
+  useEffect(() => {
+    ownUserId.current = currentUser?.id
+    if (!currentUser?.id) return
+    if (!sharingEnabled) setUserLocations(previous => previous.filter(location => location.user_id !== currentUser.id))
+    void loadUserLocations()
+  }, [currentUser?.id, sharingEnabled])
 
   const loadJourneys = async () => {
     try {
@@ -386,11 +394,15 @@ export default function LiveTrackingMap() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-2 rounded-full border px-3 py-1.5">
             <Label htmlFor="map-location-sharing" className="text-xs">Share my location</Label>
-            <Switch id="map-location-sharing" checked={sharingEnabled} onCheckedChange={setSharingEnabled} />
+            <Switch id="map-location-sharing" checked={sharingChecked} onCheckedChange={setSharingEnabled} />
           </div>
           {/* Location sharing indicator */}
-          {!sharingEnabled ? (
-            <span className="text-xs text-muted-foreground" role="status">Location sharing is off</span>
+          {sharingError ? (
+            <span className="text-xs text-destructive" role="alert">{sharingError} <button type="button" className="underline" onClick={() => setSharingEnabled(false)}>Retry</button></span>
+          ) : sharingPending ? (
+            <span className="text-xs text-muted-foreground" role="status">{sharingChecked ? 'Enabling location sharing…' : 'Hiding your shared location…'}</span>
+          ) : !sharingEnabled ? (
+            <span className="text-xs text-muted-foreground" role="status">Location sharing is off — your pin is hidden</span>
           ) : isTracking ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 select-none">
               <span className="relative flex h-2 w-2">
