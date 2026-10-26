@@ -307,7 +307,7 @@ export default function DashboardLayout({
               </ErrorBoundary>
             </>
           )}
-          {canMountExtras && <ErrorBoundary><NotificationPermissionBanner /></ErrorBoundary>}
+          {canMountTracker && <ErrorBoundary><NotificationPermissionBanner /></ErrorBoundary>}
           {/* The install prompt is how iOS users learn about Add to Home Screen */}
           {canMountTracker && (
             <ErrorBoundary>

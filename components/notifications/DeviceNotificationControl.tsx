@@ -36,7 +36,9 @@ export function DeviceNotificationControl({ compact = false }: { compact?: boole
           if (live) { setEnabled(true); setMessage(ENABLED) }
         } else if (live) {
           setEnabled(false)
-          setMessage(next.ready ? 'Get room invitations and updates even when TCNP is closed.' : 'Device notifications are temporarily unavailable. Retry setup shortly.')
+          setMessage(!next.ready ? 'Device notifications are temporarily unavailable. Retry setup shortly.'
+            : Notification.permission === 'denied' ? 'Notifications are blocked in this browser. Allow notifications for TCNP in the browser’s site settings, then click Enable.'
+            : 'Get room invitations and updates even when TCNP is closed. Click Enable to allow notifications.')
         }
       } catch (error) { if (live) setMessage(errorMessage(error)) }
       finally { if (live) { working.current = false; setBusy(false) } }
