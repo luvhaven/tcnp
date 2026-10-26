@@ -33,11 +33,6 @@ const LocationTracker = dynamic(
   { ssr: false }
 )
 
-const LocationEnforcer = dynamic(
-  () => import("@/components/tracking/LocationEnforcer").then((m) => m.LocationEnforcer),
-  { ssr: false }
-)
-
 const NotificationPermissionBanner = dynamic(
   () => import("@/components/notifications/NotificationPermissionBanner"),
   { ssr: false }
@@ -202,15 +197,6 @@ export default function DashboardLayout({
 
         {/* Dev tools - DISABLED on iOS */}
         {canMountExtras && !isIOS && <DevLoggerInit />}
-
-        {/* Location enforcer — prompts users who haven't granted permission.
-            Mounted on ALL devices (incl. iOS): its Enable button provides the
-            user gesture iOS requires for the native geolocation prompt. */}
-        {canMountTracker && locationSharingEnabled && (
-          <ErrorBoundary>
-            <LocationEnforcer />
-          </ErrorBoundary>
-        )}
 
         {/* Online status - DISABLED on iOS */}
         {canMountExtras && !isIOS && (
