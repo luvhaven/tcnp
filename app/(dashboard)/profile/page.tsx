@@ -80,11 +80,13 @@ export default function ProfilePage() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [cropOpen, setCropOpen] = useState(false)
+  const seededProfileId = useRef<string | null>(null)
 
-  // Seed form once the cached profile arrives
+  // Seed editable fields once per officer. Background refreshes and headshot
+  // uploads must not replace a draft the officer is currently typing.
   useEffect(() => {
-    if (!currentUser) return
-    setForm({
+    if (!currentUser) { seededProfileId.current = null; return }
+    const fresh: ProfileFields = {
       role: currentUser.role,
       full_name: currentUser.full_name,
       phone: currentUser.phone,
@@ -97,7 +99,14 @@ export default function ProfilePage() {
       state: currentUser.state,
       nearest_bus_stop_landmark: currentUser.nearest_bus_stop_landmark,
       bio: currentUser.bio,
-    })
+    }
+    if (seededProfileId.current !== currentUser.id) {
+      seededProfileId.current = currentUser.id
+      setForm(fresh)
+    } else {
+      // Assignments are read-only here and remain authoritative on the server.
+      setForm(previous => ({ ...previous, role: fresh.role, oscar: fresh.oscar, team: fresh.team }))
+    }
     setPhotoUrl(currentUser.photo_url)
   }, [currentUser])
 
