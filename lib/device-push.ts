@@ -7,6 +7,7 @@ const OWNER_CACHE = 'tcnp-push-owner-v1'
 const OWNER_URL = '/__tcnp_push_owner__'
 let connection: Promise<void> | null = null
 let revision = 0
+let confirmedEndpoint: string | null = null
 const progressListeners = new Set<(message: string) => void>()
 export interface DevicePushConfig { ready: boolean; publicKey: string; userId: string }
 export function pushSupported() {
@@ -114,6 +115,7 @@ async function connect(config: DevicePushConfig, askPermission: boolean, started
   if (startedRevision !== revision) { await disconnectSubscription(reg); throw new Error('Notification setup was cancelled.') }
   await setOwner(reg, config.userId)
   if (startedRevision !== revision) { await setOwner(reg, null); await disconnectSubscription(reg); throw new Error('Notification setup was cancelled.') }
+  confirmedEndpoint = sub.endpoint
   setDisabled(false)
   // Retire the old root worker's push subscription without unregistering the app worker.
   const legacy = await navigator.serviceWorker.getRegistration('/')
@@ -132,6 +134,7 @@ export async function sendDeviceNotificationTest() {
 }
 export async function disconnectDevicePush(disable = true) {
   revision++
+  confirmedEndpoint = null
   if (disable) setDisabled(true)
   try {
     // Clear the shared-device marker even when there is no active app worker.
@@ -149,6 +152,7 @@ export async function devicePushConnected() {
   if (!reg || new URL(reg.scope).pathname !== PUSH_SCOPE) return false
   try {
     const owner = await (await caches.open(OWNER_CACHE)).match(OWNER_URL)
-    return Boolean(owner && await owner.text() && await reg.pushManager.getSubscription())
+    const sub = await reg.pushManager.getSubscription()
+    return Boolean(owner && await owner.text() && sub && sub.endpoint === confirmedEndpoint)
   } catch { return false }
 }

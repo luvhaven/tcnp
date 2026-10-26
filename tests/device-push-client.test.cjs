@@ -106,6 +106,12 @@ test('blocked storage and server enrollment failure never produce a success mark
     assert.equal(d.timers.size, 0)
   }
 })
+test('an old root account marker cannot make an unregistered new subscription look connected', async () => {
+  const d = device({ postFails: true })
+  d.data.set('/__tcnp_push_owner__', 'officer')
+  await assert.rejects(d.api.connectDevicePush(d.config, true), /Try again shortly/)
+  assert.equal(await d.api.devicePushConnected(), false)
+})
 test('logout during an installation cancels enrollment instead of restoring account ownership', async () => {
   const d = device({ installing: true })
   const connecting = d.api.connectDevicePush(d.config, true)
