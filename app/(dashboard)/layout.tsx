@@ -10,6 +10,7 @@ import { SentryUserContext } from "@/components/monitoring/SentryUserContext"
 import { BrokenArrowAlert } from "@/components/operations/BrokenArrowAlert"
 import { createClient } from "@/lib/supabase/client"
 import { useLocationSharing } from "@/hooks/useLocationSharing"
+import { LocationSharingSync } from '@/components/tracking/LocationSharingSync'
 
 // ─── Singleton client — always the same instance, safe to use in effects ───
 const supabase = createClient()
@@ -194,6 +195,7 @@ export default function DashboardLayout({
 
         {/* Broken Arrow Global Alert */}
         <BrokenArrowAlert />
+        <LocationSharingSync />
 
         {/* Dev tools - DISABLED on iOS */}
         {canMountExtras && !isIOS && <DevLoggerInit />}
