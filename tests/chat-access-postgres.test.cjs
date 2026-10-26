@@ -214,4 +214,38 @@ test('actual PostgreSQL room RLS, metadata guards and definer RPCs', { skip: !PG
       }
     })
   })
+
+  await db.exec(`CREATE TABLE public.current_title_assignments(user_id uuid, program_id uuid, is_active boolean);
+    INSERT INTO public.current_title_assignments VALUES
+      ('${MEMBER}','${PROGRAM}',true),('${OUTSIDER}','${OTHER_PROGRAM}',false),
+      ('${INACTIVE}','${PROGRAM}',true),('${MEMBER}','${ARCHIVED}',true);`)
+  await db.exec(fs.readFileSync('supabase/migrations/20261026090000_program_roster_chat_access.sql', 'utf8'))
+
+  await t.test('active program assignments include only the main chat and preserve private-message boundaries', async () => {
+    await as(EXECUTIVE, async () => db.exec(`INSERT INTO public.chat_messages(id,sender_id,program_id,content,is_private,mentions) VALUES ('${uuid(90)}','${EXECUTIVE}','${PROGRAM}','Private for someone else',true,'["${PAPA_MEMBER}"]')`))
+    await as(MEMBER, async () => {
+      assert.equal(await room(PROGRAM), true)
+      assert.equal(await room(PROGRAM, PAPA), false)
+      assert.equal(await room(OTHER_PROGRAM), false)
+      assert.equal(await room(ARCHIVED), false)
+      assert.equal(await scalar('SELECT public.can_access_chat_message($1)', [uuid(90)]), false)
+      assert.equal(await scalar('SELECT public.can_access_chat_topic($1)', [`chat-room:program:${PROGRAM}`]), true)
+      assert.equal(await scalar('SELECT public.can_access_chat_topic($1)', [`chat-room:papa:${PAPA}`]), false)
+      await db.exec(`INSERT INTO public.chat_messages(sender_id,program_id,content) VALUES ('${MEMBER}','${PROGRAM}','Roster member message')`)
+      await rejects(`INSERT INTO public.chat_messages(sender_id,program_id,papa_id,content) VALUES ('${MEMBER}','${PROGRAM}','${PAPA}','Not invited')`)
+    })
+    await as(OUTSIDER, async () => assert.equal(await room(OTHER_PROGRAM), false))
+    await as(INACTIVE, async () => assert.equal(await room(PROGRAM), false))
+    await as(LEGACY_ADMIN, async () => assert.equal(await room(PROGRAM), false))
+    await as(EXECUTIVE, async () => { assert.equal(await room(PROGRAM), true); assert.equal(await room(PROGRAM, PAPA), true) })
+  })
+
+  await t.test('removing a program assignment revokes inherited access without affecting explicit Papa invitations', async () => {
+    await db.exec(`UPDATE public.current_title_assignments SET is_active=false WHERE user_id='${MEMBER}'`)
+    await as(MEMBER, async () => {
+      assert.equal(await room(PROGRAM), false)
+      await rejects(`INSERT INTO public.chat_messages(sender_id,program_id,content) VALUES ('${MEMBER}','${PROGRAM}','Assignment revoked')`)
+    })
+    await as(PAPA_MEMBER, async () => { assert.equal(await room(PROGRAM), false); assert.equal(await room(PROGRAM, PAPA), true) })
+  })
 })

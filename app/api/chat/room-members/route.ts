@@ -4,8 +4,9 @@ import { CHAT_UUID_PATTERN, canManageChatMemberships, parseChatRoomScope, type C
 import { PLATFORM_ADMIN_ROLES } from '@/lib/utils'
 import { isOfficerOnline } from '@/lib/presence'
 import { checkRateLimit } from '@/lib/security/rate-limit'
+import { getProgramChatAssignments } from '@/lib/chat-program-membership'
 
-const MEMBER_FIELDS = 'id, full_name, role, oscar, photo_url, is_online, last_seen, is_active, activation_status'
+const MEMBER_FIELDS = 'id, full_name, role, oscar, photo_url, is_online, last_seen, is_active, activation_status, team'
 
 function memberView(user: any, accessType: ChatRoomMember['accessType']): ChatRoomMember {
   return {
@@ -32,40 +33,47 @@ export async function GET(request: Request) {
     if (scopeError) return scopeError
 
     let memberIds: string[] = []
+    const programMemberIds = new Set<string>()
     if (!scope.team) {
       let query = db.from('chat_room_memberships').select('user_id').eq('program_id', scope.programId)
       query = scope.papaId ? query.eq('papa_id', scope.papaId) : query.is('papa_id', null)
       const result = await query
       if (result.error) return chatError('Could not load room members. Please retry.', 500)
       memberIds = (result.data ?? []).map((row: { user_id: string }) => row.user_id)
+      if (!scope.papaId) {
+        const assignments = await getProgramChatAssignments(db, { programId: scope.programId! })
+        if (assignments.error) return chatError('Could not load program chat members. Please retry.', 500)
+        for (const assignment of assignments.data ?? []) if (assignment.user_id) programMemberIds.add(assignment.user_id)
+        memberIds = [...new Set([...memberIds, ...programMemberIds])]
+      }
     }
-    const baseUsers = () => db.from('users').select(MEMBER_FIELDS).eq('is_active', true).eq('activation_status', 'active').eq('is_directory_hidden', false).order('full_name')
+    const baseUsers = () => db.from('users').select(MEMBER_FIELDS).eq('is_active', true).eq('activation_status', 'active').eq('is_directory_hidden', false).order('full_name').order('id')
+    const readUsers = async (build: () => any) => {
+      const rows: any[] = []
+      for (let offset = 0; ; offset += 500) {
+        const result = await build().range(offset, offset + 499)
+        if (result.error) throw new Error('Could not load room members.')
+        rows.push(...(result.data ?? []))
+        if (!result.data || result.data.length < 500) return rows
+      }
+    }
     let activeUsers: any[]
     if (canManageMembers) {
-      const result = await baseUsers()
-      if (result.error) return chatError('Could not load room members. Please retry.', 500)
-      activeUsers = result.data ?? []
+      activeUsers = await readUsers(baseUsers)
     } else {
-      const executives = await baseUsers().in('role', [...PLATFORM_ADMIN_ROLES])
-      if (executives.error) return chatError('Could not load room members. Please retry.', 500)
+      const executives = await readUsers(() => baseUsers().in('role', [...PLATFORM_ADMIN_ROLES]))
       let assigned: any[] = []
-      if (scope.team || memberIds.length) {
-        const result = await (scope.team ? baseUsers().eq('team', scope.team) : baseUsers().in('id', memberIds))
-        if (result.error) return chatError('Could not load room members. Please retry.', 500)
-        assigned = result.data ?? []
+      if (scope.team) assigned = await readUsers(() => baseUsers().eq('team', scope.team))
+      else for (let offset = 0; offset < memberIds.length; offset += 100) {
+        const ids = memberIds.slice(offset, offset + 100)
+        assigned.push(...await readUsers(() => baseUsers().in('id', ids)))
       }
-      activeUsers = [...new Map([...(executives.data ?? []), ...assigned].map((user: any) => [user.id, user])).values()]
+      activeUsers = [...new Map([...executives, ...assigned].map((user: any) => [user.id, user])).values()]
     }
     // Team assignments remain operational data; this endpoint never moves users between teams.
-    let teamMemberIds: Set<string> | null = null
-    if (scope.team && canManageMembers) {
-      const assigned = await db.from('users').select('id').eq('team', scope.team)
-      if (assigned.error) return chatError('Could not load room members. Please retry.', 500)
-      teamMemberIds = new Set((assigned.data ?? []).map((user: { id: string }) => user.id))
-    }
     const explicitIds = new Set(memberIds)
-    const members = activeUsers.filter(user => canManageChatMemberships(user.role) || (scope.team ? (!canManageMembers || teamMemberIds?.has(user.id)) : explicitIds.has(user.id)))
-      .map(user => memberView(user, canManageChatMemberships(user.role) ? 'executive' : scope.team ? 'team' : 'member'))
+    const members = activeUsers.filter(user => canManageChatMemberships(user.role) || (scope.team ? user.team === scope.team : explicitIds.has(user.id)))
+      .map(user => memberView(user, canManageChatMemberships(user.role) ? 'executive' : scope.team ? 'team' : programMemberIds.has(user.id) ? 'program' : 'member'))
     const candidates = canManageMembers && !scope.team
       ? activeUsers.filter(user => !canManageChatMemberships(user.role) && !explicitIds.has(user.id)).map(user => memberView(user, 'member'))
       : undefined
@@ -96,6 +104,11 @@ async function changeMembership(request: Request, remove: boolean) {
     if (!target || target.is_directory_hidden) return chatError('Choose a valid officer.', 400)
     if (!remove && (target.is_active !== true || target.activation_status !== 'active')) return chatError('Choose an active officer.', 400)
     if (canManageChatMemberships(target.role)) return chatError('This officer already has access to every chat room.', 400)
+    if (!scope.papaId) {
+      const assignment = await getProgramChatAssignments(caller.db, { programId: scope.programId!, userId: body.userId })
+      if (assignment.error) return chatError('Could not check this officer’s program assignment. Please retry.', 500)
+      if (assignment.data?.length) return chatError('This officer joins Program chat automatically through their program assignment. Manage that assignment to change their access.', 409)
+    }
     const membershipDb = caller.auth as any
     if (remove) {
       let query = membershipDb.from('chat_room_memberships').delete().eq('program_id', scope.programId).eq('user_id', body.userId)

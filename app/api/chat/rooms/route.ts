@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { CHAT_PRIVATE_HEADERS, chatError, getChatCaller } from '@/lib/chat-server'
 import { getAccessibleTeamChats } from '@/lib/utils'
 import { getChatRoomId, isChatProgramOpen, type ChatRoomSummary } from '@/lib/chat-access'
+import { getProgramChatAssignments } from '@/lib/chat-program-membership'
 
 export async function GET() {
   try {
@@ -14,17 +15,21 @@ export async function GET() {
     }))
 
     let memberships: { program_id: string; papa_id: string | null }[] = []
+    const assignedProgramIds = new Set<string>()
     if (!canManageMembers) {
       const result = await db.from('chat_room_memberships').select('program_id, papa_id').eq('user_id', profile.id)
       if (result.error) return chatError('Chat access is being updated. Please retry shortly.', 503)
       memberships = result.data ?? []
-      if (memberships.length === 0) return NextResponse.json({ rooms, canManageMembers }, { headers: CHAT_PRIVATE_HEADERS })
+      const assignments = await getProgramChatAssignments(db, { userId: profile.id })
+      if (assignments.error) return chatError('Could not load program chat assignments. Please retry.', 503)
+      for (const assignment of assignments.data ?? []) if (assignment.program_id) assignedProgramIds.add(assignment.program_id)
+      if (memberships.length === 0 && assignedProgramIds.size === 0) return NextResponse.json({ rooms, canManageMembers }, { headers: CHAT_PRIVATE_HEADERS })
     }
 
     // Optional archive/delete columns vary between deployed schemas. Filter the
     // complete row, then expose only room IDs and labels in this response.
     let programQuery = db.from('programs').select('*').order('created_at', { ascending: false })
-    if (!canManageMembers) programQuery = programQuery.in('id', [...new Set(memberships.map(row => row.program_id))])
+    if (!canManageMembers) programQuery = programQuery.in('id', [...new Set([...memberships.map(row => row.program_id), ...assignedProgramIds])])
     const { data: programRows, error: programError } = await programQuery
     if (programError) return chatError('Could not load program chats. Please retry.', 500)
     const programs = (programRows ?? []).filter(isChatProgramOpen) as { id: string; name: string; status: string }[]
@@ -39,7 +44,7 @@ export async function GET() {
       papas = (result.data ?? []).filter((papa: { is_deleted?: boolean | null }) => papa.is_deleted !== true)
     }
     for (const program of programs) {
-      if (canManageMembers || memberships.some(row => row.program_id === program.id && row.papa_id === null)) {
+      if (canManageMembers || assignedProgramIds.has(program.id) || memberships.some(row => row.program_id === program.id && row.papa_id === null)) {
         const scope = { programId: program.id, papaId: null, team: null }
         rooms.push({ ...scope, id: getChatRoomId(scope), kind: 'program', label: program.name, programName: program.name })
       }

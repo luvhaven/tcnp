@@ -2,9 +2,9 @@
 
 ## Access model
 
-Captain, Vice Captains, Head of Command, and platform administrators automatically access every valid team, program, and Papa chat. Ordinary officers access their assigned team and only the program/Papa rooms where they have an explicit chat invitation. A program invitation does not include its Papa rooms, and operational assignments do not imply chat invitations.
+Captain, Vice Captains, Head of Command, and platform administrators automatically access every valid team, program, and Papa chat. Active officers assigned to a program automatically access its main Program chat. Officers also access their assigned team and rooms where they have an explicit chat invitation. Program membership and main-chat invitations do not include Papa rooms: each Papa room needs its own invitation.
 
-The migration deliberately does not backfill invitations from assignments or past messages. Executives use **Room members → Add people** to invite officers separately to each room. Archived/deleted programs and deleted or mismatched Papas are unavailable, including through direct database requests.
+Rooms are created automatically for each program and each Papa. The Room dropdown identifies Papa rooms by name. Executives use **Manage members → Add people** to invite officers to the selected room. Automatic main-chat members are labeled **Program assignment** and follow their active program assignment; removing an extra chat invitation does not override an active program assignment. No invitation rows are backfilled. Archived/deleted programs and deleted or mismatched Papas remain unavailable, including through direct database requests.
 
 ## Findings addressed
 
@@ -41,6 +41,6 @@ Visual fixtures render the actual components with fabricated data for desktop, n
 
 ## Operational notes
 
-Apply `20261025210000_explicit_chat_room_access.sql` before releasing the application changes. It introduces the membership table and authorization RPCs used by the room APIs. It preserves executive access and restricts ordinary program/Papa participation until explicitly invited.
+Apply `20261025210000_explicit_chat_room_access.sql`, then `20261026090000_program_roster_chat_access.sql` before releasing the application changes. The latter grants active program assignees access to the main room only. Existing restrictive policies, private-message checks, and caller-bound mutations continue to use the shared room guard. Papa rooms remain invitation-only for ordinary officers. Chat messages and the composer use the available panel width with small edge padding.
 
 Message frequency throttling is not introduced. Existing server limits protect management/notification endpoints, and database guards constrain message ownership, scope, size, and metadata. Realtime typing is optional; conversations continue to work if its private channel cannot connect. Membership and room checks also refresh periodically to cover missed realtime events.

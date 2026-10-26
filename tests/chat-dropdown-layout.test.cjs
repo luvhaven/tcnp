@@ -15,7 +15,7 @@ function app(rooms, selectedRoomId) {
   const slots = [], mod = { exports: {} }
   let cursor = 0
   const react = { useRef: value => ({ current: value }), useEffect() {}, useMemo: fn => fn(), useState(initial) { const i = cursor++; if (!(i in slots)) slots[i] = initial; return [slots[i], value => { slots[i] = typeof value === 'function' ? value(slots[i]) : value }] } }
-  const imports = { react, '@/lib/utils': { cn: (...values) => values.filter(Boolean).join(' ') }, '@/components/ui/button': { Button: 'Button' } }
+  const imports = { react, '@/lib/utils': { cn: (...values) => values.filter(Boolean).join(' ') }, '@/components/ui/button': { Button: 'Button' }, '@/components/ui/dialog': Object.fromEntries(['Dialog', 'DialogContent', 'DialogDescription', 'DialogHeader', 'DialogTitle'].map(name => [name, name])) }
   vm.runInNewContext(ts.transpileModule(fs.readFileSync('components/chat/ChatWorkspace.tsx', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX } }).outputText, { module: mod, exports: mod.exports, require: name => imports[name] || require(name) })
   props = { rooms, selectedRoomId, children: 'CONVERSATION', onSelectRoom(room) { selected = room; props.selectedRoomId = room.id }, onRetry() {} }
   return { render() { cursor = 0; return nodes(mod.exports.ChatWorkspace(props)) }, get selected() { return selected } }
