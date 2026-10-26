@@ -6,8 +6,8 @@ const listeners = new Set<() => void>()
 export function isLocationSharingEnabled(): boolean {
   if (typeof window === 'undefined') return false
   if (enabled === undefined) {
-    try { enabled = window.localStorage.getItem(STORAGE_KEY) !== 'off' }
-    catch { enabled = true }
+    try { enabled = window.localStorage.getItem(STORAGE_KEY) === 'on' }
+    catch { enabled = false }
   }
   return enabled
 }
@@ -28,13 +28,13 @@ export function setLocationSharingEnabled(value: boolean) {
 
 function handleStorage(event: StorageEvent) {
   if (event.key === STORAGE_KEY || event.key === null) {
-    update(event.newValue !== 'off')
+    update(event.newValue === 'on')
   }
 }
 
 function refreshPreference() {
   if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
-  try { update(window.localStorage.getItem(STORAGE_KEY) !== 'off') } catch { /* Retain session preference when storage is blocked. */ }
+  try { update(window.localStorage.getItem(STORAGE_KEY) === 'on') } catch { /* Retain session preference when storage is blocked. */ }
 }
 
 export function subscribeToLocationSharing(listener: () => void) {

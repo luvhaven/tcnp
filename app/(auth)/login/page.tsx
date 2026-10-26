@@ -366,6 +366,9 @@ export default function LoginPage() {
       }
 
       if (!res.ok) throw new Error(data.error || "Failed to sign up");
+      // Registration never opts this browser into live location, including on shared devices.
+      const { setLocationSharingEnabled } = await import('@/lib/location-sharing');
+      setLocationSharingEnabled(false);
       setFormNotice("Access requested. An administrator must approve your account before you can sign in.");
       setMode("login");
       setPassword("");

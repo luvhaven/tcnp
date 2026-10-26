@@ -9,7 +9,7 @@ import { createLocationSharingGuard, isLocationSharingEnabled } from '@/lib/loca
  * LocationTracker Component - Clean Permission Flow
  * 
  * This version:
- * 1. Triggers native location permission immediately on sign-in
+ * 1. Runs only after the officer opts in using the profile location switch
  * 2. No alerts during initial permission request
  * 3. Only alerts when tracking is LOST after being established
  * 4. Works on iPhone, Android, and Desktop
@@ -215,6 +215,14 @@ export function LocationTracker() {
     }
   }, [])
 
+  // The switch requests permission within the tap gesture. Also restart when
+  // that request finishes on Safari versions without a Permissions API event.
+  useEffect(() => {
+    const ready = () => { if (isLocationSharingEnabled()) setPermissionRequested(false) }
+    window.addEventListener('tcnp-location-ready', ready)
+    return () => window.removeEventListener('tcnp-location-ready', ready)
+  }, [])
+
   // Permissions API Listener for robustness (silent - no alerts on permission changes)
   useEffect(() => {
     let cancelled = false
@@ -261,8 +269,8 @@ export function LocationTracker() {
         if (!user || !isActive()) return
 
         // iOS: never auto-fire the native prompt without a user gesture.
-        // If permission hasn't been decided yet, wait — the LocationEnforcer
-        // banner provides the gesture, and the permission-change listener
+        // If permission hasn't been decided yet, wait — the profile switch
+        // provides the gesture, and the permission-change listener
         // above restarts this effect once granted.
         const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
@@ -270,7 +278,7 @@ export function LocationTracker() {
           try {
             const status = await (navigator as any).permissions.query({ name: 'geolocation' })
             if (status.state === 'prompt') {
-              console.log('📍 iOS: deferring geolocation prompt to LocationEnforcer gesture')
+              console.log('📍 iOS: awaiting the profile location switch permission request')
               return
             }
             if (status.state === 'denied') return

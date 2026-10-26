@@ -7,7 +7,7 @@ const ts = require('typescript')
 function compile(path, globals) {
   const loaded = { exports: {} }
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(path, 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX },
   }).outputText, { module: loaded, exports: loaded.exports, ...globals })
   return loaded.exports
 }
@@ -31,6 +31,54 @@ test('location sharing is safe during server rendering', () => {
   const store = compile('lib/location-sharing.ts', {})
   assert.equal(store.isLocationSharingEnabled(), false)
   assert.doesNotThrow(() => store.setLocationSharingEnabled(true))
+})
+
+test('fresh signups and unavailable storage default to location off without an opt-in', () => {
+  for (const initial of [null, '', 'invalid']) assert.equal(preference(initial).store.isLocationSharingEnabled(), false)
+  assert.equal(preference(null, true).store.isLocationSharingEnabled(), false)
+  const p = preference('on')
+  p.store.subscribeToLocationSharing(() => {})
+  p.events.get('storage')({ key: null, newValue: null })
+  assert.equal(p.store.isLocationSharingEnabled(), false)
+})
+
+function toggleDevice() {
+  const p = preference('off')
+  const requests = [], errors = [], readyEvents = []
+  p.window.dispatchEvent = event => readyEvents.push(event.type)
+  const navigator = { geolocation: { getCurrentPosition: (success, error) => requests.push({ success, error }) } }
+  const { toggleLocationSharing: toggle } = compile('lib/location-toggle.ts', {
+    window: p.window, navigator, Event: class { constructor(type) { this.type = type } },
+    require: name => { assert.equal(name, '@/lib/location-sharing'); return p.store },
+  })
+  return { ...p, requests, errors, readyEvents, toggle: value => toggle(value, message => errors.push(message)) }
+}
+
+test('the profile toggle requests GPS synchronously on opt-in and stays off after denial', () => {
+  const p = toggleDevice()
+  assert.equal(p.requests.length, 0)
+  p.toggle(true)
+  assert.equal(p.requests.length, 1)
+  assert.equal(p.store.isLocationSharingEnabled(), true)
+  p.requests[0].error({ code: 1 })
+  assert.equal(p.store.isLocationSharingEnabled(), false)
+  assert.match(p.errors[0], /blocked/)
+})
+
+test('a successful toggle wakes the tracker, but delayed results cannot undo off or a newer opt-in', () => {
+  const p = toggleDevice()
+  p.toggle(true)
+  p.requests[0].success({})
+  assert.deepEqual(p.readyEvents, ['tcnp-location-ready'])
+  p.toggle(false)
+  assert.equal(p.store.isLocationSharingEnabled(), false)
+  p.toggle(true)
+  p.requests[0].error({ code: 1 })
+  assert.equal(p.store.isLocationSharingEnabled(), true)
+  p.toggle(false)
+  p.requests[1].success({})
+  assert.equal(p.store.isLocationSharingEnabled(), false)
+  assert.equal(p.readyEvents.length, 1)
 })
 
 test('a saved opt-out survives reloads and synchronizes subscribers', () => {
@@ -171,6 +219,63 @@ test('a saved opt-out prevents automatic and explicit location requests', async 
   assert.equal(t.requests.length, 0)
   assert.equal(t.watches.size, 0)
   assert.equal(t.writes.length, 0)
+})
+
+test('a new device never starts a GPS request, watch or upload before opting in', async () => {
+  const t = tracker(null)
+  t.render()
+  await settle()
+  assert.equal(t.requests.length, 0)
+  assert.equal(t.watches.size, 0)
+  assert.equal(t.timers.size, 0)
+  assert.equal(t.writes.length, 0)
+})
+
+test('the dashboard tracker clears its actual GPS watch and rejects late uploads when switched off', async () => {
+  const p = preference('on')
+  const slots = [], pending = [], requests = [], writes = [], cleared = []
+  const watches = new Map()
+  let cursor = 0
+  const react = {
+    useState(value) { const i = cursor++; if (!(i in slots)) slots[i] = value; return [slots[i], next => { slots[i] = typeof next === 'function' ? next(slots[i]) : next }] },
+    useRef(value) { const i = cursor++; if (!(i in slots)) slots[i] = { current: value }; return slots[i] },
+    useEffect(effect, deps) { const i = cursor++; if (!slots[i] || deps.some((v, n) => v !== slots[i].deps[n])) pending.push(() => { slots[i]?.cleanup?.(); slots[i] = { deps, cleanup: effect() } }) },
+  }
+  const navigator = { userAgent: 'iPhone', platform: 'iPhone', geolocation: {
+    getCurrentPosition: (success, error) => requests.push({ success, error }),
+    watchPosition: (success, error) => { watches.set(1, { success, error }); return 1 },
+    clearWatch: id => { cleared.push(id); watches.delete(id) },
+  } }
+  const { LocationTracker } = compile('components/tracking/LocationTracker.tsx', {
+    window: p.window, navigator, console: { log() {}, warn() {} }, setTimeout, clearTimeout,
+    document: { visibilityState: 'visible', addEventListener() {}, removeEventListener() {} },
+    require(name) {
+      if (name === 'react') return react
+      if (name === 'react/jsx-runtime') return { jsx: () => null, jsxs: () => null }
+      if (name === '@/hooks/useIsClient') return { useIsClient: () => true }
+      if (name === '@/lib/location-sharing') return p.store
+      if (name === '@/lib/supabase/client') return { createClient: () => ({ auth: { getUser: async () => ({ data: { user: { id: 'officer' } } }) }, rpc: async (...args) => { writes.push(args); return {} } }) }
+      if (name === 'sonner') return { toast: Object.assign(() => {}, { error() {} }) }
+      throw Error(`Unexpected import ${name}`)
+    },
+  })
+  LocationTracker()
+  pending.splice(0).forEach(fn => fn())
+  await settle()
+  assert.equal(requests.length, 1)
+  requests[0].success(position)
+  await settle()
+  assert.equal(watches.size, 1)
+  const late = watches.get(1).success
+  const writesBefore = writes.length
+  p.store.setLocationSharingEnabled(false)
+  // Dashboard unmounts this component when the dropdown switch goes off.
+  slots.forEach(slot => slot?.cleanup?.())
+  assert.equal(watches.size, 0)
+  assert.deepEqual(cleared, [1])
+  await late(position)
+  await settle()
+  assert.equal(writes.length, writesBefore)
 })
 
 test('pausing active sharing clears GPS watches and periodic updates and ignores late positions', async () => {
