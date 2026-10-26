@@ -317,13 +317,11 @@ export default function DashboardLayout({
               <ErrorBoundary>
                 <MissionNotificationHandler />
               </ErrorBoundary>
-              <ErrorBoundary>
-                <NotificationPermissionBanner />
-              </ErrorBoundary>
             </>
           )}
+          {canMountExtras && <ErrorBoundary><NotificationPermissionBanner /></ErrorBoundary>}
           {/* The install prompt is how iOS users learn about Add to Home Screen */}
-          {canMountTracker && locationSharingEnabled && (
+          {canMountTracker && (
             <ErrorBoundary>
               <PWAInstallPrompt />
             </ErrorBoundary>
@@ -335,7 +333,7 @@ export default function DashboardLayout({
           )}
           {/* Location tracking — enabled on ALL devices including iOS; renders
               the live-location pill while sharing is active */}
-          {canMountTracker && (
+          {canMountTracker && locationSharingEnabled && (
             <ErrorBoundary>
               <LocationTracker />
             </ErrorBoundary>

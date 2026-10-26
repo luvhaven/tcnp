@@ -11,6 +11,7 @@ import {
   Settings,
   KeyRound,
   ChevronDown,
+  MapPin,
 } from "lucide-react"
 import {
   Popover,
@@ -26,6 +27,8 @@ import InstallButton from "@/components/pwa/InstallButton"
 import NotificationCenter from "@/components/notifications/NotificationCenter"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
+import { useLocationSharing } from '@/hooks/useLocationSharing'
+import { Switch } from '@/components/ui/switch'
 
 function HamburgerIcon({ isOpen }: { isOpen: boolean }) {
   return (
@@ -96,6 +99,11 @@ function ThemeSegmented() {
       </div>
     </div>
   )
+}
+
+function MenuLocationSwitch() {
+  const { enabled, setEnabled } = useLocationSharing()
+  return <div className="px-1 py-2"><div className="flex items-center justify-between gap-3"><label htmlFor="profile-location-tracking" className="flex cursor-pointer items-center gap-2 text-xs font-medium text-foreground"><MapPin className="h-4 w-4 text-primary" aria-hidden="true" />Location tracking</label><Switch id="profile-location-tracking" checked={enabled} onCheckedChange={setEnabled} aria-describedby="profile-location-description" /></div><p id="profile-location-description" className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{enabled ? 'On for this device when location permission is allowed.' : 'Off for this device, even when device location is on.'}</p></div>
 }
 
 function getInitials(name?: string | null, email?: string | null) {
@@ -343,6 +351,8 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
             <hr className="my-1.5 border-border/60" />
 
             {/* Theme switcher: Light & Dark only */}
+            <MenuLocationSwitch />
+            <hr className="my-1.5 border-border/60" />
             <ThemeSegmented />
 
             <hr className="my-1.5 border-border/60" />

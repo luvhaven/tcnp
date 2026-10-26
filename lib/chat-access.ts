@@ -24,7 +24,7 @@ export type ChatRoomMember = {
   photo_url: string | null
   is_online: boolean
   last_seen: string | null
-  accessType: 'executive' | 'member' | 'team' | 'program'
+  accessType: 'executive' | 'admin' | 'member' | 'team' | 'program'
 }
 
 export type ChatRoomsResponse = {
