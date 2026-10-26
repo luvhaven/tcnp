@@ -11,6 +11,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { cn, normalizeOscarLabel } from "@/lib/utils"
 import { computeProfileCompletion, requiresProtocolTeam, type ProfileFields } from "@/lib/profile-completion"
 import { LocationSharingControl } from "@/components/tracking/LocationSharingControl"
+import { DeviceNotificationControl } from "@/components/notifications/DeviceNotificationControl"
 import { CompletionRing } from "@/components/profile/CompletionRing"
 import { useCelebrate } from "@/components/providers/CelebrateProvider"
 import { HeadshotCropDialog } from "@/components/profile/HeadshotCropDialog"
@@ -388,6 +389,7 @@ export default function ProfilePage() {
           </CardHeader>
           <CardContent>
             <LocationSharingControl />
+            <DeviceNotificationControl />
           </CardContent>
         </Card>
 

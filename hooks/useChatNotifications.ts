@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { audioManager } from '@/lib/audio/AudioManager'
 import { uniqueTopic } from '@/lib/realtime/topic'
 import { showSystemNotification } from '@/lib/services/system-notification'
+import { devicePushConnected } from '@/lib/device-push'
 
 // Audio is handled by the global AudioManager singleton (respects global mute)
 
@@ -39,6 +40,9 @@ export function useChatNotifications(currentUserId: string | null) {
             content: string
             mentions: string[] | null
             is_private: boolean
+            program_id?: string | null
+            papa_id?: string | null
+            team?: string | null
           }
 
           // Don't notify for own messages
@@ -68,6 +72,11 @@ export function useChatNotifications(currentUserId: string | null) {
           const toastTitle = isMentioned
             ? `${senderName} mentioned you`
             : senderName
+          const params = new URLSearchParams({ highlight: msg.id })
+          if (msg.program_id) params.set('programId', msg.program_id)
+          if (msg.papa_id) params.set('papaId', msg.papa_id)
+          if (msg.team) params.set('team', msg.team)
+          const roomUrl = `/chat?${params}`
 
           // Mentions get their own insistent ping; regular chat keeps the soft pop
           audioManager.playChime(isMentioned ? 'mention' : 'chat')
@@ -78,17 +87,17 @@ export function useChatNotifications(currentUserId: string | null) {
             duration: isMentioned ? 8000 : 5000,
             action: {
               label: 'Open Chat',
-              onClick: () => router.push('/chat'),
+              onClick: () => router.push(roomUrl),
             },
           })
 
           // System notification while the tab is in the background
-          if (document.hidden) {
+          if (document.hidden && !(isMentioned && await devicePushConnected())) {
             void showSystemNotification(`TCNP — ${toastTitle}`, {
               body: preview,
               tag: `chat-${msg.id}`,
               requireInteraction: isMentioned,
-              onClickUrl: '/chat',
+              onClickUrl: roomUrl,
             })
           }
         }

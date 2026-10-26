@@ -20,6 +20,9 @@ import {
   SEVERITY_SOFT, type CallSignDirection, type CallSignKey,
 } from '@/lib/constants/call-signs'
 import { cn } from '@/lib/utils'
+import { useConfirm } from '@/components/providers/ConfirmProvider'
+import { DutyCompletionDialog } from '@/components/operations/DutyCompletionDialog'
+import { dutyCompletionReasons, isTheatreDuty, type DOReturnDestination } from '@/lib/duty-workflow'
 
 /** Direction glyph per movement phase — identity carried by form, not colour. */
 const PHASE_ICON: Record<CallSignDirection, React.ComponentType<{ className?: string }>> = {
@@ -71,8 +74,10 @@ export default function CurrentMissionCard({
 }: CurrentMissionCardProps) {
   const supabase = createClient()
   const celebrate = useCelebrate()
+  const confirm = useConfirm()
+  const [completionOpen, setCompletionOpen] = useState(false)
   const now = useNow(30_000)
-  const { status: liveStatus, lastUpdated, sending, updateStatus, completeJourney } =
+  const { status: liveStatus, lastUpdated, sending, updateStatus, completeJourney, returnDestination: liveReturnDestination, startReturn } =
     useJourneyStatus(journey.id, { onChanged })
   const [acknowledging, setAcknowledging] = useState(false)
   const ackInFlight = useRef(false)
@@ -105,7 +110,19 @@ export default function CurrentMissionCard({
   ].filter((c): c is { key: string; label: string; phone: string } => !!c)
 
   const firstSign = firstCallSignFor(journey.origin, journey.destination)
-  const next = isPlanned ? firstSign : NEXT_CALL_SIGN[status] ?? null
+  const hasPapa = Boolean(journey.papa_id)
+  const returnDestination = liveReturnDestination ?? journey.do_return_destination ?? null
+  const completionReasons = dutyCompletionReasons(journey, returnDestination)
+  const needsReturnChoice = hasPapa && isTheatreDuty(journey) && !returnDestination
+  const canChooseReturn = hasPapa && (status === 'chapman' || status === 'dessert' || Boolean(returnDestination))
+  let next = isPlanned ? firstSign : NEXT_CALL_SIGN[status] ?? null
+  if (needsReturnChoice && (status === 'chapman' || status === 'dessert')) next = null
+  if (returnDestination && !isPlanned && !isBrokenArrow) next = 'complete'
+
+  const escortReturn = async (destination: DOReturnDestination) => {
+    if (!await confirm({ title: 'Start Papa’s return escort?', message: `Confirm Papa has finished speaking and you are staying with him on the return to ${destination === 'nest' ? 'the Nest' : 'Eagle Square'}.`, confirmText: 'Record return escort' })) return
+    await startReturn(destination)
+  }
 
   const send = async (key: CallSignKey, notes?: string) => {
     const isEvent = EVENT_CALL_SIGNS.includes(key)
@@ -128,7 +145,7 @@ export default function CurrentMissionCard({
         .eq('user_id', currentUserId)
       if (error) throw error
       onAcknowledged({ status: 'acknowledged', acknowledged_at })
-      celebrate('Assignment accepted — shift handoff complete')
+      celebrate('Assignment accepted — remain with Papa until duty is complete')
       onChanged()
     } catch (err) {
       console.error('Acknowledgment error:', err)
@@ -139,7 +156,7 @@ export default function CurrentMissionCard({
     }
   }
 
-  const otherMovement = CALL_SIGNS.filter(s => STATUS_CALL_SIGNS.includes(s.key) && s.key !== next)
+  const otherMovement = CALL_SIGNS.filter(s => STATUS_CALL_SIGNS.includes(s.key) && s.key !== next && !(needsReturnChoice && status === 'chapman' && ['cocktail','dessert'].includes(s.key)))
   const broadcasts = CALL_SIGNS.filter(s => EVENT_CALL_SIGNS.includes(s.key))
 
   return (
@@ -263,6 +280,7 @@ export default function CurrentMissionCard({
           )}
 
           {/* Next action + the rest of the call signs */}
+          {hasPapa && !isTerminal && <div className="space-y-3 rounded-xl border bg-muted/25 p-3 text-sm"><p>Remain with Papa through the speaking engagement and the return escort. Finish duty after Papa is settled at the Nest, or after confirming the flight has taken off or landed.</p>{canChooseReturn && <div className="flex flex-wrap gap-2"><button type="button" disabled={sending || returnDestination === 'nest'} onClick={() => void escortReturn('nest')} className="min-h-11 rounded-lg border bg-card px-3 font-medium disabled:opacity-50">{returnDestination === 'nest' ? 'Escorting to Nest' : 'Escort back to Nest'}</button><button type="button" disabled={sending || returnDestination === 'eagle_square'} onClick={() => void escortReturn('eagle_square')} className="min-h-11 rounded-lg border bg-card px-3 font-medium disabled:opacity-50">{returnDestination === 'eagle_square' ? 'Escorting to Eagle Square' : 'Escort to Eagle Square'}</button></div>}{needsReturnChoice && status === 'chapman' && <p className="text-muted-foreground">Papa is at the theatre. Stay with him until he finishes speaking, then select the return escort.</p>}</div>}
           {!isPendingAcknowledge && !isTerminal && (
             <div className="space-y-3">
               {next && (
@@ -270,7 +288,7 @@ export default function CurrentMissionCard({
                   type="button"
                   disabled={sending}
                   onClick={() => {
-                    if (next === 'complete') void completeJourney()
+                    if (next === 'complete') setCompletionOpen(true)
                     else void send(next, isPlanned ? 'Journey started' : undefined)
                   }}
                   className={cn(
@@ -286,7 +304,7 @@ export default function CurrentMissionCard({
                     : <Navigation className="h-5 w-5" aria-hidden />}
                   {isPlanned
                     ? `Start journey — ${getCallSignLabel(firstSign)}`
-                    : next === 'complete' ? 'Next: Complete journey' : `Next: ${getCallSignLabel(next)}`}
+                    : next === 'complete' ? 'Confirm final duty checkpoint' : `Next: ${getCallSignLabel(next)}`}
                 </button>
               )}
 
@@ -317,11 +335,11 @@ export default function CurrentMissionCard({
                     {next !== 'complete' && (
                       <button
                         type="button"
-                        disabled={sending}
-                        onClick={() => void completeJourney()}
+                        disabled={sending || (hasPapa && completionReasons.length === 0)}
+                        onClick={() => setCompletionOpen(true)}
                         className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 text-sm font-semibold text-success focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
                       >
-                        <CheckCircle className="h-4 w-4" aria-hidden />Complete
+                        <CheckCircle className="h-4 w-4" aria-hidden />Complete duty
                       </button>
                     )}
                   </div>
@@ -363,6 +381,7 @@ export default function CurrentMissionCard({
           onTrigger={() => void send('broken_arrow', 'Declared via press-and-hold distress button')}
         />
       )}
+      <DutyCompletionDialog key={`${journey.id}:${returnDestination}`} open={completionOpen} onOpenChange={setCompletionOpen} papaName={papaName} hasPapa={hasPapa} reasons={completionReasons} onConfirm={completeJourney} />
     </div>
   )
 }

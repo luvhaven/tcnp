@@ -1,80 +1,19 @@
-"use client"
+'use client'
 
 import { useEffect, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Bell, BellOff } from 'lucide-react'
-import { notificationService } from '@/lib/services/notificationService'
+import { DeviceNotificationControl } from './DeviceNotificationControl'
 
 export default function NotificationPermissionBanner() {
-    const [show, setShow] = useState(false)
-    const [permission, setPermission] = useState<NotificationPermission>('default')
-
-    useEffect(() => {
-        if (!('Notification' in window)) return
-        const timer = window.setTimeout(() => {
-            setPermission(Notification.permission)
-            let dismissed = false
-            try { dismissed = localStorage.getItem('notification-banner-dismissed') === 'true' } catch {}
-            setShow(Notification.permission === 'default' && !dismissed)
-        }, 3000)
-        return () => window.clearTimeout(timer)
-    }, [])
-
-    const handleEnableNotifications = async () => {
-        const granted = await notificationService.requestPermission()
-        if (granted) {
-            setPermission('granted')
-            setShow(false)
-
-            // Show a test notification
-            await notificationService.showNotification({
-                title: '🔔 Notifications Enabled!',
-                body: 'You will now receive real-time updates with sound and vibration.',
-            })
-        } else {
-            setPermission('denied')
-        }
-    }
-
-    const handleDismiss = () => {
-        setShow(false)
-        // Remember dismissal in localStorage
-        try {
-            localStorage.setItem('notification-banner-dismissed', 'true')
-        } catch (error) {
-            // localStorage can fail in iOS private mode - ignore
-        }
-    }
-
-
-    if (!show || permission !== 'default') {
-        return null
-    }
-
-    return (
-        <div className="pointer-events-auto w-full animate-in slide-in-from-bottom-5">
-            <Card className="border-primary/50 shadow-lg">
-                <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                        <Bell className="h-5 w-5 text-primary" />
-                        Enable Notifications
-                    </CardTitle>
-                    <CardDescription className="text-xs">
-                        Get real-time alerts with sound and vibration for messages, journey updates, and emergencies
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="flex gap-2">
-                    <Button onClick={handleEnableNotifications} size="sm" className="flex-1">
-                        <Bell className="h-4 w-4 mr-2" />
-                        Enable
-                    </Button>
-                    <Button onClick={handleDismiss} size="sm" variant="outline">
-                        <BellOff className="h-4 w-4 mr-2" />
-                        Not Now
-                    </Button>
-                </CardContent>
-            </Card>
-        </div>
-    )
+  const [dismissed, setDismissed] = useState(true)
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try { setDismissed(localStorage.getItem('notification-banner-dismissed') === 'true') } catch { setDismissed(false) }
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [])
+  // Remain mounted to reconnect granted subscriptions after sign-in.
+  return <div className={dismissed ? 'hidden' : 'pointer-events-auto w-full rounded-xl border bg-card p-4 shadow-lg'}>
+    <DeviceNotificationControl compact />
+    {!dismissed && <button type="button" className="mt-3 min-h-10 text-sm text-muted-foreground underline" onClick={() => { setDismissed(true); try { localStorage.setItem('notification-banner-dismissed', 'true') } catch {} }}>Dismiss — manage this in My Profile</button>}
+  </div>
 }

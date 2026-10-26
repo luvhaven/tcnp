@@ -204,6 +204,7 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
       } catch { /* Presence must never prevent signing out. */ }
       finally { clearTimeout(timeout) }
     }
+    await import('@/lib/device-push').then(m => m.disconnectDevicePush(false)).catch(() => undefined)
     await supabase.auth.signOut()
     router.push("/login")
   }

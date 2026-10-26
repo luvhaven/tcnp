@@ -54,6 +54,10 @@ const sections = [
         body: 'Duty Officers and admins can update call signs from the **Ops Monitor** page. Click the call sign badge on any active journey row, select the new status, and confirm. A chime sound plays on successful update.',
       },
       {
+        heading: 'DO responsibility through completion',
+        body: 'The DO remains with their Papa at the theatre, throughout the speaking engagement, and during the return escort. After Papa finishes speaking, record the return to the Nest or Eagle Square in **My Operations**. Complete duty only after personally confirming that Papa is settled at the Nest, or that Papa’s flight has taken off or landed. Theatre arrival is a checkpoint, not the end of the DO assignment.',
+      },
+      {
         heading: 'Setting ETA / ETD',
         body: 'In the Ops Monitor, click the **Set Times** or **Edit Times** button on any journey row. A dialog appears with datetime pickers for both ETA (Estimated Arrival) and ETD (Estimated Departure). Only admins and assigned DOs can edit times.',
       },

@@ -41,6 +41,7 @@ import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/l
 import { DateTimePicker } from "@/components/ui/date-time-picker"
 import { usePagination } from "@/hooks/usePagination"
 import OperationalReadiness from "@/components/journeys/OperationalReadiness"
+import { DutyJourneyActions } from '@/components/operations/DutyJourneyActions'
 
 const FALLBACK_STATUS_LABELS: Record<string, string> = {
   planned: "Planned",
@@ -91,6 +92,7 @@ type Journey = {
   assigned_duty_officer_id?: string | null
   assigned_nest_id?: string | null
   assigned_eagle_square_id?: string | null
+  assigned_theatre_id?: string | null
   program_id?: string | null
   origin: string
   destination: string
@@ -1399,9 +1401,10 @@ export default function JourneysClient({
               </div>
 
               <div className="space-y-2">
+                {selectedJourney.papa_id && <DutyJourneyActions journey={selectedJourney} onChanged={() => { setSelectedJourney(null); void loadJourneys(false) }} />}
                 <Label>Available Call-Signs:</Label>
                 <div className="grid gap-2">
-                  {getAvailableCallSigns(selectedJourney.status).map((callSign) => (
+                  {getAvailableCallSigns(selectedJourney.status).filter(sign => !selectedJourney.papa_id || sign !== 'completed').map((callSign) => (
                     <Button
                       key={callSign}
                       variant={callSign === 'broken_arrow' ? 'destructive' : 'outline'}
