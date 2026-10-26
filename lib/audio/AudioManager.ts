@@ -171,6 +171,22 @@ class AudioManager {
     if (this._muted) return
 
     switch (type) {
+      case 'notification_signature':
+        // A short, warm major-sixth motif with a quiet bell overtone.
+        this.scheduleTone(659.25, 0, 0.24, 'sine', 0.16)
+        this.scheduleTone(1318.5, 0, 0.14, 'sine', 0.035)
+        this.scheduleTone(987.77, 0.13, 0.38, 'sine', 0.14)
+        this.scheduleTone(1975.54, 0.13, 0.22, 'sine', 0.025)
+        break
+      case 'notification_soft':
+        this.scheduleTone(523.25, 0, 0.36, 'sine', 0.12)
+        this.scheduleTone(783.99, 0.16, 0.42, 'sine', 0.10)
+        break
+      case 'notification_clear':
+        this.scheduleTone(783.99, 0, 0.16, 'triangle', 0.12)
+        this.scheduleTone(1046.5, 0.14, 0.22, 'sine', 0.15)
+        this.scheduleTone(1318.5, 0.28, 0.28, 'sine', 0.11)
+        break
       case 'broken_arrow':
         // BrokenArrowAlert owns all broken_arrow audio — do nothing here
         return

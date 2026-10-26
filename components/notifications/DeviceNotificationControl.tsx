@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { connectDevicePush, disconnectDevicePush, getPushConfig, pushSupported, pushDisabled, sendDeviceNotificationTest, type DevicePushConfig } from '@/lib/device-push'
 
 const ENABLED = 'Enabled on this device, including when TCNP is closed.'
-const TEST_SENT = 'Test notification sent. If it is hidden on Windows, check Settings → System → Notifications and turn off Do not disturb.'
+const TEST_SENT = 'Test notification sent. Look in your device’s notification center. Allow banners, sounds and vibration for TCNP or your browser in device notification settings, and turn off Do not disturb.'
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Could not update device notifications. Please try again.'
 
 export function DeviceNotificationControl({ compact = false }: { compact?: boolean }) {

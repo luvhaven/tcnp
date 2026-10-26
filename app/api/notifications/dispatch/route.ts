@@ -25,8 +25,9 @@ export async function POST(request: Request) {
       try {
         await webPush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth_key } }, JSON.stringify({
           title: 'TCNP', body: 'You have a new update. Open TCNP to view it.', tag: `tcnp-${notice.id}`, targetUserId: sub.user_id,
+          notificationId: notice.id, critical: notice.type === 'broken_arrow',
           url: safeNotificationUrl(notice.metadata?.url ?? (notice.journey_id ? `/journeys?highlight=${notice.journey_id}` : notice.type === 'chat' ? '/chat' : '/dashboard')),
-        }), { vapidDetails: { subject: config.subject, publicKey: config.publicKey, privateKey: config.privateKey }, TTL: 86400, timeout: 5000, urgency: 'normal' })
+        }), { vapidDetails: { subject: config.subject, publicKey: config.publicKey, privateKey: config.privateKey }, TTL: 86400, timeout: 5000, urgency: notice.type === 'broken_arrow' ? 'high' : 'normal' })
         delivered = true; sent++
       } catch (error: any) {
         const status = Number(error?.statusCode || 0)

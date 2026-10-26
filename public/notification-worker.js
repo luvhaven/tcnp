@@ -24,7 +24,23 @@ self.addEventListener('push', event => {
     if (!owner || await owner.text() !== payload.targetUserId) return
     let url = '/dashboard'
     try { const target = new URL(payload.url, self.location.origin); if (target.origin === self.location.origin) url = target.pathname + target.search } catch {}
-    await self.registration.showNotification('TCNP', { body: 'You have a new update. Open TCNP to view it.', tag: payload.tag, icon: '/icon-192.png', badge: '/icon-192.png', data: { url }, renotify: false })
+    // Keep a real system notification in the tray. When TCNP is focused, its
+    // in-app banner owns sound/haptics; a background push uses device defaults.
+    let windows = []
+    try { windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true }) } catch {}
+    const focused = windows.filter(client => {
+      try { return new URL(client.url).origin === self.location.origin && client.focused && client.visibilityState === 'visible' } catch { return false }
+    })
+    const options = { body: 'You have a new update. Open TCNP to view it.', tag: payload.tag,
+      icon: '/icon-192.png', badge: '/notification-badge.png', data: { url, notificationId: payload.notificationId }, renotify: false,
+      requireInteraction: false, silent: focused.length > 0,
+      actions: [{ action: 'open', title: 'Open TCNP' }],
+    }
+    if (!options.silent) options.vibrate = payload.critical ? [200, 100, 200, 100, 400] : [45, 70, 90]
+    await self.registration.showNotification('TCNP', options)
+    for (const client of focused) {
+      try { client.postMessage({ type: 'TCNP_NOTIFICATION', notificationId: payload.notificationId }) } catch {}
+    }
   })())
 })
 self.addEventListener('notificationclick', event => {

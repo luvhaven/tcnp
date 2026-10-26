@@ -1,6 +1,6 @@
 "use client"
 
-import { audioManager } from '@/lib/audio/AudioManager'
+import { playNotificationFeedback } from '@/lib/notification-feedback'
 import { showSystemNotification } from '@/lib/services/system-notification'
 
 /**
@@ -57,27 +57,6 @@ export class NotificationService {
     }
 
     /**
-     * Play notification sound via the global AudioManager singleton.
-     */
-    private playNotificationSound() {
-        audioManager.playChime('info')
-    }
-
-    /**
-     * Vibrate device (mobile only)
-     */
-    private vibrate() {
-        if ('vibrate' in navigator) {
-            try {
-                // Vibration pattern: vibrate for 200ms, pause 100ms, vibrate 200ms
-                navigator.vibrate([200, 100, 200])
-            } catch (error) {
-                console.error('Error vibrating device:', error)
-            }
-        }
-    }
-
-    /**
      * Show browser notification with sound and vibration
      */
     async showNotification(options: {
@@ -97,6 +76,7 @@ export class NotificationService {
 
         // Goes through the service worker where available; `new Notification()`
         // throws on Android Chrome.
+        const foreground = !document.hidden && document.hasFocus()
         const shown = await showSystemNotification(options.title, {
             body: options.body,
             icon: options.icon || '/tcnp_logo.png',
@@ -104,13 +84,12 @@ export class NotificationService {
             tag: options.tag,
             data: options.data,
             requireInteraction: options.requireInteraction || false,
-            silent: options.silent || false,
+            silent: foreground || options.silent || false,
         })
 
-        if (shown && !options.silent) {
-            this.playNotificationSound()
+        if (shown && foreground && !options.silent) {
+            playNotificationFeedback()
         }
-        if (shown) this.vibrate()
     }
 
     /**

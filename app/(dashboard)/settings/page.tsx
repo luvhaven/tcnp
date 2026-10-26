@@ -11,6 +11,7 @@ import { useTheme, type AppTheme } from '@/components/theme/ThemeProvider'
 import { DeviceNotificationControl } from '@/components/notifications/DeviceNotificationControl'
 import { LocationSharingControl } from '@/components/tracking/LocationSharingControl'
 import { audioManager } from '@/lib/audio/AudioManager'
+import { NotificationFeedbackControl } from '@/components/notifications/NotificationFeedbackControl'
 
 const themes: { value: AppTheme; label: string; icon: typeof Sun }[] = [
   { value: 'light', label: 'Light', icon: Sun },
@@ -59,6 +60,7 @@ export default function SettingsPage() {
               <p id="app-sounds-description" className="text-sm text-muted-foreground">{muted ? 'Off' : 'On'} — applies to all in-app sounds, including chat alerts and emergency alarms. Device notification sounds follow your browser and operating system settings.</p></div>
             <Switch id="app-sounds" checked={!muted} onCheckedChange={enabled => audioManager.setMuted(!enabled)} aria-describedby="app-sounds-description" />
           </div>
+          <NotificationFeedbackControl />
         </CardContent>
       </Card>
       <Card>
