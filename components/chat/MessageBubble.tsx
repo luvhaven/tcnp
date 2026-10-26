@@ -193,12 +193,12 @@ export const MessageBubble = memo(({
                 {!isOwn && isFirst && (
                     <div className="mb-1 px-1 text-xs font-semibold text-primary">
                         {displayName}
-                        {msg.is_private && <span title="Visible to mentioned members and executives" className="ml-2 inline-flex items-center gap-1 font-medium text-muted-foreground"><Lock aria-hidden="true" className="h-3 w-3" />Restricted</span>}
+                        {msg.is_private && <span title="Visible to mentioned members, executives and admins" className="ml-2 inline-flex items-center gap-1 font-medium text-muted-foreground"><Lock aria-hidden="true" className="h-3 w-3" />Restricted</span>}
                     </div>
                 )}
                 {isOwn && isFirst && msg.is_private && (
                     <div className="mb-1 flex items-center gap-0.5 px-1 text-xs font-medium text-amber-700 dark:text-amber-400">
-                        <Lock aria-hidden="true" className="h-3 w-3" />Mentioned members + executives
+                        <Lock aria-hidden="true" className="h-3 w-3" />Mentioned members + executives + admins
                     </div>
                 )}
 

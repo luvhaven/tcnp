@@ -65,6 +65,23 @@ test('the off switch works when local storage is unavailable', () => {
   assert.equal(store.isLocationSharingEnabled(), false)
 })
 
+test('resubscribing and returning to a background tab refreshes a changed device preference', () => {
+  const p = preference('on')
+  assert.equal(p.store.isLocationSharingEnabled(), true)
+  const unsubscribe = p.store.subscribeToLocationSharing(() => {})
+  unsubscribe()
+  p.values.set('tcnp-location-sharing', 'off')
+  let notified = 0
+  const stop = p.store.subscribeToLocationSharing(() => notified++)
+  assert.equal(p.store.isLocationSharingEnabled(), false)
+  p.values.set('tcnp-location-sharing', 'on')
+  p.events.get('focus')()
+  assert.equal(p.store.isLocationSharingEnabled(), true)
+  assert.equal(notified, 1)
+  stop()
+  assert.equal(p.events.has('focus'), false)
+})
+
 function tracker(initial = 'on') {
   const p = preference(initial)
   const slots = []

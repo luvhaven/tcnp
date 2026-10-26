@@ -161,6 +161,15 @@ export function isPlatformAdministrator(role: string | null | undefined): boolea
   return platformAuthorityRank(role) >= 80
 }
 
+/** Display identity is separate from Admin authority. */
+export function isExecutiveRole(role: string | null | undefined): boolean {
+  return role === 'captain' || role === 'vice_captain'
+}
+
+export function privilegedAccessLabel(role: string | null | undefined): string {
+  return isExecutiveRole(role) ? 'Executive access' : isPlatformAdministrator(role) ? 'Admin' : ''
+}
+
 export function isUnitHeadRole(
   unit: 'alpha' | 'command' | 'compliance' | 'november_nest' | 'tango' | 'training' | 'victor' | 'welfare',
   role: string | null | undefined,

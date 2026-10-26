@@ -32,12 +32,26 @@ function handleStorage(event: StorageEvent) {
   }
 }
 
+function refreshPreference() {
+  if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+  try { update(window.localStorage.getItem(STORAGE_KEY) !== 'off') } catch { /* Retain session preference when storage is blocked. */ }
+}
+
 export function subscribeToLocationSharing(listener: () => void) {
-  if (listeners.size === 0) window.addEventListener('storage', handleStorage)
+  if (listeners.size === 0) {
+    refreshPreference()
+    window.addEventListener('storage', handleStorage)
+    window.addEventListener('focus', refreshPreference)
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', refreshPreference)
+  }
   listeners.add(listener)
   return () => {
     listeners.delete(listener)
-    if (listeners.size === 0) window.removeEventListener('storage', handleStorage)
+    if (listeners.size === 0) {
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener('focus', refreshPreference)
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', refreshPreference)
+    }
   }
 }
 

@@ -140,7 +140,6 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
     { value: 'noscar_den', label: 'November (Den)' },
     { value: 'head_noscar_nest', label: 'Head, November (Nest)' },
     { value: 'noscar_nest', label: 'November (Nest)' },
-    { value: 'november_oscar', label: 'November Oscar (Legacy)' },
     { value: 'head_victor_oscar', label: 'Head, Victor Oscar' },
     { value: 'victor_oscar', label: 'Victor Oscar (VO)' },
     { value: 'delta_oscar', label: 'Delta Oscar (DO)' },
@@ -157,6 +156,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
 
   const getRoleLabel = (role?: string | null) => {
     if (!role) return ''
+    if (role === 'november_oscar') return 'November (Nest)'
     if (role === 'super_admin') return 'Super Admin'
     return roles.find((item) => item.value === role)?.label || role
   }
@@ -350,7 +350,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
     queryFn: async () => {
       const { data, error } = await supabase.from('official_titles').select('*').order('unit, name')
       if (error) throw error
-      return data as OfficialTitle[]
+        return (data as OfficialTitle[]).filter(title => title.code !== 'HEAD_NOVEMBER_OSCAR' && !/november.*legacy|legacy.*november/i.test(title.name))
     },
     enabled: !!canManageOfficers
   })

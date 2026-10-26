@@ -104,6 +104,16 @@ test('scope parsing requires exactly one valid room and rejects orphan Papa or m
   for (const scope of [{ status: 'archived' }, { status: ' ARCHIVED ' }, { status: 'active', is_archived: true }, { status: 'active', is_deleted: true }]) assert.equal(access.isChatProgramOpen(scope), false)
 })
 
+test('only Captain and Vice Captain carry Executive labels while other implicit managers are Admin', async () => {
+  for (const role of ['captain', 'vice_captain', 'admin', 'dev_admin', 'super_admin', 'head_of_command']) {
+    const system = app({ role: 'captain', users: [user(EXECUTIVE, { role })] })
+    const result = await system.members.GET(system.request(null))
+    assert.equal(result.body.members[0].accessType, ['captain', 'vice_captain'].includes(role) ? 'executive' : 'admin')
+    assert.equal(utils.privilegedAccessLabel(role), ['captain', 'vice_captain'].includes(role) ? 'Executive access' : 'Admin')
+    assert.equal(utils.isPlatformAdministrator(role), true)
+  }
+})
+
 test('nullable status and deleted flags agree with database open-room rules', async () => {
   const system = app({ role: 'captain', programs: [{ id: PROGRAM, name: 'Open', status: null }], papas: [{ id: PAPA, full_name: 'Available Papa', program_id: PROGRAM, is_deleted: null }] })
   const response = await system.rooms.GET()

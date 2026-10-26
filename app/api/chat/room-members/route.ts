@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { CHAT_PRIVATE_HEADERS, assertOpenChatScope, chatError, getChatCaller } from '@/lib/chat-server'
 import { CHAT_UUID_PATTERN, canManageChatMemberships, parseChatRoomScope, type ChatRoomMember } from '@/lib/chat-access'
-import { PLATFORM_ADMIN_ROLES } from '@/lib/utils'
+import { PLATFORM_ADMIN_ROLES, isExecutiveRole } from '@/lib/utils'
 import { isOfficerOnline } from '@/lib/presence'
 import { checkRateLimit } from '@/lib/security/rate-limit'
 import { getProgramChatAssignments } from '@/lib/chat-program-membership'
@@ -73,7 +73,7 @@ export async function GET(request: Request) {
     // Team assignments remain operational data; this endpoint never moves users between teams.
     const explicitIds = new Set(memberIds)
     const members = activeUsers.filter(user => canManageChatMemberships(user.role) || (scope.team ? user.team === scope.team : explicitIds.has(user.id)))
-      .map(user => memberView(user, canManageChatMemberships(user.role) ? 'executive' : scope.team ? 'team' : programMemberIds.has(user.id) ? 'program' : 'member'))
+      .map(user => memberView(user, canManageChatMemberships(user.role) ? isExecutiveRole(user.role) ? 'executive' : 'admin' : scope.team ? 'team' : programMemberIds.has(user.id) ? 'program' : 'member'))
     const candidates = canManageMembers && !scope.team
       ? activeUsers.filter(user => !canManageChatMemberships(user.role) && !explicitIds.has(user.id)).map(user => memberView(user, 'member'))
       : undefined
