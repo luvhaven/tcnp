@@ -77,6 +77,10 @@ const nextConfig = {
   async headers() {
     return [
       {
+        source: '/notification-worker.js',
+        headers: [{ key: 'Cache-Control', value: 'no-store, max-age=0' }],
+      },
+      {
         source: '/(.*)',
         headers: securityHeaders,
       },
