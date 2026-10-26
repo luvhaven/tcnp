@@ -18,7 +18,7 @@ export async function showSystemNotification(
     icon: '/icon-192.png',
     badge: '/icon-192.png',
     ...notificationOptions,
-    data: { ...(notificationOptions.data ?? {}), url: onClickUrl },
+    data: { ...(notificationOptions.data ?? {}), ...(onClickUrl ? { url: onClickUrl } : {}) },
   }
 
   try {

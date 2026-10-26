@@ -3,10 +3,10 @@
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { useConfirm } from '@/components/providers/ConfirmProvider'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { offlineQueue } from '@/lib/offline-queue'
 import { CALL_SIGN_KEY_TO_DB_ENUM, getCallSignLabel, type CallSignKey } from '@/lib/constants/call-signs'
+import type { DOCompletionReason, DOReturnDestination } from '@/lib/duty-workflow'
 
 export const STATUS_CALL_SIGNS: CallSignKey[] = [
   'first_course',
@@ -89,7 +89,6 @@ export interface UseJourneyStatusOptions {
 
 export function useJourneyStatus(journeyId: string, options: UseJourneyStatusOptions = {}) {
   const supabase = createClient()
-  const confirm = useConfirm()
   const queryClient = useQueryClient()
   // A stable unique suffix so two components watching the same journey (or a
   // remount racing the previous unmount's removeChannel) never share a topic.
@@ -106,11 +105,11 @@ export function useJourneyStatus(journeyId: string, options: UseJourneyStatusOpt
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('journeys')
-        .select('status, updated_at, status_updated_at')
+        .select('status, updated_at, status_updated_at, do_return_destination, do_completion_reason')
         .eq('id', journeyId)
         .single()
       if (error) throw error
-      return data as { status: string; updated_at: string | null; status_updated_at: string | null }
+      return data as { status: string; updated_at: string | null; status_updated_at: string | null; do_return_destination: DOReturnDestination | null; do_completion_reason: DOCompletionReason | null }
     },
     enabled: !!journeyId
   })
@@ -133,6 +132,8 @@ export function useJourneyStatus(journeyId: string, options: UseJourneyStatusOpt
             status: payload.new.status,
             updated_at: payload.new.updated_at,
             status_updated_at: payload.new.status_updated_at ?? null,
+            do_return_destination: payload.new.do_return_destination ?? null,
+            do_completion_reason: payload.new.do_completion_reason ?? null,
           })
           queryClient.invalidateQueries({ queryKey: ['journeys'] })
         }
@@ -257,6 +258,7 @@ export function useJourneyStatus(journeyId: string, options: UseJourneyStatusOpt
       const now = new Date().toISOString()
 
       queryClient.setQueryData(['journeyStatus', journeyId], {
+        ...(previousState as object || {}),
         status: callSign,
         updated_at: now,
         status_updated_at: now,
@@ -312,46 +314,38 @@ export function useJourneyStatus(journeyId: string, options: UseJourneyStatusOpt
   })
 
   const completeMutation = useMutation({
-    mutationFn: async () => {
-      // NOTE: actual_arrival does NOT exist in the journeys schema — omitted.
-      const { data: { user } } = await supabase.auth.getUser()
-      const now = new Date().toISOString()
-      const { error } = await (supabase as any)
-        .from('journeys')
-        .update({
-          status: 'completed',
-          status_updated_at: now,
-          completed_at: now,               // after-op reporting relies on this
-          completed_by: user?.id ?? null,
-          updated_at: now,
-        })
-        .eq('id', journeyId)
-
+    mutationFn: async (reason: DOCompletionReason | null) => {
+      const { data: journey, error } = await (supabase as any).rpc('complete_do_journey', { target_journey_id: journeyId, completion_reason: reason })
       if (error) throw error
-
-      // 'completed' is not a call_sign enum value so we skip journey_events for completion
+      return journey
     },
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: ['journeyStatus', journeyId] })
-      const previousState = queryClient.getQueryData(['journeyStatus', journeyId])
-      const now = new Date().toISOString()
-      queryClient.setQueryData(['journeyStatus', journeyId], {
-        status: 'completed',
-        updated_at: now,
-        status_updated_at: now,
-      })
-      return { previousState }
     },
-    onError: (err, variables, context) => {
-      queryClient.setQueryData(['journeyStatus', journeyId], context?.previousState)
+    onError: (err) => {
       toast.error(isNetworkFailure(err)
         ? 'No connection — journey not completed. Retry when back online.'
-        : 'Failed to complete journey')
+        : 'Duty could not be completed. Confirm the return escort and final checkpoint.')
     },
-    onSuccess: () => {
+    onSuccess: (journey: any) => {
+      queryClient.setQueryData(['journeyStatus', journeyId], journey)
       onChangedRef.current?.()
       toast.success('Journey marked as complete')
     }
+  })
+
+  const returnMutation = useMutation({
+    mutationFn: async (destination: DOReturnDestination) => {
+      const { data, error } = await (supabase as any).rpc('start_do_return', { target_journey_id: journeyId, return_destination: destination })
+      if (error) throw error
+      return data
+    },
+    onSuccess: (journey: any) => {
+      queryClient.setQueryData(['journeyStatus', journeyId], journey)
+      onChangedRef.current?.()
+      toast.success('Return escort recorded — remain with Papa until duty is complete')
+    },
+    onError: () => toast.error('Return escort could not be recorded. Check your connection and theatre arrival, then retry.'),
   })
 
   /**
@@ -378,19 +372,29 @@ export function useJourneyStatus(journeyId: string, options: UseJourneyStatusOpt
     }
   }, [updateMutation, queryClient, journeyId])
 
-  const completeJourney = useCallback(async () => {
-    if (inFlight.current) return
-    if (!await confirm({ message: 'Mark this journey as complete?', confirmText: 'Complete', variant: 'default' })) return
+  const completeJourney = useCallback(async (reason: DOCompletionReason | null): Promise<boolean> => {
+    if (inFlight.current) return false
     inFlight.current = true
-    completeMutation.mutate(undefined, { onSettled: () => { inFlight.current = false } })
-  }, [completeMutation, confirm])
+    try { await completeMutation.mutateAsync(reason); return true } catch { return false }
+    finally { inFlight.current = false }
+  }, [completeMutation])
+
+  const startReturn = useCallback(async (destination: DOReturnDestination) => {
+    if (inFlight.current) return
+    inFlight.current = true
+    try { await returnMutation.mutateAsync(destination) } catch { /* Presented by onError. */ }
+    finally { inFlight.current = false }
+  }, [returnMutation])
 
   return {
     status: data?.status || null,
     lastUpdated: data?.status_updated_at || data?.updated_at || null,
-    loading: isLoading || updateMutation.isPending || completeMutation.isPending,
-    sending: updateMutation.isPending || completeMutation.isPending,
+    returnDestination: data?.do_return_destination ?? null,
+    completionReason: data?.do_completion_reason ?? null,
+    loading: isLoading || updateMutation.isPending || completeMutation.isPending || returnMutation.isPending,
+    sending: updateMutation.isPending || completeMutation.isPending || returnMutation.isPending,
     updateStatus,
-    completeJourney
+    completeJourney,
+    startReturn,
   }
 }

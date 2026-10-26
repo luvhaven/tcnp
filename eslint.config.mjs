@@ -20,5 +20,5 @@ export default defineConfig([
       'react-hooks/purity': 'warn',
     },
   },
-  globalIgnores(['.next/**', '.next-dev/**', '.claude/**', '.agents/**', '.codex/**', 'public/sw.js', 'public/workbox-*.js', 'public/swe-worker-*.js']),
+  globalIgnores(['.next/**', '.next-dev/**', '.claude/**', '.agents/**', '.codex/**', '.tmp-audit/**', 'outputs/**', 'public/sw.js', 'public/workbox-*.js', 'public/swe-worker-*.js', 'public/worker-*.js']),
 ])

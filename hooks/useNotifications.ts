@@ -35,6 +35,8 @@ export interface AppNotification {
  * single source of truth for "what is this notification about".
  */
 export function resolveNotificationRoute(n: AppNotification): string | null {
+  const url = n.metadata?.url
+  if (typeof url === 'string' && url.startsWith('/chat?') && !/[\\\r\n]/.test(url)) return url
   const kind = n.metadata?.kind
   if (kind === 'password_reset_request') return '/officers?tab=resets'
   if (kind === 'food_ready') return '/welfare'

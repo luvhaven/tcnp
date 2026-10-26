@@ -20,6 +20,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             try {
                 // Handle session changes
                 if (event === 'SIGNED_OUT') {
+                    // Also cover expired sessions, password enforcement and other sign-out paths.
+                    void import('@/lib/device-push').then(m => m.disconnectDevicePush(false)).catch(() => undefined)
                     // Clear any client-side cache
                     isAuthenticating.current = false
                     // Stop attributing errors to the officer who just left;

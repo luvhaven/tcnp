@@ -55,6 +55,7 @@
     "recharts": "^2.10.4",
     "sonner": "^1.7.4",
     "tailwind-merge": "^2.6.0",
+    "web-push": "^3.6.7",
     "zod": "^3.22.4",
     "zustand": "^4.4.7"
   },
@@ -64,6 +65,7 @@
     "@types/node": "^20.11.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "@types/web-push": "^3.6.4",
     "autoprefixer": "^10.4.17",
     "eslint": "10.10.0",
     "eslint-config-next": "16.4.2",
