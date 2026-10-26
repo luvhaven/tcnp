@@ -130,7 +130,7 @@ export function connectDevicePush(config: DevicePushConfig, askPermission = fals
 export async function sendDeviceNotificationTest() {
   const reg = await navigator.serviceWorker.getRegistration(PUSH_SCOPE)
   if (!reg || !await devicePushConnected()) throw new Error('Enable device notifications first.')
-  await reg.showNotification('TCNP notifications enabled', { body: 'This device is ready to receive TCNP updates.', icon: '/icon-192.png', badge: '/icon-192.png', tag: 'tcnp-device-test', data: { url: '/profile' } })
+  await reg.showNotification('TCNP notifications enabled', { body: 'Your device notification is ready. You can find this update in your notification center.', icon: '/icon-192.png', badge: '/notification-badge.png', tag: 'tcnp-device-test', silent: false, requireInteraction: false, data: { url: '/profile' }, vibrate: [45, 70, 90] } as NotificationOptions)
 }
 export async function disconnectDevicePush(disable = true) {
   revision++

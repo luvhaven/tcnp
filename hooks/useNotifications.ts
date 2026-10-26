@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { audioManager } from '@/lib/audio/AudioManager'
 import { uniqueTopic } from '@/lib/realtime/topic'
+import { useRouter } from 'next/navigation'
+import { presentNotification } from '@/lib/notification-presentation'
 
 export type NotificationType =
   | 'info'
@@ -75,26 +76,31 @@ function resolveChimeKey(n: AppNotification): string {
 }
 
 
-function vibrateDevice(type: NotificationType = 'info') {
-  try {
-    if (!('vibrate' in navigator)) return
-    if (type === 'broken_arrow') {
-      navigator.vibrate([300, 100, 300, 100, 300]) // Triple pulse for emergency
-    } else {
-      navigator.vibrate([150, 80, 150]) // Standard double pulse
-    }
-  } catch {
-    // Silent
-  }
-}
-
 // --- Hook ---
 export function useNotifications() {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
+  const router = useRouter()
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+
+  const receiveNotification = useCallback((incoming: AppNotification, uid: string) => {
+    if (incoming.user_id !== uid) return
+    setNotifications(prev => prev.some(n => n.id === incoming.id) ? prev : [incoming, ...prev.slice(0, NOTIFICATION_PAGE_SIZE - 1)])
+    if (incoming.is_read) return
+    const messageId = incoming.metadata?.message_id
+    presentNotification({
+      id: typeof messageId === 'string' ? `chat:${messageId}` : incoming.id,
+      title: incoming.title, message: incoming.message, kind: resolveChimeKey(incoming),
+      category: incoming.type === 'broken_arrow' ? 'emergency' : incoming.type === 'chat' ? 'chat' : 'update',
+      onOpen: () => {
+        const url = resolveNotificationRoute(incoming)
+        if (url) router.push(url)
+        else document.getElementById('notification-bell')?.click()
+      },
+    })
+  }, [router])
 
   const loadNotifications = useCallback(async (uid: string) => {
     try {
@@ -144,32 +150,7 @@ export function useNotifications() {
             (payload) => {
               if (cancelled) return
               const incoming = payload.new as AppNotification
-              setNotifications((prev) =>
-                prev.some((n) => n.id === incoming.id)
-                  ? prev
-                  : [incoming, ...prev.slice(0, NOTIFICATION_PAGE_SIZE - 1)]
-              )
-
-              // Teams-quality alerts — route through AudioManager (BrokenArrowAlert owns broken_arrow audio)
-              audioManager.playChime(resolveChimeKey(incoming))
-              vibrateDevice(incoming.type)
-
-              // Toast
-              const toastFn =
-                incoming.type === 'broken_arrow'
-                  ? toast.error
-                  : incoming.type === 'error'
-                    ? toast.error
-                    : incoming.type === 'warning'
-                      ? toast.warning
-                      : incoming.type === 'success'
-                        ? toast.success
-                        : toast.info
-
-              toastFn(incoming.title, {
-                description: incoming.message,
-                duration: incoming.type === 'broken_arrow' ? 10000 : 5000,
-              })
+              receiveNotification(incoming, user.id)
             }
           )
           .on(
@@ -210,30 +191,55 @@ export function useNotifications() {
         channelRef.current = null
       }
     }
-  }, [supabase, loadNotifications])
+  }, [supabase, loadNotifications, receiveNotification])
+
+  // A push can arrive while realtime reconnects. Read the row with this user's
+  // session rather than putting private message text in the push payload.
+  useEffect(() => {
+    if (!userId) return
+    let live = true
+    const onPush = async (event: MessageEvent) => {
+      if (event.data?.type !== 'TCNP_NOTIFICATION' || typeof event.data.notificationId !== 'string') return
+      try {
+        const { data, error } = await supabase.from('notifications').select('*').eq('id', event.data.notificationId).eq('user_id', userId).maybeSingle()
+        if (live && !error && data) receiveNotification(data as unknown as AppNotification, userId)
+      } catch { /* Realtime and the next inbox refresh can recover. */ }
+    }
+    navigator.serviceWorker?.addEventListener('message', onPush)
+    const refresh = () => { if (!document.hidden) void loadNotifications(userId) }
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('online', refresh)
+    return () => {
+      live = false
+      navigator.serviceWorker?.removeEventListener('message', onPush)
+      document.removeEventListener('visibilitychange', refresh)
+      window.removeEventListener('online', refresh)
+    }
+  }, [userId, supabase, receiveNotification, loadNotifications])
 
   const markAsRead = useCallback(async (id: string) => {
     try {
-      await (supabase.from('notifications') as any)
+      const { error } = await (supabase.from('notifications') as any)
         .update({ is_read: true })
         .eq('id', id)
-
+      if (error) throw error
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
       )
     } catch (err) {
       console.error('[useNotifications] markAsRead failed:', err)
+      toast.error('Could not mark notification as read. Please retry.')
     }
   }, [supabase])
 
   const markAllAsRead = useCallback(async () => {
     if (!userId) return
     try {
-      await (supabase.from('notifications') as any)
+      const { error } = await (supabase.from('notifications') as any)
         .update({ is_read: true })
         .eq('user_id', userId)
         .eq('is_read', false)
-
+      if (error) throw error
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
     } catch (err) {
       console.error('[useNotifications] markAllAsRead failed:', err)

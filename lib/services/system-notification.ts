@@ -8,7 +8,7 @@
  */
 export async function showSystemNotification(
   title: string,
-  options: NotificationOptions & { onClickUrl?: string } = {}
+  options: NotificationOptions & { onClickUrl?: string; vibrate?: number[] } = {}
 ): Promise<boolean> {
   if (typeof window === 'undefined' || !('Notification' in window)) return false
   if (Notification.permission !== 'granted') return false
@@ -16,13 +16,15 @@ export async function showSystemNotification(
   const { onClickUrl, ...notificationOptions } = options
   const payload: NotificationOptions = {
     icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    badge: '/notification-badge.png',
+    ...(options.silent ? {} : { vibrate: [45, 70, 90] }),
     ...notificationOptions,
     data: { ...(notificationOptions.data ?? {}), ...(onClickUrl ? { url: onClickUrl } : {}) },
   }
+  if (payload.silent) delete (payload as NotificationOptions & { vibrate?: number[] }).vibrate
 
   try {
-    const registration = await navigator.serviceWorker?.getRegistration()
+    const registration = await navigator.serviceWorker?.getRegistration('/notifications/') || await navigator.serviceWorker?.getRegistration()
     if (registration) {
       await registration.showNotification(title, payload)
       return true

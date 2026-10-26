@@ -3,8 +3,7 @@
 import { useEffect, useRef, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { usePathname, useRouter } from 'next/navigation'
-import { toast } from 'sonner'
-import { audioManager } from '@/lib/audio/AudioManager'
+import { presentNotification } from '@/lib/notification-presentation'
 import { uniqueTopic } from '@/lib/realtime/topic'
 import { showSystemNotification } from '@/lib/services/system-notification'
 import { devicePushConnected } from '@/lib/device-push'
@@ -27,6 +26,7 @@ export function useChatNotifications(currentUserId: string | null) {
 
   useEffect(() => {
     if (!currentUserId) return
+    let live = true
 
     const channel = supabase
       .channel(uniqueTopic('global-chat-notify'))
@@ -53,7 +53,7 @@ export function useChatNotifications(currentUserId: string | null) {
           const isOnChatPage = pathnameRef.current?.startsWith('/chat') ?? false
 
           // Skip toast if user is on chat page and not mentioned
-          if (isOnChatPage && !isMentioned) return
+          if (isOnChatPage && !document.hidden && document.hasFocus() && !isMentioned) return
 
           // Fetch sender name
           let senderName = 'Team member'
@@ -78,21 +78,14 @@ export function useChatNotifications(currentUserId: string | null) {
           if (msg.team) params.set('team', msg.team)
           const roomUrl = `/chat?${params}`
 
-          // Mentions get their own insistent ping; regular chat keeps the soft pop
-          audioManager.playChime(isMentioned ? 'mention' : 'chat')
-
-          // Show Sonner toast with navigation action
-          toast(toastTitle, {
-            description: preview,
-            duration: isMentioned ? 8000 : 5000,
-            action: {
-              label: 'Open Chat',
-              onClick: () => router.push(roomUrl),
-            },
-          })
+          if (!live) return
+          // The stored mention and this realtime message use the same key, so
+          // either may arrive first without duplicating the banner or sound.
+          presentNotification({ id: `chat:${msg.id}`, title: toastTitle, message: preview,
+            kind: isMentioned ? 'mention' : 'chat', category: 'chat', persisted: false, onOpen: () => router.push(roomUrl) })
 
           // System notification while the tab is in the background
-          if (document.hidden && !(isMentioned && await devicePushConnected())) {
+          if ((document.hidden || !document.hasFocus()) && !(isMentioned && await devicePushConnected())) {
             void showSystemNotification(`TCNP — ${toastTitle}`, {
               body: preview,
               tag: `chat-${msg.id}`,
@@ -105,6 +98,7 @@ export function useChatNotifications(currentUserId: string | null) {
       .subscribe()
 
     return () => {
+      live = false
       supabase.removeChannel(channel)
     }
   }, [currentUserId, supabase, router])

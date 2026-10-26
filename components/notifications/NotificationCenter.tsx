@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useNotifications, AppNotification, NotificationType, resolveNotificationRoute } from "@/hooks/useNotifications"
 import { Button } from "@/components/ui/button"
 import { motion, AnimatePresence } from "framer-motion"
@@ -90,17 +90,18 @@ function NotificationItem({
       </div>
 
       {/* Content */}
-      <div
-        className="min-w-0 flex-1 cursor-pointer"
+      <button
+        type="button"
+        className="min-w-0 flex-1 cursor-pointer rounded-md pr-16 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
         onClick={() => {
           if (!notification.is_read) onMarkRead(notification.id)
           onNavigate(resolveNotificationRoute(notification))
         }}
       >
-        <div className="flex items-start justify-between gap-2">
-          <p className={cn("text-sm leading-snug", meta.color, isBrokenArrow && "font-bold uppercase tracking-wide")}>
+        <span className="flex items-start justify-between gap-2">
+          <span className={cn("text-sm leading-snug", meta.color, isBrokenArrow && "font-bold uppercase tracking-wide")}>
             {notification.title}
-          </p>
+          </span>
           {!notification.is_read && (
             <motion.span
               initial={{ scale: 0 }}
@@ -108,12 +109,12 @@ function NotificationItem({
               className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-primary"
             />
           )}
-        </div>
-        <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+        </span>
+        <span className="mt-0.5 block text-xs text-muted-foreground line-clamp-2">
           {notification.message}
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground/70">{timeAgo}</p>
-      </div>
+        </span>
+        <span className="mt-1 block text-xs text-muted-foreground/70">{timeAgo}</span>
+      </button>
 
       {/* Actions.
           These used to be opacity-0 until group-hover, which meant that on any
@@ -164,6 +165,14 @@ export default function NotificationCenter() {
   const [open, setOpen] = useState(false)
   const [filter, setFilter] = useState<FilterTab>("all")
   const panelRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setOpen(false); document.getElementById('notification-bell')?.focus() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open])
 
   const filtered = notifications.filter((n) => {
     if (filter === "unread") return !n.is_read
@@ -188,6 +197,8 @@ export default function NotificationCenter() {
         onClick={() => setOpen((o) => !o)}
         className="relative"
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
+        aria-expanded={open}
+        aria-controls={open ? 'notification-panel' : undefined}
       >
         <motion.div
           animate={unreadCount > 0 ? { rotate: [0, -15, 15, -10, 10, 0] } : {}}
@@ -227,6 +238,9 @@ export default function NotificationCenter() {
 
             <motion.div
               key="panel"
+              id="notification-panel"
+              role="region"
+              aria-label="Notification inbox"
               initial={{ opacity: 0, y: -8, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.96 }}
