@@ -22,6 +22,12 @@ class AudioManager {
 
   private _ctx: AudioContext | null = null
   private _muted: boolean = false
+  private _listeners = new Set<() => void>()
+  subscribe = (listener: () => void) => {
+    this._listeners.add(listener)
+    return () => { this._listeners.delete(listener) }
+  }
+  getMuted = () => this._muted
   private _alarmIntervalId: ReturnType<typeof setInterval> | null = null
   /** Used to signal the alarm cycle to stop if mute fires mid-burst */
   private _alarmGeneration = 0
@@ -56,6 +62,11 @@ class AudioManager {
       window.addEventListener('pointerdown', unlock, { passive: true })
       window.addEventListener('touchend', unlock, { passive: true })
       window.addEventListener('keydown', unlock)
+      window.addEventListener('storage', event => {
+        if (event.key === STORAGE_KEY || event.key === null) {
+          this.setMuted(event.newValue === 'true', false)
+        }
+      })
     }
   }
 
@@ -98,10 +109,10 @@ class AudioManager {
     return this._muted
   }
 
-  setMuted(value: boolean): void {
+  setMuted(value: boolean, persist = true): void {
     this._muted = value
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY, String(value))
+    if (persist && typeof window !== 'undefined') {
+      try { localStorage.setItem(STORAGE_KEY, String(value)) } catch { /* Keep mute working for this session. */ }
     }
     if (value) {
       this.stopAlarm()
@@ -117,6 +128,7 @@ class AudioManager {
         this._ctx.resume().catch(() => {})
       }
     }
+    this._listeners.forEach(listener => listener())
   }
 
   toggleMute(): boolean {

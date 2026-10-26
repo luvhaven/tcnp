@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useSyncExternalStore } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { AlertTriangle, X, ShieldAlert, Volume2, VolumeX } from 'lucide-react'
@@ -20,7 +20,7 @@ export function BrokenArrowAlert() {
   const [alert, setAlert] = useState<BrokenArrowEvent | null>(null)
   const [dismissed, setDismissed] = useState(false)
   // Mirror the global muted state for rendering
-  const [muted, setMuted] = useState(() => audioManager.muted)
+  const muted = useSyncExternalStore(audioManager.subscribe, audioManager.getMuted, () => false)
   // Journeys whose broken_arrow the operator has already acknowledged. Prevents
   // re-alarming when the same still-broken_arrow row is updated again (e.g. an
   // admin edits ETA, or a duplicate realtime frame arrives). Cleared when the
@@ -77,7 +77,6 @@ export function BrokenArrowAlert() {
 
   const handleMuteToggle = useCallback(() => {
     const nowMuted = audioManager.toggleMute()
-    setMuted(nowMuted)
     // Only restart alarm if unmuting while an active, undismissed alert is currently displayed
     if (!nowMuted && alert && !dismissed) {
       audioManager.startAlarm()
@@ -170,7 +169,6 @@ export function BrokenArrowAlert() {
           alertRef.current = newAlert
           // Reset mute for each new incident so it always alerts
           audioManager.setMuted(false)
-          setMuted(false)
           setDismissed(false)
           setAlert(newAlert)
         }

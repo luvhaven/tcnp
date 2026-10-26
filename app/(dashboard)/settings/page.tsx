@@ -1,587 +1,90 @@
-"use client"
+'use client'
 
-import { useEffect, useState } from "react"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { createClient } from "@/lib/supabase/client"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Settings, Save, RotateCcw, Loader2 } from "lucide-react"
-import { toast } from "sonner"
-import { notifyError, UserFacingError } from '@/lib/notify'
-import { useTheme } from "@/components/theme/ThemeProvider"
-import { settingsSchema, defaultSettings, type SettingsFormValues } from "./schema"
-import { cn, isAdmin } from "@/lib/utils"
+import Link from 'next/link'
+import { useSyncExternalStore } from 'react'
+import { Settings, Sun, Moon, Monitor } from 'lucide-react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import { useTheme, type AppTheme } from '@/components/theme/ThemeProvider'
+import { DeviceNotificationControl } from '@/components/notifications/DeviceNotificationControl'
+import { LocationSharingControl } from '@/components/tracking/LocationSharingControl'
+import { audioManager } from '@/lib/audio/AudioManager'
+
+const themes: { value: AppTheme; label: string; icon: typeof Sun }[] = [
+  { value: 'light', label: 'Light', icon: Sun },
+  { value: 'dark', label: 'Dark', icon: Moon },
+  { value: 'auto', label: 'Follow device', icon: Monitor },
+]
+const unavailable = [
+  ['Organization details', 'Organization name, contact information and address'],
+  ['Email and SMS delivery', 'Email and SMS notification preferences'],
+  ['Journey automation', 'Default duration, automatic vehicle assignment and approval rules'],
+  ['Security policies', 'Session timeout, enforced two-factor authentication and password expiry'],
+  ['Language and formats', 'Language, time zone, date and time formatting'],
+  ['Map configuration', 'Map provider, default coordinates, zoom and tracking interval'],
+  ['Offline preferences', 'A configurable offline mode'],
+]
 
 export default function SettingsPage() {
-  const supabase = createClient()
-  const { setTheme } = useTheme()
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [currentUser, setCurrentUser] = useState<any>(null)
-
-  const form = useForm<SettingsFormValues>({
-    resolver: zodResolver(settingsSchema),
-    defaultValues: defaultSettings,
-  })
-
-  const { register, handleSubmit, formState: { errors, isDirty }, reset, setValue, watch } = form
-
-  // Watch theme to update UI immediately
-  const currentTheme = watch("theme")
-
-  useEffect(() => {
-    if (currentTheme && currentTheme !== 'system') {
-      setTheme(currentTheme)
-    }
-  }, [currentTheme, setTheme])
-
-  useEffect(() => {
-    loadSettings()
-  }, [])
-
-  const loadSettings = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-
-      if (!user) {
-        toast.error('Please login to access settings')
-        return
-      }
-
-      // Get user role
-      const { data: userData } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-
-      setCurrentUser(userData)
-
-      // Get settings for this user (column-based schema)
-      const { data: settingsData, error } = await supabase
-        .from('settings')
-        .select('*')
-        .eq('user_id', user.id)
-        .single()
-
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-        throw error
-      }
-
-      if (settingsData) {
-        const sd = settingsData as any
-        // Map database columns to form fields
-        reset({
-          theme: sd.theme || defaultSettings.theme,
-          organization_name: sd.organization_name || defaultSettings.organization_name,
-          organization_email: sd.organization_email || defaultSettings.organization_email,
-          organization_phone: sd.organization_phone || defaultSettings.organization_phone,
-          address: sd.address || defaultSettings.address,
-          email_notifications: sd.email_notifications ?? defaultSettings.email_notifications,
-          sms_notifications: sd.sms_notifications ?? defaultSettings.sms_notifications,
-          push_notifications: sd.push_notifications ?? defaultSettings.push_notifications,
-          notification_sound: sd.notification_sound ?? defaultSettings.notification_sound,
-          default_journey_duration: sd.default_journey_duration || defaultSettings.default_journey_duration,
-          auto_assign_vehicles: sd.auto_assign_vehicles ?? defaultSettings.auto_assign_vehicles,
-          require_journey_approval: sd.require_journey_approval ?? defaultSettings.require_journey_approval,
-          session_timeout: sd.session_timeout || defaultSettings.session_timeout,
-          require_2fa: sd.require_2fa ?? defaultSettings.require_2fa,
-          password_expiry_days: sd.password_expiry_days || defaultSettings.password_expiry_days,
-          language: sd.language || defaultSettings.language,
-          timezone: sd.timezone || defaultSettings.timezone,
-          date_format: sd.date_format || defaultSettings.date_format,
-          time_format: sd.time_format || defaultSettings.time_format,
-          default_map_center_lat: sd.default_map_center_lat || defaultSettings.default_map_center_lat,
-          default_map_center_lng: sd.default_map_center_lng || defaultSettings.default_map_center_lng,
-          default_map_zoom: sd.default_map_zoom || defaultSettings.default_map_zoom,
-          map_provider: sd.map_provider || defaultSettings.map_provider,
-          location_update_interval: sd.location_update_interval || defaultSettings.location_update_interval,
-          enable_offline_mode: sd.enable_offline_mode ?? defaultSettings.enable_offline_mode,
-        })
-      } else {
-        reset(defaultSettings)
-      }
-
-    } catch (error) {
-      console.error('Error loading settings:', error)
-      toast.error('Failed to load settings')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const onSubmit = async (data: SettingsFormValues) => {
-    setSaving(true)
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new UserFacingError('User not authenticated')
-
-      // Map form fields to database columns
-      const settingsUpdate = {
-        user_id: user.id,
-        ...data
-      }
-
-      const { error } = await (supabase as any)
-        .from('settings')
-        .upsert(settingsUpdate, { onConflict: 'user_id' })
-
-      if (error) throw error
-
-      toast.success('Settings saved successfully!')
-
-      // Re-load to ensure sync
-      loadSettings()
-
-    } catch (error: any) {
-      console.error('Error saving settings:', error)
-      notifyError(error, 'Failed to save settings')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const isAdminUser = currentUser && isAdmin(currentUser.role)
-
-  if (loading) {
-    return (
-      <div className="space-y-6 animate-pulse">
-        <div className="h-8 w-32 rounded-md bg-muted" />
-        <div className="h-4 w-64 rounded-md bg-muted" />
-        <div className="space-y-4">
-          {[...Array(3)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader>
-                <div className="h-5 w-40 rounded-md bg-muted" />
-                <div className="mt-2 h-4 w-56 rounded-md bg-muted" />
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="h-10 rounded-md bg-muted" />
-                  <div className="h-10 rounded-md bg-muted" />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  if (!isAdminUser) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground">Configure system preferences</p>
-        </div>
-        <Card className="border-destructive/20 bg-destructive/5">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-destructive">
-              <Settings className="h-5 w-5" />
-              Access Restricted
-            </CardTitle>
-            <CardDescription>
-              Only administrators can access system settings.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              If you need to change system settings, please contact your administrator.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
+  const { theme, setTheme } = useTheme()
+  const muted = useSyncExternalStore(audioManager.subscribe, audioManager.getMuted, () => false)
   return (
-    <div className="space-y-6 pb-10">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground">Manage system-wide configurations and defaults</p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => reset(defaultSettings)}
-            disabled={saving}
-          >
-            <RotateCcw className="mr-2 h-4 w-4" />
-            Reset Defaults
-          </Button>
-          <Button onClick={handleSubmit(onSubmit)} disabled={saving || !isDirty}>
-            {saving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="mr-2 h-4 w-4" />
-                Save Changes
-              </>
-            )}
-          </Button>
-        </div>
+    <div className="mx-auto max-w-4xl space-y-6 pb-6">
+      <div className="flex items-center gap-3">
+        <Settings className="h-7 w-7 text-primary" aria-hidden />
+        <div><h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+          <p className="text-muted-foreground">Manage your preferences and device permissions.</p></div>
       </div>
-
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Organization Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Organization Information</CardTitle>
-            <CardDescription>Basic details displayed in reports and communications</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="organization_name">Organization Name</Label>
-              <Input
-                id="organization_name"
-                placeholder="The Covenant Nation Protocol"
-                {...register("organization_name")}
-              />
-              {errors.organization_name && (
-                <p className="text-sm text-destructive">{errors.organization_name.message}</p>
-              )}
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="organization_email">Contact Email</Label>
-                <Input
-                  id="organization_email"
-                  type="email"
-                  placeholder="contact@tcnp.org"
-                  {...register("organization_email")}
-                />
-                {errors.organization_email && (
-                  <p className="text-sm text-destructive">{errors.organization_email.message}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="organization_phone">Contact Phone</Label>
-                <Input
-                  id="organization_phone"
-                  type="tel"
-                  placeholder="+234..."
-                  {...register("organization_phone")}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="address">Address</Label>
-              <Textarea
-                id="address"
-                placeholder="Organization address..."
-                {...register("address")}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Notification Preferences */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Notification Defaults</CardTitle>
-            <CardDescription>Default notification channels for new users</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
-              <div className="space-y-0.5">
-                <Label className="text-base">Email Notifications</Label>
-                <p className="text-sm text-muted-foreground">Send notifications via email</p>
-              </div>
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                {...register("email_notifications")}
-              />
-            </div>
-
-            <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
-              <div className="space-y-0.5">
-                <Label className="text-base">SMS Notifications</Label>
-                <p className="text-sm text-muted-foreground">Send notifications via SMS (requires gateway)</p>
-              </div>
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                {...register("sms_notifications")}
-              />
-            </div>
-
-            <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
-              <div className="space-y-0.5">
-                <Label className="text-base">Push Notifications</Label>
-                <p className="text-sm text-muted-foreground">Send in-app and browser alerts</p>
-              </div>
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                {...register("push_notifications")}
-              />
-            </div>
-
-            <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
-              <div className="space-y-0.5">
-                <Label className="text-base">Notification Sounds</Label>
-                <p className="text-sm text-muted-foreground">Play sounds for critical alerts</p>
-              </div>
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                {...register("notification_sound")}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Display & Localization */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Display & Localization</CardTitle>
-            <CardDescription>System-wide defaults for appearance and time</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="theme">Default Theme</Label>
-                <select
-                  id="theme"
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  {...register("theme")}
-                >
-                  <option value="light">Light</option>
-                  <option value="dark">Dark</option>
-                  <option value="system">System</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="language">Language</Label>
-                <select
-                  id="language"
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  {...register("language")}
-                >
-                  <option value="en">English</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="timezone">Timezone</Label>
-                <Input
-                  id="timezone"
-                  placeholder="Africa/Lagos"
-                  {...register("timezone")}
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="date_format">Date Format</Label>
-                <Input
-                  id="date_format"
-                  placeholder="DD/MM/YYYY"
-                  {...register("date_format")}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="time_format">Time Format</Label>
-                <select
-                  id="time_format"
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  {...register("time_format")}
-                >
-                  <option value="24h">24-hour</option>
-                  <option value="12h">12-hour</option>
-                </select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Journey & Approvals */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Journey & Approvals</CardTitle>
-            <CardDescription>Operational rules for journey management</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="default_journey_duration">Default Duration (mins)</Label>
-                <Input
-                  id="default_journey_duration"
-                  type="number"
-                  {...register("default_journey_duration")}
-                />
-                {errors.default_journey_duration && (
-                  <p className="text-sm text-destructive">{errors.default_journey_duration.message}</p>
-                )}
-              </div>
-
-              <div className="col-span-2 grid gap-4 md:grid-cols-2">
-                <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
-                  <div className="space-y-0.5">
-                    <Label className="text-sm">Auto-assign Vehicles</Label>
-                    <p className="text-xs text-muted-foreground">Suggest vehicles automatically</p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                    {...register("auto_assign_vehicles")}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
-                  <div className="space-y-0.5">
-                    <Label className="text-sm">Require Approval</Label>
-                    <p className="text-xs text-muted-foreground">Journeys need approval</p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                    {...register("require_journey_approval")}
-                  />
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Security */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Security Policies</CardTitle>
-            <CardDescription>Authentication and session management</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="session_timeout">Session Timeout (mins)</Label>
-                <Input
-                  id="session_timeout"
-                  type="number"
-                  {...register("session_timeout")}
-                />
-                {errors.session_timeout && (
-                  <p className="text-sm text-destructive">{errors.session_timeout.message}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password_expiry_days">Password Expiry (days)</Label>
-                <Input
-                  id="password_expiry_days"
-                  type="number"
-                  {...register("password_expiry_days")}
-                />
-                {errors.password_expiry_days && (
-                  <p className="text-sm text-destructive">{errors.password_expiry_days.message}</p>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm h-[70px]">
-                <div className="space-y-0.5">
-                  <Label className="text-sm">Require 2FA</Label>
-                  <p className="text-xs text-muted-foreground">Enforce two-factor auth</p>
-                </div>
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                  {...register("require_2fa")}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Maps & Tracking */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Maps & Tracking</CardTitle>
-            <CardDescription>Map provider settings and tracking intervals</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="map_provider">Map Provider</Label>
-                <select
-                  id="map_provider"
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  {...register("map_provider")}
-                >
-                  <option value="openstreetmap">OpenStreetMap</option>
-                  <option value="mapbox">Mapbox</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="default_map_center_lat">Default Latitude</Label>
-                <Input
-                  id="default_map_center_lat"
-                  type="number"
-                  step="0.000001"
-                  {...register("default_map_center_lat")}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="default_map_center_lng">Default Longitude</Label>
-                <Input
-                  id="default_map_center_lng"
-                  type="number"
-                  step="0.000001"
-                  {...register("default_map_center_lng")}
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="default_map_zoom">Default Zoom Level</Label>
-                <Input
-                  id="default_map_zoom"
-                  type="number"
-                  {...register("default_map_zoom")}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="location_update_interval">Update Interval (sec)</Label>
-                <Input
-                  id="location_update_interval"
-                  type="number"
-                  {...register("location_update_interval")}
-                />
-              </div>
-
-              <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm h-[70px]">
-                <div className="space-y-0.5">
-                  <Label className="text-sm">Offline Mode</Label>
-                  <p className="text-xs text-muted-foreground">Enable offline capabilities</p>
-                </div>
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                  {...register("enable_offline_mode")}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </form>
+      <Card>
+        <CardHeader><CardTitle>Appearance</CardTitle><CardDescription>Changes apply immediately and stay in sync with the profile menu on this device.</CardDescription></CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" role="group" aria-label="App appearance">
+            {themes.map(({ value, label, icon: Icon }) => (
+              <Button key={value} type="button" variant={theme === value ? 'default' : 'outline'} aria-pressed={theme === value} onClick={() => setTheme(value)}>
+                <Icon className="mr-2 h-4 w-4" aria-hidden />{label}
+              </Button>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">Saved automatically in this browser. Follow device updates when your device changes between light and dark mode.</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle>Notifications and sound</CardTitle><CardDescription>Device notifications and sounds are managed separately.</CardDescription></CardHeader>
+        <CardContent className="space-y-6">
+          <DeviceNotificationControl compact />
+          <div className="flex items-start justify-between gap-4 border-t pt-5">
+            <div className="space-y-1"><Label htmlFor="app-sounds">App sounds</Label>
+              <p id="app-sounds-description" className="text-sm text-muted-foreground">{muted ? 'Off' : 'On'} — applies to all in-app sounds, including chat alerts and emergency alarms. Device notification sounds follow your browser and operating system settings.</p></div>
+            <Switch id="app-sounds" checked={!muted} onCheckedChange={enabled => audioManager.setMuted(!enabled)} aria-describedby="app-sounds-description" />
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle>Location</CardTitle><CardDescription>Choose whether to share your location with TCNP.</CardDescription></CardHeader>
+        <CardContent><LocationSharingControl /></CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle>Account</CardTitle><CardDescription>Keep your officer details and sign-in credentials up to date.</CardDescription></CardHeader>
+        <CardContent className="flex flex-wrap gap-3">
+          <Button asChild variant="outline"><Link href="/profile">My profile</Link></Button>
+          <Button asChild variant="outline"><Link href="/change-password">Change password</Link></Button>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle>Unavailable settings</CardTitle><CardDescription>These previous controls are not connected to app behavior. They are disabled until the corresponding features are implemented. Previously saved values are preserved.</CardDescription></CardHeader>
+        <CardContent>
+          <fieldset disabled aria-label="Unavailable settings" className="space-y-4">
+            {unavailable.map(([label, description]) => (
+              <label key={label} className="flex items-start gap-3 text-sm text-muted-foreground">
+                <input type="checkbox" disabled className="mt-1 h-4 w-4 shrink-0" />
+                <span><span className="font-medium">{label} · Unavailable</span><span className="mt-0.5 block">{description}</span></span>
+              </label>
+            ))}
+          </fieldset>
+        </CardContent>
+      </Card>
     </div>
   )
 }

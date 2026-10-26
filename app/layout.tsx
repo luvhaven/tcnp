@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "leaflet/dist/leaflet.css";
 import { SafeProviders } from "@/components/providers/SafeProviders";
+import { THEME_BOOTSTRAP_SCRIPT } from "@/lib/theme";
 
 export const metadata: Metadata = {
   title: {
@@ -52,7 +53,7 @@ export default function RootLayout({
         {/* Apply saved theme before first paint — prevents light-mode flash for dark users */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem('tcnp-theme');var d=t==='dark'||(t==='auto'&&matchMedia('(prefers-color-scheme: dark)').matches);if(d)document.documentElement.classList.add('dark')}catch(e){}`,
+            __html: THEME_BOOTSTRAP_SCRIPT,
           }}
         />
         <SafeProviders>
