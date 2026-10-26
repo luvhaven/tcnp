@@ -42,35 +42,11 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to load officers' }, { status: 500 })
     }
 
-    // Fetch officers that have an active title assignment in a planning/active program
-    // This defines "active" correctly: assigned to an open program
-    const { data: activeAssignments } = await adminClient
-      .from('current_title_assignments')
-      .select(`
-        user_id,
-        programs:program_id (
-          id,
-          status
-        )
-      `)
-
-    // Build a Set of user IDs that are active (in a planning or active program)
-    const activeUserIds = new Set<string>()
-    if (activeAssignments) {
-      for (const assignment of activeAssignments as any[]) {
-        const program = assignment.programs
-        if (program && ['planning', 'active'].includes(program.status)) {
-          activeUserIds.add(assignment.user_id)
-        }
-      }
-    }
-
     const now = Date.now()
 
-    // Map officers with computed is_active and is_online
+    // Account activation is stored on the user; program assignments must not replace it.
     const enrichedOfficers = (officers || []).map((officer: any) => ({
       ...officer,
-      is_active: activeUserIds.has(officer.id),
       is_online: isOfficerOnline(officer, now),
     }))
 

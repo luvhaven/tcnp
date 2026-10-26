@@ -27,6 +27,7 @@ import { isPermanentOwnerEmail } from "@/lib/platform-owner"
 import { OFFICER_PRESENCE_REFRESH_MS } from "@/lib/presence"
 import { useSearchParams } from "next/navigation"
 import { PasswordResetRequestsTab } from "@/components/officers/PasswordResetRequestsTab"
+import { OFFICER_ROLE_OPTIONS, OFFICER_CATEGORIES, officerRoleLabel, canonicalOfficerRole, officerAccountStatus, leadershipSummary, filterDirectoryOfficers, toggleVisibleOfficerSelection, officerCSVCell } from '@/lib/officer-directory'
 
 type Officer = {
   id: string
@@ -116,67 +117,20 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
   const [filterTeam, setFilterTeam] = useState('all')
 
   useEffect(() => {
-    const saved = localStorage.getItem('officersViewMode')
-    if (saved === 'table') setViewMode('table')
+    try {
+      const saved = localStorage.getItem('officersViewMode')
+      if (saved === 'table') setViewMode('table')
+    } catch { /* Browsing preferences must not block the directory. */ }
   }, [])
 
   const toggleViewMode = (mode: 'grid' | 'table') => {
     setViewMode(mode)
-    localStorage.setItem('officersViewMode', mode)
+    try { localStorage.setItem('officersViewMode', mode) } catch { /* Keep the view usable this session. */ }
   }
 
-  const roles = [
-    { value: 'admin', label: 'Admin' },
-    { value: 'captain', label: 'Captain' },
-    { value: 'vice_captain', label: 'Vice Captain' },
-    { value: 'head_of_operations', label: 'Head of Operations' },
-    { value: 'head_of_command', label: 'Head of Command' },
-    { value: 'command', label: 'Command' },
-    { value: 'head_tango_oscar', label: 'Head, Tango Oscar' },
-    { value: 'tango_oscar', label: 'Tango Oscar (TO)' },
-    { value: 'head_alpha_oscar', label: 'Head, Alpha Oscar' },
-    { value: 'alpha_oscar', label: 'Alpha Oscar (AO)' },
-    { value: 'head_noscar_den', label: 'Head, November (Den)' },
-    { value: 'noscar_den', label: 'November (Den)' },
-    { value: 'head_noscar_nest', label: 'Head, November (Nest)' },
-    { value: 'noscar_nest', label: 'November (Nest)' },
-    { value: 'head_victor_oscar', label: 'Head, Victor Oscar' },
-    { value: 'victor_oscar', label: 'Victor Oscar (VO)' },
-    { value: 'delta_oscar', label: 'Delta Oscar (DO)' },
-    { value: 'head_serial_oscar', label: 'Head, Serial Oscar' },
-    { value: 'serial_oscar', label: 'Serial Oscar (SO)' },
-    { value: 'head_compliance_oscar', label: 'Head, Compliance Oscar' },
-    { value: 'compliance_oscar', label: 'Compliance Oscar (CO)' },
-    { value: 'head_welfare_oscar', label: 'Head, Welfare Oscar' },
-    { value: 'welfare_oscar', label: 'Welfare Oscar (WO)' },
-    { value: 'head_training_oscar', label: 'Head, Training Oscar' },
-    { value: 'training_oscar', label: 'Training Oscar' },
-    { value: 'viewer', label: 'Viewer' }
-  ]
-
-  const getRoleLabel = (role?: string | null) => {
-    if (!role) return ''
-    if (role === 'november_oscar') return 'November (Nest)'
-    if (role === 'super_admin') return 'Super Admin'
-    return roles.find((item) => item.value === role)?.label || role
-  }
-
-  const CATEGORIES = [
-    { id: 'leadership', label: 'Leadership', roles: ['captain', 'vice_captain'] },
-    { id: 'command', label: 'Command Centre', roles: ['head_of_command', 'command', 'head_of_operations'] },
-    { id: 'alpha', label: 'Alpha Oscar (AO)', roles: ['head_alpha_oscar', 'alpha_oscar'] },
-    { id: 'tango', label: 'Tango Oscar (TO)', roles: ['head_tango_oscar', 'tango_oscar'] },
-    { id: 'victor', label: 'Victor Oscar (VO)', roles: ['head_victor_oscar', 'victor_oscar'] },
-    { id: 'november_nest', label: 'November (Nest)', roles: ['head_noscar_nest', 'noscar_nest', 'november_oscar', 'hospitality_oscar', 'head_hospitality_oscar'] },
-    { id: 'november_den', label: 'November (Den)', roles: ['head_noscar_den', 'noscar_den'] },
-    { id: 'delta', label: 'Delta Oscar (DO)', roles: ['delta_oscar'] },
-    { id: 'serial', label: 'Serial Oscar (SO)', roles: ['head_serial_oscar', 'serial_oscar'] },
-    { id: 'compliance', label: 'Compliance Oscar (CO)', roles: ['head_compliance_oscar', 'compliance_oscar'] },
-    { id: 'welfare', label: 'Welfare Oscar (WO)', roles: ['head_welfare_oscar', 'welfare_oscar'] },
-    { id: 'training', label: 'Training Oscar', roles: ['head_training_oscar', 'training_oscar'] },
-    { id: 'legacy_echo', label: 'Echo (Legacy)', roles: ['head_echo_oscar', 'echo_oscar'] },
-    { id: 'others', label: 'Administration & Viewers', roles: ['admin', 'dev_admin', 'viewer'] }
-  ]
+  const roles = OFFICER_ROLE_OPTIONS
+  const getRoleLabel = officerRoleLabel
+  const CATEGORIES = OFFICER_CATEGORIES
 
   const sortOfficersByHierarchy = (a: Officer, b: Officer) => {
     // 1. Captains absolutely first
@@ -218,7 +172,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
 
   const canManageOfficers = Boolean(currentUser && isPlatformAdministrator(currentUser.role))
 
-  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'directory')
+  const [activeTab, setActiveTab] = useState(['directory', 'manage', 'pending', 'resets'].includes(searchParams.get('tab') || '') ? searchParams.get('tab')! : 'directory')
 
   useEffect(() => {
     const tabParam = searchParams.get('tab')
@@ -232,7 +186,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
     queryKey: ['admin-password-resets'],
     queryFn: async () => {
       const res = await fetch('/api/admin/password-resets')
-      if (!res.ok) return []
+      if (!res.ok) throw new UserFacingError('Could not load password reset requests')
       const data = await res.json()
       return data.requests || []
     },
@@ -298,40 +252,18 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
     return null
   }
 
-  // Filter officers based on global search & filters
-  const filteredOfficers = officers.filter((officer: Officer) => {
-    if (filterStatus !== 'all') {
-      if (filterStatus === 'active' && !officer.is_active) return false
-      if (filterStatus === 'inactive' && officer.is_active) return false
-      if (filterStatus === 'pending' && officer.activation_status !== 'pending') return false
-      if (filterStatus === 'online' && !officer.is_online) return false
-    }
-    if (filterRole !== 'all' && officer.role !== filterRole) return false
-    if (filterTeam !== 'all' && officer.team !== filterTeam) return false
-
-    if (!globalSearch.trim()) return true
-    const q = globalSearch.toLowerCase()
-    return (
-      (officer.full_name || "").toLowerCase().includes(q) ||
-      (officer.oscar || "").toLowerCase().includes(q) ||
-      (officer.role || "").toLowerCase().includes(q) ||
-      (officer.email || "").toLowerCase().includes(q)
-    )
-  })
-
+  const filteredOfficers = filterDirectoryOfficers(officers, { status: filterStatus, role: filterRole, team: filterTeam, search: globalSearch })
+  const visibleSelectedOfficers = selectedOfficers.filter(id => filteredOfficers.some(officer => officer.id === id))
+  const roleFilterOptions = Array.from(new Set([...roles.map(role => role.value), ...officers.map(officer => canonicalOfficerRole(officer.role))]))
+    .map(value => ({ value, label: getRoleLabel(value) }))
   const exportToCSV = () => {
     const headers = ['Full Name', 'Email', 'Phone', 'OSCAR', 'Role', 'Unit', 'Status']
     const csvContent = [
       headers.join(','),
-      ...filteredOfficers.map((o: Officer) => [
-        `"${o.full_name || ''}"`,
-        `"${o.email || ''}"`,
-        `"${o.phone || ''}"`,
-        `"${o.oscar || ''}"`,
-        `"${getRoleLabel(o.role)}"`,
-        `"${o.unit || ''}"`,
-        `"${o.activation_status === 'pending' ? 'Pending' : o.is_active ? 'Active' : 'Inactive'}"`
-      ].join(','))
+      ...filteredOfficers.filter(o => activeTab !== 'pending' || o.activation_status === 'pending')
+        .filter(o => activeTab !== 'directory' || o.activation_status !== 'pending').map((o: Officer) => [
+          o.full_name, o.email, o.phone, o.oscar, getRoleLabel(o.role), o.unit, officerAccountStatus(o)
+        ].map(officerCSVCell).join(','))
     ].join('\n')
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
@@ -343,6 +275,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   }
 
   const { data: titles = [] } = useQuery({
@@ -402,6 +335,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['officers'] })
       toast.success('Officer updated successfully!')
+      if (editing) queryClient.invalidateQueries({ queryKey: ['officer-details', editing.id] })
       setDialogOpen(false)
       resetForm()
     },
@@ -415,8 +349,9 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
       if (!response.ok) throw new UserFacingError(result.error || 'Failed to delete officer')
       return result
     },
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ['officers'] })
+      if (viewingOfficer?.id === id) setViewingOfficer(null)
       toast.success('Officer deleted successfully!')
     },
     onError: (error: any) => notifyError(error, 'Failed to delete officer')
@@ -427,7 +362,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
       const response = await fetch('/api/officers/toggle-activation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ officerId: officer.id, isActive: officer.is_active }),
+        body: JSON.stringify({ officerId: officer.id, isActive: officerAccountStatus(officer) === 'Active' }),
       })
       const result = await response.json()
       if (!response.ok) throw new UserFacingError(result.error || 'Failed to update officer status')
@@ -480,30 +415,34 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
           .from('title_assignments')
           .update({ is_active: false })
           .eq('user_id', payload.rpcData.p_user_id)
-        if (payload.rpcData.p_program_id) {
-          await updateQuery.eq('program_id', payload.rpcData.p_program_id)
-        } else {
-          await updateQuery
-        }
-        await supabase
-          .from('users')
-          .update({ current_title_id: null })
-          .eq('id', payload.rpcData.p_user_id)
+        const { error } = await (payload.rpcData.p_program_id
+          ? updateQuery.eq('program_id', payload.rpcData.p_program_id)
+          : updateQuery.is('program_id', null))
+        if (error) throw error
+        const { data: remaining, error: remainingError } = await supabase.from('title_assignments')
+          .select('title_id').eq('user_id', payload.rpcData.p_user_id).eq('is_active', true)
+          .order('assigned_at', { ascending: false }).limit(1).maybeSingle()
+        if (remainingError) throw remainingError
+        const { error: pointerError } = await supabase.from('users')
+          .update({ current_title_id: remaining?.title_id || null }).eq('id', payload.rpcData.p_user_id)
+          .select('current_title_id').single()
+        if (pointerError) throw pointerError
       } else if (payload.titleData?.title_id && payload.rpcData?.p_title_code) {
         const { error } = await supabase.rpc('assign_title', payload.rpcData)
         if (error) throw error
 
-        // Auto-activate logic: if assigned to an active program, and they are currently inactive
+        // Approve pending accounts only; do not reactivate deactivated officers.
         if (payload.rpcData.p_program_id) {
           const prog = programs.find((p: any) => p.id === payload.rpcData.p_program_id)
           if (prog && prog.status === 'active') {
             const officer = officers.find((o: any) => o.id === payload.rpcData.p_user_id)
-            if (officer && (!officer.is_active || officer.activation_status === 'pending')) {
-              await fetch('/api/officers/toggle-activation', {
+            if (officer && officer.activation_status === 'pending') {
+              const activation = await fetch('/api/officers/toggle-activation', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ officerId: officer.id, isActive: false })
               })
+              if (!activation.ok) throw new UserFacingError('Title assigned, but account approval failed. Review the officer in Pending.')
             }
           }
         }
@@ -515,20 +454,19 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
       if (variables?.rpcData?.p_user_id) {
         queryClient.invalidateQueries({ queryKey: ['officer-details', variables.rpcData.p_user_id] })
       }
-      if (viewingOfficer && assigningTitleFor && viewingOfficer.id === assigningTitleFor.id) {
-        setViewingOfficer(prev => prev ? {
-          ...prev,
-          current_title_id: variables?.clearTitle ? null : (variables?.titleData?.title_id || prev.current_title_id)
-        } : null)
-      }
-      toast.success(variables?.clearTitle ? 'Title unassigned successfully!' : 'Program role assigned successfully!')
+      toast.success(variables?.clearTitle ? 'Title unassigned successfully!' : variables?.rpcData?.p_title_code ? 'Title assigned successfully!' : 'Account role updated successfully!')
       setTitleDialogOpen(false)
       setAssignFromDirectoryOpen(false)
       setAssigningTitleFor(null)
       setTitleFormData({ title_id: '', program_id: '', role: '' })
       setAssignForm({ officer_ids: [], program_id: '' })
     },
-    onError: (error: any) => notifyError(error, 'Failed to update officer')
+    onError: (error: any) => {
+      queryClient.invalidateQueries({ queryKey: ['officers'] })
+      queryClient.invalidateQueries({ queryKey: ['currentUserProfile'] })
+      if (assigningTitleFor) queryClient.invalidateQueries({ queryKey: ['officer-details', assigningTitleFor.id] })
+      notifyError(error, 'Failed to update officer')
+    }
   })
 
   const getInitials = (name: string) => {
@@ -541,6 +479,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
       case 'dev_admin': return 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
       case 'admin': return 'bg-blue-500 text-white'
       case 'captain': return 'bg-green-500 text-white'
+      case 'vice_captain': return 'bg-green-500 text-white'
       default: return 'bg-secondary text-secondary-foreground'
     }
   }
@@ -614,10 +553,9 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
 
   const handleAssignTitleClick = (officer: Officer) => {
     setAssigningTitleFor(officer)
-    const preferredProgram = programs.find(p => p.status === 'active') || programs[0] || null
     setTitleFormData({
       title_id: officer.current_title_id || '',
-      program_id: preferredProgram?.id || '',
+      program_id: '',
       role: officer.role
     })
     setTitleDialogOpen(true)
@@ -635,7 +573,6 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
     }
 
     assignTitleMutation.mutate({
-      roleUpdate: { id: assigningTitleFor.id, role: titleFormData.role, currentRole: assigningTitleFor.role },
       titleData: titleFormData,
       clearTitle: isUnassigning,
       rpcData: {
@@ -664,6 +601,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
       toast.error('Select at least one officer')
       return
     }
+    if (!assignForm.program_id) { toast.error('Select an open program'); return }
 
     if (assigningFromDirectory) return
     setAssigningFromDirectory(true)
@@ -680,9 +618,17 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
       if (!response.ok) throw new UserFacingError(result.error || "Failed to batch assign officers")
 
       queryClient.invalidateQueries({ queryKey: ['officers'] })
-      toast.success(`Successfully assigned ${assignForm.officer_ids.length - Number(result.inactive_count ?? 0)} officer(s) to program!`)
+      const assigned = Number(result.assigned_count || 0)
+      const existing = Number(result.already_assigned_count || 0)
+      if (assigned > 0) toast.success(`Assigned ${assigned} officer${assigned === 1 ? '' : 's'} to the program.`)
+      if (existing > 0) toast.info(`${existing} officer${existing === 1 ? ' is' : 's are'} already assigned.`)
       if (result.inactive_count > 0) {
         toast.warning(`${result.inactive_count} deactivated officer(s) were skipped. Reactivate them first.`)
+      }
+      if (result.failed_count > 0) {
+        toast.warning(`${result.failed_count} assignment${result.failed_count === 1 ? '' : 's'} failed. Check each officer's title and retry.`)
+        setAssignForm(current => ({ ...current, officer_ids: result.failed_ids || [] }))
+        return
       }
       setAssignFromDirectoryOpen(false)
       setAssignForm({ officer_ids: [], program_id: '' })
@@ -741,29 +687,19 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
   }
 
   const handleBulkDelete = async () => {
-    if (selectedOfficers.length === 0) return
+    const officersToDelete = officers.filter((o: Officer) =>
+      visibleSelectedOfficers.includes(o.id) && o.role !== 'dev_admin' && o.role !== 'super_admin' &&
+      !isPermanentOwnerEmail(o.email) && o.id !== currentUser?.id)
+    if (officersToDelete.length === 0) { toast.error('Selected officers cannot be deleted (protected accounts or self)'); return }
     const confirmed = await confirm({
       title: '⚠️ Bulk Delete Multi-Select',
-      message: `You are about to permanently delete ${selectedOfficers.length} officers. This action cannot be undone — all histories and assignments will be destroyed.`,
+      message: `You are about to permanently delete ${officersToDelete.length} selected visible officers. Protected accounts are excluded. This action cannot be undone — all histories and assignments will be destroyed.`,
       confirmText: 'Yes, Delete Selected',
       cancelText: 'Cancel',
       variant: 'destructive',
       requireInput: 'DELETE'
     })
     if (!confirmed) return
-
-    const officersToDelete = officers.filter((o: Officer) =>
-      selectedOfficers.includes(o.id) &&
-      o.role !== 'dev_admin' &&
-      o.role !== 'super_admin' &&
-      !isPermanentOwnerEmail(o.email) &&
-      o.id !== currentUser?.id
-    )
-
-    if (officersToDelete.length === 0) {
-      toast.error('Selected officers cannot be deleted (protected accounts or self)')
-      return
-    }
 
     try {
       await Promise.all(officersToDelete.map((o: Officer) => deleteOfficerMutation.mutateAsync(o.id)))
@@ -795,7 +731,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
       <div className="space-y-8 pb-8">
         {CATEGORIES.map(category => {
           const categoryOfficers = officersList
-            .filter(o => category.roles.includes(o.role))
+            .filter(o => category.roles.includes(canonicalOfficerRole(o.role)))
             .sort(sortOfficersByHierarchy);
 
           if (categoryOfficers.length === 0) return null;
@@ -808,6 +744,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                   {categoryOfficers.length}
                 </Badge>
               </div>
+              {category.id === 'leadership' && <p className="text-sm text-muted-foreground">{leadershipSummary(categoryOfficers)}</p>}
               <motion.div layout className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <AnimatePresence>
                   {categoryOfficers.map(renderCard)}
@@ -821,7 +758,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
         {(() => {
           const categorizedRoles = CATEGORIES.flatMap(c => c.roles);
           const uncategorized = officersList
-            .filter(o => !categorizedRoles.includes(o.role))
+            .filter(o => !categorizedRoles.includes(canonicalOfficerRole(o.role)))
             .sort(sortOfficersByHierarchy);
 
           if (uncategorized.length === 0) return null;
@@ -829,7 +766,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
           return (
             <div key="uncategorized" className="space-y-3 pt-6 mt-8 border-t border-dashed border-border/50">
               <div className="flex items-center gap-2 pb-2 border-b border-border/50">
-                <h3 className="text-lg font-semibold tracking-tight text-muted-foreground">Uncategorized / External</h3>
+                <h3 className="text-lg font-semibold tracking-tight text-muted-foreground">Other officers</h3>
                 <Badge variant="outline" className="rounded-full px-2 py-0.5 text-xs font-normal">
                   {uncategorized.length}
                 </Badge>
@@ -870,9 +807,9 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
       <div className="grid gap-4 grid-cols-2 nav:grid-cols-4">
         {[
           { label: 'Total Officers', value: officers.length, color: 'text-foreground', bg: 'bg-primary/8', ring: 'ring-primary/15' },
-          { label: 'Active', value: officers.filter((o: Officer) => o.is_active).length, color: 'text-[hsl(var(--success))]', bg: 'bg-[hsl(var(--success)/0.08)]', ring: 'ring-[hsl(var(--success)/0.2)]' },
+          { label: 'Active accounts', value: officers.filter((o: Officer) => officerAccountStatus(o) === 'Active').length, color: 'text-[hsl(var(--success))]', bg: 'bg-[hsl(var(--success)/0.08)]', ring: 'ring-[hsl(var(--success)/0.2)]' },
           { label: 'Online Now', value: officers.filter((o: Officer) => o.is_online).length, color: 'text-sky-500', bg: 'bg-sky-500/8', ring: 'ring-sky-500/15' },
-          { label: 'With Titles', value: officers.filter((o: Officer) => o.current_title_id).length, color: 'text-primary', bg: 'bg-primary/8', ring: 'ring-primary/15' },
+          { label: 'Officers with assigned titles', value: officers.filter((o: Officer) => o.current_title_id).length, color: 'text-primary', bg: 'bg-primary/8', ring: 'ring-primary/15' },
         ].map(({ label, value, color, bg, ring }) => (
           <div key={label} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
             <p className="text-xs font-medium text-muted-foreground">{label}</p>
@@ -881,16 +818,20 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
         ))}
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      <p className="text-xs text-muted-foreground">Account status is independent of program assignments. The title count counts officers with a recorded current title, not distinct titles or leadership roles.</p>
+      <Tabs value={activeTab} onValueChange={tab => {
+        setActiveTab(tab)
+        if (tab === 'pending' || filterStatus === 'pending') setFilterStatus('all')
+      }} className="space-y-4">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <TabsList>
             <TabsTrigger value="directory">Directory</TabsTrigger>
             {canManageOfficers && <TabsTrigger value="manage">Manage</TabsTrigger>}
             {canManageOfficers && <TabsTrigger value="pending">
               Pending
-              {filteredOfficers.filter(o => o.activation_status === 'pending').length > 0 && (
+              {officers.filter(o => o.activation_status === 'pending').length > 0 && (
                 <Badge variant="destructive" className="ml-2 px-1 text-xs">
-                  {filteredOfficers.filter(o => o.activation_status === 'pending').length}
+                  {officers.filter(o => o.activation_status === 'pending').length}
                 </Badge>
               )}
             </TabsTrigger>}
@@ -909,13 +850,17 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                 <Download className="h-4 w-4" />
               </Button>
             )}
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-[120px] h-9">
+            <Select value={filterStatus} onValueChange={status => {
+              setFilterStatus(status)
+              if (status === 'pending') setActiveTab('pending')
+              else if (activeTab === 'pending') setActiveTab('directory')
+            }}>
+              <SelectTrigger className="w-[120px] h-9" aria-label="Filter by account status">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="online">
@@ -927,18 +872,18 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
               </SelectContent>
             </Select>
             <Select value={filterRole} onValueChange={setFilterRole}>
-              <SelectTrigger className="w-[160px] h-9">
+              <SelectTrigger className="w-[160px] h-9" aria-label="Filter by role">
                 <SelectValue placeholder="Role" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Roles</SelectItem>
-                {roles.map(r => (
-                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                {roleFilterOptions.map(r => (
+                  <SelectItem key={r.value} value={r.value}>{r.label} ({officers.filter(officer => canonicalOfficerRole(officer.role) === r.value).length})</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={filterTeam} onValueChange={setFilterTeam}>
-              <SelectTrigger className="w-[140px] h-9">
+              <SelectTrigger className="w-[140px] h-9" aria-label="Filter by team">
                 <SelectValue placeholder="Team" />
               </SelectTrigger>
               <SelectContent>
@@ -976,7 +921,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
               <div className="relative w-full sm:w-64">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search name, oscar, email..."
+                  aria-label="Search officers"
+                  placeholder="Search name, role, Oscar, email…"
                   className="pl-8 h-9 bg-background border-primary/20 text-sm"
                   value={globalSearch}
                   onChange={(e) => setGlobalSearch(e.target.value)}
@@ -1015,7 +961,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                         .filter((o: Officer) => o.activation_status !== 'pending')
                         .sort(sortOfficersByHierarchy)
                         .map((officer: Officer) => {
-                          const category = CATEGORIES.find(c => c.roles.includes(officer.role))
+                          const category = CATEGORIES.find(c => c.roles.includes(canonicalOfficerRole(officer.role)))
                           return (
                             <TableRow
                               key={officer.id}
@@ -1034,7 +980,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                                     )}
                                   </Avatar>
                                   <div className="flex flex-col min-w-0">
-                                    <span className={`font-medium group-hover:text-primary transition truncate ${!officer.is_active ? 'opacity-60 text-muted-foreground' : ''}`}>
+                                    <span className={`font-medium group-hover:text-primary transition truncate ${officerAccountStatus(officer) !== 'Active' ? 'opacity-60 text-muted-foreground' : ''}`}>
                                       {officer.full_name || 'No name'}
                                     </span>
                                     <span className="text-xs text-muted-foreground truncate">
@@ -1077,7 +1023,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                                       {officer.is_online ? 'online' : 'offline'}
                                     </span>
                                   </div>
-                                  {!officer.is_active && (
+                                  {officerAccountStatus(officer) !== 'Active' && (
                                     <Badge variant="outline" className="text-xs bg-destructive/10 text-destructive border-destructive/30">
                                       Inactive
                                     </Badge>
@@ -1166,21 +1112,21 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                 Edit officer details and assign titles and duties across programs
               </p>
               <div className="flex items-center gap-2">
-                {selectedOfficers.length > 0 && (
+                {visibleSelectedOfficers.length > 0 && (
                   <>
                     <Button variant="ghost" onClick={() => setSelectedOfficers([])} className="text-muted-foreground mr-1 h-9 px-3">
                       Cancel Selection
                     </Button>
                     <Button variant="outline" onClick={() => {
-                      setAssignForm({ officer_ids: selectedOfficers, program_id: '' })
+                      setAssignForm({ officer_ids: visibleSelectedOfficers, program_id: '' })
                       setAssignFromDirectoryOpen(true)
                     }} className="gap-2 text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-900 dark:hover:bg-blue-950">
                       <UserCheck className="h-4 w-4" />
-                      <span>Assign Selected ({selectedOfficers.length}) to Program</span>
+                      <span>Assign Selected ({visibleSelectedOfficers.length}) to Program</span>
                     </Button>
                     <Button variant="destructive" onClick={handleBulkDelete} className="gap-2">
                       <Trash2 className="h-4 w-4" />
-                      <span>Delete Selected ({selectedOfficers.length})</span>
+                      <span>Delete Selected ({visibleSelectedOfficers.length})</span>
                     </Button>
                   </>
                 )}
@@ -1202,10 +1148,10 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                       <TableHead className="w-[50px] text-center">
                         <input
                           type="checkbox"
-                          checked={selectedOfficers.length > 0 && selectedOfficers.length === filteredOfficers.length}
+                          aria-label="Select all visible officers"
+                          checked={filteredOfficers.length > 0 && filteredOfficers.every(officer => selectedOfficers.includes(officer.id))}
                           onChange={(e) => {
-                            if (e.target.checked) setSelectedOfficers(filteredOfficers.map(o => o.id))
-                            else setSelectedOfficers([])
+                            setSelectedOfficers(current => toggleVisibleOfficerSelection(current, filteredOfficers.map(officer => officer.id), e.target.checked))
                           }}
                           className="h-4 w-4 rounded border-input text-primary focus:ring-primary bg-background dark:bg-background/50 accent-primary/80"
                         />
@@ -1222,9 +1168,10 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                         <TableCell className="text-center">
                           <input
                             type="checkbox"
+                            aria-label={`Select ${officer.full_name || officer.email}`}
                             checked={selectedOfficers.includes(officer.id)}
                             onChange={(e) => {
-                              if (e.target.checked) setSelectedOfficers(prev => [...prev, officer.id])
+                              if (e.target.checked) setSelectedOfficers(prev => [...new Set([...prev, officer.id])])
                               else setSelectedOfficers(prev => prev.filter(id => id !== officer.id))
                             }}
                             className="h-4 w-4 rounded border-input text-primary focus:ring-primary bg-background dark:bg-background/50 accent-primary/80"
@@ -1236,13 +1183,13 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                               {officer.photo_url ? <AvatarImage src={officer.photo_url} /> : <AvatarFallback className={getRoleBadgeColor(officer.role)}>{getInitials(officer.full_name || officer.email)}</AvatarFallback>}
                             </Avatar>
                             <div className="flex flex-col">
-                              <span className={`font-medium group-hover:text-primary transition ${!officer.is_active ? 'opacity-60 text-muted-foreground' : ''}`}>{officer.full_name || 'No name'}</span>
+                              <span className={`font-medium group-hover:text-primary transition ${officerAccountStatus(officer) !== 'Active' ? 'opacity-60 text-muted-foreground' : ''}`}>{officer.full_name || 'No name'}</span>
                               <span className="text-xs text-muted-foreground">{officer.email}</span>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
-                          {officer.is_active ? (
+                          {officerAccountStatus(officer) === 'Active' ? (
                             <Badge variant="outline" className="bg-[hsl(var(--success)/0.1)] text-[hsl(var(--success))] border-[hsl(var(--success)/0.3)]">Active</Badge>
                           ) : (
                             <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30">Inactive</Badge>
@@ -1265,8 +1212,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                             <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleAssignTitleClick(officer)} title="Assign Title">
                               <Award className="h-4 w-4" />
                             </Button>
-                            <Button size="sm" variant="ghost" className={`h-8 w-8 p-0 ${officer.is_active ? 'text-orange-500' : 'text-green-600'}`} onClick={() => toggleActivationMutation.mutate(officer)} title={officer.is_active ? "Deactivate" : "Activate"}>
-                              {officer.is_active ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                            <Button size="sm" variant="ghost" className={`h-8 w-8 p-0 ${officerAccountStatus(officer) === 'Active' ? 'text-orange-500' : 'text-green-600'}`} onClick={() => toggleActivationMutation.mutate(officer)} title={officerAccountStatus(officer) === 'Active' ? "Deactivate" : "Activate"}>
+                              {officerAccountStatus(officer) === 'Active' ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
                             </Button>
                             {officer.role !== 'dev_admin' && officer.id !== currentUser?.id && (
                               <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={() => handleDelete(officer)} title="Delete">
@@ -1292,16 +1239,17 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                     transition={{ duration: 0.2 }}
                     key={officer.id}
                   >
-                    <Card className={`${!officer.is_active ? 'opacity-60' : ''} transition-all hover:-translate-y-0.5 hover:shadow-md h-full flex flex-col`}>
+                    <Card className={`${officerAccountStatus(officer) !== 'Active' ? 'opacity-60' : ''} transition-all hover:-translate-y-0.5 hover:shadow-md h-full flex flex-col`}>
                       <CardHeader className="cursor-pointer" onClick={() => setViewingOfficer(officer)}>
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-3">
                             <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
                               <input
                                 type="checkbox"
-                                checked={selectedOfficers.includes(officer.id)}
+                                aria-label={`Select ${officer.full_name || officer.email}`}
+                            checked={selectedOfficers.includes(officer.id)}
                                 onChange={(e) => {
-                                  if (e.target.checked) setSelectedOfficers(prev => [...prev, officer.id])
+                                  if (e.target.checked) setSelectedOfficers(prev => [...new Set([...prev, officer.id])])
                                   else setSelectedOfficers(prev => prev.filter(id => id !== officer.id))
                                 }}
                                 className="h-4 w-4 rounded border-input text-primary focus:ring-primary bg-background dark:bg-background/50 accent-primary/80"
@@ -1316,7 +1264,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                             </div>
                           </div>
                           <div className="flex gap-1 shrink-0">
-                            {officer.is_active ? (
+                            {officerAccountStatus(officer) === 'Active' ? (
                               <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                                 Active
                               </Badge>
@@ -1370,7 +1318,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                             Title
                           </Button>
                           <Button size="sm" variant="outline" onClick={() => toggleActivationMutation.mutate(officer)}>
-                            {officer.is_active ? <UserX className="h-3 w-3" /> : <UserCheck className="h-3 w-3" />}
+                            {officerAccountStatus(officer) === 'Active' ? <UserX className="h-3 w-3" /> : <UserCheck className="h-3 w-3" />}
                           </Button>
                           {officer.role !== 'dev_admin' && officer.id !== currentUser?.id && (
                             <Button size="sm" variant="outline" onClick={() => handleDelete(officer)}>
@@ -1394,7 +1342,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                 Review and approve outstanding self-registration requests
               </p>
             </div>
-            {filteredOfficers.filter(o => o.activation_status === 'pending').length === 0 ? (
+            {officersPending || (officersError && officers.length === 0) ? renderOfficersStatus(0) : filteredOfficers.filter(o => o.activation_status === 'pending').length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center bg-white/5 rounded-xl border border-white/10">
                 <UserCheck className="h-12 w-12 text-muted-foreground/50" />
                 <p className="mt-4 text-sm font-medium">No pending approvals</p>
@@ -1646,19 +1594,19 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
         <Dialog open={titleDialogOpen} onOpenChange={setTitleDialogOpen}>
           <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Manage Roles & Titles</DialogTitle>
+              <DialogTitle>Manage role and title</DialogTitle>
               <DialogDescription>Modify assignments for {assigningTitleFor?.full_name}</DialogDescription>
             </DialogHeader>
             <Tabs defaultValue="program_role" className="mt-4">
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="program_role">Program Role</TabsTrigger>
-                <TabsTrigger value="official_oscar">Official Oscar</TabsTrigger>
+                <TabsTrigger value="program_role">Title assignment</TabsTrigger>
+                <TabsTrigger value="official_oscar">Account role</TabsTrigger>
               </TabsList>
 
               <TabsContent value="program_role">
                 <form onSubmit={handleAssignTitle} className="space-y-4 mt-4">
                   <div className="space-y-2">
-                    <Label htmlFor="title">Program Role</Label>
+                    <Label htmlFor="title">Title</Label>
                     <Select
                       value={titleFormData.title_id || 'unassigned'}
                       onValueChange={(value) => setTitleFormData({ ...titleFormData, title_id: value === 'unassigned' ? '' : value })}
@@ -1673,7 +1621,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                             <SelectLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1.5">Leadership</SelectLabel>
                             {getTitleByUnit('leadership').map((title) => (
                               <SelectItem key={title.id} value={title.id}>
-                                {title.name}
+                                {title.name}{title.code === 'VICE_CAPTAIN' ? ' · ' + title.max_positions + ' positions' : ''}
                               </SelectItem>
                             ))}
                           </SelectGroup>
@@ -1683,7 +1631,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                             <SelectLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1.5">Command</SelectLabel>
                             {getTitleByUnit('command').map((title) => (
                               <SelectItem key={title.id} value={title.id}>
-                                {title.name}
+                                {title.name}{title.code === 'VICE_CAPTAIN' ? ' · ' + title.max_positions + ' positions' : ''}
                               </SelectItem>
                             ))}
                           </SelectGroup>
@@ -1727,14 +1675,12 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                         <SelectItem value="unassigned">No specific program</SelectItem>
                         {programs.filter(p => p.status === 'active').map(p => <SelectItem key={p.id} value={p.id}>[Active] {p.name}</SelectItem>)}
                         {programs.filter(p => p.status === 'planning').map(p => <SelectItem key={p.id} value={p.id}>[Planning] {p.name}</SelectItem>)}
-                        {programs.filter(p => p.status === 'completed').map(p => <SelectItem key={p.id} value={p.id}>[Completed] {p.name}</SelectItem>)}
-                        {programs.filter(p => p.status === 'archived').map(p => <SelectItem key={p.id} value={p.id}>[Archived] {p.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="flex gap-2 pt-4">
                     <Button type="button" variant="outline" onClick={() => { setTitleDialogOpen(false); setAssigningTitleFor(null); setTitleFormData({ title_id: '', program_id: '', role: '' }) }} className="flex-1">Cancel</Button>
-                    <Button type="submit" className="flex-1" pending={assignTitleMutation.isPending}>Assign Program Role</Button>
+                    <Button type="submit" className="flex-1" pending={assignTitleMutation.isPending}>{titleFormData.title_id ? 'Save title assignment' : 'Clear title assignment'}</Button>
                   </div>
                 </form>
               </TabsContent>
@@ -1742,10 +1688,10 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
               <TabsContent value="official_oscar">
                 <form onSubmit={handleAssignOfficialOscar} className="space-y-4 mt-4">
                   <div className="space-y-2">
-                    <Label htmlFor="base_role">Official Oscar (Base Role) *</Label>
+                    <Label htmlFor="base_role">Account role *</Label>
                     <Select required value={titleFormData.role || ''} onValueChange={(value) => setTitleFormData({ ...titleFormData, role: value })}>
                       <SelectTrigger id="base_role">
-                        <SelectValue placeholder="Select official oscar..." />
+                        <SelectValue placeholder="Select account role…" />
                       </SelectTrigger>
                       <SelectContent>
                         {roles.map((role) => <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>)}
@@ -1754,7 +1700,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                   </div>
                   <div className="flex gap-2 pt-4">
                     <Button type="button" variant="outline" onClick={() => { setTitleDialogOpen(false); setAssigningTitleFor(null); setTitleFormData({ title_id: '', program_id: '', role: '' }) }} className="flex-1">Cancel</Button>
-                    <Button type="submit" className="flex-1 text-white bg-amber-600 hover:bg-amber-700" pending={assignTitleMutation.isPending}>Set Official Oscar</Button>
+                    <Button type="submit" className="flex-1 text-white bg-amber-600 hover:bg-amber-700" pending={assignTitleMutation.isPending}>Save account role</Button>
                   </div>
                 </form>
               </TabsContent>
@@ -1797,7 +1743,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                           <span className="text-xs text-muted-foreground flex gap-1 items-center">
                             {getRoleLabel(officer.role)}
                             {officer.oscar && <span className="opacity-50">• {officer.oscar}</span>}
-                            {!officer.is_active && <span className="text-orange-500 font-medium">• Pending</span>}
+                            {officerAccountStatus(officer) !== 'Active' && <span className="text-orange-500 font-medium">• {officerAccountStatus(officer)}</span>}
                           </span>
                         </div>
                       </label>
@@ -1812,8 +1758,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                     <SelectValue placeholder="No specific program" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="unassigned">No specific program</SelectItem>
-                    {programs.map((program) => <SelectItem key={program.id} value={program.id}>{program.name}</SelectItem>)}
+                    <SelectItem value="unassigned" disabled>Select an open program</SelectItem>
+                    {programs.filter(program => ['active', 'planning'].includes(program.status)).map((program) => <SelectItem key={program.id} value={program.id}>{program.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -1828,7 +1774,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
 
       {/* Full Officer Profile Dialog */}
       <OfficerProfileDialog
-        officer={viewingOfficer}
+        officer={officers.find(officer => officer.id === viewingOfficer?.id) || viewingOfficer}
         open={!!viewingOfficer}
         onOpenChange={(open) => {
           if (!open) setViewingOfficer(null)

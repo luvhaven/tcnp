@@ -39,6 +39,11 @@ export async function POST(request: Request) {
         if (uniqueOfficerIds.length === 0) {
             return NextResponse.json({ error: 'No valid officers were selected' }, { status: 400 })
         }
+        const { data: program, error: programError } = await (adminClient as any).from('programs').select('status').eq('id', program_id).maybeSingle()
+        if (programError) return NextResponse.json({ error: 'Could not verify program' }, { status: 500 })
+        if (!program) return NextResponse.json({ error: 'Program not found' }, { status: 404 })
+        if (!['active', 'planning'].includes(program.status)) return NextResponse.json({ error: 'Select an active or planning program' }, { status: 409 })
+        const isProgramActive = program.status === 'active'
 
         const { data: existingAssignments, error: assignmentLookupError } = await (adminClient as any)
             .from('current_title_assignments')
@@ -62,8 +67,8 @@ export async function POST(request: Request) {
         }
 
         // Load available official titles to map fallbacks
-        const { data: titles } = await (adminClient as any).from('official_titles').select('*')
-        const fallbackTitleCode = titles && titles.length > 0 ? titles[0].code : 'COMMAND'
+        const { data: titles, error: titlesError } = await (adminClient as any).from('official_titles').select('*')
+        if (titlesError) return NextResponse.json({ error: 'Could not verify officer titles' }, { status: 500 })
 
         // Load selected users
         const { data: usersData, error: usersError } = await (adminClient as any)
@@ -89,13 +94,6 @@ export async function POST(request: Request) {
         const mappedUsers = loadedUsers.filter((u: any) => isActive(u) || isPending(u))
         const inactiveIds: string[] = loadedUsers.filter((u: any) => !isActive(u) && !isPending(u)).map((u: any) => u.id)
 
-        // Fetch the program to ensure auto-activation happens if it is active
-        let isProgramActive = false
-        if (program_id) {
-            const { data: prog } = await (adminClient as any).from('programs').select('status').eq('id', program_id).single()
-            if (prog && prog.status === 'active') isProgramActive = true
-        }
-
         const roleToTitleMap: Record<string, string> = {
             'alpha_oscar': 'ALPHA_OSCAR',
             'head_alpha_oscar': 'ALPHA_OSCAR_LEAD',
@@ -111,6 +109,8 @@ export async function POST(request: Request) {
             'head_noscar_den': 'NOVEMBER_DEN_LEAD',
             'noscar_nest': 'NOVEMBER_OSCAR',
             'head_noscar_nest': 'NOVEMBER_OSCAR_LEAD',
+            'hospitality_oscar': 'NOVEMBER_OSCAR',
+            'head_hospitality_oscar': 'NOVEMBER_OSCAR_LEAD',
             'serial_oscar': 'SERIAL_OSCAR',
             'head_serial_oscar': 'SERIAL_OSCAR_LEAD',
             'compliance_oscar': 'COMPLIANCE_OSCAR',
@@ -131,18 +131,22 @@ export async function POST(request: Request) {
         const assignedIds: string[] = []
         const failedIds: string[] = []
         for (const u of mappedUsers) {
-            let titleCode = fallbackTitleCode
+            let titleCode: string | null = null
 
             // Attempt to resolve best title
             if (u.current_title_id && titles) {
                 const existing = titles.find((t: any) => t.id === u.current_title_id);
                 if (existing) titleCode = existing.code;
-            } else {
+            }
+            if (!titleCode) {
                 const mappedCode = roleToTitleMap[u.role]
                 if (mappedCode && titles && titles.some((t: any) => t.code === mappedCode)) {
                     titleCode = mappedCode
                 }
             }
+
+            // Never assign the first arbitrary database title to an unmapped role.
+            if (!titleCode) { failedIds.push(u.id); continue }
 
             // Execute assignment via RPC
             const { error: rpcError } = await (adminClient as any).rpc('assign_title', {
@@ -157,11 +161,8 @@ export async function POST(request: Request) {
                 failedIds.push(u.id)
                 continue
             }
-            assignedCount += 1
-            assignedIds.push(u.id)
 
-            // Manually sync `current_title_id` & `unit` because `assign_title` RPC 
-            // skips it when a program is explicitly assigned (`p_program_id != null`)
+            // Keep the directory pointer in sync across deployed assign_title versions.
             const updates: any = {}
             if (titles) {
                 const matchedRecord = titles.find((t: any) => t.code === titleCode)
@@ -178,11 +179,14 @@ export async function POST(request: Request) {
             }
 
             if (Object.keys(updates).length > 0) {
-                await (adminClient as any)
+                const { error: updateError } = await (adminClient as any)
                     .from('users')
                     .update(updates)
                     .eq('id', u.id)
+                if (updateError) { failedIds.push(u.id); continue }
             }
+            assignedCount += 1
+            assignedIds.push(u.id)
         }
 
         return NextResponse.json({
