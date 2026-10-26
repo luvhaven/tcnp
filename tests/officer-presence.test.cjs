@@ -77,7 +77,7 @@ for (const role of utils.PLATFORM_ADMIN_ROLES) {
     assert.equal(response.status, 200)
     assert.equal(response.headers['Cache-Control'], 'private, no-store')
     assert.equal(response.body.officers[0].is_online, true)
-    assert.equal(response.body.officers[0].is_active, false, 'programme assignment must not decide presence')
+    assert.equal(response.body.officers[0].is_active, true, 'programme assignment must not overwrite account activation')
     assert.equal(response.body.officers[1].is_online, false)
     assert.equal(response.body.officers[2].is_online, false)
     assert.deepEqual(route.filters, [['is_directory_hidden', false]])

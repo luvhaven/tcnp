@@ -1,4 +1,5 @@
-"use client"
+'use client'
+import { officerRoleLabel } from '@/lib/officer-directory'
 
 import { useEffect, useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
@@ -131,7 +132,9 @@ export function OfficerProfileDialog({
         ...officer,
         ...details.officer,
         is_active: officer.is_active,
-        is_online: officer.is_online
+        is_online: officer.is_online,
+        activation_status: officer.activation_status,
+        role: officer.role,
       }
     }
     return officer
@@ -166,19 +169,7 @@ export function OfficerProfileDialog({
     return (email ?? "??").slice(0, 2).toUpperCase()
   }
 
-  const formatRole = (role?: string | null) => {
-    if (!role) return "Officer"
-    const unitLabels: Record<string, string> = {
-      noscar_den: "November (Den)",
-      head_noscar_den: "Head, November (Den)",
-      noscar_nest: "November (Nest)",
-      head_noscar_nest: "Head, November (Nest)",
-      hospitality_oscar: "November (Nest)",
-      head_hospitality_oscar: "Head, November (Nest)",
-    }
-    if (unitLabels[role]) return unitLabels[role]
-    return role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
-  }
+  const formatRole = officerRoleLabel
 
   const getRoleColor = (role: string) => {
     switch (role) {
