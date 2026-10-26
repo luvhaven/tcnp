@@ -17,6 +17,7 @@ function load(path, imports = {}) {
 }
 
 const utils = load('lib/utils.ts')
+const programMembership = load('lib/chat-program-membership.ts')
 const id = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 const PROGRAM = id(1), PAPA = id(2), MESSAGE = id(3), CALLER = id(4), AUTHOR = id(5)
 const MEMBER = id(6), PAPA_MEMBER = id(7), EXECUTIVE = id(8), OUTSIDER = id(9)
@@ -25,7 +26,7 @@ function api(options = {}) {
   const config = {
     signedIn: true, role: 'tango_oscar', active: true, status: 'active', allowed: true,
     message: { id: MESSAGE, sender_id: CALLER, content: 'Room message', mentions: [], created_at: new Date(Date.now() - 1000).toISOString(), deleted_at: null, is_archived: false, is_private: false, program_id: PROGRAM, papa_id: null, team: null, flagged: false, flagged_by: null },
-    recipients: [], memberships: [], deleteIds: [], existing: 0,
+    recipients: [], memberships: [], assignments: [], deleteIds: [], existing: 0,
     ...options,
   }
   const calls = []
@@ -52,10 +53,11 @@ function api(options = {}) {
       return { data: config.message, error: null }
     }
     if (table === 'notifications') return { count: config.existing, error: null }
-    let data = table === 'users' ? config.recipients : table === 'chat_room_memberships' ? config.memberships : []
+    let data = table === 'users' ? config.recipients : table === 'chat_room_memberships' ? config.memberships : table === 'current_title_assignments' ? config.assignments : []
     for (const [method, key, value] of query.filters) {
       data = data.filter(row => method === 'in' ? value.includes(row[key]) : row[key] === value)
     }
+    if (query.range) data = data.slice(query.range[0], query.range[1] + 1)
     return { data, error: null }
   }
   function from(kind, table) {
@@ -87,6 +89,7 @@ function api(options = {}) {
     '@/lib/supabase/admin': { createAdminClient: () => { adminCreated++; return { from: table => from('admin', table) } } },
     '@/lib/security/rate-limit': { checkRateLimit: async () => ({ success: !config.rateLimited }) },
     '@/lib/utils': utils,
+    '@/lib/chat-program-membership': programMembership,
   }
   const admin = load('app/api/admin/chat/route.ts', imports)
   const mentions = load('app/api/chat/mention-notifications/route.ts', imports)
@@ -199,6 +202,20 @@ test('program membership does not grant Papa notifications, including for privat
   assert.equal(response.status, 200)
   assert.deepEqual([...app.notifications.values()].map(row => row.user_id).sort(), [PAPA_MEMBER, EXECUTIVE].sort())
   assert.match([...app.notifications.values()][0].metadata.url, new RegExp(`papaId=${PAPA}`))
+})
+
+test('program assignment enables main-room mentions only, never Papa or another program', async () => {
+  for (const papaId of [null, PAPA]) {
+    const app = api({ recipients: [recipient(MEMBER), recipient(OUTSIDER), recipient(PAPA_MEMBER)], assignments: [
+      { program_id: PROGRAM, user_id: MEMBER, is_active: true },
+      { program_id: id(99), user_id: OUTSIDER, is_active: true },
+      { program_id: PROGRAM, user_id: PAPA_MEMBER, is_active: false },
+    ] })
+    Object.assign(app.config.message, { papa_id: papaId, is_private: true, mentions: [MEMBER, OUTSIDER, PAPA_MEMBER] })
+    const response = await app.mentions.POST(app.request({ messageId: MESSAGE }))
+    assert.equal(response.status, 200)
+    assert.deepEqual([...app.notifications.values()].map(row => row.user_id), papaId ? [] : [MEMBER])
+  }
 })
 
 test('team mentions never expose a message to another team or inactive account', async () => {

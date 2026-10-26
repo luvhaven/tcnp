@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { checkRateLimit } from '@/lib/security/rate-limit'
 import { isPlatformAdministrator } from '@/lib/utils'
+import { getProgramChatAssignments } from '@/lib/chat-program-membership'
 
 const MAX_RECIPIENTS = 50
 const MAX_MESSAGE_AGE_MS = 10 * 60 * 1000
@@ -77,6 +78,11 @@ export async function POST(req: NextRequest) {
         : membershipQuery.is('papa_id', null)
       const { data: memberships, error: membershipError } = await membershipQuery
       if (membershipError) throw membershipError
+      if (!message.papa_id) {
+        const { data: assigned, error: assignmentError } = await getProgramChatAssignments(db, { programId: message.program_id, userIds: recipientIds })
+        if (assignmentError) throw assignmentError
+        for (const assignment of assigned ?? []) permitted.add(assignment.user_id)
+      }
       ;(memberships ?? []).forEach((membership: { user_id: string }) => permitted.add(membership.user_id))
     }
     // Private message recipients originate from the stored mentions list above;
