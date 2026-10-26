@@ -43,12 +43,16 @@ const Dialog = ({ open, onOpenChange, children }: DialogProps) => {
   const containerRef = React.useRef<HTMLDivElement>(null)
   const [hasDescription, setHasDescription] = React.useState(false)
   const [mounted, setMounted] = React.useState(false)
+  const onOpenChangeRef = React.useRef(onOpenChange)
 
   // Render overlays under document.body so fixed positioning is not captured
   // by animated/scrolling page containers (which otherwise clip tall dialogs).
   React.useEffect(() => setMounted(true), [])
 
-  const close = React.useCallback(() => onOpenChange?.(false), [onOpenChange])
+  // Form parents often pass inline guards. Keep their latest callback without
+  // treating each keystroke as a new dialog lifecycle (which reclaims focus).
+  React.useEffect(() => { onOpenChangeRef.current = onOpenChange }, [onOpenChange])
+  const close = React.useCallback(() => onOpenChangeRef.current?.(false), [])
 
   // A DialogDescription tells us it exists on mount, so aria-describedby only
   // points at an element that is actually on the page.
