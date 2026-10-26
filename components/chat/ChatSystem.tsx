@@ -320,7 +320,7 @@ export default function ChatSystem({ programId, papaId, team, initialMessage, ro
         const bottom = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 60
         stickToBottom.current = bottom; setAtBottom(bottom)
         if (bottom) setUnreadCount(0)
-      }} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-muted/[0.16] px-4 py-4 sm:px-6">
+      }} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-muted/[0.16] px-3 py-4 sm:px-4">
         {chat.loading ? (
           <div className="space-y-5 py-4" aria-label="Loading messages"><div className="skeleton h-14 w-3/5 rounded-2xl" /><div className="skeleton ml-auto h-20 w-2/3 rounded-2xl" /><div className="skeleton h-14 w-1/2 rounded-2xl" /></div>
         ) : chat.denied ? (
@@ -330,7 +330,7 @@ export default function ChatSystem({ programId, papaId, team, initialMessage, ro
         ) : visibleMessages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center"><div className="flex h-14 w-14 items-center justify-center rounded-2xl border bg-card text-muted-foreground"><MessageSquare className="h-6 w-6" /></div><div><h3 className="text-sm font-semibold">{search ? 'No messages match your search' : 'Start the conversation'}</h3><p className="mt-1 max-w-xs text-sm leading-relaxed text-muted-foreground">{search ? 'Try another name or phrase.' : 'Share an update, ask a question, or mention someone in this room.'}</p></div>{search && <Button variant="ghost" onClick={() => setSearch('')}>Clear search</Button>}</div>
         ) : (
-          <div className="mx-auto max-w-3xl pb-1">
+          <div className="w-full pb-1">
             {chat.hasMore && <div className="pb-4 text-center"><Button variant="ghost" size="sm" disabled={chat.loadingEarlier} onClick={() => void loadEarlier()}>{chat.loadingEarlier && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}Load earlier messages</Button></div>}
             {visibleMessages.map((message, index) => {
               const previous = visibleMessages[index - 1]
@@ -353,8 +353,8 @@ export default function ChatSystem({ programId, papaId, team, initialMessage, ro
 
       {!atBottom && <button type="button" onClick={scrollLatest} aria-label={unreadCount ? `Jump to latest, ${unreadCount} new` : 'Jump to latest messages'} className="absolute bottom-36 right-5 z-20 inline-flex min-h-10 items-center gap-2 rounded-full border bg-card px-3 text-xs font-semibold shadow-elevation-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><ArrowDown className="h-4 w-4" />{unreadCount ? `${unreadCount} new` : 'Latest'}</button>}
 
-      <div className="flex-none border-t bg-card p-3 sm:px-5 sm:py-4">
-        <div className="mx-auto max-w-3xl">
+      <div className="flex-none border-t bg-card p-3 sm:px-4 sm:py-4">
+        <div className="w-full">
           {failedMessage && (
             <div role="alert" className="mb-3 rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-xs">
               <p className="font-semibold text-destructive">Message wasn’t sent</p>
