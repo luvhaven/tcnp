@@ -230,17 +230,40 @@ export default function DashboardPage() {
     setLoading(true)
     setLoadError(false)
     let stage: DashboardLoadStage = "active_program"
+
+    // The session comes from the shared useCurrentUser cache instead of a
+    // fresh auth.getUser() round trip on every dashboard load. The cache is
+    // also empty when nobody is signed in, so separate the two before
+    // treating an absent user as something that went wrong.
+    if (!currentUser?.id) {
+      const { data: { session } } = await supabase.auth.getSession()
+        .catch(() => ({ data: { session: null } }))
+
+      if (!session) {
+        // Signed out, or the token expired while this page was open. That is
+        // a state, not a failure: nothing is broken and nobody is on the
+        // dashboard any more. Send them to /login and leave the skeleton up
+        // instead of painting an error and filing an issue for it.
+        router.replace("/login")
+        return
+      }
+
+      // A session exists but the profile never arrived. useCurrentUser has
+      // already reported whatever went wrong, so offer the recoverable error
+      // state without filing a second issue that blames the session.
+      setLoadError(true)
+      setLoading(false)
+      return
+    }
+
     try {
       // Plain-effect loader: React Query never sees these reads, so without
       // this a single dropped packet becomes a visible error for something
       // that would have succeeded a second later. Transport failures only —
       // an answered failure is rethrown on the first attempt.
       await retryTransientRead(async () => {
-        // The session comes from the shared useCurrentUser cache instead of a
-        // fresh auth.getUser() round trip on every dashboard load.
         stage = "auth_user"
-        const userId = currentUser?.id
-        if (!userId) throw new Error("Session unavailable")
+        const userId = currentUser.id
 
         // Each read below is independent, so they run together. `track`
         // records which one failed so the Sentry stage tag stays accurate.
@@ -377,7 +400,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [supabase, canViewGlobalDashboard, currentUser?.id])
+  }, [supabase, router, canViewGlobalDashboard, currentUser?.id])
 
   const handleDashboardRetry = async () => {
     setLoading(true)
