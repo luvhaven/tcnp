@@ -13,7 +13,6 @@ type ZoomAnimatableMap = {
 }
 
 type DetachableLayer = {
-  off?: () => unknown
   remove?: () => unknown
 }
 
@@ -41,6 +40,9 @@ export function isZoomAnimating(map: unknown): boolean {
  * moment tiles stop loading — common on poor connections, and exactly when a
  * user is likely to be pinching the map. Waiting for `zoomend` lets the
  * queued frame find the map it expects.
+ *
+ * Detaching is `remove()` and nothing else — see the note inside. Seen as
+ * TCNP-H when this function also called `off()`.
  */
 export function detachTileLayer(map: unknown, layer: unknown): void {
   if (!layer || typeof layer !== 'object') return
@@ -48,7 +50,18 @@ export function detachTileLayer(map: unknown, layer: unknown): void {
   const detach = () => {
     const target = layer as DetachableLayer
     try {
-      target.off?.()
+      // `remove()` only. Never call `layer.off()` here, however tempting it
+      // looks for silencing a dying layer's tile events.
+      //
+      // Leaflet unsubscribes a layer from its map through a `once('remove')`
+      // listener stored ON THE LAYER (`Layer._layerAdd`), and `off()` with no
+      // arguments deletes every listener — that one included. The layer then
+      // keeps the map's `zoom` and `viewreset` subscriptions while `_map` is
+      // null, so the next zoom frame calls `this._map.getCenter()` on null.
+      //
+      // `remove()` alone is enough: it fires 'remove', which runs Leaflet's
+      // own unsubscribe, and our `tileload`/`tileerror` handlers die with the
+      // layer (they also no-op via the `baseLayerRef.current !== layer` guard).
       target.remove?.()
     } catch {
       /* The map may already be torn down; nothing left to detach. */
