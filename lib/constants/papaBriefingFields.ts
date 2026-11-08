@@ -24,7 +24,7 @@ export type RoleBriefingConfig = {
 
 // ── Field definitions ────────────────────────────────────────────────────────
 
-const MIC_PREF_OPTIONS = ['Lapel / Lavalier', 'Handheld', 'Headset', 'Podium / Fixed', 'No preference']
+export const MIC_PREF_OPTIONS = ['Lapel / Lavalier', 'Handheld', 'Headset', 'Podium / Fixed', 'No preference']
 const WATER_TEMP_OPTIONS = ['Room temperature', 'Cold', 'Warm', 'Hot']
 
 const ECHO_FIELDS: PapaField[] = [

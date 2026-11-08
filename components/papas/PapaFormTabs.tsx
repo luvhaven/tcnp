@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Plus, X } from 'lucide-react'
+import { MIC_PREF_OPTIONS } from '@/lib/constants/papaBriefingFields'
 
 type PapaFormData = {
   // Basic Info
@@ -115,6 +116,11 @@ export default function PapaFormTabs({
     entourage_count: initialData?.entourage_count || 0,
     personal_assistants: initialData?.personal_assistants || []
   })
+
+  // Keep a legacy free-text value selectable so editing an older Papa doesn't drop it.
+  const micOptions = formData.mic_preference && !MIC_PREF_OPTIONS.includes(formData.mic_preference)
+    ? [...MIC_PREF_OPTIONS, formData.mic_preference]
+    : MIC_PREF_OPTIONS
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -459,13 +465,27 @@ export default function PapaFormTabs({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="mic_preference">Mic Preference</Label>
-                <Input
-                  id="mic_preference"
-                  placeholder="e.g., Handheld, Lapel, etc."
-                  value={formData.mic_preference}
-                  onChange={(e) => setFormData({ ...formData, mic_preference: e.target.value })}
-                />
+                <Label id="mic_preference_label">Mic Preference</Label>
+                <div role="radiogroup" aria-labelledby="mic_preference_label" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {micOptions.map((option) => {
+                    const selected = formData.mic_preference === option
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => setFormData({ ...formData, mic_preference: selected ? '' : option })}
+                        className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${selected ? 'border-primary bg-primary/10 font-semibold text-primary' : 'border-input bg-background hover:bg-muted'}`}
+                      >
+                        <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${selected ? 'border-primary' : 'border-muted-foreground/50'}`}>
+                          {selected && <span className="h-2 w-2 rounded-full bg-primary" />}
+                        </span>
+                        {option}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
 
               <div className="space-y-2">
