@@ -17,6 +17,7 @@ function load(path, imports = {}) {
 
 const utils = load('lib/utils.ts')
 const programMembership = load('lib/chat-program-membership.ts')
+const autoMembership = load('lib/chat-auto-membership.ts')
 const access = load('lib/chat-access.ts', { '@/lib/utils': utils })
 const json = (body, init = {}) => ({ body, status: init.status ?? 200, headers: init.headers })
 const id = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
@@ -42,9 +43,12 @@ function app(options = {}) {
         return { data: null, error: config.writeError ?? null }
       }
       if (config.failTable === table) return { data: null, error: { message: 'Unavailable' } }
-      let data = table === 'programs' ? config.programs : table === 'papas' ? config.papas : table === 'users' ? config.users : table === 'current_title_assignments' ? config.assignments : config.memberships
+      // Before migration 20261031121000 the removals table does not exist.
+      if (table === 'chat_room_removals' && !config.removals) return { data: null, error: { code: '42P01', message: 'relation "public.chat_room_removals" does not exist' } }
+      const extraTables = { chat_room_removals: config.removals, mission_requests: config.missionRequests, mission_responses: config.missionResponses, journeys: config.journeys, journey_duty_officers: config.journeyDutyOfficers, journey_papas: config.journeyPapas }
+      let data = table in extraTables ? extraTables[table] ?? [] : table === 'programs' ? config.programs : table === 'papas' ? config.papas : table === 'users' ? config.users : table === 'current_title_assignments' ? config.assignments : config.memberships
       for (const [op, field, value] of query.filters) {
-        data = data.filter(row => op === 'in' ? value.includes(row[field]) : op === 'neq' ? row[field] !== value : row[field] === value)
+        data = data.filter(row => op === 'in' ? value.includes(row[field]) : op === 'neq' ? row[field] !== value : op === 'is' ? (row[field] ?? null) === value : op === 'or' ? field(row) : row[field] === value)
       }
       if (query.range) data = data.slice(query.range[0], query.range[1] + 1)
       if (query.columns && query.columns !== '*') {
@@ -59,6 +63,18 @@ function app(options = {}) {
       neq(field, value) { query.filters.push(['neq', field, value]); return this },
       is(field, value) { query.filters.push(['is', field, value]); return this },
       in(field, value) { query.filters.push(['in', field, value]); return this },
+      // Minimal PostgREST or(): supports the a.eq.x / a.is.null / id.in.(...) forms used by the chat helpers.
+      or(expression) {
+        const clauses = expression.match(/[a-z_]+\.(?:in\.\([^)]*\)|[a-z]+\.[^,]+)/g) || []
+        const test = row => clauses.some(clause => {
+          const [, field, op, raw] = clause.match(/^([a-z_]+)\.([a-z]+)\.(.*)$/)
+          const value = raw === 'null' ? null : raw === 'false' ? false : raw === 'true' ? true : raw
+          if (op === 'in') return raw.slice(1, -1).split(',').includes(row[field])
+          if (op === 'is') return (row[field] ?? null) === value
+          return row[field] === value
+        })
+        query.filters.push(['or', test]); return this
+      },
       range(start, end) { query.range = [start, end]; return this },
       insert(value) { query.action = 'insert'; query.value = value; return this },
       delete() { query.action = 'delete'; return this },
@@ -79,6 +95,7 @@ function app(options = {}) {
   const imports = {
     'next/server': next, '@/lib/utils': utils, '@/lib/chat-access': access,
     '@/lib/chat-program-membership': programMembership,
+    '@/lib/chat-auto-membership': autoMembership,
     '@/lib/chat-server': {
       ...server,
       getChatCaller: async () => config.callerError
@@ -155,12 +172,65 @@ test('main-room member lists include active assigned officers but Papa lists do 
 test('inherited main-chat members are managed through program assignments; Papa invitations stay independent', async () => {
   const system = app({ role: 'captain', assignments: [{ user_id: MEMBER, program_id: PROGRAM, is_active: true }] })
   const main = { programId: PROGRAM, papaId: null, userId: MEMBER }
-  assert.equal((await system.members.POST(system.request(main))).status, 409)
+  // Already a member through the assignment: adding is a no-op, not a duplicate invitation.
+  assert.equal((await system.members.POST(system.request(main))).status, 200)
+  // Before the removals migration an automatic member cannot be removed.
   assert.equal((await system.members.DELETE(system.request(main))).status, 409)
   assert.equal(system.writes.length, 0)
   assert.equal((await system.members.POST(system.request({ ...main, papaId: PAPA }))).status, 200)
   assert.equal(system.writes.length, 1)
   assert.equal(system.writes[0].value.papa_id, PAPA)
+})
+
+test('with removals enabled, admins can remove automatic members and the removal overrides the assignment', async () => {
+  const system = app({ role: 'captain', removals: [], assignments: [{ user_id: MEMBER, program_id: PROGRAM, is_active: true }] })
+  const main = { programId: PROGRAM, papaId: null, userId: MEMBER }
+  assert.equal((await system.members.DELETE(system.request(main))).status, 200)
+  const removal = system.writes.find(write => write.table === 'chat_room_removals' && write.action === 'insert')
+  assert.equal(removal.value.user_id, MEMBER)
+  assert.equal(removal.value.papa_id, null)
+  // Executives and admins are never removable.
+  assert.equal((await system.members.DELETE(system.request({ ...main, userId: EXECUTIVE }))).status, 400)
+
+  system.config.removals = [{ program_id: PROGRAM, papa_id: null, user_id: MEMBER }]
+  const listed = await system.members.GET(system.request(null))
+  assert.equal(listed.body.canRemoveAutomatic, true)
+  assert.equal(listed.body.members.some(member => member.id === MEMBER), false)
+  assert.equal(listed.body.candidates.some(member => member.id === MEMBER), true)
+
+  // Adding back clears the removal and relies on the assignment again (no duplicate invitation).
+  const before = system.writes.length
+  assert.equal((await system.members.POST(system.request(main))).status, 200)
+  const added = system.writes.slice(before)
+  assert.ok(added.some(write => write.table === 'chat_room_removals' && write.action === 'delete'))
+  assert.equal(added.some(write => write.table === 'chat_room_memberships'), false)
+})
+
+test('with removals enabled, a Papa DO joins its room and is listed as a duty member', async () => {
+  const journeys = [{ id: id(50), papa_id: PAPA, program_id: PROGRAM, assigned_duty_officer_id: MEMBER, assigned_do_id: null, is_deleted: false, status: 'cocktail' }]
+  const officer = app({ role: 'tango_oscar', removals: [], journeys })
+  officer.config.users.push(user(CALLER))
+  journeys[0].assigned_duty_officer_id = CALLER
+  const rooms = await officer.rooms.GET()
+  assert.ok(rooms.body.rooms.some(room => room.kind === 'papa' && room.papaId === PAPA))
+  assert.equal(rooms.body.rooms.some(room => room.kind === 'papa' && room.papaId === OTHER_PAPA), false)
+
+  journeys[0].assigned_duty_officer_id = MEMBER
+  const admin = app({ role: 'captain', removals: [], journeys })
+  const members = await admin.members.GET(admin.request(null, `?programId=${PROGRAM}&papaId=${PAPA}`))
+  assert.equal(members.body.members.find(member => member.id === MEMBER)?.accessType, 'duty')
+})
+
+test('officers who said they are available are flagged and listed first when adding people', async () => {
+  const system = app({
+    role: 'captain',
+    missionRequests: [{ id: id(60), program_id: PROGRAM }],
+    missionResponses: [{ request_id: id(60), user_id: CANDIDATE, response: 'yes' }, { request_id: id(60), user_id: MEMBER, response: 'no' }],
+  })
+  const result = await system.members.GET(system.request(null))
+  assert.equal(result.body.candidates[0].id, CANDIDATE)
+  assert.equal(result.body.candidates[0].available, true)
+  assert.equal(result.body.candidates.find(member => member.id === MEMBER)?.available, false)
 })
 
 test('large program rosters are paged and officer lookups use bounded ID batches', async () => {

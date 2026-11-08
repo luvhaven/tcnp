@@ -24,7 +24,9 @@ export type ChatRoomMember = {
   photo_url: string | null
   is_online: boolean
   last_seen: string | null
-  accessType: 'executive' | 'admin' | 'member' | 'team' | 'program'
+  accessType: 'executive' | 'admin' | 'member' | 'team' | 'program' | 'duty'
+  /** Said "available" to this program's mission request. */
+  available?: boolean
 }
 
 export type ChatRoomsResponse = {
@@ -36,6 +38,8 @@ export type ChatRoomMembersResponse = {
   members: ChatRoomMember[]
   candidates?: ChatRoomMember[]
   canManageMembers: boolean
+  /** Automatic (program/DO) members can be removed too. */
+  canRemoveAutomatic?: boolean
 }
 
 export const CHAT_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

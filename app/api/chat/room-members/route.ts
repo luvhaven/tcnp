@@ -5,14 +5,15 @@ import { PLATFORM_ADMIN_ROLES, isExecutiveRole } from '@/lib/utils'
 import { isOfficerOnline } from '@/lib/presence'
 import { checkRateLimit } from '@/lib/security/rate-limit'
 import { getProgramChatAssignments } from '@/lib/chat-program-membership'
+import { getAvailableOfficerIds, getAvailableProgramDutyOfficerIds, getChatRemovals, getPapaDutyOfficerIds } from '@/lib/chat-auto-membership'
 
 const MEMBER_FIELDS = 'id, full_name, role, oscar, photo_url, is_online, last_seen, is_active, activation_status, team'
 
-function memberView(user: any, accessType: ChatRoomMember['accessType']): ChatRoomMember {
+function memberView(user: any, accessType: ChatRoomMember['accessType'], available = false): ChatRoomMember {
   return {
     id: user.id, full_name: user.full_name, role: user.role, oscar: user.oscar,
     photo_url: user.photo_url, last_seen: user.last_seen,
-    is_online: isOfficerOnline(user), accessType,
+    is_online: isOfficerOnline(user), accessType, available,
   }
 }
 
@@ -34,18 +35,32 @@ export async function GET(request: Request) {
 
     let memberIds: string[] = []
     const programMemberIds = new Set<string>()
+    const dutyMemberIds = new Set<string>()
+    let availableIds = new Set<string>()
+    let removedIds = new Set<string>()
+    let removalsSupported = false
     if (!scope.team) {
       let query = db.from('chat_room_memberships').select('user_id').eq('program_id', scope.programId)
       query = scope.papaId ? query.eq('papa_id', scope.papaId) : query.is('papa_id', null)
       const result = await query
       if (result.error) return chatError('Could not load room members. Please retry.', 500)
       memberIds = (result.data ?? []).map((row: { user_id: string }) => row.user_id)
+      const removals = await getChatRemovals(db, { programId: scope.programId!, papaId: scope.papaId })
+      removedIds = new Set(removals.rows.map(row => row.user_id))
+      removalsSupported = removals.supported
+      // Officers who said they're available for this program are listed first when adding people.
+      availableIds = await getAvailableOfficerIds(db, scope.programId!).catch(() => new Set<string>())
       if (!scope.papaId) {
         const assignments = await getProgramChatAssignments(db, { programId: scope.programId! })
         if (assignments.error) return chatError('Could not load program chat members. Please retry.', 500)
         for (const assignment of assignments.data ?? []) if (assignment.user_id) programMemberIds.add(assignment.user_id)
-        memberIds = [...new Set([...memberIds, ...programMemberIds])]
+        if (removals.supported) {
+          for (const id of await getAvailableProgramDutyOfficerIds(db, scope.programId!, availableIds)) programMemberIds.add(id)
+        }
+      } else if (removals.supported) {
+        for (const id of await getPapaDutyOfficerIds(db, scope.papaId)) dutyMemberIds.add(id)
       }
+      memberIds = [...new Set([...memberIds, ...programMemberIds, ...dutyMemberIds])].filter(id => !removedIds.has(id))
     }
     const baseUsers = () => db.from('users').select(MEMBER_FIELDS).eq('is_active', true).eq('activation_status', 'active').eq('is_directory_hidden', false).order('full_name').order('id')
     const readUsers = async (build: () => any) => {
@@ -73,11 +88,24 @@ export async function GET(request: Request) {
     // Team assignments remain operational data; this endpoint never moves users between teams.
     const explicitIds = new Set(memberIds)
     const members = activeUsers.filter(user => canManageChatMemberships(user.role) || (scope.team ? user.team === scope.team : explicitIds.has(user.id)))
-      .map(user => memberView(user, canManageChatMemberships(user.role) ? isExecutiveRole(user.role) ? 'executive' : 'admin' : scope.team ? 'team' : programMemberIds.has(user.id) ? 'program' : 'member'))
+      .map(user => memberView(
+        user,
+        canManageChatMemberships(user.role) ? isExecutiveRole(user.role) ? 'executive' : 'admin'
+          : scope.team ? 'team' : dutyMemberIds.has(user.id) ? 'duty' : programMemberIds.has(user.id) ? 'program' : 'member',
+        availableIds.has(user.id),
+      ))
+    // Available officers first (keeping alphabetical order within each group).
     const candidates = canManageMembers && !scope.team
-      ? activeUsers.filter(user => !canManageChatMemberships(user.role) && !explicitIds.has(user.id)).map(user => memberView(user, 'member'))
+      ? activeUsers.filter(user => !canManageChatMemberships(user.role) && !explicitIds.has(user.id))
+        .map(user => memberView(user, 'member', availableIds.has(user.id)))
+        .sort((a, b) => Number(b.available) - Number(a.available))
       : undefined
-    return NextResponse.json({ members, candidates, canManageMembers: canManageMembers && !scope.team }, { headers: CHAT_PRIVATE_HEADERS })
+    return NextResponse.json({
+      members, candidates,
+      canManageMembers: canManageMembers && !scope.team,
+      // Removing automatic members needs the chat_room_removals migration.
+      canRemoveAutomatic: canManageMembers && !scope.team && removalsSupported,
+    }, { headers: CHAT_PRIVATE_HEADERS })
   } catch (error) {
     console.error('[chat/room-members] Could not load members:', error)
     return chatError('Could not load room members. Please retry.', 500)
@@ -103,11 +131,23 @@ async function changeMembership(request: Request, remove: boolean) {
     if (targetError) return chatError('Could not check this officer. Please retry.', 500)
     if (!target || target.is_directory_hidden) return chatError('Choose a valid officer.', 400)
     if (!remove && (target.is_active !== true || target.activation_status !== 'active')) return chatError('Choose an active officer.', 400)
-    if (canManageChatMemberships(target.role)) return chatError('This officer already has access to every chat room.', 400)
+    if (canManageChatMemberships(target.role)) return chatError('Executives and admins always have access to every chat room and cannot be removed.', 400)
+    const removals = await getChatRemovals(caller.db, { programId: scope.programId!, papaId: scope.papaId, userId: body.userId })
+    let automatic = false
     if (!scope.papaId) {
       const assignment = await getProgramChatAssignments(caller.db, { programId: scope.programId!, userId: body.userId })
       if (assignment.error) return chatError('Could not check this officer’s program assignment. Please retry.', 500)
-      if (assignment.data?.length) return chatError('This officer joins Program chat automatically through their program assignment. Manage that assignment to change their access.', 409)
+      automatic = Boolean(assignment.data?.length)
+      if (!automatic && removals.supported) automatic = (await getAvailableProgramDutyOfficerIds(caller.db, scope.programId!)).has(body.userId)
+    } else if (removals.supported) {
+      automatic = (await getPapaDutyOfficerIds(caller.db, scope.papaId)).has(body.userId)
+    }
+    if (remove && automatic && !removals.supported) {
+      return chatError('This officer joins automatically. Apply the latest database update to remove automatic members.', 409)
+    }
+    const removalQuery = () => {
+      const query = caller.db.from('chat_room_removals').delete().eq('program_id', scope.programId).eq('user_id', body.userId)
+      return scope.papaId ? query.eq('papa_id', scope.papaId) : query.is('papa_id', null)
     }
     const membershipDb = caller.auth as any
     if (remove) {
@@ -115,11 +155,25 @@ async function changeMembership(request: Request, remove: boolean) {
       query = scope.papaId ? query.eq('papa_id', scope.papaId) : query.is('papa_id', null)
       const { error } = await query
       if (error) return chatError('Could not remove this room member. Please retry.', 500)
+      if (removals.supported) {
+        // The removal overrides automatic access (program assignment, DO duty, availability).
+        await removalQuery()
+        const { error: removalError } = await caller.db.from('chat_room_removals').insert({
+          program_id: scope.programId, papa_id: scope.papaId, user_id: body.userId, removed_by: caller.profile.id,
+        })
+        if (removalError && removalError.code !== '23505') return chatError('Could not remove this room member. Please retry.', 500)
+      }
     } else {
-      const { error } = await membershipDb.from('chat_room_memberships').insert({
-        program_id: scope.programId, papa_id: scope.papaId, user_id: body.userId, added_by: caller.profile.id,
-      })
-      if (error && error.code !== '23505') return chatError('Could not add this room member. Please retry.', 500)
+      if (removals.supported) {
+        const { error: clearError } = await removalQuery()
+        if (clearError) return chatError('Could not add this room member. Please retry.', 500)
+      }
+      if (!automatic) {
+        const { error } = await membershipDb.from('chat_room_memberships').insert({
+          program_id: scope.programId, papa_id: scope.papaId, user_id: body.userId, added_by: caller.profile.id,
+        })
+        if (error && error.code !== '23505') return chatError('Could not add this room member. Please retry.', 500)
+      }
     }
     return NextResponse.json({ success: true }, { headers: CHAT_PRIVATE_HEADERS })
   } catch (error) {
