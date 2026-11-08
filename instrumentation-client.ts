@@ -9,6 +9,8 @@
  * 16ms. Session Replay is lazy-loaded by the SDK, so the cost here is the
  * `Sentry.init` call itself.
  */
+// Must stay first: older iPhones need these before any app code runs.
+import '@/lib/polyfills'
 import * as Sentry from '@sentry/nextjs'
 
 import {
