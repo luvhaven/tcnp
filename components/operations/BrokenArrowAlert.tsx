@@ -11,6 +11,8 @@ import { audioManager } from '@/lib/audio/AudioManager'
 interface BrokenArrowEvent {
   journeyId: string
   papaName: string
+  /** Duty officer(s) on the journey, lead first. */
+  doName: string
   cheetahCallSign: string
   timestamp: string
 }
@@ -131,7 +133,26 @@ export function BrokenArrowAlert() {
           if (isAcknowledged(updated.id)) return
 
           let papaName = 'Unknown Papa'
+          let doName = 'Unassigned'
           let cheetahCallSign = 'Unknown Cheetah'
+
+          // DO team (lead first), falling back to the journey's lead DO column.
+          try {
+            const { data: team } = await (supabase as any)
+              .from('journey_duty_officers')
+              .select('is_lead, status, users:user_id(full_name)')
+              .eq('journey_id', updated.id)
+            const names = ((team as any[]) || [])
+              .filter(row => row.status !== 'rejected' && row.users?.full_name)
+              .sort((a, b) => Number(b.is_lead) - Number(a.is_lead))
+              .map(row => row.users.full_name as string)
+            const leadId = updated.assigned_duty_officer_id || updated.assigned_do_id
+            if (names.length === 0 && leadId) {
+              const { data } = await (supabase as any).from('users').select('full_name').eq('id', leadId).maybeSingle()
+              if (data?.full_name) names.push(data.full_name)
+            }
+            if (names.length) doName = [...new Set(names)].join(', ')
+          } catch { /* The alert must still show without the DO name. */ }
 
           if (updated.papa_id) {
             const { data } = await (supabase as any)
@@ -158,6 +179,7 @@ export function BrokenArrowAlert() {
           const newAlert: BrokenArrowEvent = {
             journeyId: updated.id,
             papaName,
+            doName,
             cheetahCallSign,
             timestamp: new Date().toLocaleTimeString('en-GB', {
               hour: '2-digit',
@@ -245,9 +267,13 @@ export function BrokenArrowAlert() {
 
                 {/* Details */}
                 <div id="ba-desc" className="bg-red-900/60 rounded-xl p-4 space-y-2 text-left border border-red-700">
-                  <div className="flex justify-between text-sm">
+                  <div className="flex justify-between gap-3 text-sm">
                     <span className="text-red-400 font-medium">Papa:</span>
-                    <span className="font-bold">{alert.papaName}</span>
+                    <span className="font-bold text-right">{alert.papaName}</span>
+                  </div>
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="text-red-400 font-medium">DO:</span>
+                    <span className="font-bold text-right">{alert.doName}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-red-400 font-medium">Cheetah:</span>
