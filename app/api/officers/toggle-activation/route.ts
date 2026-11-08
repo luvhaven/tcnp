@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 import { isPlatformAdministrator, platformAuthorityRank } from '@/lib/utils'
+import { isPermanentOwnerEmail } from '@/lib/platform-owner'
 
 // Build the hardened service-role client right here to avoid any wrapper issues
 function buildAdminClient() {
@@ -43,10 +44,16 @@ export async function POST(request: Request) {
 
     // 2. Parse body
     const body = await request.json()
-    const { officerId, isActive } = body as { officerId?: string; isActive?: boolean }
+    // `active` is the desired state (idempotent). `isActive` is the legacy
+    // "current state, please flip it" field, kept for older clients.
+    const { officerId, active, isActive } = body as { officerId?: string; active?: boolean; isActive?: boolean }
+    const desired = typeof active === 'boolean' ? active : typeof isActive === 'boolean' ? !isActive : null
 
-    if (!officerId || typeof isActive !== 'boolean') {
-      return NextResponse.json({ error: 'Missing or invalid fields: officerId and isActive (boolean) required' }, { status: 400 })
+    if (!officerId || desired === null) {
+      return NextResponse.json({ error: 'Missing or invalid fields: officerId and active (boolean) required' }, { status: 400 })
+    }
+    if (officerId === user.id) {
+      return NextResponse.json({ error: 'You cannot change your own account status' }, { status: 403 })
     }
 
     // 3. Perform update using service role to bypass RLS entirely
@@ -61,13 +68,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Officer not found' }, { status: 404 })
     }
     if (target.is_directory_hidden) return NextResponse.json({ error: 'Officer not found' }, { status: 404 })
-    if (target.role === 'super_admin' || target.email?.toLowerCase() === 'doriazowan@gmail.com') {
+    if (target.role === 'super_admin' || isPermanentOwnerEmail(target.email)) {
       return NextResponse.json({ error: 'The permanent owner account cannot be deactivated' }, { status: 403 })
     }
     if (platformAuthorityRank(target.role) >= 80 && callerRow.role !== 'super_admin') {
       return NextResponse.json({ error: 'Only Super Admin can change an administrator account' }, { status: 403 })
     }
-    const newIsActive = !isActive
+    const newIsActive = desired
     const newStatus = newIsActive ? 'active' : 'inactive'
 
     const { data: updated, error: updateError } = await adminClient
@@ -102,6 +109,12 @@ export async function POST(request: Request) {
       }
 
       return NextResponse.json({ error: updateError.message }, { status: 500 })
+    }
+
+    // A deactivated officer must not keep using a session issued before.
+    if (!newIsActive) {
+      const { error: signOutError } = await adminClient.auth.admin.signOut(officerId, 'global')
+      if (signOutError) console.warn('[toggle-activation] Could not revoke sessions:', signOutError.message)
     }
 
     return NextResponse.json({

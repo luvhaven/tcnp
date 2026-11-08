@@ -60,7 +60,7 @@ export async function POST(request: Request) {
         }
         if (targetIsPermanentOwner && (
             id !== user.id ||
-            !isPermanentOwnerEmail(email) ||
+            !isPermanentOwnerEmail(email ?? (targetUser as { email?: string }).email) ||
             desiredRole !== 'super_admin'
         )) {
             return NextResponse.json({ error: 'The permanent owner identity and authority cannot be changed' }, { status: 403 })
@@ -81,39 +81,39 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Invalid team' }, { status: 400 })
         }
 
-        // Prepare auth updates
-        const authUpdates: any = {
-            email,
-            user_metadata: {
-                full_name,
-                phone,
-                role
-            }
+        // Only write fields the caller actually sent: a role-only change must not
+        // wipe the officer's phone or rewrite their login metadata.
+        const has = (key: string) => Object.prototype.hasOwnProperty.call(body, key)
+        const metadata: Record<string, unknown> = {}
+        if (has('full_name')) metadata.full_name = full_name
+        if (has('phone')) metadata.phone = phone
+        if (has('role')) metadata.role = role
+
+        const authUpdates: any = {}
+        if (has('email') && email) authUpdates.email = email
+        if (Object.keys(metadata).length > 0) {
+            const { data: existing } = await adminClient.auth.admin.getUserById(id)
+            authUpdates.user_metadata = { ...(existing?.user?.user_metadata ?? {}), ...metadata }
         }
 
         if (password && password.trim() !== '') {
             authUpdates.password = password
         }
 
-        // Update user via Supabase Admin API
-        const { data: authData, error: authError } = await adminClient.auth.admin.updateUserById(
-            id,
-            authUpdates
-        )
-
-        if (authError) {
-            console.error('Auth update error:', authError)
-            return NextResponse.json({ error: authError.message }, { status: 400 })
+        if (Object.keys(authUpdates).length > 0) {
+            const { error: authError } = await adminClient.auth.admin.updateUserById(id, authUpdates)
+            if (authError) {
+                console.error('Auth update error:', authError)
+                return NextResponse.json({ error: authError.message }, { status: 400 })
+            }
         }
 
         // Update users table
-        const userUpdates: any = {
-            email,
-            full_name,
-            phone: phone || null,
-            role,
-            updated_at: new Date().toISOString()
-        }
+        const userUpdates: any = { updated_at: new Date().toISOString() }
+        if (has('email') && email) userUpdates.email = email
+        if (has('full_name')) userUpdates.full_name = full_name
+        if (has('phone')) userUpdates.phone = phone || null
+        if (has('role')) userUpdates.role = role
 
         if (photo_url !== undefined) {
             userUpdates.photo_url = photo_url

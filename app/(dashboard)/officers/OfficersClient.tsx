@@ -362,7 +362,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
       const response = await fetch('/api/officers/toggle-activation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ officerId: officer.id, isActive: officerAccountStatus(officer) === 'Active' }),
+        body: JSON.stringify({ officerId: officer.id, active: officerAccountStatus(officer) !== 'Active' }),
       })
       const result = await response.json()
       if (!response.ok) throw new UserFacingError(result.error || 'Failed to update officer status')
@@ -440,7 +440,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
               const activation = await fetch('/api/officers/toggle-activation', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ officerId: officer.id, isActive: false })
+                body: JSON.stringify({ officerId: officer.id, active: true })
               })
               if (!activation.ok) throw new UserFacingError('Title assigned, but account approval failed. Review the officer in Pending.')
             }
