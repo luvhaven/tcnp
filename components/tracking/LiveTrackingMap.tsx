@@ -138,7 +138,8 @@ function SidebarSection({
 }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="rounded-xl border border-border/60 bg-card shadow-sm overflow-hidden">
+    // shrink-0: without it the flex column squashes (and clips) sections instead of scrolling the panel.
+    <div className="shrink-0 rounded-xl border border-border/60 bg-card shadow-sm overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
@@ -349,7 +350,7 @@ export default function LiveTrackingMap() {
   }), [statusCounts, userLocations, journeyCallSignList])
 
   const recentLocations = useMemo(() =>
-    [...filteredLocations].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()).slice(0, 8),
+    [...filteredLocations].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()),
     [filteredLocations]
   )
 
@@ -380,7 +381,7 @@ export default function LiveTrackingMap() {
   }
 
   return (
-    <div className="flex h-[calc(100dvh-6rem)] flex-col gap-3 animate-fade-in">
+    <div className="flex h-[calc(100dvh-6rem)] min-h-0 flex-col gap-3 animate-fade-in">
       {(locationError || journeyError) && <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm">{locationError} {journeyError} <button className="underline" onClick={handleManualRefresh}>Retry</button></div>}
       {lastUpdated && <p className="text-xs text-muted-foreground">Locations last refreshed at {lastUpdated}</p>}
 
@@ -500,7 +501,8 @@ export default function LiveTrackingMap() {
         {/* Map column */}
         <div className={cn(
           'min-w-0 transition-all duration-300 ease-in-out',
-          sidebarOpen ? 'lg:flex-[0.74] flex-1' : 'flex-1'
+          // On phones the panel stacks below the map, so give the map a fixed share and let the panel scroll.
+          sidebarOpen ? 'h-[42dvh] shrink-0 lg:h-auto lg:shrink lg:flex-[0.74]' : 'flex-1'
         )}>
           <Card className="flex flex-col h-full overflow-hidden shadow-lg border border-border/70">
             <CardContent className="flex-1 p-0 relative min-h-[360px]">
@@ -546,8 +548,8 @@ export default function LiveTrackingMap() {
         {/* Sidebar column */}
         <div
           className={cn(
-            'lg:flex-[0.26] w-full lg:w-auto flex flex-col gap-3 overflow-y-auto pb-2 transition-all duration-300 ease-in-out',
-            sidebarOpen ? 'min-w-[240px] opacity-100' : 'pointer-events-none opacity-0 lg:max-w-0 lg:min-w-0 lg:overflow-hidden'
+            'flex-1 min-h-0 lg:flex-[0.26] w-full lg:w-auto flex flex-col gap-3 overflow-y-auto overscroll-contain pb-2 transition-all duration-300 ease-in-out [-webkit-overflow-scrolling:touch]',
+            sidebarOpen ? 'min-w-[240px] opacity-100' : 'hidden lg:flex pointer-events-none opacity-0 lg:max-w-0 lg:min-w-0 lg:overflow-hidden'
           )}
           style={{ willChange: 'opacity, max-width' }}
         >
