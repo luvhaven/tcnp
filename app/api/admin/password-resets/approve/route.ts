@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     }
 
     const nowIso = new Date().toISOString()
-    const { error: updateError } = await db
+    const { data: approvedRows, error: updateError } = await db
       .from('password_reset_requests')
       .update({
         status: 'approved',
@@ -84,10 +84,14 @@ export async function POST(request: Request) {
       })
       .eq('id', requestId)
       .eq('status', 'pending')
+      .select('id')
 
     if (updateError) {
       console.error('[admin/password-resets/approve] Update error:', updateError)
       return NextResponse.json({ error: 'Failed to approve request' }, { status: 500 })
+    }
+    if (!approvedRows?.length) {
+      return NextResponse.json({ error: 'This request was already handled by another administrator.' }, { status: 409 })
     }
 
     // Broadcast to the user's waiting screen channel for immediate transition

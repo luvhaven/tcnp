@@ -25,6 +25,15 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
+        const { data: account } = await supabase
+            .from('users')
+            .select('is_active, activation_status')
+            .eq('id', user.id)
+            .maybeSingle()
+        if (!account || account.is_active === false || account.activation_status !== 'active') {
+            return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
+        }
+
         const parsed = bodySchema.safeParse(await request.json().catch(() => null))
         if (!parsed.success) {
             const message = parsed.error.issues[0]?.message

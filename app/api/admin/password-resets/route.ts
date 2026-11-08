@@ -29,7 +29,8 @@ export async function GET(request: Request) {
     const adminClient = createAdminClient()
     const db = adminClient as any
 
-    const { data: requests, error: fetchError } = await db
+    // Pending requests are never capped; only the history is limited.
+    const base = () => db
       .from('password_reset_requests')
       .select(`
         id,
@@ -57,8 +58,12 @@ export async function GET(request: Request) {
           photo_url
         )
       `)
-      .order('requested_at', { ascending: false })
-      .limit(50)
+    const [pending, history] = await Promise.all([
+      base().in('status', ['pending', 'approved']).order('requested_at', { ascending: false }),
+      base().not('status', 'in', '(pending,approved)').order('requested_at', { ascending: false }).limit(50),
+    ])
+    const fetchError = pending.error || history.error
+    const requests = [...(pending.data || []), ...(history.data || [])]
 
     if (fetchError) {
       console.error('[admin/password-resets] Error fetching requests:', fetchError)

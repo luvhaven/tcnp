@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     }
 
     const nowIso = new Date().toISOString()
-    const { error: updateError } = await db
+    const { data: rejectedRows, error: updateError } = await db
       .from('password_reset_requests')
       .update({
         status: 'rejected',
@@ -61,10 +61,16 @@ export async function POST(request: Request) {
         updated_at: nowIso,
       })
       .eq('id', requestId)
+      // Only pending or approved-but-unused requests can be rejected.
+      .in('status', ['pending', 'approved'])
+      .select('id')
 
     if (updateError) {
       console.error('[admin/password-resets/reject] Update error:', updateError)
       return NextResponse.json({ error: 'Failed to reject request' }, { status: 500 })
+    }
+    if (!rejectedRows?.length) {
+      return NextResponse.json({ error: 'This request was already handled.' }, { status: 409 })
     }
 
     // Broadcast to the user's waiting screen channel

@@ -87,12 +87,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'This account cannot be reset. Please contact Command Center.' }, { status: 403 })
     }
 
-    // 2. Update user's password in Supabase Auth
+    // 2. Claim the request atomically so two submits with the same token can't
+    // both set a password.
+    const nowIso = new Date().toISOString()
+    const { data: claimed } = await db
+      .from('password_reset_requests')
+      .update({ status: 'completed', completed_at: nowIso, updated_at: nowIso })
+      .eq('id', resetReq.id)
+      .eq('status', 'approved')
+      .select('id')
+    if (!claimed?.length) {
+      return NextResponse.json(
+        { error: 'This reset request has already been used. Please sign in or request a new reset.' },
+        { status: 409 }
+      )
+    }
+
+    // 3. Update user's password in Supabase Auth
     const { error: authUpdateError } = await adminClient.auth.admin.updateUserById(resetReq.user_id, {
       password: newPassword,
     })
 
     if (authUpdateError) {
+      // Release the claim so the officer can retry with the same approval.
+      await db.from('password_reset_requests').update({ status: 'approved', completed_at: null }).eq('id', resetReq.id)
       console.error('[reset-password/confirm] Supabase auth update error:', authUpdateError)
       return NextResponse.json(
         { error: 'Failed to update password. Please try again.' },
@@ -100,16 +118,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 3. Mark request completed & update users table
-    const nowIso = new Date().toISOString()
-    await db
-      .from('password_reset_requests')
-      .update({
-        status: 'completed',
-        completed_at: nowIso,
-        updated_at: nowIso,
-      })
-      .eq('id', resetReq.id)
+    // 4. End every existing session: whoever held the old password is signed out.
+    const { error: signOutError } = await adminClient.auth.admin.signOut(resetReq.user_id, 'global')
+    if (signOutError) console.warn('[reset-password/confirm] Could not revoke sessions:', signOutError.message)
 
     await db
       .from('users')
