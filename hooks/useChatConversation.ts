@@ -349,6 +349,34 @@ export function useChatConversation(scope: ConversationScope) {
     window.dispatchEvent(new Event('tcnp:chat-read'))
   }, [me, supabase])
 
+  // Opening a room clears its unread badge entirely, including messages older
+  // than the loaded page (which the on-screen marker never reaches).
+  const caughtUpRoom = useRef<string | null>(null)
+  useEffect(() => {
+    if (!allowed || !me || caughtUpRoom.current === roomKey) return
+    const catchUp = async () => {
+      if (document.visibilityState !== 'visible') return
+      caughtUpRoom.current = roomKey
+      try {
+        const { data, error: unreadError } = await scopeQuery(
+          (supabase as any).from('chat_messages').select('id')
+            .neq('sender_id', me.id).is('deleted_at', null)
+            .or(`read_by.is.null,read_by.not.cs.${JSON.stringify([me.id])}`)
+        ).limit(1000)
+        if (unreadError) throw unreadError
+        const ids = (data ?? []).map((row: { id: string }) => row.id)
+        if (ids.length) await markRead(ids)
+      } catch (catchUpError) {
+        caughtUpRoom.current = null
+        console.warn('Could not mark this room read (non-fatal):', catchUpError)
+      }
+    }
+    void catchUp()
+    const onVisible = () => { if (caughtUpRoom.current !== roomKey) void catchUp() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [allowed, me, roomKey, scopeQuery, supabase, markRead])
+
   return {
     me, messages: allowed ? messages : [], members: membersQuery.data?.members ?? [], membersData: membersQuery.data,
     loading: userLoading || membersQuery.isPending || (allowed && loading),

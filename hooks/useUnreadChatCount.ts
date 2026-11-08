@@ -2,10 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { uniqueTopic } from '@/lib/realtime/topic'
 
-type RpcParams = {
-  user_uuid: string
-}
-
 export function useUnreadChatCount() {
   const supabase = useMemo(() => createClient(), [])
   const [userId, setUserId] = useState<string | null>(null)
@@ -40,16 +36,23 @@ export function useUnreadChatCount() {
           return
         }
 
-        const { data, error } = await (supabase as any).rpc('get_unread_message_count', {
-          user_uuid: session.user.id
-        } satisfies RpcParams)
+        // Count through row-level security so only rooms this officer can open
+        // are included. The old get_unread_message_count RPC counted every
+        // unread message in the database (other rooms, old test chats).
+        const uid = session.user.id
+        const { count: unread, error } = await (supabase as any)
+          .from('chat_messages')
+          .select('id', { count: 'exact', head: true })
+          .neq('sender_id', uid)
+          .is('deleted_at', null)
+          .or('is_archived.is.null,is_archived.eq.false')
+          .or(`read_by.is.null,read_by.not.cs.${JSON.stringify([uid])}`)
 
         if (error) {
           throw error
         }
 
-        const numericCount = typeof data === 'number' ? data : 0
-        setCount(numericCount)
+        setCount(typeof unread === 'number' ? unread : 0)
         lastSuccessfulFetchRef.current = Date.now()
       } catch (error) {
   // Downgrade unread-count failures to a warning to avoid red error overlay
@@ -97,6 +100,12 @@ export function useUnreadChatCount() {
         table: 'chat_messages',
         filter: `sender_id=neq.${userId}`
       }, scheduleRefetch)
+      // A deleted message must drop out of the badge for everyone.
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'chat_messages',
+      }, (payload: any) => { if (payload.new?.deleted_at || payload.new?.is_archived) scheduleRefetch() })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           // Catch up on anything missed while the connection was down.
@@ -110,15 +119,18 @@ export function useUnreadChatCount() {
 
     // ChatSystem announces when it has marked messages read.
     window.addEventListener('tcnp:chat-read', scheduleRefetch)
+    const onVisible = () => { if (document.visibilityState === 'visible') scheduleRefetch() }
+    document.addEventListener('visibilitychange', onVisible)
 
-    // Refresh every 30 seconds for reliability
+    // Safety net in case a realtime event is missed.
     const interval = setInterval(() => {
       void fetchUnread()
-    }, 30000)
+    }, 20000)
 
     return () => {
       if (refetchTimer) clearTimeout(refetchTimer)
       window.removeEventListener('tcnp:chat-read', scheduleRefetch)
+      document.removeEventListener('visibilitychange', onVisible)
       supabase.removeChannel(channel)
       clearInterval(interval)
     }
