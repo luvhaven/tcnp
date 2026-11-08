@@ -225,3 +225,26 @@ test('a logged-out visitor does not reach the issue feed', () => {
   assert.equal(matchesIgnoredError('JWT expired'), false)
   assert.equal(matchesIgnoredError('Failed to fetch (supabase.co)'), false)
 })
+
+test('a signed-out visitor on the dashboard is routed, not reported', () => {
+  // useCurrentUser answers null for a missing session as well as for a failed
+  // profile read. The dashboard loader threw "Session unavailable" for both,
+  // so every sign-out and every expired token filed a High priority issue
+  // against a page the officer had already left.
+  const page = fs.readFileSync('app/(dashboard)/dashboard/page.tsx', 'utf8')
+  assert.doesNotMatch(page, /Session unavailable/)
+
+  const noUser = page.indexOf('if (!currentUser?.id) {')
+  const sessionCheck = page.indexOf('supabase.auth.getSession()', noUser)
+  const redirect = page.indexOf('router.replace("/login")', noUser)
+  const capture = page.indexOf('Sentry.captureException(err', noUser)
+  assert.ok(noUser >= 0 && sessionCheck > noUser)
+  // The redirect decides the no-session case before anything reaches Sentry.
+  assert.ok(redirect > sessionCheck && redirect < capture)
+  // A session that exists but has no profile still shows the retryable error
+  // state — useCurrentUser has already reported why.
+  assert.match(page.slice(redirect, capture), /setLoadError\(true\)/)
+  // Everything that actually breaks mid-load still reports.
+  assert.ok(capture > redirect)
+  assert.match(page.slice(capture), /dashboard_stage: stage/)
+})

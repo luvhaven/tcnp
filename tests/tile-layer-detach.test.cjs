@@ -21,6 +21,25 @@ function fakeLayer() {
   }
 }
 
+/**
+ * A layer that models the one piece of Leaflet's contract this helper can
+ * break: a layer is unsubscribed from its map by a `once('remove')` listener
+ * stored ON THE LAYER (`Layer._layerAdd` in leaflet-src.js), and `off()` with
+ * no arguments deletes every listener it has.
+ */
+function leafletLikeLayer(map) {
+  let events = { remove: [() => { map.subscribedToZoom = false }] }
+  return {
+    off(type) {
+      if (type === undefined) { events = {} } else { delete events[type] }
+    },
+    remove() {
+      for (const handler of events.remove || []) handler()
+      this._map = null
+    },
+  }
+}
+
 test('a layer is detached immediately when no zoom is animating', () => {
   const layer = fakeLayer()
   detachTileLayer({ _animatingZoom: false, once: () => {} }, layer)
@@ -43,7 +62,6 @@ test('detaching waits for zoomend while a zoom animation is in flight', () => {
 
   handler()
   assert.equal(layer.calls.remove, 1, 'must detach once the animation ends')
-  assert.equal(layer.calls.off, 1)
 })
 
 test('a map torn down before zoomend simply never detaches', () => {
@@ -54,8 +72,34 @@ test('a map torn down before zoomend simply never detaches', () => {
 })
 
 test('a layer that throws while detaching does not propagate', () => {
-  const hostile = { off: () => { throw new Error('map already removed') }, remove: () => {} }
+  const hostile = { remove: () => { throw new Error('map already removed') } }
   assert.doesNotThrow(() => detachTileLayer({}, hostile))
+})
+
+test('a detached layer stops receiving the map zoom events', () => {
+  // Seen as TCNP-H: 67 unhandled TypeErrors in one burst for a single Command
+  // officer on /tracking/live. This function used to call `layer.off()` before
+  // `layer.remove()`, which deleted the `once('remove')` listener Leaflet uses
+  // to unsubscribe the layer. The layer kept the map's `zoom` subscription with
+  // a null `_map`, and every frame of the next pinch called
+  // `this._map.getCenter()` on null — hence a burst, not a single event.
+  const map = { subscribedToZoom: true, _animatingZoom: false }
+  detachTileLayer(map, leafletLikeLayer(map))
+  assert.equal(map.subscribedToZoom, false, 'detaching must leave no listener behind')
+})
+
+test('a layer detached after a zoom animation also unsubscribes', () => {
+  // The deferred path runs the same detach, so it must not regress separately.
+  let handler = null
+  const map = {
+    subscribedToZoom: true,
+    _animatingZoom: true,
+    once: (event, fn) => { handler = fn },
+  }
+  detachTileLayer(map, leafletLikeLayer(map))
+  assert.equal(map.subscribedToZoom, true, 'still attached until zoomend')
+  handler()
+  assert.equal(map.subscribedToZoom, false)
 })
 
 test('missing maps, layers and animation flags are all tolerated', () => {
