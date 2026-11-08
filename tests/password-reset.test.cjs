@@ -5,7 +5,8 @@ const { z } = require('zod')
 
 test('resolveNotificationRoute navigates password reset requests to the admin resets tab', () => {
   const source = fs.readFileSync('hooks/useNotifications.ts', 'utf8')
-  assert.match(source, /if\s*\(kind === ['"]password_reset_request['"]\)\s*return\s*['"]\/officers\?tab=resets['"]/)
+  const routes = fs.readFileSync('lib/notification-route.ts', 'utf8')
+  assert.match(routes, /if\s*\(kind === ['"]password_reset_request['"]\)\s*return\s*['"]\/officers\?tab=resets['"]/)
   assert.match(source, /if\s*\(kind === ['"]password_reset_request['"]\)\s*return\s*['"]warning['"]/)
 })
 

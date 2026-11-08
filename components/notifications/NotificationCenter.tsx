@@ -161,7 +161,7 @@ type FilterTab = "all" | "unread" | "broken_arrow"
 
 export default function NotificationCenter() {
   const router = useRouter()
-  const { notifications, unreadCount, loading, markAsRead, markAllAsRead, deleteNotification } = useNotifications()
+  const { notifications, unreadCount, loading, error, reload, markAsRead, markAllAsRead, deleteNotification } = useNotifications()
   const [open, setOpen] = useState(false)
   const [filter, setFilter] = useState<FilterTab>("all")
   const panelRef = useRef<HTMLDivElement>(null)
@@ -341,6 +341,13 @@ export default function NotificationCenter() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                ) : error && notifications.length === 0 ? (
+                  <div role="alert" className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+                    <p className="text-sm text-muted-foreground">Notifications couldn&apos;t load. Check your connection.</p>
+                    <button type="button" onClick={() => { void reload() }} className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted">
+                      Retry
+                    </button>
                   </div>
                 ) : filtered.length === 0 ? (
                   <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">

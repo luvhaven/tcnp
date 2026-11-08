@@ -4,58 +4,11 @@ import { toast } from 'sonner'
 import { uniqueTopic } from '@/lib/realtime/topic'
 import { useRouter } from 'next/navigation'
 import { presentNotification } from '@/lib/notification-presentation'
+import { resolveNotificationRoute, type AppNotification } from '@/lib/notification-route'
 
-export type NotificationType =
-  | 'info'
-  | 'success'
-  | 'warning'
-  | 'error'
-  | 'broken_arrow'
-  | 'call_sign'
-  | 'chat'
-  | 'announcement'
-  | 'birthday_reminder'
-  | 'alert'
-  | 'reminder'
+export type { NotificationType, AppNotification } from '@/lib/notification-route'
+export { resolveNotificationRoute } from '@/lib/notification-route'
 
-export interface AppNotification {
-  id: string
-  user_id: string
-  title: string
-  message: string
-  type: NotificationType
-  is_read: boolean
-  created_at: string
-  journey_id?: string | null
-  metadata?: { kind?: string; program_id?: string; request_id?: string; [key: string]: unknown } | null
-}
-
-/**
- * Where clicking a notification should take the user. Kept alongside
- * resolveChimeKey since both classify a notification by kind/type — the
- * single source of truth for "what is this notification about".
- */
-export function resolveNotificationRoute(n: AppNotification): string | null {
-  const url = n.metadata?.url
-  if (typeof url === 'string' && url.startsWith('/chat?') && !/[\\\r\n]/.test(url)) return url
-  const kind = n.metadata?.kind
-  if (kind === 'password_reset_request') return '/officers?tab=resets'
-  if (kind === 'food_ready') return '/welfare'
-  if (kind === 'birthday_0700' || n.type === 'birthday_reminder') return '/welfare'
-  if (kind === 'mission_request') return '/dashboard'
-  if (kind === 'mention') return '/chat'
-  if (kind === 'announcement' || n.type === 'announcement') {
-    const category = String(n.metadata?.category || '').toLowerCase()
-    if (category === 'training' || category === 'recruitment') return '/training'
-    if (category === 'birthday' || category === 'wedding' || category === 'welfare') return '/welfare'
-    return '/dashboard'
-  }
-  if (n.journey_id) return `/journeys?highlight=${n.journey_id}`
-  if (n.type === 'chat') return '/chat'
-  if (n.type === 'broken_arrow') return '/incidents'
-  if (n.type === 'call_sign') return '/operations-monitor'
-  return null
-}
 
 // The bell shows the last 10 notifications
 const NOTIFICATION_PAGE_SIZE = 10
@@ -83,6 +36,9 @@ export function useNotifications() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
+  // The list holds only the newest page; the badge needs the true unread total.
+  const [unreadTotal, setUnreadTotal] = useState(0)
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
 
   const receiveNotification = useCallback((incoming: AppNotification, uid: string) => {
@@ -102,6 +58,15 @@ export function useNotifications() {
     })
   }, [router])
 
+  const refreshUnreadTotal = useCallback(async (uid: string) => {
+    const { count, error } = await supabase
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', uid)
+      .eq('is_read', false)
+    if (!error && typeof count === 'number') setUnreadTotal(count)
+  }, [supabase])
+
   const loadNotifications = useCallback(async (uid: string) => {
     try {
       const { data, error } = await supabase
@@ -115,21 +80,29 @@ export function useNotifications() {
 
       const notifs = (data || []) as unknown as AppNotification[]
       setNotifications(notifs)
+      setLoadError(false)
+      void refreshUnreadTotal(uid)
     } catch (err) {
       console.warn('[useNotifications] load failed:', err)
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
-  }, [supabase])
+  }, [supabase, refreshUnreadTotal])
 
   // Bootstrap
   useEffect(() => {
     let cancelled = false
+    let subscribedOnce = false
 
     const init = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
-        if (!user || cancelled) return
+        if (cancelled) return
+        if (!user) {
+          setLoading(false)
+          return
+        }
 
         setUserId(user.id)
         await loadNotifications(user.id)
@@ -151,6 +124,7 @@ export function useNotifications() {
               if (cancelled) return
               const incoming = payload.new as AppNotification
               receiveNotification(incoming, user.id)
+              void refreshUnreadTotal(user.id)
             }
           )
           .on(
@@ -167,9 +141,16 @@ export function useNotifications() {
               setNotifications((prev) =>
                 prev.map((n) => (n.id === updated.id ? { ...n, ...updated } : n))
               )
+              void refreshUnreadTotal(user.id)
             }
           )
-          .subscribe()
+          .subscribe((status) => {
+            // Catch up on anything missed while the socket was down.
+            if (status === 'SUBSCRIBED') {
+              if (subscribedOnce && !cancelled) void loadNotifications(user.id)
+              subscribedOnce = true
+            }
+          })
 
         if (cancelled) {
           void supabase.removeChannel(channel)
@@ -191,7 +172,7 @@ export function useNotifications() {
         channelRef.current = null
       }
     }
-  }, [supabase, loadNotifications, receiveNotification])
+  }, [supabase, loadNotifications, receiveNotification, refreshUnreadTotal])
 
   // A push can arrive while realtime reconnects. Read the row with this user's
   // session rather than putting private message text in the push payload.
@@ -226,11 +207,12 @@ export function useNotifications() {
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
       )
+      if (userId) void refreshUnreadTotal(userId)
     } catch (err) {
       console.error('[useNotifications] markAsRead failed:', err)
       toast.error('Could not mark notification as read. Please retry.')
     }
-  }, [supabase])
+  }, [supabase, userId, refreshUnreadTotal])
 
   const markAllAsRead = useCallback(async () => {
     if (!userId) return
@@ -241,6 +223,7 @@ export function useNotifications() {
         .eq('is_read', false)
       if (error) throw error
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
+      setUnreadTotal(0)
     } catch (err) {
       console.error('[useNotifications] markAllAsRead failed:', err)
       toast.error('Failed to mark notifications as read')
@@ -252,21 +235,25 @@ export function useNotifications() {
       const { error } = await (supabase.from('notifications') as any).delete().eq('id', id)
       if (error) throw error
       setNotifications((prev) => prev.filter((n) => n.id !== id))
+      if (userId) void refreshUnreadTotal(userId)
       // Realtime can't filter DELETEs by user, so tell the sidebar badge directly.
       window.dispatchEvent(new Event('tcnp:notifications-changed'))
     } catch (err) {
       console.error('[useNotifications] delete failed:', err)
       toast.error('Failed to delete notification')
     }
-  }, [supabase])
+  }, [supabase, userId, refreshUnreadTotal])
 
-  // Derived, so a local mark-as-read followed by its realtime echo can't count twice.
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.is_read).length, [notifications])
+  // The loaded page can only under-count; the server total covers older unread
+  // rows. Taking the max also covers an insert that arrives before the recount.
+  const unreadInPage = useMemo(() => notifications.filter((n) => !n.is_read).length, [notifications])
+  const unreadCount = Math.max(unreadTotal, unreadInPage)
 
   return {
     notifications,
     unreadCount,
     loading,
+    error: loadError,
     userId,
     markAsRead,
     markAllAsRead,

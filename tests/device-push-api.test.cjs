@@ -52,6 +52,7 @@ test('dispatcher requires secret, sends generic payload, and expires rejected su
   let expired = false
   const route = load('app/api/notifications/dispatch/route.ts', {
     'node:crypto': { timingSafeEqual }, '@/lib/supabase/admin': { createAdminClient: () => db }, '@/lib/push-validation': load('lib/push-validation.ts', {}),
+    '@/lib/notification-route': load('lib/notification-route.ts', {}),
     'web-push': { sendNotification: async (_, payload) => { sent.push(JSON.parse(payload)); if (expired) throw { statusCode: 410 } } },
   })
   const req = token => new Request('https://tcnp.vercel.app/api/notifications/dispatch', { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
