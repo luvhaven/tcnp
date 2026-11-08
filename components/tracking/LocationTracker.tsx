@@ -224,6 +224,24 @@ export function LocationTracker() {
     return () => window.removeEventListener('tcnp-location-ready', ready)
   }, [])
 
+  // iOS Safari suspends geolocation watches while the app is in the background
+  // and doesn't always resume them. Restart the watch when the officer returns.
+  useEffect(() => {
+    let hiddenAt = 0
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return }
+      if (!isLocationSharingEnabled() || !hiddenAt || Date.now() - hiddenAt < 15000) return
+      hiddenAt = 0
+      if (watchIdRef.current !== null) {
+        try { navigator.geolocation.clearWatch(watchIdRef.current) } catch { /* already gone */ }
+        watchIdRef.current = null
+      }
+      setPermissionRequested(false)
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [])
+
   // Permissions API Listener for robustness (silent - no alerts on permission changes)
   useEffect(() => {
     let cancelled = false
@@ -279,7 +297,17 @@ export function LocationTracker() {
           try {
             const status = await (navigator as any).permissions.query({ name: 'geolocation' })
             if (status.state === 'prompt') {
-              console.log('📍 iOS: awaiting the profile location switch permission request')
+              // Safari often reports "prompt" again after a reload even though the
+              // officer opted in. Ask on their next tap (a real gesture) rather
+              // than waiting for them to find the profile switch again.
+              console.log('📍 iOS: will request location on the next tap')
+              const onGesture = () => {
+                window.removeEventListener('touchend', onGesture)
+                window.removeEventListener('click', onGesture)
+                if (isActive()) setPermissionRequested(false)
+              }
+              window.addEventListener('touchend', onGesture, { once: true, passive: true })
+              window.addEventListener('click', onGesture, { once: true })
               return
             }
             if (status.state === 'denied') return
@@ -365,21 +393,38 @@ export function LocationTracker() {
             )
           }
 
-          // Initial permission request
-          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          // Initial fix. Older iPhones often can't get a high-accuracy fix
+          // within 10s indoors; fall back to a coarse fix, and if that also
+          // times out still start the watch below — it delivers once GPS locks.
+          const getFix = (highAccuracy: boolean, timeout: number) => new Promise<GeolocationPosition>((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(
               resolve,
               reject,
-              { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+              { enableHighAccuracy: highAccuracy, timeout, maximumAge: highAccuracy ? 0 : 60000 }
             )
           })
+          let position: GeolocationPosition | null = null
+          try {
+            position = await getFix(true, 10000)
+          } catch (firstError: any) {
+            if (firstError?.code === 1) throw firstError // PERMISSION_DENIED
+            if (!isActive()) return
+            try {
+              position = await getFix(false, 20000)
+            } catch (secondError: any) {
+              if (secondError?.code === 1) throw secondError
+              console.warn('📍 No initial fix yet; continuing with the watch')
+            }
+          }
 
           if (!isActive()) return
 
-          console.log('📍 Initial location obtained, starting continuous tracking')
-          setHasEverTracked(true)
-          await updateLocation(position)
-          if (!isActive()) return
+          if (position) {
+            console.log('📍 Initial location obtained, starting continuous tracking')
+            setHasEverTracked(true)
+            await updateLocation(position)
+            if (!isActive()) return
+          }
 
           if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current)
 
@@ -412,7 +457,9 @@ export function LocationTracker() {
                 retryTimerRef.current = setTimeout(silentRetry, 5000)
               }
             },
-            { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
+            // A few seconds of cached position keeps older iPhones from timing
+            // out between fixes without making the map noticeably stale.
+            { enableHighAccuracy: true, timeout: 30000, maximumAge: 5000 }
           )
 
           setIsTracking(true)
