@@ -29,6 +29,10 @@ const TERMINAL = ['completed', 'cancelled']
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+// Every status before the convoy leaves, not only 'planned'.
+const PRE_DEPARTURE = new Set(['planned', 'planning', 'scheduled'])
+const isPreDeparture = (status?: string | null) => !!status && PRE_DEPARTURE.has(status)
+
 export default function MyOperationsPage() {
   const {
     loading, journeys, activePrograms, completedAssignments, submittedReportIds,
@@ -40,7 +44,7 @@ export default function MyOperationsPage() {
 
   const myAssigned = useMemo(() => journeys.filter(j => isOwnAssignment(j, userId)), [journeys, userId])
   const programFeed = useMemo(() => journeys.filter(j => !myAssigned.some(a => a.id === j.id)), [journeys, myAssigned])
-  const upcoming = useMemo(() => journeys.filter(j => j.status === 'planned').sort((a, b) =>
+  const upcoming = useMemo(() => journeys.filter(j => isPreDeparture(j.status)).sort((a, b) =>
     new Date(a.etd ?? a.scheduled_departure ?? 0).getTime() - new Date(b.etd ?? b.scheduled_departure ?? 0).getTime()
   ), [journeys])
   const pendingReports = completedAssignments.filter(j => !submittedReportIds.has(j.id))
@@ -87,7 +91,7 @@ export default function MyOperationsPage() {
             fire(`${j.id}:${kind}:15`, `⏰ ${verb} in ${Math.round(mins)} minutes`)
           }
         }
-        if (j.status === 'planned') check(j.etd ?? j.scheduled_departure, 'dep', 'Departing')
+        if (isPreDeparture(j.status)) check(j.etd ?? j.scheduled_departure, 'dep', 'Departing')
         else check(j.eta ?? j.scheduled_arrival, 'arr', 'Arriving')
       }
     }
@@ -169,7 +173,7 @@ export default function MyOperationsPage() {
       )}
 
       {/* ── Supporting material, collapsed until needed ────────────────── */}
-      {selected && canUpdateSelected && selected.status === 'planned' && selected.cheetahs?.id && (
+      {selected && canUpdateSelected && isPreDeparture(selected.status) && selected.cheetahs?.id && (
         <Section title="Pre-op checklists" icon={ClipboardCheck}>
           <div className="grid gap-4 md:grid-cols-2">
             <CheetahPrerequisites

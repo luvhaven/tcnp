@@ -11,6 +11,7 @@ import type { LiveState } from '@/hooks/useMyOperations'
 const STATE_COPY: Record<LiveState, { label: string; className: string; Icon: React.ComponentType<{ className?: string }> }> = {
   live: { label: 'Live', className: 'border-success/30 bg-success/10 text-success', Icon: Wifi },
   reconnecting: { label: 'Reconnecting', className: 'border-warning/30 bg-warning/10 text-warning', Icon: RefreshCw },
+  stale: { label: 'Out of date', className: 'border-warning/30 bg-warning/10 text-warning', Icon: RefreshCw },
   offline: { label: 'Offline', className: 'border-destructive/30 bg-destructive/10 text-destructive', Icon: WifiOff },
 }
 

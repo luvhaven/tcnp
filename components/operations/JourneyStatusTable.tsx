@@ -30,6 +30,7 @@ import { CallSignChip } from '@/components/ui/call-sign-chip'
 import { toast } from 'sonner'
 import { cn, isAdmin, effectiveOscarRole } from '@/lib/utils'
 import { OfficerProfileDialog, type OfficerProfileData } from '@/components/officers/OfficerProfileDialog'
+import { isOwnAssignment } from '@/hooks/useMyOperations'
 
 // Latest live SITREP broadcast (traffic / route / emergency) per journey — these
 // come from journey_events, not journeys.status, so they'd otherwise be invisible
@@ -93,6 +94,7 @@ export default function JourneyStatusTable() {
     // Realtime connection status for the status dot in the footer
     const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
     // Stable per-tab channel name — prevents multi-tab subscription collision
+    const loadSeqRef = useRef(0)
     const channelName = useRef(`journey-monitor-${Math.random().toString(36).slice(2)}`).current
     // Debounce timer for INSERT-triggered full reloads
     const insertDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -144,6 +146,13 @@ export default function JourneyStatusTable() {
                         })
                         return updated
                     })
+
+                    // The instant patch covers status only. Reload shortly after to
+                    // pick up restored journeys and edits to ETA, DO or Cheetah.
+                    if (insertDebounceRef.current) clearTimeout(insertDebounceRef.current)
+                    insertDebounceRef.current = setTimeout(() => {
+                        if (mounted) loadActiveJourneys()
+                    }, 500)
 
                     // Flash effect for visual feedback
                     const element = document.querySelector(`[data-journey-id="${payload.new?.id}"]`)
@@ -294,6 +303,9 @@ export default function JourneyStatusTable() {
     }
 
     const loadActiveJourneys = async () => {
+        // Overlapping loads (poll, realtime, post-save) must not let an older
+        // response overwrite a newer one.
+        const seq = ++loadSeqRef.current
         try {
             const { data, error } = await (supabase as any)
                 .from('journeys')
@@ -329,6 +341,7 @@ export default function JourneyStatusTable() {
                 }
             }
 
+            if (seq !== loadSeqRef.current) return
             setJourneys(rawJourneys.map(j => ({ ...j, duty_officers: doMap[j.id] || [] })))
 
             // Seed the latest live broadcast (traffic / route / emergency) per journey
@@ -353,7 +366,7 @@ export default function JourneyStatusTable() {
                         notes: row.description ?? null,
                     }
                 }
-                setBroadcasts(seeded)
+                if (seq === loadSeqRef.current) setBroadcasts(seeded)
             }
         } catch (error) {
             console.error('Error loading journeys:', JSON.stringify(error, null, 2))
@@ -401,9 +414,9 @@ export default function JourneyStatusTable() {
 
     const handleCallSignClick = (journey: Journey) => {
         // Admin is READ-ONLY on Ops Monitor — status changes come from the assigned DO only
-        const isAssignedDO = !!(journey.duty_officers?.some(d => d.user_id === currentUser?.id)) ||
-            currentUser?.id === journey.assigned_duty_officer_id ||
-            currentUser?.id === (journey as any).assigned_do_id
+        // Same rule as My Operations: a rejected or released DO row doesn't count.
+        const isAssignedDO = isOwnAssignment(journey as any, currentUser?.id ?? null) ||
+            (!journey.duty_officers?.some(d => d.user_id === currentUser?.id) && currentUser?.id === (journey as any).assigned_do_id)
 
         if (!isAssignedDO) return   // admin sees the badge but cannot click
 

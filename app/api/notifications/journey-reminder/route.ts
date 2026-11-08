@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
 
     const message = `${papaName}: ${journey?.origin ?? ''} → ${journey?.destination ?? ''}`
 
-    await (adminClient as any).from('notifications').insert({
+    const { error: insertError } = await (adminClient as any).from('notifications').insert({
       user_id: user.id,
       title,
       message,
@@ -99,6 +99,7 @@ export async function POST(req: NextRequest) {
       metadata: { reminder_key: type, is_arrival: isArrival, minutes_left: minutesLeft },
       is_read: false,
     })
+    if (insertError) throw insertError
 
     return NextResponse.json({ success: true })
   } catch (err: any) {

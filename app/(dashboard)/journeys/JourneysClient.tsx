@@ -273,15 +273,15 @@ export default function JourneysClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [journeys, searchParams])
 
+  const loadedCountRef = useRef(0)
+  useEffect(() => { loadedCountRef.current = journeys.length }, [journeys])
+
   const toggleDO = (userId: string) => {
-    setSelectedDOs(prev => {
-      const next = prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
-      // If removing the current team lead, clear it
-      if (!next.includes(teamLeadId)) setTeamLeadId(next[0] ?? '')
-      // Auto-set lead if first selection
-      if (next.length === 1) setTeamLeadId(next[0])
-      return next
-    })
+    // Work out the next selection and lead together in the handler, not inside
+    // a state updater, so the lead can never point at an unselected officer.
+    const next = selectedDOs.includes(userId) ? selectedDOs.filter(id => id !== userId) : [...selectedDOs, userId]
+    setSelectedDOs(next)
+    if (next.length === 1 || !next.includes(teamLeadId)) setTeamLeadId(next[0] ?? '')
   }
 
   const resetDOState = () => {
@@ -315,12 +315,13 @@ export default function JourneysClient({
 
     // Subscribe to real-time updates
     const channel = supabase
-      .channel('journeys_changes')
+      .channel(`journeys_changes_${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'journeys' }, () => {
-        resetPage()
+        // Refresh in place, keeping every page already loaded, instead of
+        // throwing the user back to page one on each DO call sign.
         // Realtime refreshes are background work. Their failures must not
         // emit a second, contradictory toast after a successful create/update.
-        void loadJourneys(false, false)
+        void loadJourneys(false, false, loadedCountRef.current)
       })
       .subscribe()
 
@@ -333,11 +334,11 @@ export default function JourneysClient({
     if (page > 0) loadJourneys(true)
   }, [page])
 
-  const loadJourneys = async (isLoadMore = false, reportError = true): Promise<boolean> => {
+  const loadJourneys = async (isLoadMore = false, reportError = true, keepLoaded = 0): Promise<boolean> => {
     if (isLoadMore) setLoadingMore(true)
     try {
       const rangeFrom = isLoadMore ? from : 0
-      const rangeTo = isLoadMore ? to : 49
+      const rangeTo = isLoadMore ? to : Math.max(49, keepLoaded - 1)
 
       const { data, error } = await supabase.from('journeys').select(`
         *,
@@ -363,7 +364,7 @@ export default function JourneysClient({
         } else {
           setJourneys(data as any)
         }
-        setHasMore(data.length === 50)
+        setHasMore(isLoadMore || !keepLoaded ? data.length === 50 : data.length >= Math.max(50, keepLoaded))
       }
       if (!isLoadMore) setJourneysLoadFailed(false)
       return true

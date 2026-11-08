@@ -78,7 +78,9 @@ import { useCurrentUser } from "@/hooks/useCurrentUser"
 export default function CommandPage() {
   const { data: currentUser, isLoading: userLoading } = useCurrentUser()
   const hasAccess = Boolean(currentUser && canAccessCommandCentre(currentUser.role, currentUser.oscar))
-  const [stats, setStats] = useState<CommandStats>({ activeJourneys: 0, onlineOfficers: 0, openIncidents: 0 })
+  // null = not loaded yet; a failed refresh keeps the last good numbers and flags them.
+  const [stats, setStats] = useState<CommandStats | null>(null)
+  const [statsStale, setStatsStale] = useState(false)
 
   useEffect(() => {
     if (!hasAccess) return
@@ -86,17 +88,21 @@ export default function CommandPage() {
       try {
         const onlineSince = new Date(Date.now() - OFFICER_ONLINE_WINDOW_MS).toISOString()
         const [journeys, officers, incidents] = await Promise.all([
-          supabase.from("journeys").select("id", { count: "exact", head: true }).eq("status", "active").eq("is_deleted", false),
+          supabase.from("journeys").select("id", { count: "exact", head: true }).not("status", "in", "(completed,cancelled)").or("is_deleted.is.null,is_deleted.eq.false"),
           supabase.from("users").select("id", { count: "exact", head: true }).gte("last_seen", onlineSince).eq("is_online", true).eq("is_active", true).eq("activation_status", "active").eq("is_directory_hidden", false),
           supabase.from("incidents").select("id", { count: "exact", head: true }).neq("status", "resolved"),
         ])
+        const failed = journeys.error || officers.error || incidents.error
+        if (failed) throw failed
         setStats({
           activeJourneys: journeys.count ?? 0,
           onlineOfficers: officers.count ?? 0,
           openIncidents: incidents.count ?? 0,
         })
+        setStatsStale(false)
       } catch (err) {
         console.warn("Command stats load failed:", err)
+        setStatsStale(true)
       }
     }
     void load()
@@ -180,13 +186,18 @@ export default function CommandPage() {
           </div>
         </div>
 
+        {statsStale && (
+          <p role="status" className="relative z-10 mt-4 text-xs text-amber-600 dark:text-amber-400">
+            Live figures couldn&apos;t refresh{stats ? ' — showing the last known values' : ''}. Retrying automatically.
+          </p>
+        )}
         {/* Live telemetry stat cards */}
         <div className="relative z-10 mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="flex items-center justify-between rounded-xl bg-background/80 backdrop-blur-sm border border-border/60 px-4 py-3.5 shadow-sm">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Active Journeys</p>
               <p className="text-2xl font-bold tracking-tight text-foreground mt-0.5">
-                <CountUp value={stats.activeJourneys} />
+                {stats ? <CountUp value={stats.activeJourneys} /> : "—"}
               </p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500">
@@ -201,7 +212,7 @@ export default function CommandPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Officers Online</p>
               </div>
               <p className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400 mt-0.5">
-                <CountUp value={stats.onlineOfficers} />
+                {stats ? <CountUp value={stats.onlineOfficers} /> : "—"}
               </p>
               {isPlatformAdministrator(currentUser?.role) && (
                 <Link href="/officers?status=online" className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline">
@@ -217,11 +228,11 @@ export default function CommandPage() {
           <div className="flex items-center justify-between rounded-xl bg-background/80 backdrop-blur-sm border border-border/60 px-4 py-3.5 shadow-sm">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Open Incidents</p>
-              <p className={`text-2xl font-bold tracking-tight mt-0.5 ${stats.openIncidents > 0 ? "text-amber-500" : "text-foreground"}`}>
-                <CountUp value={stats.openIncidents} />
+              <p className={`text-2xl font-bold tracking-tight mt-0.5 ${(stats?.openIncidents ?? 0) > 0 ? "text-amber-500" : "text-foreground"}`}>
+                {stats ? <CountUp value={stats.openIncidents} /> : "—"}
               </p>
             </div>
-            <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${stats.openIncidents > 0 ? "bg-amber-500/15 text-amber-500" : "bg-muted text-muted-foreground"}`}>
+            <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${(stats?.openIncidents ?? 0) > 0 ? "bg-amber-500/15 text-amber-500" : "bg-muted text-muted-foreground"}`}>
               <AlertTriangle className="h-5 w-5" />
             </div>
           </div>

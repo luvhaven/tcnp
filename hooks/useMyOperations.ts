@@ -64,7 +64,7 @@ export interface OpsJourney {
   driver?: JourneyDriver | null
 }
 
-export type LiveState = 'live' | 'reconnecting' | 'offline'
+export type LiveState = 'live' | 'reconnecting' | 'offline' | 'stale'
 
 const JOURNEY_COLUMNS = `
   id, status, origin, destination,
@@ -176,6 +176,8 @@ export function useMyOperations() {
   const knownOwnIds = useRef<Set<string> | null>(null)
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // A failed background reload must not leave the pill saying "Live".
+  const [loadFailed, setLoadFailed] = useState(false)
   const load = useCallback(async (isInitial = false) => {
     const seq = ++loadSeq.current
     const isCurrent = () => seq === loadSeq.current
@@ -381,8 +383,10 @@ export function useMyOperations() {
       setJourneys(active)
       setCompletedAssignments(completed)
       setSubmittedReportIds(new Set((feedbackRes.data || []).map((r: any) => r.journey_id)))
+      setLoadFailed(false)
     } catch (err) {
       console.error('Error loading operations:', err)
+      if (isCurrent()) setLoadFailed(true)
       if (isInitial && isCurrent()) toast.error('Failed to load operations')
     } finally {
       if (isInitial && isCurrent()) setLoading(false)
@@ -463,7 +467,7 @@ export function useMyOperations() {
   }, [])
 
   const isAdminUser = Boolean(userRole && (isAdmin(userRole) || isAdmin(effectiveOscarRole(userRole, userOscar))))
-  const liveState: LiveState = !online ? 'offline' : channelStatus
+  const liveState: LiveState = !online ? 'offline' : loadFailed ? 'stale' : channelStatus
 
   return {
     loading,
