@@ -51,7 +51,7 @@ test('custom tones schedule short composed audio, and mute prevents all their os
   createGain() { return { gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {} } }
   suspend() { this.state = 'suspended'; return Promise.resolve() }
  }
- const { audioManager: audio } = compile('lib/audio/AudioManager.ts', {}, { window: { AudioContext: Context, addEventListener() {} }, localStorage: { getItem: key => local.get(key), setItem: (key,value) => local.set(key,value) } })
+ const { audioManager: audio } = compile('lib/audio/AudioManager.ts', { '@/lib/haptics': compile('lib/haptics.ts') }, { window: { AudioContext: Context, addEventListener() {} }, localStorage: { getItem: key => local.get(key), setItem: (key,value) => local.set(key,value) } })
  for (const [tone, count] of [['signature',4],['soft',2],['clear',3]]) {
   tones.length = 0; audio.playChime(`notification_${tone}`)
   assert.equal(tones.length, count)

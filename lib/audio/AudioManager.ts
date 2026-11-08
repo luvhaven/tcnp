@@ -13,6 +13,8 @@
  *   audioManager.setMuted(true)
  */
 
+import { haptic } from '@/lib/haptics'
+
 const STORAGE_KEY = 'tcnp_audio_muted'
 
 export type ChimeType = 'info' | 'success' | 'warning' | 'error' | 'chat' | 'broken_arrow' | string
@@ -358,11 +360,7 @@ class AudioManager {
   // ------------------------------------------------------------------ vibration
 
   vibrate(pattern: number | number[] = [150, 80, 150]): void {
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      try {
-        navigator.vibrate(pattern)
-      } catch {}
-    }
+    haptic(pattern)
   }
 
   vibrateEmergency(): void {

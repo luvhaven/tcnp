@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { offlineQueue } from '@/lib/offline-queue'
 import { CALL_SIGN_KEY_TO_DB_ENUM, getCallSignLabel, type CallSignKey } from '@/lib/constants/call-signs'
 import type { DOCompletionReason, DOReturnDestination } from '@/lib/duty-workflow'
+import { haptic, hapticSuccess, hapticWarning } from '@/lib/haptics'
 
 export const STATUS_CALL_SIGNS: CallSignKey[] = [
   'first_course',
@@ -271,6 +272,7 @@ export function useJourneyStatus(journeyId: string, options: UseJourneyStatusOpt
         queryClient.setQueryData(['journeyStatus', journeyId], context.previousState)
       }
       console.error('Call sign update failed:', err)
+      hapticWarning()
       const label = variables.isUndo ? 'Undo' : getCallSignLabel(variables.callSign)
       toast.error(`${label} failed to send`, {
         description: err?.message ? String(err.message).slice(0, 120) : 'Check your connection or permissions and retry.',
@@ -278,6 +280,7 @@ export function useJourneyStatus(journeyId: string, options: UseJourneyStatusOpt
     },
     onSuccess: (result, variables) => {
       onChangedRef.current?.()
+      hapticSuccess()
       const label = getCallSignLabel(result.callSign)
       if (result.queued) {
         toast.info(OFFLINE_SAVED_MESSAGE, { description: variables.isUndo ? 'Undo' : label })
@@ -361,6 +364,8 @@ export function useJourneyStatus(journeyId: string, options: UseJourneyStatusOpt
     // must never be what stops a Broken Arrow.
     const isDistress = callSign === 'broken_arrow'
     if (inFlight.current && !isDistress) return null
+    // Immediate tactile acknowledgement while still inside the tap.
+    haptic(isDistress ? [200, 100, 200] : 25)
     inFlight.current = true
     try {
       const previousStatus = (queryClient.getQueryData(['journeyStatus', journeyId]) as { status?: string } | undefined)?.status ?? null
