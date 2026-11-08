@@ -9,7 +9,7 @@ class SyncService {
     private isSyncing = false
     private syncListeners: Set<() => void> = new Set()
 
-    async syncAll(): Promise<void> {
+    async syncAll(options: { quiet?: boolean } = {}): Promise<void> {
         if (this.isSyncing) return
         if (!navigator.onLine) return
 
@@ -68,7 +68,7 @@ class SyncService {
                 toast.success(`✅ Synced ${processed} submission${processed > 1 ? 's' : ''}`)
             }
 
-            if (errors > 0) {
+            if (errors > 0 && !options.quiet) {
                 toast.error(`❌ ${errors} submission${errors > 1 ? 's' : ''} failed to sync`)
             }
 
@@ -169,5 +169,15 @@ if (typeof window !== 'undefined') {
     window.addEventListener('online', () => {
         console.log('📡 Network reconnected, syncing...')
         setTimeout(() => syncService.syncAll(), 1000)
+    })
+
+    // A weak signal never fires 'offline'/'online', so queued updates would sit
+    // until a reload. Retry in the background, on app start, and whenever the
+    // officer returns to the app. syncAll is a no-op when the queue is empty.
+    const retry = () => { void syncService.syncAll({ quiet: true }).catch(() => undefined) }
+    setTimeout(retry, 5000)
+    setInterval(retry, 30000)
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') retry()
     })
 }
