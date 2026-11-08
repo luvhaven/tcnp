@@ -27,6 +27,7 @@ import {
   Shirt, Plus, Trash2, Pencil, Sparkles, Scissors, CheckCircle2, ImageIcon, Loader2, CalendarDays,
 } from "lucide-react"
 import { UPLOAD_RULES, validateUploadFiles } from "@/lib/security/upload-validation"
+import { ErrorState } from "@/components/ui/error-state"
 
 // ─── Singleton client ───
 const supabase = createClient()
@@ -110,12 +111,13 @@ export default function CompliancePage() {
   const { data: programs = [] } = useQuery({
     queryKey: ["programs-lite"],
     queryFn: async () => {
-      const { data } = await supabase.from("programs").select("id, name, status").order("created_at", { ascending: false })
+      const { data, error } = await supabase.from("programs").select("id, name, status").order("created_at", { ascending: false })
+      if (error) throw error
       return data ?? []
     },
   })
 
-  const { data: posts = [], isLoading } = useQuery({
+  const { data: posts = [], isLoading, isError: listFailed, refetch: refetchList, isRefetching: listRetrying } = useQuery({
     queryKey: ["compliance-posts"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -308,7 +310,9 @@ export default function CompliancePage() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton h-64 rounded-xl" />)}
             </div>
-          ) : outfits.length === 0 ? (
+          ) : listFailed ? (
+        <ErrorState onRetry={() => { void refetchList() }} retrying={listRetrying} />
+      ) : outfits.length === 0 ? (
             <div className="empty-state rounded-xl border">
               <ImageIcon className="h-10 w-10" />
               <p className="font-medium">No outfit posts yet</p>

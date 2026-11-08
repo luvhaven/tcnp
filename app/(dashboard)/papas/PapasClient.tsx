@@ -93,9 +93,14 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
   const { data: papas = [] } = useQuery({
     queryKey: ['papas'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('papas').select('*').order('full_name').limit(200)
-      if (error) throw error
-      return (data || []) as unknown as Papa[]
+      // Read every Papa (PostgREST caps a single response), never a silent first page.
+      const rows: Papa[] = []
+      for (let offset = 0; ; offset += 1000) {
+        const { data, error } = await supabase.from('papas').select('*').order('full_name').order('id').range(offset, offset + 999)
+        if (error) throw error
+        rows.push(...((data || []) as unknown as Papa[]))
+        if (!data || data.length < 1000) return rows
+      }
     },
     initialData: initialPapas
   })

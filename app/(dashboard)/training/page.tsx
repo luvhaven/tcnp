@@ -24,6 +24,7 @@ import {
   GraduationCap, Plus, Pencil, Trash2, MapPin, Clock, Users, BookOpen, ArrowRight, CalendarDays, FileText, Shield
 } from "lucide-react"
 
+import { ErrorState } from "@/components/ui/error-state"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
@@ -116,7 +117,7 @@ export default function TrainingPage() {
     content: ""
   })
 
-  const { data: sessions = [], isLoading } = useQuery({
+  const { data: sessions = [], isLoading, isError: listFailed, refetch: refetchList, isRefetching: listRetrying } = useQuery({
     queryKey: ["training-schedules"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -367,7 +368,9 @@ export default function TrainingPage() {
           <div className="grid gap-4 md:grid-cols-2">
             {Array.from({ length: 2 }).map((_, i) => <div key={i} className="skeleton h-36 rounded-xl" />)}
           </div>
-        ) : upcoming.length === 0 ? (
+        ) : listFailed ? (
+        <ErrorState onRetry={() => { void refetchList() }} retrying={listRetrying} />
+      ) : upcoming.length === 0 ? (
           <div className="empty-state rounded-xl border">
             <GraduationCap className="h-10 w-10" />
             <p className="font-medium">No upcoming training</p>

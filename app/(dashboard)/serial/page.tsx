@@ -24,6 +24,7 @@ import {
   Camera, Upload, Instagram, Trash2, Film, ImageIcon, Lock, Loader2, Link2,
 } from "lucide-react"
 import { UPLOAD_RULES, validateUploadFiles } from "@/lib/security/upload-validation"
+import { ErrorState } from "@/components/ui/error-state"
 
 // ─── Singleton client ───
 const supabase = createClient()
@@ -95,13 +96,14 @@ export default function SerialPage() {
   const { data: programs = [] } = useQuery({
     queryKey: ["programs-lite"],
     queryFn: async () => {
-      const { data } = await supabase.from("programs").select("id, name, status").order("created_at", { ascending: false })
+      const { data, error } = await supabase.from("programs").select("id, name, status").order("created_at", { ascending: false })
+      if (error) throw error
       return data ?? []
     },
     enabled: allowed,
   })
 
-  const { data: assets = [], isLoading } = useQuery({
+  const { data: assets = [], isLoading, isError: listFailed, refetch: refetchList, isRefetching: listRetrying } = useQuery({
     queryKey: ["serial-media"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -188,9 +190,12 @@ export default function SerialPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (asset: MediaAsset) => {
-      await supabase.storage.from("serial-media").remove([asset.storage_path])
+      // Delete the record first: if that fails nothing changes; if removing the
+      // file fails afterwards it is only an orphaned file, never a broken listing.
       const { error } = await supabase.from("media_assets").delete().eq("id", asset.id)
       if (error) throw error
+      const { error: storageError } = await supabase.storage.from("serial-media").remove([asset.storage_path])
+      if (storageError) console.warn("Serial asset file was not removed:", storageError.message)
     },
     onSuccess: () => {
       toast.success("Asset deleted")
@@ -254,21 +259,21 @@ export default function SerialPage() {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
         <Select value={filterProgram} onValueChange={setFilterProgram}>
-          <SelectTrigger className="w-[180px] h-9"><SelectValue placeholder="Program" /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-[180px] h-9"><SelectValue placeholder="Program" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Programs</SelectItem>
             {programs.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filterCategory} onValueChange={setFilterCategory}>
-          <SelectTrigger className="w-[170px] h-9"><SelectValue placeholder="Category" /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-[170px] h-9"><SelectValue placeholder="Category" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
             {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[140px] h-9"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-[140px] h-9"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
             {STATUSES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
@@ -281,6 +286,8 @@ export default function SerialPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton h-64 rounded-xl" />)}
         </div>
+      ) : listFailed ? (
+        <ErrorState onRetry={() => { void refetchList() }} retrying={listRetrying} />
       ) : filtered.length === 0 ? (
         <div className="empty-state">
           <ImageIcon className="h-12 w-12" />

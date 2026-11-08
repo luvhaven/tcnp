@@ -5,6 +5,10 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { FileText } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { ErrorState } from "@/components/ui/error-state"
+
+const PAGE = 200
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 import { isAdmin, effectiveOscarRole } from "@/lib/utils"
@@ -17,12 +21,16 @@ export default function AuditLogsPage() {
   const [actionFilter, setActionFilter] = useState("all")
   const [entityFilter, setEntityFilter] = useState("all")
   const [authorized, setAuthorized] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
 
   useEffect(() => {
     loadLogs()
   }, [])
 
-  const loadLogs = async () => {
+  const loadLogs = async (append = false) => {
+    if (append) setLoadingMore(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
@@ -48,22 +56,27 @@ export default function AuditLogsPage() {
         .from('audit_logs_readable')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(200)
+        .range(append ? logs.length : 0, (append ? logs.length : 0) + PAGE - 1)
 
       if (error) {
         console.error('Supabase error:', JSON.stringify(error))
         throw error
       }
 
-      setLogs(data || [])
+      setLogs(prev => append ? [...prev, ...(data || [])] : (data || []))
+      setHasMore((data || []).length === PAGE)
+      setLoadFailed(false)
     } catch (error: any) {
       console.error('Error loading logs:', JSON.stringify(error))
+      if (append) toast.error('Older events could not load. Try again.')
+      else setLoadFailed(true)
       // Show user-friendly message
       if (error?.code === 'PGRST116') {
         console.log('No audit logs table or no data yet')
       }
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
   }
 
@@ -253,10 +266,12 @@ export default function AuditLogsPage() {
             <FileText className="h-5 w-5" />
             <span>Activity Logs</span>
           </CardTitle>
-          <CardDescription>Complete audit trail of system activities (Last 200 entries)</CardDescription>
+          <CardDescription>Complete audit trail of system activities, newest first</CardDescription>
         </CardHeader>
         <CardContent>
-          {logs.length === 0 ? (
+          {loadFailed ? (
+            <ErrorState title="Audit logs couldn't load" onRetry={() => { setLoading(true); void loadLogs() }} />
+          ) : logs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <FileText className="h-12 w-12 text-muted-foreground/50" />
               <p className="mt-4 text-sm font-medium">No audit logs yet</p>
@@ -417,6 +432,13 @@ export default function AuditLogsPage() {
                   </div>
                 ))}
               </div>
+              {hasMore && (
+                <div className="flex justify-center pt-4">
+                  <Button variant="outline" size="sm" onClick={() => { void loadLogs(true) }} pending={loadingMore}>
+                    Load older events
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

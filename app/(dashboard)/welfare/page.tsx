@@ -47,10 +47,11 @@ export default function WelfarePage() {
   const [alarmNote, setAlarmNote] = useState("")
   const [filterProgram, setFilterProgram] = useState("all")
 
-  const { data: programs = [] } = useQuery({
+  const { data: programs = [], isError: programsFailed, isLoading: programsLoading } = useQuery({
     queryKey: ["programs-lite"],
     queryFn: async () => {
-      const { data } = await supabase.from("programs").select("id, name, status").order("created_at", { ascending: false })
+      const { data, error } = await supabase.from("programs").select("id, name, status").order("created_at", { ascending: false })
+      if (error) throw error
       return data ?? []
     },
   })
@@ -96,7 +97,7 @@ export default function WelfarePage() {
             </p>
           </div>
           {canEdit && (
-            <Button onClick={() => { setAlarmProgram(activeProgram?.id ?? ""); setAlarmOpen(true) }} className="gap-2 bg-amber-600 hover:bg-amber-500">
+            <Button onClick={() => { setAlarmProgram(activeProgram?.id ?? ""); setAlarmOpen(true) }} disabled={programsLoading || programsFailed} title={programsFailed ? "Programs couldn't load, so the alarm can't be targeted. Refresh and try again." : undefined} className="gap-2 bg-amber-600 hover:bg-amber-500">
               <BellRing className="h-4 w-4" /> Food is Ready
             </Button>
           )}
@@ -116,7 +117,7 @@ export default function WelfarePage() {
             <div className="flex items-center gap-3">
               <Label className="text-sm text-muted-foreground">Program:</Label>
               <Select value={filterProgram} onValueChange={setFilterProgram}>
-                <SelectTrigger className="w-[220px] h-9"><SelectValue placeholder="All Programs" /></SelectTrigger>
+                <SelectTrigger className="w-full sm:w-[220px] h-9"><SelectValue placeholder="All Programs" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Programs</SelectItem>
                   {programs.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
@@ -136,7 +137,7 @@ export default function WelfarePage() {
           <div className="flex items-center gap-3">
             <Label className="text-sm text-muted-foreground">Program:</Label>
             <Select value={filterProgram} onValueChange={setFilterProgram}>
-              <SelectTrigger className="w-[220px] h-9"><SelectValue placeholder="All Programs" /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-[220px] h-9"><SelectValue placeholder="All Programs" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Programs</SelectItem>
                 {programs.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}

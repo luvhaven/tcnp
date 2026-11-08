@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Loader2, ClipboardList, Star, AlertTriangle, Download, User, Calendar, MapPin } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn, isAdmin } from '@/lib/utils'
+import { ErrorState } from '@/components/ui/error-state'
 
 interface FeedbackReport {
     id: string
@@ -49,6 +50,8 @@ export default function AfterOpReportPage() {
     const [reports, setReports] = useState<FeedbackReport[]>([])
     const [loading, setLoading] = useState(true)
     const [userRole, setUserRole] = useState<string | null>(null)
+    const [loadFailed, setLoadFailed] = useState(false)
+    const [attempt, setAttempt] = useState(0)
 
     useEffect(() => {
         const load = async () => {
@@ -58,7 +61,7 @@ export default function AfterOpReportPage() {
                 const { data: ud } = await supabase.from('users').select('role').eq('id', user.id).single()
                 setUserRole((ud as any)?.role || null)
 
-                const { data } = await (supabase as any)
+                const { data, error } = await (supabase as any)
                     .from('do_feedback_forms')
                     .select(`
             id, submitted_at, submitted_by_name, overall_rating,
@@ -70,12 +73,17 @@ export default function AfterOpReportPage() {
                     .order('submitted_at', { ascending: false })
                     .limit(50)
 
+                if (error) throw error
                 setReports(data || [])
-            } catch (_) { }
+                setLoadFailed(false)
+            } catch (err) {
+                console.error('After-op reports failed to load:', err)
+                setLoadFailed(true)
+            }
             finally { setLoading(false) }
         }
         void load()
-    }, [supabase])
+    }, [supabase, attempt])
 
     const handleExportCSV = () => {
         const headers = ['Date', 'DO Name', 'Papa', 'Origin', 'Destination', 'Rating', 'Wellbeing', 'What Went Well', 'What Didn\'t Go As Plan', 'Team Feedback', 'Finance & Expenses', 'Logistics', 'Accommodation', 'Incidents', 'Monetary Gifts', 'Improvements']
@@ -129,6 +137,8 @@ export default function AfterOpReportPage() {
                 <div className="flex items-center justify-center py-20">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
+            ) : loadFailed ? (
+                <ErrorState title="Reports couldn't load" onRetry={() => { setLoading(true); setAttempt(n => n + 1) }} />
             ) : reports.length === 0 ? (
                 <Card>
                     <CardContent className="flex flex-col items-center justify-center py-16 text-center">

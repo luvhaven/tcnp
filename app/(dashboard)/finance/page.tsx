@@ -25,6 +25,7 @@ import {
   Banknote, Upload, Download, Trash2, FileText, Lock, Loader2, FileSpreadsheet, Receipt, FileBarChart,
 } from "lucide-react"
 import { UPLOAD_RULES, validateUploadFiles } from "@/lib/security/upload-validation"
+import { ErrorState } from "@/components/ui/error-state"
 
 // ─── Singleton client ───
 const supabase = createClient()
@@ -83,13 +84,14 @@ export default function FinancePage() {
   const { data: programs = [] } = useQuery({
     queryKey: ["programs-lite"],
     queryFn: async () => {
-      const { data } = await supabase.from("programs").select("id, name, status").order("created_at", { ascending: false })
+      const { data, error } = await supabase.from("programs").select("id, name, status").order("created_at", { ascending: false })
+      if (error) throw error
       return data ?? []
     },
     enabled: allowed,
   })
 
-  const { data: docs = [], isLoading } = useQuery({
+  const { data: docs = [], isLoading, isError: listFailed, refetch: refetchList, isRefetching: listRetrying } = useQuery({
     queryKey: ["finance-documents"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -211,7 +213,7 @@ export default function FinancePage() {
       {/* Filter */}
       <div className="flex items-center gap-2">
         <Select value={filterCategory} onValueChange={setFilterCategory}>
-          <SelectTrigger className="w-[170px] h-9"><SelectValue placeholder="Category" /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-[170px] h-9"><SelectValue placeholder="Category" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
             {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
@@ -225,6 +227,8 @@ export default function FinancePage() {
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-20 rounded-xl" />)}
         </div>
+      ) : listFailed ? (
+        <ErrorState onRetry={() => { void refetchList() }} retrying={listRetrying} />
       ) : filtered.length === 0 ? (
         <div className="empty-state rounded-xl border">
           <FileText className="h-10 w-10" />
