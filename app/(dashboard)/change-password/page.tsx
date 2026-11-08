@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { notifyError } from '@/lib/notify'
 import { useRouter } from "next/navigation"
+import { startForgotPasswordFlow } from '@/lib/password-reset-handoff'
 
 export default function ChangePasswordPage() {
     const router = useRouter()
@@ -82,7 +83,16 @@ export default function ChangePasswordPage() {
                 <CardContent>
                     <form onSubmit={handlePasswordChange} className="space-y-5">
                         <div className="space-y-2">
-                            <Label htmlFor="current-password">Current Password</Label>
+                            <div className="flex items-center justify-between gap-2">
+                                <Label htmlFor="current-password">Current Password</Label>
+                                <button
+                                    type="button"
+                                    onClick={() => { void startForgotPasswordFlow() }}
+                                    className="text-xs font-medium text-primary hover:underline"
+                                >
+                                    Forgot password?
+                                </button>
+                            </div>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input

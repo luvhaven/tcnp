@@ -11,6 +11,7 @@ import { notifyError, UserFacingError } from '@/lib/notify'
 import { differenceInDays, addDays, isPast } from 'date-fns'
 import { Eye, EyeOff } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { startForgotPasswordFlow } from '@/lib/password-reset-handoff'
 
 export function PasswordEnforcer() {
     const [mustChange, setMustChange] = useState(false)
@@ -127,7 +128,16 @@ export function PasswordEnforcer() {
 
                 <form onSubmit={handleChangePassword} className="space-y-6 mt-4">
                     <div className="space-y-2">
-                        <Label htmlFor="current-password">Current Password</Label>
+                        <div className="flex items-center justify-between gap-2">
+                            <Label htmlFor="current-password">Current Password</Label>
+                            <button
+                                type="button"
+                                onClick={() => { void startForgotPasswordFlow() }}
+                                className="text-xs font-medium text-primary hover:underline"
+                            >
+                                Forgot password?
+                            </button>
+                        </div>
                         <Input
                             id="current-password"
                             type="password"

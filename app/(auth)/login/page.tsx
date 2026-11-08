@@ -19,6 +19,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { consumeResetPrefill } from "@/lib/password-reset-handoff";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -210,6 +211,15 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // Arrived from "Forgot password?" on the change-password screen.
+    const prefill = consumeResetPrefill();
+    if (prefill !== null && !sessionStorage.getItem(RESET_STORAGE_KEY)) {
+      setResetEmail(prefill);
+      setEmail(prefill);
+      setMode("request_reset");
+      setFormNotice("Request a password reset. An administrator will approve it, then you can set a new password here.");
+      return;
+    }
     try {
       const raw = sessionStorage.getItem(RESET_STORAGE_KEY);
       if (!raw) return;
