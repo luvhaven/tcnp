@@ -24,10 +24,13 @@ import {
   Droplets,
   Sliders,
   UserCheck,
+  Eye,
 } from "lucide-react"
 import { toast } from "sonner"
 import { notifyError } from '@/lib/notify'
 import PapaFormTabs from "@/components/papas/PapaFormTabs"
+import PapaPhotoStep from "@/components/papas/PapaPhotoStep"
+import PapaDetailsView from "@/components/papas/PapaDetailsView"
 import { canManagePapas, effectiveOscarRole } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 
@@ -61,6 +64,7 @@ type Papa = {
   speaking_schedule?: any
   entourage_count?: number
   personal_assistants?: any
+  profile_photo_url?: string | null
   created_at: string
 }
 
@@ -72,6 +76,8 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingPapa, setEditingPapa] = useState<Papa | null>(null)
   const [search, setSearch] = useState('')
+  // After a Papa is created (or from the details view) we walk through photo → details.
+  const [viewer, setViewer] = useState<{ papaId: string; step: 'photo' | 'details'; fromCreate?: boolean } | null>(null)
 
   const { data: userRole } = useQuery({
     queryKey: ['userRole'],
@@ -141,10 +147,18 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
       }
     },
     onSuccess: (data) => {
+      const saved = data.result?.[0] as Papa | undefined
+      if (saved) {
+        queryClient.setQueryData(['papas'], (old: Papa[] | undefined) => {
+          const rest = (old || []).filter(p => p.id !== saved.id)
+          return [...rest, saved].sort((a, b) => a.full_name.localeCompare(b.full_name))
+        })
+      }
       queryClient.invalidateQueries({ queryKey: ['papas'] })
       toast.success(data.isEdit ? 'Papa updated successfully!' : 'Papa added successfully!')
       setDialogOpen(false)
       setEditingPapa(null)
+      if (saved) setViewer({ papaId: saved.id, step: data.isEdit ? 'details' : 'photo', fromCreate: !data.isEdit })
     },
     onError: (error: any) => {
       console.error('Error saving papa:', error)
@@ -196,6 +210,14 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
     }
     if (!await confirm({ message: 'Are you sure you want to delete this Papa?', variant: 'destructive' })) return
     deleteMutation.mutate(id)
+  }
+
+  const viewerPapa = viewer ? papas.find(p => p.id === viewer.papaId) ?? null : null
+
+  const setPapaPhoto = (papaId: string, url: string | null) => {
+    queryClient.setQueryData(['papas'], (old: Papa[] | undefined) =>
+      (old || []).map(p => (p.id === papaId ? { ...p, profile_photo_url: url } : p))
+    )
   }
 
   const openCreateDialog = () => {
@@ -332,10 +354,20 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
                       className="group relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-xl border border-border/70 bg-card hover:border-primary/40 hover:shadow-sm transition-all"
                     >
                       <div className="flex items-start gap-3.5 min-w-0 flex-1">
-                        {/* VIP Initials Avatar */}
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-500/5 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-bold text-sm shadow-xs">
-                          {initials || "VIP"}
-                        </div>
+                        {/* VIP photo, falling back to initials */}
+                        <button
+                          type="button"
+                          onClick={() => setViewer({ papaId: papa.id, step: 'details' })}
+                          className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-500/5 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-bold text-sm shadow-xs"
+                          aria-label={`View ${papa.full_name}`}
+                        >
+                          {papa.profile_photo_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={papa.profile_photo_url} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            initials || "VIP"
+                          )}
+                        </button>
 
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
@@ -410,6 +442,10 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
 
                       {/* Actions */}
                       <div className="flex shrink-0 items-center gap-1.5 self-end sm:self-center pt-2 sm:pt-0 border-t sm:border-t-0 border-border/40 w-full sm:w-auto justify-end">
+                        <Button variant="outline" size="sm" onClick={() => setViewer({ papaId: papa.id, step: 'details' })} className="h-8 gap-1 text-xs">
+                          <Eye className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">View</span>
+                        </Button>
                         {papa.phone && (
                           <a href={`tel:${papa.phone}`} className="inline-flex">
                             <Button variant="outline" size="sm" className="h-8 gap-1 text-xs text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10">
@@ -445,7 +481,7 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
             <DialogTitle className="text-xl font-bold">{editingPapa ? 'Edit Papa Dossier' : 'Add New Guest Minister'}</DialogTitle>
           </DialogHeader>
           <PapaFormTabs
-            initialData={editingPapa || undefined}
+            initialData={editingPapa ? { ...editingPapa, event_id: editingPapa.event_id || editingPapa.program_id || '' } as any : undefined}
             events={programs}
             onSubmit={handleSubmit}
             onCancel={() => {
@@ -455,6 +491,37 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
             isEditing={!!editingPapa}
             pending={saveMutation.isPending}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* Photo + details viewer */}
+      <Dialog open={!!viewerPapa} onOpenChange={(open) => { if (!open) setViewer(null) }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">
+              {viewer?.step === 'photo' ? (viewer.fromCreate ? 'Papa Photo' : 'Change Papa Photo') : 'Papa Details'}
+            </DialogTitle>
+          </DialogHeader>
+          {viewerPapa && viewer?.step === 'photo' && (
+            <PapaPhotoStep
+              papa={viewerPapa}
+              onUploaded={(url) => setPapaPhoto(viewerPapa.id, url)}
+              onDone={() => setViewer({ papaId: viewerPapa.id, step: 'details' })}
+              doneLabel={viewer.fromCreate ? 'Skip for now' : 'Back to details'}
+            />
+          )}
+          {viewerPapa && viewer?.step === 'details' && (
+            <PapaDetailsView
+              papa={viewerPapa}
+              programName={viewerPapa.program_id ? programMap.get(viewerPapa.program_id) : null}
+              canManage={canManage}
+              onChangePhoto={() => setViewer({ papaId: viewerPapa.id, step: 'photo' })}
+              onEdit={() => {
+                setViewer(null)
+                handleEdit(viewerPapa)
+              }}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>
