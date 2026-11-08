@@ -112,6 +112,12 @@ type Journey = {
   eagle_squares?: { name: string; code: string } | null
 }
 
+// Everything that isn't finished is live. A fixed allow-list here once hid
+// journeys in Cocktail (Papa in transit) and other early statuses until the
+// DO sent a later call sign.
+const FINISHED_JOURNEY_STATUSES = new Set(['completed', 'cancelled'])
+const isActiveJourneyStatus = (status?: string | null) => !!status && !FINISHED_JOURNEY_STATUSES.has(status)
+
 export default function JourneysClient({
   initialJourneys,
   initialPapas,
@@ -867,7 +873,7 @@ export default function JourneysClient({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {journeys.filter(j => ['in_progress', 'first_course', 'chapman', 'dessert'].includes(j.status)).length}
+              {journeys.filter(j => isActiveJourneyStatus(j.status) && !['planned', 'planning', 'scheduled'].includes(j.status)).length}
             </div>
           </CardContent>
         </Card>
@@ -909,7 +915,7 @@ export default function JourneysClient({
             <CardContent>
               {journeysLoadFailed && journeys.length === 0 ? (
                 <ErrorState title="Couldn't load journeys" onRetry={() => { setLoading(true); void loadJourneys(false) }} />
-              ) : journeys.filter(j => ['planned', 'in_progress', 'first_course', 'chapman', 'dessert', 'broken_arrow'].includes(j.status)).length === 0 ? (
+              ) : journeys.filter(j => isActiveJourneyStatus(j.status)).length === 0 ? (
                 <EmptyState
                   icon={MapPin}
                   title="No active journeys"
@@ -924,7 +930,7 @@ export default function JourneysClient({
               ) : (
                 <div className="space-y-4">
                   {journeys
-                    .filter(j => ['planned', 'in_progress', 'first_course', 'chapman', 'dessert', 'broken_arrow'].includes(j.status))
+                    .filter(j => isActiveJourneyStatus(j.status))
                     .map((journey) => (
                       <div
                         key={journey.id}
