@@ -250,6 +250,7 @@ function tracker(initial = 'on') {
       if (name === '@/lib/location-sharing') return p.store
       if (name === '@/hooks/useLocationSharing') return { useLocationSharing: () => ({ enabled: p.store.isLocationSharingEnabled() }) }
       if (name === '@/lib/supabase/client') return { createClient: () => supabase }
+      if (name === '@/lib/location-upload') return { publishLocation: (userId, fix) => writes.push(['upsert_user_location', { p_user_id: userId, ...fix }]) }
       if (name === '@/lib/utils/devLogger') return { devLog: { warn() {} } }
       if (name === 'sonner') return { toast }
       throw Error(`Unexpected import ${name}`)
@@ -314,6 +315,7 @@ test('the dashboard tracker clears its actual GPS watch and rejects late uploads
       if (name === '@/hooks/useIsClient') return { useIsClient: () => true }
       if (name === '@/lib/location-sharing') return p.store
       if (name === '@/lib/supabase/client') return { createClient: () => ({ auth: { getUser: async () => ({ data: { user: { id: 'officer' } } }) }, rpc: async (...args) => { writes.push(args); return {} } }) }
+      if (name === '@/lib/location-upload') return { publishLocation: (userId, fix) => writes.push(['upsert_user_location', { p_user_id: userId, ...fix }]) }
       if (name === 'sonner') return { toast: Object.assign(() => {}, { error() {} }) }
       throw Error(`Unexpected import ${name}`)
     },

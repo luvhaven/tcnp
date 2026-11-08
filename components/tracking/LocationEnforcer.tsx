@@ -18,6 +18,7 @@ import { MapPin, AlertTriangle, X, WifiOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { createLocationSharingGuard } from '@/lib/location-sharing'
+import { publishLocation } from '@/lib/location-upload'
 
 // Roles that can always dismiss the prompt
 const SKIPPABLE_ROLES = [
@@ -139,15 +140,13 @@ export function LocationEnforcer() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!canShare()) return
       if (user) {
-        await (supabase as any).rpc('upsert_user_location', {
-          p_user_id: user.id,
-          p_latitude: position.coords.latitude,
-          p_longitude: position.coords.longitude,
-          p_accuracy: position.coords.accuracy,
-          p_altitude: position.coords.altitude ?? null,
-          p_heading: position.coords.heading ?? null,
-          p_speed: position.coords.speed ?? null,
-          p_battery_level: null
+        publishLocation(user.id, {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          altitude: position.coords.altitude ?? null,
+          heading: position.coords.heading ?? null,
+          speed: position.coords.speed ?? null,
         })
       }
 
@@ -175,16 +174,7 @@ export function LocationEnforcer() {
           const { data: { user } } = await supabase.auth.getUser()
           if (!canShare()) return
           if (user) {
-            await (supabase as any).rpc('upsert_user_location', {
-              p_user_id: user.id,
-              p_latitude: ipData.latitude,
-              p_longitude: ipData.longitude,
-              p_accuracy: 5000,
-              p_altitude: null,
-              p_heading: null,
-              p_speed: null,
-              p_battery_level: null
-            })
+            publishLocation(user.id, { latitude: ipData.latitude, longitude: ipData.longitude, accuracy: 5000 })
           }
           if (!canShare()) return
           setLocationMode('ip')

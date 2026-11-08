@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useIsClient } from '@/hooks/useIsClient'
 import { toast } from 'sonner'
 import { createLocationSharingGuard, isLocationSharingEnabled } from '@/lib/location-sharing'
+import { publishLocation } from '@/lib/location-upload'
 
 /**
  * LocationTracker Component - Clean Permission Flow
@@ -328,18 +329,15 @@ export function LocationTracker() {
               timestamp: currentTimestamp
             }
 
-            const { error } = await (supabase as any).rpc('upsert_user_location', {
-              p_user_id: user.id,
-              p_latitude: position.coords.latitude,
-              p_longitude: position.coords.longitude,
-              p_accuracy: position.coords.accuracy,
-              p_altitude: position.coords.altitude ?? null,
-              p_heading: position.coords.heading ?? null,
-              p_speed: speed ?? 0,
-              p_battery_level: currentBattery
+            publishLocation(user.id, {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+              altitude: position.coords.altitude ?? null,
+              heading: position.coords.heading ?? null,
+              speed: speed ?? 0,
+              batteryLevel: currentBattery
             })
-
-            if (error) console.warn('📍 Location update failed (non-fatal):', error.message)
           } catch (e) {
             console.warn('📍 Location DB update failed (non-fatal):', e)
           }

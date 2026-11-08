@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { devLog } from '@/lib/utils/devLogger'
 import { useLocationSharing } from '@/hooks/useLocationSharing'
 import { createLocationSharingGuard, isLocationSharingEnabled } from '@/lib/location-sharing'
+import { publishLocation } from '@/lib/location-upload'
 
 interface LocationData {
   latitude: number
@@ -62,22 +63,7 @@ export function useLocationTracking(options: UseLocationTrackingOptions = {}) {
       }
 
       if (!canShare()) return
-      const { error: rpcError } = await (supabase as any).rpc('upsert_user_location', {
-        p_user_id: user.id,
-        p_latitude: locationData.latitude,
-        p_longitude: locationData.longitude,
-        p_accuracy: locationData.accuracy,
-        p_altitude: locationData.altitude ?? null,
-        p_heading: locationData.heading ?? null,
-        p_speed: locationData.speed ?? null,
-        p_battery_level: batteryLevel ?? null
-      })
-
-      if (rpcError) {
-        console.error('❌ Failed to update location in database:', rpcError)
-      } else {
-        console.log('✅ Location updated in database')
-      }
+      publishLocation(user.id, { ...locationData, batteryLevel: batteryLevel ?? null })
     } catch (err) {
       console.error('❌ Error updating location:', err)
     }
