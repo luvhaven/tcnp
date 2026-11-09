@@ -37,6 +37,7 @@ test('Settings and the actual profile theme control share a stable, working pref
    if (name === '@/lib/audio/AudioManager') return load('lib/audio/AudioManager.ts')
    if (name === '@/lib/haptics') return load('lib/haptics.ts')
    if (name === '@/lib/notification-feedback') return load('lib/notification-feedback.ts')
+   if (name === '@/lib/haptics') return load('lib/haptics.ts')
    if (name === '@/components/notifications/NotificationFeedbackControl') return load('components/notifications/NotificationFeedbackControl.tsx')
    if (name === '@/lib/utils') return { cn: require('clsx').clsx }
    if (name === '@/components/ui/button') return load('components/ui/button.tsx')

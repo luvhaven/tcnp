@@ -1,7 +1,8 @@
 "use client"
+import { useReloadOnDeletion } from "@/hooks/useDashboardDeletions"
 import { DASHBOARD_JOURNEY_SELECT } from '@/lib/dashboard-queries'
 
-import { useEffect, useState, useCallback, useMemo } from "react"
+import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { JourneyAlerts } from "@/components/dashboard/JourneyAlerts"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
@@ -226,8 +227,10 @@ export default function DashboardPage() {
     else if (result === "accepted") toast.success("TCNP is now installed. Check your home screen.")
   }
 
-  const loadDashboardData = useCallback(async () => {
-    setLoading(true)
+  const loadSequence = useRef(0)
+  const loadDashboardData = useCallback(async (background = false) => {
+    const sequence = ++loadSequence.current
+    if (!background) setLoading(true)
     setLoadError(false)
     let stage: DashboardLoadStage = "active_program"
 
@@ -239,6 +242,7 @@ export default function DashboardPage() {
       const { data: { session } } = await supabase.auth.getSession()
         .catch(() => ({ data: { session: null } }))
 
+      if (sequence !== loadSequence.current) return
       if (!session) {
         // Signed out, or the token expired while this page was open. That is
         // a state, not a failure: nothing is broken and nobody is on the
@@ -378,6 +382,7 @@ export default function DashboardPage() {
           loadRecentJourneys(),
         ])
 
+        if (sequence !== loadSequence.current) return
         // State is applied only once every required read has succeeded, so a
         // partial failure never paints a half-updated dashboard.
         setActiveProgram(program)
@@ -392,13 +397,14 @@ export default function DashboardPage() {
         setUpdatedAt(new Date())
       })
     } catch (err) {
+      if (sequence !== loadSequence.current) return
       setLoadError(true)
       console.error("Dashboard load failed at stage:", stage, err)
       Sentry.captureException(err, {
         tags: { feature: "dashboard", dashboard_stage: stage },
       })
     } finally {
-      setLoading(false)
+      if (sequence === loadSequence.current) setLoading(false)
     }
   }, [supabase, router, canViewGlobalDashboard, currentUser?.id])
 
@@ -414,6 +420,10 @@ export default function DashboardPage() {
       void loadDashboardData()
     }
   }, [loadDashboardData, userLoading])
+
+  useReloadOnDeletion(['programs', 'journeys', 'papas', 'cheetahs', 'incidents'], () => {
+    if (currentUser?.id) void loadDashboardData(true)
+  })
 
   // ── Leadership quick actions — must be a useMemo BEFORE any early return ──
   const leadershipQuickActions = useMemo(() => {

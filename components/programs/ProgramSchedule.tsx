@@ -1,5 +1,6 @@
 "use client"
 
+import { useReloadOnDeletion } from "@/hooks/useDashboardDeletions"
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -95,9 +96,9 @@ export default function ProgramSchedule({
 
             if (daysRes.data) {
                 setDays(daysRes.data)
-                if (daysRes.data.length > 0 && !selectedDayId) {
-                    setSelectedDayId(daysRes.data[0].id)
-                }
+                setSelectedDayId(current => daysRes.data.some((day: ProgramDay) => day.id === current)
+                    ? current
+                    : daysRes.data[0]?.id ?? null)
             }
             const papasById = new Map((papasRes.data ?? []).map((p: any) => [p.id, p]))
             if (sessionsRes.data) setSessions(sessionsRes.data as any)
@@ -115,6 +116,8 @@ export default function ProgramSchedule({
             setLoading(false)
         }
     }
+
+    useReloadOnDeletion(['program_days', 'program_sessions', 'session_speakers', 'papas'], () => { void loadData() })
 
     const handleAddDay = async () => {
         try {

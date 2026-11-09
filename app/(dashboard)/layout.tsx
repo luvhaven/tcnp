@@ -16,6 +16,7 @@ import { LocationSharingSync } from '@/components/tracking/LocationSharingSync'
 const supabase = createClient()
 
 import { useChatNotifications } from "@/hooks/useChatNotifications"
+import { useDashboardDeletions } from "@/hooks/useDashboardDeletions"
 
 // Core layout components - loaded normally but wrapped in error boundaries
 import { Header } from "@/components/layout/header"
@@ -102,6 +103,7 @@ export default function DashboardLayout({
 
   // Mount global chat notification listener (supabase singleton defined at module level)
   useChatNotifications(currentUserId)
+  useDashboardDeletions(currentUserId)
 
   // The drawer covers the whole viewport but was pointer-only: no Escape, and
   // Tab walked straight out of it into the page underneath. Close on Escape,

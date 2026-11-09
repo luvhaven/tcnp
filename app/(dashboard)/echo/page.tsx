@@ -1,5 +1,6 @@
 "use client"
 
+import { useReloadOnDeletion } from "@/hooks/useDashboardDeletions"
 import { useEffect, useState, useCallback } from "react"
 import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
 import EOChecklist from "@/components/echo/EOChecklist"
@@ -179,6 +180,8 @@ export default function EchoPage() {
             setLoading(false)
         }
     }
+
+    useReloadOnDeletion(['equipment', 'programs', 'users'], () => { void loadData() })
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()

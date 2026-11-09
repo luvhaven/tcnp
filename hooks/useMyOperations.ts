@@ -1,5 +1,6 @@
 "use client"
 
+import { useReloadOnDeletion } from "@/hooks/useDashboardDeletions"
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -405,6 +406,7 @@ export function useMyOperations() {
   }, [load])
 
   const reload = useCallback(() => load(false), [load])
+  useReloadOnDeletion(['programs', 'journeys', 'papas', 'cheetahs', 'nests', 'journey_cheetahs'], scheduleReload)
 
   // Initial load, then realtime once we know who the user is (filters need the uid)
   useEffect(() => {
