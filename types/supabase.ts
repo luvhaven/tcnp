@@ -1683,8 +1683,30 @@ export type Database = {
           },
         ]
       }
+      mission_request_recipients: {
+        Row: { request_id: string; user_id: string }
+        Insert: { request_id: string; user_id: string }
+        Update: { request_id?: string; user_id?: string }
+        Relationships: [
+          {
+            foreignKeyName: "mission_request_recipients_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "mission_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mission_request_recipients_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mission_requests: {
         Row: {
+          audience: string | null
           created_at: string
           created_by: string | null
           deadline: string
@@ -1695,6 +1717,7 @@ export type Database = {
           title: string
         }
         Insert: {
+          audience?: string | null
           created_at?: string
           created_by?: string | null
           deadline: string
@@ -1705,6 +1728,7 @@ export type Database = {
           title: string
         }
         Update: {
+          audience?: string | null
           created_at?: string
           created_by?: string | null
           deadline?: string

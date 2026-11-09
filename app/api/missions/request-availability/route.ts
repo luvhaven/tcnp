@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { checkRateLimit } from '@/lib/security/rate-limit'
+import { isMissionAudience } from '@/lib/mission-audiences'
 
 const ALLOWED_ROLES = [
     'super_admin', 'dev_admin', 'admin', 'captain', 'vice_captain',
@@ -10,7 +11,7 @@ const ALLOWED_ROLES = [
 
 /**
  * Creates a mission availability request for a program and broadcasts a
- * high-priority notification to every officer on the platform, asking them to
+ * high-priority notification to the selected audience, asking them to
  * confirm availability before the deadline.
  */
 export async function POST(req: NextRequest) {
@@ -35,9 +36,12 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Forbidden: Command or Admin access required' }, { status: 403 })
         }
 
-        const { program_id, title, message, deadline } = await req.json()
+        const { program_id, title, message, deadline, audience = 'all' } = await req.json()
         if (!program_id || !deadline) {
             return NextResponse.json({ error: 'program_id and deadline are required' }, { status: 400 })
+        }
+        if (!isMissionAudience(audience)) {
+            return NextResponse.json({ error: 'Select a valid audience' }, { status: 400 })
         }
         const deadlineDate = new Date(deadline)
         if (isNaN(deadlineDate.getTime()) || deadlineDate <= new Date()) {
@@ -50,38 +54,22 @@ export async function POST(req: NextRequest) {
         const requestTitle = title?.trim() || `Mission Request — ${program.name}`
 
         const { data: request, error: reqError } = await db
-            .from('mission_requests')
-            .insert({
-                program_id,
-                title: requestTitle,
-                message: message?.trim() || null,
-                deadline: deadlineDate.toISOString(),
-                created_by: user.id,
+            .rpc('send_mission_availability_request', {
+                target_program_id: program_id,
+                request_title: requestTitle,
+                request_message: message?.trim() || null,
+                request_deadline: deadlineDate.toISOString(),
+                sender_id: user.id,
+                request_audience: audience,
+                notification_message: `${program.name}: please confirm your availability to serve before ${deadlineDate.toLocaleString()}. Respond from your dashboard.`,
             })
-            .select('id')
             .single()
         if (reqError) throw reqError
-
-        // Broadcast to every active officer
-        const { data: officers } = await db.from('users').select('id').eq('is_active', true).eq('is_directory_hidden', false)
-        const recipientIds: string[] = (officers ?? []).map((o: any) => o.id)
-
-        const rows = recipientIds.map((id) => ({
-            user_id: id,
-            title: `🎖️ ${requestTitle}`,
-            message: `${program.name}: please confirm your availability to serve before ${deadlineDate.toLocaleString()}. Respond from your dashboard.`,
-            type: 'alert',
-            channel: 'push',
-            metadata: { kind: 'mission_request', request_id: request.id, program_id },
-            is_read: false,
-        }))
-
-        for (let i = 0; i < rows.length; i += 200) {
-            const { error } = await db.from('notifications').insert(rows.slice(i, i + 200))
-            if (error) throw error
+        if (!request.request_id) {
+            return NextResponse.json({ error: 'No active officers match this audience' }, { status: 400 })
         }
 
-        return NextResponse.json({ success: true, request_id: request.id, recipients: recipientIds.length })
+        return NextResponse.json({ success: true, request_id: request.request_id, recipients: request.recipients })
     } catch (err: any) {
         console.error('Error in missions/request-availability route:', err)
         return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 })

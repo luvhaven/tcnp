@@ -50,7 +50,7 @@ test('officer activation service-role writes require an active platform administ
 
 test('elevated operational writes reject inactive sessions before using service credentials', () => {
   const protectedRoutes = [
-    ['app/api/missions/request-availability/route.ts', "profile.activation_status !== 'active' || profile.is_active === false", '.from(\'notifications\').insert'],
+    ['app/api/missions/request-availability/route.ts', "profile.activation_status !== 'active' || profile.is_active === false", "rpc('send_mission_availability_request'"],
     ['app/api/welfare/food-ready/route.ts', "profile.activation_status !== 'active' || profile.is_active === false", '.from(\'notifications\').insert'],
     ['app/api/teams/remove-member/route.ts', "me.activation_status !== 'active' || me.is_active === false", "db.from('users').update"],
     ['app/api/journey-duty-officers/route.ts', "currentUser.activation_status !== 'active' || currentUser.is_active === false", "rpc('replace_journey_duty_officers'"],

@@ -1,10 +1,11 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useId, useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { notifyError, UserFacingError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
+import { isMissionAudience, MISSION_AUDIENCES, type MissionAudience } from "@/lib/mission-audiences"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -27,6 +28,7 @@ const supabase = createClient()
 
 type MissionRequest = {
   id: string
+  audience: string | null
   program_id: string
   title: string
   message: string | null
@@ -61,6 +63,8 @@ function initials(name?: string | null) {
 export function RequestAvailabilityButton({ programId, programName }: { programId: string; programName: string }) {
   const [open, setOpen] = useState(false)
   const [sending, setSending] = useState(false)
+  const [audience, setAudience] = useState<MissionAudience>("all")
+  const audienceId = useId()
   const queryClient = useQueryClient()
   const defaultDeadline = () => {
     const d = new Date(Date.now() + 48 * 60 * 60 * 1000)
@@ -79,13 +83,16 @@ export function RequestAvailabilityButton({ programId, programName }: { programI
           program_id: programId,
           message: form.message || null,
           deadline: new Date(form.deadline).toISOString(),
+          audience,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new UserFacingError(data.error || "Failed to send")
       toast.success(`Mission request broadcast to ${data.recipients} officers 🎖️`)
       setOpen(false)
+      setAudience("all")
       queryClient.invalidateQueries({ queryKey: ["mission-requests"] })
+      queryClient.invalidateQueries({ queryKey: ["my-mission-requests"] })
     } catch (err: any) {
       notifyError(err, "Failed to send mission request")
     } finally {
@@ -105,10 +112,21 @@ export function RequestAvailabilityButton({ programId, programName }: { programI
               <Megaphone className="h-5 w-5 text-orange-500" /> Mission Request
             </DialogTitle>
             <DialogDescription>
-              Every officer receives a high-priority request to confirm availability for <strong>{programName}</strong>.
+              Ask the selected officers to confirm their availability for <strong>{programName}</strong>.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor={audienceId}>Send to</Label>
+              <Select value={audience} onValueChange={value => { if (isMissionAudience(value)) setAudience(value) }} disabled={sending}>
+                <SelectTrigger id={audienceId}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MISSION_AUDIENCES.map(option => (
+                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label>Message (optional)</Label>
               <Textarea rows={3} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })}
@@ -386,7 +404,7 @@ export function MissionRequestPrompt({ currentUserId }: { currentUserId: string 
       const [{ data: requests, error }, { data: myResponses }] = await Promise.all([
         supabase
           .from("mission_requests")
-          .select("*, programs(name)")
+          .select("*, mission_request_recipients(user_id)")
           .eq("status", "open")
           .gt("deadline", nowIso)
           .order("deadline", { ascending: true }),
@@ -394,8 +412,9 @@ export function MissionRequestPrompt({ currentUserId }: { currentUserId: string 
       ])
       if (error) throw error
       const answered = new Set((myResponses ?? []).map((r: any) => r.request_id))
-      return ((requests ?? []) as (MissionRequest & { programs?: { name: string } | null })[])
-        .filter(r => !answered.has(r.id))
+      return (requests ?? []).filter(r =>
+        !answered.has(r.id) && (r.audience === null || r.mission_request_recipients.length > 0)
+      )
     },
     enabled: !!currentUserId,
     refetchInterval: 60000,
