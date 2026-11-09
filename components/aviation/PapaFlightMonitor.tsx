@@ -1,5 +1,6 @@
 "use client"
 
+import { useReloadOnDeletion } from "@/hooks/useDashboardDeletions"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   AlertCircle,
@@ -299,6 +300,8 @@ export default function PapaFlightMonitor({
       setLoading(false)
     }
   }, [])
+
+  useReloadOnDeletion(['programs', 'papas'], () => { void loadFlights() })
 
   useEffect(() => {
     void loadFlights()

@@ -1,5 +1,6 @@
 "use client"
 
+import { useReloadOnDeletion } from "@/hooks/useDashboardDeletions"
 import { useEffect, useState, useRef } from "react"
 import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
 import AOArrivalTimeline from "@/components/eagles/AOArrivalTimeline"
@@ -138,6 +139,8 @@ function ManageSquares() {
     useEffect(() => {
         loadAirports()
     }, [])
+
+    useReloadOnDeletion(['eagle_squares'], () => { void loadAirports() })
 
     const loadAirports = async () => {
         try {
@@ -507,6 +510,8 @@ function TrackEagles() {
             return []
         }
     }
+
+    useReloadOnDeletion(['papas'], () => { void fetchPapasWithFlights() })
 
     const refreshFlightData = async (papasData: any[]) => {
         if (!papasData || papasData.length === 0) return

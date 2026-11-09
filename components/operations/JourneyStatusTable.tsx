@@ -1,5 +1,6 @@
 "use client"
 
+import { useReloadOnDeletion } from "@/hooks/useDashboardDeletions"
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { audioManager } from '@/lib/audio/AudioManager'
@@ -296,6 +297,11 @@ export default function JourneyStatusTable() {
             console.error('Error loading current user:', error)
         }
     }
+
+    useReloadOnDeletion(['programs', 'journeys', 'papas', 'cheetahs', 'nests', 'eagle_squares', 'users'], () => {
+        void loadPrograms()
+        void loadActiveJourneys()
+    })
 
     const loadPrograms = async () => {
         const { data } = await supabase.from('programs').select('id, name').eq('status', 'active')

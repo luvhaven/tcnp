@@ -1,5 +1,6 @@
 "use client"
 
+import { useReloadOnDeletion } from "@/hooks/useDashboardDeletions"
 import { useEffect, useState, useMemo, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
@@ -420,6 +421,13 @@ export default function JourneysClient({
   }
 
   const handleCreateJourney = async (e: React.FormEvent) => {
+  useReloadOnDeletion(['programs', 'papas', 'cheetahs', 'nests', 'eagle_squares', 'users'], () => {
+    void loadLookups()
+  })
+  useReloadOnDeletion(['programs', 'journeys', 'papas', 'cheetahs', 'nests', 'eagle_squares', 'users'], () => {
+    void loadJourneys(false, false, loadedCountRef.current)
+  })
+
     e.preventDefault()
 
     if (!canCreateJourney) {

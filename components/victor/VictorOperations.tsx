@@ -1,5 +1,6 @@
 "use client"
 
+import { useReloadOnDeletion } from "@/hooks/useDashboardDeletions"
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react"
 import {
   Armchair,
@@ -216,6 +217,9 @@ export default function VictorOperations({ canManage: legacyCanManage, currentUs
   }, [db])
 
   useEffect(() => { void loadOperations() }, [loadOperations])
+  useReloadOnDeletion(['programs', 'theatres', 'users', 'papas', 'operational_post_assignments', 'welcome_party_members'], () => {
+    void loadOperations()
+  })
 
   useEffect(() => {
     if (data.venues.length === 0) return

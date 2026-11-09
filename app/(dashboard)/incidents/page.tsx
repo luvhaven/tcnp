@@ -1,5 +1,6 @@
 'use client'
 
+import { useReloadOnDeletion } from "@/hooks/useDashboardDeletions"
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -169,6 +170,8 @@ export default function IncidentsPage() {
       setLoading(false)
     }
   }, [supabase])
+
+  useReloadOnDeletion(['incidents', 'journeys', 'papas', 'cheetahs', 'users'], () => { void loadData() })
 
   const subscribeToIncidents = () => {
     const channel = supabase

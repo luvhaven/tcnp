@@ -114,7 +114,8 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
       if (error) throw error
       return data as Program[]
     },
-    initialData: initialPrograms
+    initialData: initialPrograms,
+    initialDataUpdatedAt: 0,
   })
 
   // React Query: Fetch Theatres
@@ -153,26 +154,21 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('programs').delete().eq('id', id)
+      const { error, count } = await supabase.from('programs').delete({ count: 'exact' }).eq('id', id)
       if (error) throw error
+      if (count !== 1) throw new Error('The program could not be deleted.')
       return id
     },
-    // Optimistic UI update
-    onMutate: async (deletedId) => {
+    onSuccess: async (deletedId) => {
       await queryClient.cancelQueries({ queryKey: ['programs', 'full'] })
-      const previousPrograms = queryClient.getQueryData<Program[]>(['programs', 'full'])
-      if (previousPrograms) {
-        queryClient.setQueryData<Program[]>(['programs', 'full'], old => old?.filter(p => p.id !== deletedId))
-      }
-      return { previousPrograms }
+      queryClient.setQueryData<Program[]>(['programs', 'full'], old => old?.filter(p => p.id !== deletedId))
+      toast.success('Program deleted!')
     },
-    onError: (err, newTodo, context) => {
-      queryClient.setQueryData(['programs', 'full'], context?.previousPrograms)
-      toast.error('Failed to delete program')
+    onError: (error) => {
+      notifyError(error, 'Failed to delete program')
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['programs'] })
-      toast.success('Program deleted!')
     }
   })
 
@@ -530,7 +526,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
       </Card>
 
       {/* Create/Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen && (!editing || programs.some(program => program.id === editing.id))} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Program' : 'Add New Program'}</DialogTitle>
@@ -687,7 +683,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
         </DialogContent>
       </Dialog>
 
-      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+      <Dialog open={scheduleOpen && programs.some(program => program.id === scheduleProgram?.id)} onOpenChange={setScheduleOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Manage Schedule: {scheduleProgram?.name}</DialogTitle>
