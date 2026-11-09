@@ -342,7 +342,7 @@ export default function TrainingOperations() {
     },
   })
 
-  const canManage = Boolean(isPlatformAdministrator(currentUser?.role) || (myMembership && MANAGEMENT_LEVELS.has(myMembership.access_level)))
+  const canManage = Boolean(isPlatformAdministrator(currentUser?.role, currentUser?.has_admin_access) || (myMembership && MANAGEMENT_LEVELS.has(myMembership.access_level)))
 
   const { data: courses = [], isLoading: coursesLoading } = useQuery({
     queryKey: ["training-courses"],

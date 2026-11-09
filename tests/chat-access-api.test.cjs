@@ -44,7 +44,7 @@ function api(options = {}) {
       if (config.failReactions && table === 'message_reactions') return { error: { message: 'private database failure' } }
       return { data: null, error: null }
     }
-    if (kind === 'auth' && table === 'users') return { data: config.profileMissing ? null : { id: CALLER, role: config.role, is_active: config.active, activation_status: config.status, team: config.team ?? null, is_team_head: config.isTeamHead ?? false }, error: null }
+    if (kind === 'auth' && table === 'users') return { data: config.profileMissing ? null : { id: CALLER, role: config.role, has_admin_access: config.hasAdminAccess, is_active: config.active, activation_status: config.status, team: config.team ?? null, is_team_head: config.isTeamHead ?? false }, error: null }
     if (table === 'chat_messages') {
       if (query.columns === 'id') {
         const [start, end] = query.range ?? [0, 499]
@@ -118,9 +118,9 @@ test('legacy Command and HOP roles cannot archive or permanently delete chats', 
   }
 })
 
-test('Captain and Vice Captain retain moderation access without assigned room membership', async () => {
-  for (const role of ['captain', 'vice_captain', 'head_of_command', 'admin']) {
-    const app = api({ role, allowed: false, message: { id: MESSAGE, sender_id: AUTHOR, team: 'swift', deleted_at: null } })
+test('Executives and granted admins retain moderation access without assigned room membership', async () => {
+  for (const role of ['captain', 'vice_captain', 'head_of_command', 'admin', 'tango_oscar']) {
+    const app = api({ role, hasAdminAccess: ['head_of_command', 'tango_oscar'].includes(role), allowed: false, message: { id: MESSAGE, sender_id: AUTHOR, team: 'swift', deleted_at: null } })
     assert.equal((await app.admin.POST(app.request({ action: 'soft_delete', messageId: MESSAGE }))).status, 200)
     assert.equal(app.rpcCalls.length, 0)
     assert.equal(app.writes[0].value.deleted_by_admin, true)

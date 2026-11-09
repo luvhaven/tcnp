@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 
 const { withSentryConfig } = require('@sentry/nextjs/config')
+const { PHASE_PRODUCTION_BUILD } = require('next/constants')
 
 const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
   ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
@@ -182,4 +183,22 @@ const sentryBuildOptions = {
   automaticVercelMonitors: false,
 };
 
-module.exports = withSentryConfig(withPWA(nextConfig), sentryBuildOptions);
+const configuredApp = withSentryConfig(withPWA(nextConfig), sentryBuildOptions);
+
+module.exports = async (phase, context) => {
+  if (phase === PHASE_PRODUCTION_BUILD && process.env.VERCEL_ENV === 'production') {
+    const { NEXT_PUBLIC_SUPABASE_URL: url, SUPABASE_SERVICE_ROLE_KEY: key } = process.env;
+    if (!url || !key) throw new Error('Production Supabase credentials are required to verify the officer access schema.');
+
+    const schemaProbe = new URL('/rest/v1/users?select=has_admin_access&limit=0', url);
+    const response = await fetch(schemaProbe, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) {
+      throw new Error('Production officer access schema is unavailable. Apply the Supabase migration 20261109120000 before deploying.');
+    }
+  }
+
+  return typeof configuredApp === 'function' ? configuredApp(phase, context) : configuredApp;
+};

@@ -58,8 +58,8 @@ export default function AfterOpReportPage() {
             try {
                 const { data: { user } } = await supabase.auth.getUser()
                 if (!user) return
-                const { data: ud } = await supabase.from('users').select('role').eq('id', user.id).single()
-                setUserRole((ud as any)?.role || null)
+                const { data: ud } = await supabase.from('users').select('role, has_admin_access').eq('id', user.id).single()
+                setUserRole(ud?.has_admin_access ? 'admin' : ud?.role || null)
 
                 const { data, error } = await (supabase as any)
                     .from('do_feedback_forms')

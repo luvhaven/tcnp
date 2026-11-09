@@ -166,7 +166,7 @@ export default function ComplianceInitiatives() {
   })
 
   const canManage = Boolean(
-    isPlatformAdministrator(currentUser?.role) ||
+    isPlatformAdministrator(currentUser?.role, currentUser?.has_admin_access) ||
       (membershipQuery.data?.status === "active" && MANAGER_ACCESS.has(membershipQuery.data.access_level)),
   )
 

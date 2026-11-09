@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
     const { data: callerRow, error: callerError } = await supabase
       .from('users')
-      .select('role, activation_status, is_active')
+      .select('role, has_admin_access, activation_status, is_active')
       .eq('id', user.id)
       .single()
 
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
     }
 
-    if (!isPlatformAdministrator(callerRow.role)) {
+    if (!isPlatformAdministrator(callerRow.role, callerRow.has_admin_access)) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
     }
 
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
     const adminClient = buildAdminClient()
     const { data: target } = await adminClient
       .from('users')
-      .select('role, email, is_directory_hidden')
+      .select('role, has_admin_access, email, is_directory_hidden')
       .eq('id', officerId)
       .single()
 
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
     if (target.role === 'super_admin' || isPermanentOwnerEmail(target.email)) {
       return NextResponse.json({ error: 'The permanent owner account cannot be deactivated' }, { status: 403 })
     }
-    if (platformAuthorityRank(target.role) >= 80 && callerRow.role !== 'super_admin') {
+    if (platformAuthorityRank(target.role, target.has_admin_access) >= 80 && callerRow.role !== 'super_admin') {
       return NextResponse.json({ error: 'Only Super Admin can change an administrator account' }, { status: 403 })
     }
     const newIsActive = desired

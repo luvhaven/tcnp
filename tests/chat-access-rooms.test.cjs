@@ -100,7 +100,7 @@ function app(options = {}) {
       ...server,
       getChatCaller: async () => config.callerError
         ? { error: json({ error: 'Denied' }, { status: config.callerError }) }
-        : { auth, db, profile: { id: CALLER, role: config.role, team: 'strength' }, canManageMembers: utils.isPlatformAdministrator(config.role) },
+        : { auth, db, profile: { id: CALLER, role: config.role, has_admin_access: config.hasAdminAccess, team: 'strength' }, canManageMembers: utils.isPlatformAdministrator(config.role, config.hasAdminAccess) },
     },
     '@/lib/presence': { isOfficerOnline: user => user.is_online === true },
     '@/lib/security/rate-limit': { checkRateLimit: async () => ({ success: !config.rateLimited }) },
@@ -121,13 +121,14 @@ test('scope parsing requires exactly one valid room and rejects orphan Papa or m
   for (const scope of [{ status: 'archived' }, { status: ' ARCHIVED ' }, { status: 'active', is_archived: true }, { status: 'active', is_deleted: true }]) assert.equal(access.isChatProgramOpen(scope), false)
 })
 
-test('only Captain and Vice Captain carry Executive labels while other implicit managers are Admin', async () => {
-  for (const role of ['captain', 'vice_captain', 'admin', 'dev_admin', 'super_admin', 'head_of_command']) {
-    const system = app({ role: 'captain', users: [user(EXECUTIVE, { role })] })
+test('only Captain and Vice Captain carry Executive labels while admins can keep any officer role', async () => {
+  for (const role of ['captain', 'vice_captain', 'admin', 'dev_admin', 'super_admin', 'head_of_command', 'tango_oscar']) {
+    const hasAdminAccess = ['head_of_command', 'tango_oscar'].includes(role)
+    const system = app({ role: 'captain', users: [user(EXECUTIVE, { role, has_admin_access: hasAdminAccess })] })
     const result = await system.members.GET(system.request(null))
     assert.equal(result.body.members[0].accessType, ['captain', 'vice_captain'].includes(role) ? 'executive' : 'admin')
-    assert.equal(utils.privilegedAccessLabel(role), ['captain', 'vice_captain'].includes(role) ? 'Executive access' : 'Admin')
-    assert.equal(utils.isPlatformAdministrator(role), true)
+    assert.equal(utils.privilegedAccessLabel(role, hasAdminAccess), ['captain', 'vice_captain'].includes(role) ? 'Executive access' : 'Admin')
+    assert.equal(utils.isPlatformAdministrator(role, hasAdminAccess), true)
   }
 })
 
@@ -249,9 +250,9 @@ test('large program rosters are paged and officer lookups use bounded ID batches
   }
 })
 
-test('Captain, Vice Captain and Head of Command discover all active rooms without invitations', async () => {
-  for (const role of ['captain', 'vice_captain', 'head_of_command']) {
-    const api = app({ role })
+test('Executives and officers granted Admin access discover all active rooms without invitations', async () => {
+  for (const role of ['captain', 'vice_captain', 'head_of_command', 'tango_oscar']) {
+    const api = app({ role, hasAdminAccess: ['head_of_command', 'tango_oscar'].includes(role) })
     const result = await api.rooms.GET()
     assert.equal(result.status, 200)
     assert.equal(result.body.canManageMembers, true)

@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     // Only admins/captains/command can assign DOs
     const { data: currentUser } = await supabase
       .from('users')
-      .select('role, oscar, activation_status, is_active')
+      .select('role, has_admin_access, oscar, activation_status, is_active')
       .eq('id', user.id)
       .single()
 
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
     }
     const effectiveRole = effectiveOscarRole(currentUser.role, currentUser.oscar) || currentUser.role
-    if (!isAdmin(effectiveRole)) {
+    if (!isAdmin(effectiveRole, currentUser.has_admin_access)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -68,14 +68,14 @@ export async function GET(req: NextRequest) {
 
     const { data: currentUser } = await supabase
       .from('users')
-      .select('role, oscar, activation_status, is_active')
+      .select('role, has_admin_access, oscar, activation_status, is_active')
       .eq('id', user.id)
       .single()
     if (!currentUser || currentUser.activation_status !== 'active' || currentUser.is_active === false) {
       return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
     }
     const effectiveRole = effectiveOscarRole(currentUser.role, currentUser.oscar) || currentUser.role
-    const canManage = !!currentUser && isAdmin(effectiveRole)
+    const canManage = !!currentUser && isAdmin(effectiveRole, currentUser.has_admin_access)
     if (!canManage) {
       const { data: ownAssignment, error: assignmentError } = await (supabase as any)
         .from('journey_duty_officers')

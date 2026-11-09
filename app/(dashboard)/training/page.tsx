@@ -90,7 +90,7 @@ export default function TrainingPage() {
       return Boolean(data)
     },
   })
-  const canEdit = isPlatformAdministrator(currentUser?.role) || canManageTrainingUnit
+  const canEdit = isPlatformAdministrator(currentUser?.role, currentUser?.has_admin_access) || canManageTrainingUnit
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Training | null>(null)

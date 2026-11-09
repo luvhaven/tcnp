@@ -16,7 +16,8 @@ export async function POST(request: Request) {
         const db = adminClient as any
 
         const body = await request.json()
-        const { email, password, full_name, phone, oscar: custom_oscar, team } = body
+        const { password, full_name, phone, oscar: custom_oscar, team } = body
+        const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
         // Public registration is always a least-privilege request. Platform or
         // unit roles can only be assigned later by an authorized administrator.
         const role = 'viewer'
@@ -49,6 +50,9 @@ export async function POST(request: Request) {
         })
 
         if (authError) {
+            if (authError.code === 'email_exists' || authError.code === 'user_already_exists') {
+                return NextResponse.json({ error: 'An account already uses this email address.' }, { status: 409 })
+            }
             console.error('Auth error:', authError)
             return NextResponse.json({ error: authError.message }, { status: 400 })
         }
@@ -87,6 +91,9 @@ export async function POST(request: Request) {
         if (userError) {
             console.error('User table error:', userError)
             await adminClient.auth.admin.deleteUser(authData.user.id)
+            if (userError.code === '23505') {
+                return NextResponse.json({ error: 'An account already uses this email address.' }, { status: 409 })
+            }
             return NextResponse.json({ error: userError.message }, { status: 500 })
         }
 

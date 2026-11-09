@@ -131,7 +131,7 @@ export default function IncidentsPage() {
 
       setCurrentUser(userData)
 
-      const canManageIncidents = Boolean(userData && (isAdmin(userData.role) || isAdmin(effectiveOscarRole(userData.role, userData.oscar))))
+      const canManageIncidents = Boolean(userData && (isAdmin(userData.role, userData.has_admin_access) || isAdmin(effectiveOscarRole(userData.role, userData.oscar))))
       setCanManage(canManageIncidents)
 
       const { data: incidentsData, error } = await supabase

@@ -82,8 +82,8 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return null
-      const { data } = await supabase.from('users').select('role').eq('id', user.id).single()
-      return data?.role || null
+      const { data } = await supabase.from('users').select('role, has_admin_access').eq('id', user.id).single()
+      return data?.has_admin_access ? 'admin' : data?.role || null
     }
   })
 
@@ -138,10 +138,10 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
 
   const canManage = userRole ? canManageNoscarDen(userRole) : false
   const { data: currentUser } = useCurrentUser()
-  const canEditMenus = canManageWelfare(currentUser?.role, currentUser?.oscar)
+  const canEditMenus = canManageWelfare(currentUser?.role, currentUser?.oscar, currentUser?.has_admin_access)
   // Taking a Papa's order is Nest floor work, not menu curation: the Welfare
   // Oscars who publish menus do not stand in front of a Papa to order for them.
-  const canTakeOrders = canManageNoscarDen(currentUser?.role, currentUser?.oscar)
+  const canTakeOrders = canManageNoscarDen(currentUser?.role, currentUser?.oscar, currentUser?.has_admin_access)
 
   const saveDenMutation = useMutation({
     mutationFn: async (payload: { isEdit: boolean, data: any }) => {
@@ -705,7 +705,7 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
         onOpenChange={(open) => {
           if (!open) setSelectedOfficer(null)
         }}
-        canManage={Boolean(currentUser && (isAdmin(currentUser.role) || isAdmin(currentUser.oscar)))}
+        canManage={Boolean(currentUser && (isAdmin(currentUser.role, currentUser.has_admin_access) || isAdmin(currentUser.oscar)))}
       />
     </div>
   )

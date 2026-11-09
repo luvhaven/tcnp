@@ -169,6 +169,7 @@ export default function JourneysClient({
   const resolvedRole = useMemo(() => {
     if (!currentUser) return currentRole
     const eff = effectiveOscarRole(currentUser.role, currentUser.oscar)
+    if (currentUser.has_admin_access) return 'admin'
     return eff || currentUser.role
   }, [currentUser, currentRole])
 
@@ -298,12 +299,12 @@ export default function JourneysClient({
           // Also set currentRole as fallback in case useCurrentUser hasn't resolved yet
           const { data: userRow } = await supabase
             .from('users')
-            .select('role, oscar')
+            .select('role, has_admin_access, oscar')
             .eq('id', user.id)
             .single<any>()
           if (userRow?.role) {
             const eff = effectiveOscarRole(userRow.role, userRow.oscar)
-            setCurrentRole(eff || userRow.role)
+            setCurrentRole(userRow.has_admin_access ? 'admin' : eff || userRow.role)
           }
         }
       } catch (error) {

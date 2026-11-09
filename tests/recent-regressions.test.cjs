@@ -32,7 +32,7 @@ test('critical alert animation has a valid keyframe definition', () => {
 
 test('officer directory service-role reads require an active platform administrator', () => {
   const source = fs.readFileSync('app/api/officers/list/route.ts', 'utf8')
-  const guard = source.indexOf('!isPlatformAdministrator(caller.role)')
+  const guard = source.indexOf('!isPlatformAdministrator(caller.role, caller.has_admin_access)')
   const serviceRead = source.indexOf('const adminClient = createAdminClient()')
   assert.ok(guard >= 0 && serviceRead > guard)
   assert.match(source, /caller\.activation_status !== 'active'/)
@@ -42,10 +42,10 @@ test('officer directory service-role reads require an active platform administra
 test('officer activation service-role writes require an active platform administrator', () => {
   const source = fs.readFileSync('app/api/officers/toggle-activation/route.ts', 'utf8')
   const accountGuard = source.indexOf("callerRow.activation_status !== 'active' || callerRow.is_active === false")
-  const platformGuard = source.indexOf('!isPlatformAdministrator(callerRow.role)')
+  const platformGuard = source.indexOf('!isPlatformAdministrator(callerRow.role, callerRow.has_admin_access)')
   const serviceWrite = source.indexOf('const adminClient = buildAdminClient()')
   assert.ok(accountGuard >= 0 && platformGuard > accountGuard && serviceWrite > platformGuard)
-  assert.match(source, /\.select\('role, activation_status, is_active'\)/)
+  assert.match(source, /\.select\('role, has_admin_access, activation_status, is_active'\)/)
 })
 
 test('elevated operational writes reject inactive sessions before using service credentials', () => {
@@ -76,7 +76,7 @@ test('journey reminders are rate limited, active-account and assignment scoped, 
 
 test('public signup always creates a pending Viewer request regardless of submitted role', () => {
   const source = fs.readFileSync('app/api/auth/signup/route.ts', 'utf8')
-  assert.match(source, /const \{ email, password, full_name, phone, oscar: custom_oscar, team \} = body/)
+  assert.match(source, /const \{ password, full_name, phone, oscar: custom_oscar, team \} = body/)
   assert.match(source, /const role = 'viewer'/)
   assert.match(source, /activation_status: 'pending'/)
   assert.match(source, /is_active: false/)
@@ -92,7 +92,7 @@ test('officer full-profile endpoint limits access to self or approved profile vi
 
 test('program officer roster is restricted to journey managers or program participants', () => {
   const source = fs.readFileSync('app/api/officers/by-program/route.ts', 'utf8')
-  assert.match(source, /if \(!isAdmin\(caller\.role\)\)/)
+  assert.match(source, /if \(!isAdmin\(caller\.role, caller\.has_admin_access\)\)/)
   assert.match(source, /current_title_assignments[\s\S]*?user\.id/)
   assert.match(source, /mission_responses[\s\S]*?user\.id/)
   assert.match(source, /You are not assigned to this program/)
@@ -102,7 +102,7 @@ test('Command flight watch is active-account and Command/Admin gated', () => {
   const source = fs.readFileSync('app/api/flights/watch/route.ts', 'utf8')
   assert.match(source, /supabase\.auth\.getUser\(\)/)
   assert.match(source, /caller\.activation_status !== 'active'/)
-  assert.match(source, /canAccessCommandCentre\(caller\.role, caller\.oscar\)/)
+  assert.match(source, /canAccessCommandCentre\(caller\.role, caller\.oscar, caller\.has_admin_access\)/)
   assert.match(source, /Cache-Control': 'private, no-store'/)
 })
 
@@ -116,7 +116,7 @@ test('OpenSky polling defaults to its anonymous free quota and supports OAuth re
 
 test('dashboard global-sensitive view is limited to Command/Admin and rejected missions are excluded', () => {
   const source = fs.readFileSync('app/(dashboard)/dashboard/page.tsx', 'utf8')
-  assert.match(source, /canViewGlobalDashboard = useMemo[\s\S]*?canAccessCommandCentre\(currentUser\.role, currentUser\.oscar\)/)
+  assert.match(source, /canViewGlobalDashboard = useMemo[\s\S]*?canAccessCommandCentre\(currentUser\.role, currentUser\.oscar, currentUser\.has_admin_access\)/)
   assert.doesNotMatch(source, /import \{[^}]*\bisAdmin\b/)
   assert.match(source, /if \(canViewGlobalDashboard\) \{[\s\S]*?setStats\(/)
   assert.match(source, /canViewGlobalDashboard && \(\s*<ErrorBoundary>/)

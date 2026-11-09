@@ -12,14 +12,18 @@ test('only platform administrator roles have platform administration', () => {
   for (const role of PLATFORM_ADMIN_ROLES) assert.equal(isPlatformAdministrator(role), true, role)
   for (const role of [null, undefined, '', 'delta_oscar', 'head_victor_oscar', 'head_of_operations', 'command']) assert.equal(isPlatformAdministrator(role), false, role)
 })
-test('requested leadership roles have the same authority as Admin; owner authority stays higher', () => {
+test('executives have cross-workspace authority; the Head of Command needs an explicit grant', () => {
   assert.ok(platformAuthorityRank('super_admin') > platformAuthorityRank('admin'))
-  for (const role of ['captain', 'vice_captain', 'head_of_command']) {
+  for (const role of ['captain', 'vice_captain']) {
     assert.equal(platformAuthorityRank(role), platformAuthorityRank('admin'))
     assert.equal(canAccessCommandCentre(role), true)
     assert.equal(canApproveSignupFor(role, null, 'Tango Oscar'), true)
     assert.equal(canApproveSignupFor(role, null, 'Victor Oscar'), true)
   }
+  assert.equal(isPlatformAdministrator('head_of_command'), false)
+  assert.equal(canApproveSignupFor('head_of_command', null, 'Victor Oscar'), false)
+  assert.equal(isPlatformAdministrator('head_of_command', true), true)
+  assert.equal(canApproveSignupFor('tango_oscar', 'Tango Oscar', 'Victor Oscar', true), true)
 })
 test('a unit head role does not by itself grant another unit head authority', () => {
   assert.equal(isUnitHeadRole('victor', 'head_victor_oscar'), true)

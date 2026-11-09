@@ -90,8 +90,8 @@ export default function SerialPage() {
     files: [] as File[],
   })
 
-  const allowed = canAccessSierra(currentUser?.role, currentUser?.oscar)
-  const canManage = canManageSierra(currentUser?.role, currentUser?.oscar)
+  const allowed = canAccessSierra(currentUser?.role, currentUser?.oscar, currentUser?.has_admin_access)
+  const canManage = canManageSierra(currentUser?.role, currentUser?.oscar, currentUser?.has_admin_access)
 
   const { data: programs = [] } = useQuery({
     queryKey: ["programs-lite"],

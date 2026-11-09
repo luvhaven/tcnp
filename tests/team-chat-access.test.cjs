@@ -20,15 +20,15 @@ const utils = load('lib/utils.ts')
 const roomNames = rooms => Array.from(rooms, room => room.value)
 
 test('Captain and Vice Captains can access all team rooms without a team assignment', () => {
-  for (const role of ['captain', 'vice_captain', 'head_of_command', 'admin', 'super_admin']) {
+  for (const role of ['captain', 'vice_captain', 'head_of_command', 'admin', 'super_admin', 'tango_oscar']) {
     for (const assigned of [null, 'strength', 'wisdom', 'swift']) {
-      assert.deepEqual(roomNames(utils.getAccessibleTeamChats(role, assigned)), ['strength', 'wisdom', 'swift'])
+      assert.deepEqual(roomNames(utils.getAccessibleTeamChats(role, assigned, role === 'head_of_command' || role === 'tango_oscar')), ['strength', 'wisdom', 'swift'])
     }
   }
 })
 
 test('ordinary officers and team heads stay within their assigned team', () => {
-  for (const role of ['tango_oscar', 'head_welfare_oscar', 'command', 'viewer', null]) {
+  for (const role of ['tango_oscar', 'head_welfare_oscar', 'head_of_command', 'command', 'viewer', null]) {
     assert.deepEqual(roomNames(utils.getAccessibleTeamChats(role, 'wisdom')), ['wisdom'])
     assert.deepEqual(roomNames(utils.getAccessibleTeamChats(role, null)), [])
     assert.deepEqual(roomNames(utils.getAccessibleTeamChats(role, 'unknown')), [])

@@ -23,13 +23,13 @@ export async function GET(request: Request) {
     }
     const { data: profile, error: profileError } = await supabase
         .from('users')
-        .select('role, oscar, activation_status, is_active')
+        .select('role, has_admin_access, oscar, activation_status, is_active')
         .eq('id', user.id)
         .maybeSingle()
     if (profileError || !profile || profile.activation_status !== 'active' || profile.is_active === false) {
         return NextResponse.json({ error: 'Active account required' }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } })
     }
-    if (!canAccessCommandCentre(profile.role, profile.oscar) && !canManageEagles(profile.role, profile.oscar)) {
+    if (!canAccessCommandCentre(profile.role, profile.oscar, profile.has_admin_access) && !canManageEagles(profile.role, profile.oscar, profile.has_admin_access)) {
         return NextResponse.json({ error: 'Alpha, Command, or administrator access required' }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } })
     }
 

@@ -46,7 +46,7 @@ export function BottomNav({ onOpenMore, moreOpen }: BottomNavProps) {
 
   const tabs = useMemo(() => {
     const allowed = new Set(
-      getVisibleNav(currentUser?.role ?? null, currentUser?.oscar ?? null).map((item) => item.href)
+      getVisibleNav(currentUser?.role ?? null, currentUser?.oscar ?? null, [], currentUser?.has_admin_access).map((item) => item.href)
     )
     return TAB_HREFS.filter((href) => allowed.has(href))
       .map((href) => ALL_NAV.find((item) => item.href === href))

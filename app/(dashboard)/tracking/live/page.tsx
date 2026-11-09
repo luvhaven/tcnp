@@ -9,7 +9,7 @@ import { useCurrentUser } from '@/hooks/useCurrentUser'
 
 export default function LiveTrackingPage() {
   const { data: currentUser, isLoading: loading } = useCurrentUser()
-  const hasAccess = Boolean(currentUser && canViewLiveTracking(currentUser.role, currentUser.oscar))
+  const hasAccess = Boolean(currentUser && canViewLiveTracking(currentUser.role, currentUser.oscar, currentUser.has_admin_access))
 
   // Loading skeleton
   if (loading) {

@@ -44,8 +44,8 @@ export type ChatRoomMembersResponse = {
 
 export const CHAT_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-export function canManageChatMemberships(role?: string | null): boolean {
-  return isPlatformAdministrator(role)
+export function canManageChatMemberships(role?: string | null, hasAdminAccess?: boolean | null): boolean {
+  return isPlatformAdministrator(role, hasAdminAccess)
 }
 
 export function isChatProgramOpen(program: {

@@ -21,13 +21,13 @@ export async function GET(
 
     const { data: caller, error: callerError } = await supabase
       .from('users')
-      .select('role, oscar, activation_status, is_active')
+      .select('role, has_admin_access, oscar, activation_status, is_active')
       .eq('id', user.id)
       .maybeSingle()
     if (callerError || !caller || caller.activation_status !== 'active' || caller.is_active === false) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
-    if (user.id !== id && !canViewOfficerFullProfile(caller.role, caller.oscar)) {
+    if (user.id !== id && !canViewOfficerFullProfile(caller.role, caller.oscar, caller.has_admin_access)) {
       return NextResponse.json({ error: 'Forbidden: You cannot view this officer profile' }, { status: 403 })
     }
 

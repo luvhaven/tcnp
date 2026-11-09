@@ -101,7 +101,10 @@ test('real notification banner, inbox and feedback controls work together withou
   if (name === 'sonner') return { toast }
   if (name === '@/lib/utils') return { cn: require('clsx').clsx }
   if (name === '@/lib/audio/AudioManager') return { audioManager: audio }
-  if (name.startsWith('@/')) return load(`${name.slice(2)}${name.includes('notification-presentation') ? '.tsx' : name === '@/hooks/useNotifications' || name === '@/lib/notification-feedback' ? '.ts' : '.tsx'}`)
+  if (name.startsWith('@/')) {
+   const source = name.slice(2)
+   return load(fs.existsSync(`${source}.ts`) ? `${source}.ts` : `${source}.tsx`)
+  }
  } })
  const globals = { URLSearchParams, window: dom.window, document, navigator, localStorage: dom.window.localStorage, Event: dom.window.Event }
  function load(file) { if (!cache.has(file)) cache.set(file, compile(file, imports, globals)); return cache.get(file) }

@@ -14,7 +14,7 @@ export async function POST(request: Request) {
 
     const { data: caller, error: callerError } = await supabase
       .from('users')
-      .select('id, full_name, email, role, activation_status, is_active')
+      .select('id, full_name, email, role, has_admin_access, activation_status, is_active')
       .eq('id', user.id)
       .single()
 
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    if (!isPlatformAdministrator(caller.role)) {
+    if (!isPlatformAdministrator(caller.role, caller.has_admin_access)) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 

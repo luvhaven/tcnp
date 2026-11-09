@@ -168,6 +168,7 @@ export function useMyOperations() {
   const [submittedReportIds, setSubmittedReportIds] = useState<Set<string>>(() => new Set())
   const [userId, setUserId] = useState<string | null>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [adminGranted, setAdminGranted] = useState(false)
   const [userOscar, setUserOscar] = useState<string | null>(null)
   const [channelStatus, setChannelStatus] = useState<'live' | 'reconnecting'>('reconnecting')
   const online = useOnlineStatus()
@@ -188,13 +189,13 @@ export function useMyOperations() {
 
       const { data: userData } = await supabase
         .from('users')
-        .select('id, role, oscar')
+        .select('id, role, has_admin_access, oscar')
         .eq('id', user.id)
         .single()
 
       const role = (userData as any)?.role ?? null
       const oscar = (userData as any)?.oscar ?? null
-      const isAdminUser = isAdmin(role) || isAdmin(effectiveOscarRole(role, oscar))
+      const isAdminUser = isAdmin(role, userData?.has_admin_access) || isAdmin(effectiveOscarRole(role, oscar))
 
       // ── Program assignments (direct title assignments + view fallback) ─────
       // Both reads are independent, so run them together.
@@ -351,7 +352,7 @@ export function useMyOperations() {
       }
       const enrich = (j: any): OpsJourney => ({ ...j, duty_officers: doMap[j.id] || [], driver: driverMap[j.id] ?? null })
 
-      const active = rawActive.map(enrich).filter(j => journeyMatchesRole(j, role, user.id, oscar))
+      const active = rawActive.map(enrich).filter(j => isAdminUser || journeyMatchesRole(j, role, user.id, oscar))
       const completed = rawCompleted.map(enrich).filter(j => isOwnAssignment(j, user.id))
 
       if (!isCurrent()) return // a newer load started while this one was in flight
@@ -379,6 +380,7 @@ export function useMyOperations() {
       setUserId(user.id)
       setUserRole(role)
       setUserOscar(oscar)
+      setAdminGranted(userData?.has_admin_access === true)
       setActivePrograms(programs)
       setJourneys(active)
       setCompletedAssignments(completed)
@@ -466,7 +468,7 @@ export function useMyOperations() {
     setSubmittedReportIds(prev => new Set(prev).add(journeyId))
   }, [])
 
-  const isAdminUser = Boolean(userRole && (isAdmin(userRole) || isAdmin(effectiveOscarRole(userRole, userOscar))))
+  const isAdminUser = Boolean(userRole && (isAdmin(userRole, adminGranted) || isAdmin(effectiveOscarRole(userRole, userOscar))))
   const liveState: LiveState = !online ? 'offline' : loadFailed ? 'stale' : channelStatus
 
   return {

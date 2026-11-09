@@ -56,8 +56,8 @@ export default function EaglesPage() {
         const loadRole = async () => {
             const { data: { user } } = await supabase.auth.getUser()
             if (!user) return
-            const { data } = await supabase.from('users').select('role,oscar').eq('id', user.id).single()
-            const resolvedRole = effectiveOscarRole(data?.role, data?.oscar)
+            const { data } = await supabase.from('users').select('role, has_admin_access, oscar').eq('id', user.id).single()
+            const resolvedRole = data?.has_admin_access ? 'admin' : effectiveOscarRole(data?.role, data?.oscar)
             if (resolvedRole) setUserRole(resolvedRole)
         }
         void loadRole()
@@ -472,11 +472,11 @@ function TrackEagles() {
                 if (user) {
                     const { data } = await supabase
                         .from('users')
-                        .select('role,oscar')
+                        .select('role, has_admin_access, oscar')
                         .eq('id', user.id)
                         .single()
 
-                    const resolvedRole = effectiveOscarRole(data?.role, data?.oscar)
+                    const resolvedRole = data?.has_admin_access ? 'admin' : effectiveOscarRole(data?.role, data?.oscar)
                     if (resolvedRole) {
                         setCurrentRole(resolvedRole)
                     }

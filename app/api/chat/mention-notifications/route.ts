@@ -63,10 +63,10 @@ export async function POST(req: NextRequest) {
     if (existing && existing > 0) return NextResponse.json({ success: true, recipients: 0 })
 
     const { data: activeRecipients, error: recipientError } = await db.from('users')
-      .select('id, role, team').in('id', recipientIds).eq('is_active', true).eq('activation_status', 'active')
+      .select('id, role, has_admin_access, team').in('id', recipientIds).eq('is_active', true).eq('activation_status', 'active')
     if (recipientError) throw recipientError
-    const candidates = (activeRecipients ?? []) as { id: string; role: string | null; team: string | null }[]
-    const permitted = new Set(candidates.filter(recipient => isPlatformAdministrator(recipient.role)).map(recipient => recipient.id))
+    const candidates = (activeRecipients ?? []) as { id: string; role: string | null; has_admin_access: boolean; team: string | null }[]
+    const permitted = new Set(candidates.filter(recipient => isPlatformAdministrator(recipient.role, recipient.has_admin_access)).map(recipient => recipient.id))
 
     if (message.team) {
       candidates.filter(recipient => recipient.team === message.team).forEach(recipient => permitted.add(recipient.id))

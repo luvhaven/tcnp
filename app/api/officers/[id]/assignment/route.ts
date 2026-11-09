@@ -28,14 +28,14 @@ export async function PATCH(
 
     const { data: caller, error: callerError } = await supabase
       .from('users')
-      .select('role, activation_status, is_active')
+      .select('role, has_admin_access, activation_status, is_active')
       .eq('id', user.id)
       .maybeSingle()
 
     if (callerError || !caller || caller.activation_status !== 'active' || caller.is_active === false) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
-    if (!isPlatformAdministrator(caller.role)) {
+    if (!isPlatformAdministrator(caller.role, caller.has_admin_access)) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 

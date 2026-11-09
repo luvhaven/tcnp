@@ -15,7 +15,7 @@ export async function POST(request: Request) {
 
     const { data: caller, error: callerError } = await supabase
       .from('users')
-      .select('id, full_name, email, role, activation_status, is_active')
+      .select('id, full_name, email, role, has_admin_access, activation_status, is_active')
       .eq('id', user.id)
       .single()
 
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    if (!isPlatformAdministrator(caller.role)) {
+    if (!isPlatformAdministrator(caller.role, caller.has_admin_access)) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
 
     const { data: target } = await db
       .from('users')
-      .select('role, email')
+      .select('role, has_admin_access, email')
       .eq('id', resetReq.user_id)
       .maybeSingle()
 
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     if (isPermanentOwnerEmail(target.email)) {
       return NextResponse.json({ error: 'The platform owner account cannot be reset through this workflow.' }, { status: 403 })
     }
-    if (platformAuthorityRank(target.role) >= 80 && !isSuperAdmin(caller.role)) {
+    if (platformAuthorityRank(target.role, target.has_admin_access) >= 80 && !isSuperAdmin(caller.role)) {
       return NextResponse.json({ error: 'Only a Super Admin can approve resets for administrator accounts.' }, { status: 403 })
     }
     if (resetReq.user_id === caller.id) {

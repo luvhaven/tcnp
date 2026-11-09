@@ -3572,6 +3572,7 @@ export type Database = {
           gender: string | null
           id: string
           is_active: boolean | null
+          has_admin_access: boolean
           is_directory_hidden: boolean
           is_online: boolean | null
           is_team_head: boolean
@@ -3610,6 +3611,7 @@ export type Database = {
           gender?: string | null
           id: string
           is_active?: boolean | null
+          has_admin_access?: boolean
           is_directory_hidden?: boolean
           is_online?: boolean | null
           is_team_head?: boolean
@@ -3648,6 +3650,7 @@ export type Database = {
           gender?: string | null
           id?: string
           is_active?: boolean | null
+          has_admin_access?: boolean
           is_directory_hidden?: boolean
           is_online?: boolean | null
           is_team_head?: boolean

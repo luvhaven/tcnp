@@ -42,7 +42,7 @@ async function caller() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) } as const
   const { data: profile, error } = await supabase.from('users')
-    .select('role, full_name, team, is_team_head, activation_status, is_active')
+    .select('role, has_admin_access, full_name, team, is_team_head, activation_status, is_active')
     .eq('id', user.id).maybeSingle()
   if (error || !profile || profile.activation_status !== 'active' || profile.is_active !== true) {
     return { error: NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 }) } as const
@@ -57,7 +57,7 @@ export async function DELETE(request: Request) {
     const auth = await caller()
     if ('error' in auth) return auth.error
     const { profile: callerData, user } = auth
-    if (!isPlatformAdministrator(callerData.role)) {
+    if (!isPlatformAdministrator(callerData.role, callerData.has_admin_access)) {
       return NextResponse.json({ error: 'Forbidden: only platform administrators can permanently delete chats' }, { status: 403 })
     }
     const params = new URL(request.url).searchParams
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
     }
     const { action, messageId } = body
     if (action === 'archive') {
-      if (!isPlatformAdministrator(callerData.role)) {
+      if (!isPlatformAdministrator(callerData.role, callerData.has_admin_access)) {
         return NextResponse.json({ error: 'Forbidden: only platform administrators can archive chats' }, { status: 403 })
       }
       const scope = parseScope(body)
@@ -129,7 +129,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'A valid messageId is required.' }, { status: 400 })
     }
 
-    const platformAdmin = isPlatformAdministrator(callerData.role)
+    const platformAdmin = isPlatformAdministrator(callerData.role, callerData.has_admin_access)
     if (!platformAdmin) {
       // auth.uid() must be the actual caller, not the service-role identity.
       const { data: allowed, error } = await (supabase as any).rpc('can_access_chat_message', { target_message_id: messageId })

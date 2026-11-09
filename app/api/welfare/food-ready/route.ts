@@ -31,11 +31,11 @@ export async function POST(req: NextRequest) {
         const adminClient = createAdminClient()
         const db = adminClient as any
 
-        const { data: profile } = await db.from('users').select('role, full_name, activation_status, is_active').eq('id', user.id).single()
+        const { data: profile } = await db.from('users').select('role, has_admin_access, full_name, activation_status, is_active').eq('id', user.id).single()
         if (!profile || profile.activation_status !== 'active' || profile.is_active === false) {
             return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
         }
-        if (!profile?.role || !ALLOWED_ROLES.includes(profile.role)) {
+        if (profile.has_admin_access !== true && !ALLOWED_ROLES.includes(profile.role)) {
             return NextResponse.json({ error: 'Forbidden: Welfare or leadership access required' }, { status: 403 })
         }
 

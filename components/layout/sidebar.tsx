@@ -77,7 +77,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   }, [currentUser?.id, isLoadingCurrentUser])
 
   const visibleSections = useMemo(() => {
-    const allowed = new Set(getVisibleNav(currentUser?.role ?? null, currentUser?.oscar ?? null, unitSlugs).map(i => i.href))
+    const allowed = new Set(getVisibleNav(currentUser?.role ?? null, currentUser?.oscar ?? null, unitSlugs, currentUser?.has_admin_access).map(i => i.href))
     return NAV_SECTIONS
       .map(section => ({ ...section, items: section.items.filter(i => allowed.has(i.href)) }))
       .filter(section => section.items.length > 0)

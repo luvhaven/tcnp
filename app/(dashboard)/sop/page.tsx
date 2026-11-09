@@ -668,6 +668,7 @@ export default function SOPPage() {
     const supabase = createClient()
     const [search, setSearch] = useState('')
     const [active, setActive] = useState('call-signs')
+    const [adminGranted, setAdminGranted] = useState(false)
     const [userRole, setUserRole] = useState<string | null>(null)
     const [userOscar, setUserOscar] = useState<string | null>(null)
     const [customDocs, setCustomDocs] = useState<{ id: string, oscar: string, title: string, content: string, doc_type: string }[]>([])
@@ -680,8 +681,8 @@ export default function SOPPage() {
         const load = async () => {
             const { data: { user } } = await supabase.auth.getUser()
             if (!user) return
-            const { data } = await supabase.from('users').select('role, oscar').eq('id', user.id).single<{ role: string; oscar: string }>()
-            if (data) { setUserRole(data.role); setUserOscar(data.oscar) }
+            const { data } = await supabase.from('users').select('role, has_admin_access, oscar').eq('id', user.id).single()
+            if (data) { setUserRole(data.role); setUserOscar(data.oscar); setAdminGranted(data.has_admin_access) }
 
             const { data: docs } = await supabase.from('oscar_documents').select('*')
             if (docs) setCustomDocs(docs)
@@ -729,7 +730,7 @@ export default function SOPPage() {
 
     // Always show DO section to DOs, admins, captains
     const isDO = userRole === 'delta_oscar'
-    const isAdmin = hasAdminAccess(userRole)
+    const isAdmin = hasAdminAccess(userRole, adminGranted)
 
     const filtered = useMemo(() =>
         dynamicSections.filter(s => {

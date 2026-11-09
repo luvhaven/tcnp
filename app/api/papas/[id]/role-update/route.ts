@@ -24,7 +24,7 @@ export async function PATCH(
     // Get requesting user's role
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('role, oscar, full_name, activation_status, is_active')
+      .select('role, has_admin_access, oscar, full_name, activation_status, is_active')
       .eq('id', user.id)
       .single()
 
@@ -61,7 +61,7 @@ export async function PATCH(
     // lead. Platform administrators retain cross-program authority. During the
     // additive membership rollout, an active title assignment remains a safe
     // compatibility path for legacy head accounts.
-    if (!isAdmin(role)) {
+    if (!isAdmin(role, userData.has_admin_access)) {
       const requiredUnit = ROLE_UNIT[effectiveRole]
       let hasScopedAuthority = false
 

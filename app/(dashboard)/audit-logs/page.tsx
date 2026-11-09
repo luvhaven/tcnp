@@ -40,11 +40,11 @@ export default function AuditLogsPage() {
 
       const { data: userData } = await supabase
         .from('users')
-        .select('role, oscar')
+        .select('role, has_admin_access, oscar')
         .eq('id', user.id)
         .single()
 
-      if (!userData || !(isAdmin((userData as any).role) || isAdmin(effectiveOscarRole((userData as any).role, (userData as any).oscar)))) {
+      if (!userData || !(isAdmin(userData.role, userData.has_admin_access) || isAdmin(effectiveOscarRole((userData as any).role, (userData as any).oscar)))) {
         setAuthorized(false)
         toast.error('Access denied. Leadership privileges required to view audit logs.')
         return

@@ -47,7 +47,7 @@ export function useUnitAccess(unit: UnitSlug) {
     retry: false,
   })
 
-  const isPlatformAdmin = isPlatformAdministrator(currentUser?.role)
+  const isPlatformAdmin = isPlatformAdministrator(currentUser?.role, currentUser?.has_admin_access)
   const legacyHead = isUnitHeadRole(unit, currentUser?.role, currentUser?.oscar)
   const authorityAvailable = membershipQuery.data?.authorityAvailable === true
   const membership = membershipQuery.data?.membership ?? null

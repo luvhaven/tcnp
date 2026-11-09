@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
         const { data: currentUser } = await (supabase as any)
             .from('users')
-            .select('role')
+            .select('role, has_admin_access')
             .eq('id', user.id)
             .eq('activation_status', 'active')
             .or('is_active.is.null,is_active.eq.true')
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
 
         const role = (currentUser as { role?: string } | null)?.role
 
-        if (!role || !isPlatformAdministrator(role)) {
+        if (!role || !isPlatformAdministrator(role, currentUser?.has_admin_access)) {
             return NextResponse.json({ error: 'Forbidden: platform administrator access required' }, { status: 403 })
         }
 

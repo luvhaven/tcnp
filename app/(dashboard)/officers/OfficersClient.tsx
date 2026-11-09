@@ -19,7 +19,7 @@ import { toast } from "sonner"
 import { notifyError, UserFacingError } from '@/lib/notify'
 import { motion, AnimatePresence } from "framer-motion"
 import { OfficerProfileDialog } from "@/components/officers/OfficerProfileDialog"
-import { cn, isPlatformAdministrator } from "@/lib/utils"
+import { cn, isExecutiveRole, isPlatformAdministrator, oscarToRole, privilegedAccessLabel } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
@@ -36,6 +36,7 @@ type Officer = {
   phone: string | null
   oscar: string | null
   role: string
+  has_admin_access?: boolean
   unit: string | null
   current_title_id: string | null
   is_active: boolean
@@ -93,6 +94,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
     full_name: '',
     phone: '',
     role: '',
+    has_admin_access: false,
     photo_url: '',
     team: '',
     is_team_head: false
@@ -170,7 +172,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
     retry: 1
   })
 
-  const canManageOfficers = Boolean(currentUser && isPlatformAdministrator(currentUser.role))
+  const canManageOfficers = Boolean(currentUser && isPlatformAdministrator(currentUser.role, currentUser.has_admin_access))
+  const canAssignElevatedAccess = currentUser?.role === 'super_admin'
 
   const [activeTab, setActiveTab] = useState(['directory', 'manage', 'pending', 'resets'].includes(searchParams.get('tab') || '') ? searchParams.get('tab')! : 'directory')
 
@@ -493,6 +496,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
       full_name: '',
       phone: '',
       role: 'delta_oscar',
+      has_admin_access: false,
       photo_url: '',
       team: '',
       is_team_head: false
@@ -543,9 +547,10 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
       password: '',
       full_name: officer.full_name || '',
       phone: officer.phone || '',
-      role: officer.role,
+      role: officer.role === 'admin' ? oscarToRole(officer.oscar) ?? 'viewer' : officer.role,
+      has_admin_access: officer.has_admin_access === true || officer.role === 'admin',
       photo_url: officer.photo_url || '',
-      team: officer.team || '',
+      team: officer.team === 'executive' ? '' : officer.team || '',
       is_team_head: officer.is_team_head === true
     })
     setDialogOpen(true)
@@ -999,6 +1004,9 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                                   <Badge className={`text-xs uppercase tracking-wide ${getRoleBadgeColor(officer.role)}`}>
                                     {getRoleLabel(officer.role)}
                                   </Badge>
+                                  {officer.role !== 'admin' && privilegedAccessLabel(officer.role, officer.has_admin_access) && (
+                                    <Badge variant="outline" className="ml-1 text-xs">{privilegedAccessLabel(officer.role, officer.has_admin_access)}</Badge>
+                                  )}
                                   {officer.oscar && (
                                     <span className="text-xs text-muted-foreground">
                                       {officer.oscar}
@@ -1506,7 +1514,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Officer' : 'Add Protocol Officer'}</DialogTitle>
             <DialogDescription>
-              {editing ? 'Update officer details and role.' : 'Create a new Protocol Officer account.'}
+              {editing ? 'Update officer details, role and additional access.' : 'Create a new Protocol Officer account.'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-4">
@@ -1529,24 +1537,45 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
               <Input id="phone" type="tel" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="role">Role / Oscar *</Label>
+              <Label htmlFor="role">Role / OSCAR *</Label>
               <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
-                <SelectTrigger>
+                <SelectTrigger id="role">
                   <SelectValue placeholder="Select a role..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {roles.map((role) => <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>)}
+                  {editing && editing.role !== 'admin' && !roles.some(role => role.value === editing.role) && (
+                    <SelectItem value={editing.role}>{getRoleLabel(editing.role)}</SelectItem>
+                  )}
+                  {roles.map((role) => <SelectItem key={role.value} value={role.value} disabled={!canAssignElevatedAccess && isExecutiveRole(role.value)}>{role.label}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="additional-access">Additional access</Label>
+              <Select
+                value={formData.has_admin_access ? 'admin' : 'none'}
+                onValueChange={(value) => setFormData({ ...formData, has_admin_access: value === 'admin' })}
+                disabled={!canAssignElevatedAccess || editing?.role === 'super_admin' || editing?.role === 'dev_admin'}
+              >
+                <SelectTrigger id="additional-access" aria-describedby="additional-access-description"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+              <p id="additional-access-description" className="text-xs text-muted-foreground">
+                {isExecutiveRole(formData.role) ? 'Executive OSCAR and team are assigned automatically. Executives can participate across all teams and OSCARs.' : 'Admin access can be added to any officer role by the Super Admin.'}
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="team">Protocol Team</Label>
-                <Select value={formData.team || 'none'} onValueChange={(value) => setFormData({ ...formData, team: value === 'none' ? '' : value, is_team_head: value === 'none' ? false : formData.is_team_head })}>
+                <Select disabled={isExecutiveRole(formData.role)} value={isExecutiveRole(formData.role) ? 'executive' : formData.team || 'none'} onValueChange={(value) => setFormData({ ...formData, team: value === 'none' ? '' : value, is_team_head: value === 'none' ? false : formData.is_team_head })}>
                   <SelectTrigger id="team">
                     <SelectValue placeholder="Select team..." />
                   </SelectTrigger>
                   <SelectContent>
+                    {isExecutiveRole(formData.role) && <SelectItem value="executive">Executive</SelectItem>}
                     <SelectItem value="none">No team</SelectItem>
                     <SelectItem value="strength">Team Strength</SelectItem>
                     <SelectItem value="wisdom">Team Wisdom</SelectItem>
@@ -1561,8 +1590,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                     id="is_team_head"
                     type="checkbox"
                     className="h-4 w-4 accent-orange-500"
-                    disabled={!formData.team}
-                    checked={formData.is_team_head}
+                    disabled={!formData.team || isExecutiveRole(formData.role)}
+                    checked={!isExecutiveRole(formData.role) && formData.is_team_head}
                     onChange={(e) => setFormData({ ...formData, is_team_head: e.target.checked })}
                   />
                   <span className="text-sm text-muted-foreground">Moderates team chat</span>

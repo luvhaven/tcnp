@@ -477,7 +477,7 @@ export default function JourneyStatusTable() {
     // with the other surfaces (Cocktail was amber here, green on My Operations)
     // and have been removed rather than re-synced, so there is only one source.
 
-    const isLeadership = Boolean(currentUser?.role && (isAdmin(currentUser.role) || isAdmin(effectiveOscarRole(currentUser.role, currentUser.oscar))))
+    const isLeadership = Boolean(currentUser?.role && (isAdmin(currentUser.role, currentUser.has_admin_access) || isAdmin(effectiveOscarRole(currentUser.role, currentUser.oscar))))
 
     const filteredJourneys = journeys.filter(journey => {
         const doNames = journey.duty_officers?.map(d => d.users?.full_name?.toLowerCase() ?? '').join(' ') ??

@@ -217,7 +217,7 @@ export default function DashboardPage() {
   // incident information. Keep them strictly within Command/Admin scope.
   const canViewGlobalDashboard = useMemo(() => {
     if (!currentUser) return false
-    return canAccessCommandCentre(currentUser.role, currentUser.oscar)
+    return canAccessCommandCentre(currentUser.role, currentUser.oscar, currentUser.has_admin_access)
   }, [currentUser])
 
   const handleInstallClick = async () => {
@@ -417,7 +417,7 @@ export default function DashboardPage() {
 
   // ── Leadership quick actions — must be a useMemo BEFORE any early return ──
   const leadershipQuickActions = useMemo(() => {
-    const canCmd = Boolean(currentUser && canAccessCommandCentre(currentUser.role, currentUser.oscar))
+    const canCmd = Boolean(currentUser && canAccessCommandCentre(currentUser.role, currentUser.oscar, currentUser.has_admin_access))
     const actions: Array<{ href: string; label: string; sub: string; Icon: any; color: string; bg: string }> = [
       { href: "/journeys", label: "Create Journey", sub: "Plan a new Papa movement", Icon: MapPin, color: "text-primary", bg: "bg-primary/10" },
       { href: "/papas", label: "Add Papa", sub: "Register a new guest", Icon: Users, color: "text-emerald-500", bg: "bg-emerald-500/10" },
