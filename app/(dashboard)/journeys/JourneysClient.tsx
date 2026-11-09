@@ -420,7 +420,6 @@ export default function JourneysClient({
     }
   }
 
-  const handleCreateJourney = async (e: React.FormEvent) => {
   useReloadOnDeletion(['programs', 'papas', 'cheetahs', 'nests', 'eagle_squares', 'users'], () => {
     void loadLookups()
   })
@@ -428,6 +427,7 @@ export default function JourneysClient({
     void loadJourneys(false, false, loadedCountRef.current)
   })
 
+  const handleCreateJourney = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!canCreateJourney) {

@@ -404,9 +404,9 @@ export function useMyOperations() {
   }, [load])
 
   const reload = useCallback(() => load(false), [load])
+  useReloadOnDeletion(['programs', 'journeys', 'papas', 'cheetahs', 'nests', 'journey_cheetahs'], scheduleReload)
 
   // Initial load, then realtime once we know who the user is (filters need the uid)
-  useReloadOnDeletion(['programs', 'journeys', 'papas', 'cheetahs', 'nests', 'journey_cheetahs'], scheduleReload)
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | undefined
     let active = true
