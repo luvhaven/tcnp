@@ -10,7 +10,7 @@ export async function GET() {
     const caller = await getChatCaller()
     if ('error' in caller) return caller.error
     const { db, profile, canManageMembers } = caller
-    const rooms: ChatRoomSummary[] = getAccessibleTeamChats(profile.role, profile.team).map(team => ({
+    const rooms: ChatRoomSummary[] = getAccessibleTeamChats(profile.role, profile.team, profile.has_admin_access).map(team => ({
       id: `team:${team.value}`, kind: 'team', label: team.label,
       programId: null, papaId: null, team: team.value,
     }))

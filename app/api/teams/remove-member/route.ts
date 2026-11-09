@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
         const adminClient = createAdminClient()
         const db = adminClient as any
 
-        const { data: me } = await db.from('users').select('role, team, is_team_head, activation_status, is_active').eq('id', user.id).single()
+        const { data: me } = await db.from('users').select('role, has_admin_access, team, is_team_head, activation_status, is_active').eq('id', user.id).single()
         if (!me) return NextResponse.json({ error: 'Profile not found' }, { status: 403 })
         if (me.activation_status !== 'active' || me.is_active === false) {
             return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
@@ -34,7 +34,9 @@ export async function POST(req: NextRequest) {
         if (target?.is_directory_hidden) return NextResponse.json({ error: 'Officer not found' }, { status: 404 })
         if (!target?.team) return NextResponse.json({ error: 'Officer is not in a team' }, { status: 400 })
 
-        const isPlatformAdmin = ADMIN_ROLES.includes(me.role ?? '')
+        if (target.team === 'executive') return NextResponse.json({ error: 'Executive team follows the officer’s leadership role' }, { status: 400 })
+
+        const isPlatformAdmin = me.has_admin_access === true || ADMIN_ROLES.includes(me.role ?? '')
         const isSameTeamHead = me.is_team_head === true && me.team === target.team
         if (!isPlatformAdmin && !isSameTeamHead) {
             return NextResponse.json({ error: 'Forbidden: team head or admin access required' }, { status: 403 })

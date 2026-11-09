@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
     const { data: caller, error: callerError } = await supabase
       .from('users')
-      .select('role, activation_status, is_active')
+      .select('role, has_admin_access, activation_status, is_active')
       .eq('id', user.id)
       .maybeSingle()
     if (callerError || !caller || caller.activation_status !== 'active' || caller.is_active === false) {
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     // The roster contains officer identities. A caller may inspect it only
     // when they administer the platform or belong to this program (including
     // an explicit availability response for this program).
-    if (!isAdmin(caller.role)) {
+    if (!isAdmin(caller.role, caller.has_admin_access)) {
       const [{ data: titleAssignment, error: titleError }, { data: programRequests, error: requestsAccessError }] = await Promise.all([
         db.from('current_title_assignments').select('id').eq('program_id', programId).eq('user_id', user.id).eq('is_active', true).limit(1),
         db.from('mission_requests').select('id').eq('program_id', programId),

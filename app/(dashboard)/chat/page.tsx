@@ -25,7 +25,7 @@ function ChatContent() {
   const [version, setVersion] = useState(0)
   const [consumedSeeds, setConsumedSeeds] = useState<string[]>([])
   const query = useQuery<ChatRoomsResponse>({
-    queryKey: ['chat-rooms', me?.id, me?.role, me?.team],
+    queryKey: ['chat-rooms', me?.id, me?.role, me?.team, me?.has_admin_access],
     queryFn: async ({ signal }) => {
       const response = await fetch('/api/chat/rooms', { signal, cache: 'no-store' })
       const body = await response.json()
@@ -46,7 +46,7 @@ function ChatContent() {
       : requestedTeam ? room.team === requestedTeam : false)
   const active = selected ? rooms.find(room => room.id === selected) : requestedRoom || (!hasRequestedRoom ? rooms.find(room => room.kind === 'program') || rooms.find(room => room.kind === 'papa') || rooms[0] : undefined)
   const selectRoom = (room: ChatRoomSummary) => { setSelection({ id: room.id, requestKey }); setMembersOpen(false) }
-  const platform = isPlatformAdministrator(me?.role)
+  const platform = isPlatformAdministrator(me?.role, me?.has_admin_access)
   const loading = userLoading || (Boolean(me) && query.isPending)
   const initialMessage = !selected && !consumedSeeds.includes(requestKey) ? params.get('message') || undefined : undefined
   useEffect(() => {

@@ -14,14 +14,14 @@ async function getApprover() {
 
   const { data: caller } = await supabase
     .from('users')
-    .select('id, role, oscar, activation_status, is_active')
+    .select('id, role, has_admin_access, oscar, activation_status, is_active')
     .eq('id', user.id)
     .maybeSingle()
 
   if (!caller || caller.activation_status !== 'active' || caller.is_active === false) {
     return { error: NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 }) }
   }
-  if (!canApproveSignups(caller.role, caller.oscar)) {
+  if (!canApproveSignups(caller.role, caller.oscar, caller.has_admin_access)) {
     return { error: NextResponse.json({ error: 'Only an admin or a unit head can approve signups' }, { status: 403 }) }
   }
   return { caller }
@@ -45,8 +45,8 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to load pending signups' }, { status: 500 })
     }
 
-    const pending = (data ?? []).filter(applicant => canApproveSignupFor(caller.role, caller.oscar, applicant.oscar))
-    return NextResponse.json({ pending, scope: isPlatformAdministrator(caller.role) ? 'all' : 'unit' })
+    const pending = (data ?? []).filter(applicant => canApproveSignupFor(caller.role, caller.oscar, applicant.oscar, caller.has_admin_access))
+    return NextResponse.json({ pending, scope: isPlatformAdministrator(caller.role, caller.has_admin_access) ? 'all' : 'unit' })
   } catch (err: any) {
     console.error('[signup-approvals] unexpected GET error:', err)
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 })
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     if (applicant.activation_status !== 'pending') {
       return NextResponse.json({ error: 'This signup is no longer pending' }, { status: 409 })
     }
-    if (!canApproveSignupFor(caller.role, caller.oscar, applicant.oscar)) {
+    if (!canApproveSignupFor(caller.role, caller.oscar, applicant.oscar, caller.has_admin_access)) {
       return NextResponse.json({ error: 'You can only approve signups into your own unit' }, { status: 403 })
     }
 

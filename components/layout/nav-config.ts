@@ -159,12 +159,12 @@ const UNIT_HREFS: Record<string, string[]> = {
   welfare: ["/welfare"],
 }
 
-export function getVisibleNav(role: string | null, oscar?: string | null, unitSlugs: string[] = []): typeof ALL_NAV {
+export function getVisibleNav(role: string | null, oscar?: string | null, unitSlugs: string[] = [], hasAdminAccess?: boolean): typeof ALL_NAV {
   const oscarRole = oscarToRole(oscar)
   const effectiveRole = role === 'delta_oscar' ? (oscarRole || role) : (role || oscarRole)
   const membershipHrefs = unitSlugs.flatMap(slug => UNIT_HREFS[slug] ?? [])
   const canAccessCommand = Boolean(
-    canAccessCommandCentre(role, oscar)
+    canAccessCommandCentre(role, oscar, hasAdminAccess)
     || unitSlugs.includes('command')
   )
 
@@ -176,7 +176,7 @@ export function getVisibleNav(role: string | null, oscar?: string | null, unitSl
 
   let visibleList: typeof ALL_NAV
 
-  if (ADMIN_ROLES.has(role) || (effectiveRole && ADMIN_ROLES.has(effectiveRole))) {
+  if (hasAdminAccess || ADMIN_ROLES.has(role) || (effectiveRole && ADMIN_ROLES.has(effectiveRole))) {
     visibleList = ALL_NAV
   } else {
     // Resolve extra pages from the assigned role (may be delta_oscar)
@@ -196,7 +196,7 @@ export function getVisibleNav(role: string | null, oscar?: string | null, unitSl
   }
 
   // Signup approvals: admins see everyone, unit heads see their own unit
-  visibleList = canApproveSignups(role, oscar)
+  visibleList = canApproveSignups(role, oscar, hasAdminAccess)
     ? (visibleList.some(n => n.href === "/approvals") ? visibleList : [...visibleList, ...ALL_NAV.filter(n => n.href === "/approvals")])
     : visibleList.filter(n => n.href !== "/approvals")
 

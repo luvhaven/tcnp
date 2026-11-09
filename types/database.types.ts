@@ -48,6 +48,7 @@ export type NotificationChannel = 'email' | 'sms' | 'push' | 'whatsapp';
 export type NotificationStatus = 'pending' | 'sent' | 'failed' | 'delivered';
 
 export interface User {
+  has_admin_access?: boolean
   id: string;
   full_name: string;
   email: string;

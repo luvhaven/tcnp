@@ -27,14 +27,14 @@ async function authorize() {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('role, activation_status, is_active')
+    .select('role, has_admin_access, activation_status, is_active')
     .eq('id', user.id)
     .single()
 
   if (!profile || profile.activation_status !== 'active' || profile.is_active === false) {
     return { error: NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 }) }
   }
-  if (!canManagePapas(profile.role as string)) {
+  if (!canManagePapas(profile.role, profile.has_admin_access)) {
     return { error: NextResponse.json({ error: 'You are not authorized to manage Papas' }, { status: 403 }) }
   }
   return { error: null }

@@ -60,7 +60,7 @@ export default function GuestExperiences() {
   const { data: currentUser } = useCurrentUser()
   const queryClient = useQueryClient()
   const confirm = useConfirm()
-  const canEdit = canManageNoscarNest(currentUser?.role, currentUser?.oscar)
+  const canEdit = canManageNoscarNest(currentUser?.role, currentUser?.oscar, currentUser?.has_admin_access)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Place | null>(null)

@@ -10,6 +10,7 @@ export type CurrentUser = {
     email: string | null
     full_name: string | null
     role: string | null
+    has_admin_access: boolean
     oscar: string | null
     photo_url: string | null
     is_active: boolean
@@ -63,7 +64,7 @@ export function useCurrentUser() {
 
             const { data: profile, error } = await supabase
                 .from('users')
-                .select('id, full_name, role, oscar, photo_url, is_active, team, is_team_head, phone, job_title, bio, date_of_birth, gender, address, local_government_area, state, nearest_bus_stop_landmark, city, profile_completed_at')
+                .select('id, full_name, role, has_admin_access, oscar, photo_url, is_active, team, is_team_head, phone, job_title, bio, date_of_birth, gender, address, local_government_area, state, nearest_bus_stop_landmark, city, profile_completed_at')
                 .eq('id', user.id)
                 .single()
 
@@ -93,6 +94,7 @@ export function useCurrentUser() {
                         email: user.email ?? null,
                         full_name: typeof fullName === 'string' ? fullName : null,
                         role: 'super_admin',
+                        has_admin_access: false,
                         oscar: null,
                         photo_url: typeof photoUrl === 'string' ? photoUrl : null,
                         is_active: true,
@@ -122,6 +124,7 @@ export function useCurrentUser() {
                 email: user.email ?? null,
                 full_name: p.full_name ?? null,
                 role: p.role ?? null,
+                has_admin_access: p.has_admin_access === true,
                 oscar: p.oscar ?? null,
                 photo_url: p.photo_url ?? null,
                 is_active: p.is_active ?? true,

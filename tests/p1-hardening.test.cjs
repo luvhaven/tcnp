@@ -51,13 +51,13 @@ test('every signup unit option resolves to a known unit', () => {
 
 test('admin chat archive and delete-all require platform administrators', () => {
   const source = fs.readFileSync('app/api/admin/chat/route.ts', 'utf8')
-  assert.match(source, /if \(!isPlatformAdministrator\(callerData\.role\)\) \{\s*return NextResponse\.json\(\{ error: 'Forbidden: only platform administrators can permanently delete chats'/)
-  assert.match(source, /action === 'archive'\) \{\s*if \(!isPlatformAdministrator\(callerData\.role\)\)/)
+  assert.match(source, /if \(!isPlatformAdministrator\(callerData\.role, callerData\.has_admin_access\)\) \{\s*return NextResponse\.json\(\{ error: 'Forbidden: only platform administrators can permanently delete chats'/)
+  assert.match(source, /action === 'archive'\) \{\s*if \(!isPlatformAdministrator\(callerData\.role, callerData\.has_admin_access\)\)/)
 })
 
 test('bulk-assign never reactivates deactivated officers', () => {
   const source = fs.readFileSync('app/api/admin/bulk-assign-program/route.ts', 'utf8')
-  assert.match(source, /isPlatformAdministrator\(role\)/)
+  assert.match(source, /isPlatformAdministrator\(role, currentUser\?\.has_admin_access\)/)
   assert.match(source, /if \(isProgramActive && isPending\(u\)\)/)
   assert.doesNotMatch(source, /!u\.is_active \|\|/)
 })

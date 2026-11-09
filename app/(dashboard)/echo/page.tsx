@@ -137,11 +137,11 @@ export default function EchoPage() {
 
             const { data } = await supabase
                 .from('users')
-                .select('role')
+                .select('role, has_admin_access')
                 .eq('id', user.id)
                 .single()
 
-            if (data && (isPlatformAdministrator(data.role) || ALLOWED_ROLES.includes(data.role))) {
+            if (data && (isPlatformAdministrator(data.role, data.has_admin_access) || ALLOWED_ROLES.includes(data.role))) {
                 setCanManage(true)
             }
             if (data) setUserRole(data.role)

@@ -67,7 +67,7 @@ export default function FinancePage() {
   const queryClient = useQueryClient()
   const confirm = useConfirm()
 
-  const allowed = canAccessFinance(currentUser?.role)
+  const allowed = canAccessFinance(currentUser?.role, currentUser?.has_admin_access)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [uploading, setUploading] = useState(false)

@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
-import { isPlatformAdministrator, platformAuthorityRank } from '@/lib/utils'
+import { isExecutiveRole, isPlatformAdministrator, OFFICER_TEAMS, platformAuthorityRank } from '@/lib/utils'
+import { OFFICER_ROLE_OPTIONS } from '@/lib/officer-directory'
 import { isPermanentOwnerEmail } from '@/lib/platform-owner'
 
 export async function POST(request: Request) {
@@ -10,7 +11,6 @@ export async function POST(request: Request) {
         const adminClient = createAdminClient()
         const db = adminClient as any
 
-        // Platform administrators include Captain, Vice Captain and Head of Command.
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
 
         const { data: currentUser } = await db
             .from('users')
-            .select('role')
+            .select('role, has_admin_access')
             .eq('id', user.id)
             .eq('activation_status', 'active')
             .or('is_active.is.null,is_active.eq.true')
@@ -27,13 +27,14 @@ export async function POST(request: Request) {
 
         const currentRole = (currentUser as { role?: string } | null)?.role
 
-        if (!isPlatformAdministrator(currentRole)) {
+        if (!isPlatformAdministrator(currentRole, currentUser?.has_admin_access)) {
             return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
         }
 
         // Get request body
         const body = await request.json()
-        const { id, email, password, full_name, phone, role, photo_url, team, is_team_head } = body
+        const { id, password, full_name, phone, role, photo_url, team, is_team_head, has_admin_access } = body
+        const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : undefined
 
         if (!id) {
             return NextResponse.json({ error: 'Missing user ID' }, { status: 400 })
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
 
         const { data: targetUser } = await db
             .from('users')
-            .select('role, email, is_directory_hidden')
+            .select('role, email, is_directory_hidden, has_admin_access')
             .eq('id', id)
             .single()
 
@@ -50,7 +51,16 @@ export async function POST(request: Request) {
         }
 
         const targetRole = (targetUser as { role?: string }).role
-        const desiredRole = role || targetRole
+        const desiredRole = role ?? targetRole
+        const desiredAdminAccess = has_admin_access ?? (targetUser.has_admin_access || targetRole === 'admin')
+        if ((role !== undefined && role !== targetRole && !OFFICER_ROLE_OPTIONS.some(option => option.value === role)) ||
+            (has_admin_access !== undefined && typeof has_admin_access !== 'boolean') ||
+            (body.email !== undefined && !email)) {
+            return NextResponse.json({ error: 'Check the email, officer role and additional access level' }, { status: 400 })
+        }
+        if (targetRole === 'admin' && desiredRole === 'admin' && has_admin_access === false) {
+            return NextResponse.json({ error: 'Select an officer role before removing legacy Admin access' }, { status: 400 })
+        }
         const targetIsPermanentOwner = isPermanentOwnerEmail((targetUser as { email?: string }).email)
         if ((targetUser as { is_directory_hidden?: boolean }).is_directory_hidden && id !== user.id) {
             return NextResponse.json({ error: 'Officer not found' }, { status: 404 })
@@ -69,15 +79,16 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Only the permanent platform owner may hold Super Admin' }, { status: 403 })
         }
         if (currentRole !== 'super_admin' && (
-            platformAuthorityRank(targetRole) >= 80 || platformAuthorityRank(desiredRole) >= 80
+            platformAuthorityRank(targetRole, targetUser.has_admin_access) >= 80 ||
+            platformAuthorityRank(desiredRole, desiredAdminAccess) >= 80
         )) {
             return NextResponse.json({ error: 'Only Super Admin can manage administrator accounts' }, { status: 403 })
         }
-        if (id === user.id && desiredRole !== currentRole) {
+        if (id === user.id && (desiredRole !== currentRole || desiredAdminAccess !== targetUser.has_admin_access)) {
             return NextResponse.json({ error: 'You cannot change your own authority level' }, { status: 403 })
         }
 
-        if (team !== undefined && team !== null && team !== '' && !['strength', 'wisdom', 'swift'].includes(team)) {
+        if (team && !OFFICER_TEAMS.some(option => option.value === team)) {
             return NextResponse.json({ error: 'Invalid team' }, { status: 400 })
         }
 
@@ -87,10 +98,16 @@ export async function POST(request: Request) {
         const metadata: Record<string, unknown> = {}
         if (has('full_name')) metadata.full_name = full_name
         if (has('phone')) metadata.phone = phone
-        if (has('role')) metadata.role = role
+        if (desiredRole !== targetRole) metadata.role = desiredRole
 
         const authUpdates: any = {}
-        if (has('email') && email) authUpdates.email = email
+        if (email && email !== targetUser.email) {
+            const { data: duplicate, error: lookupError } = await db.from('users')
+                .select('id').ilike('email', email.replace(/[\\%_]/g, '\\$&')).neq('id', id).limit(1)
+            if (lookupError) return NextResponse.json({ error: 'Could not verify the email address' }, { status: 500 })
+            if (duplicate?.length) return NextResponse.json({ error: 'An account already uses this email address.' }, { status: 409 })
+            authUpdates.email = email
+        }
         if (Object.keys(metadata).length > 0) {
             const { data: existing } = await adminClient.auth.admin.getUserById(id)
             authUpdates.user_metadata = { ...(existing?.user?.user_metadata ?? {}), ...metadata }
@@ -103,6 +120,9 @@ export async function POST(request: Request) {
         if (Object.keys(authUpdates).length > 0) {
             const { error: authError } = await adminClient.auth.admin.updateUserById(id, authUpdates)
             if (authError) {
+                if (authError.code === 'email_exists' || authError.code === 'user_already_exists') {
+                    return NextResponse.json({ error: 'An account already uses this email address.' }, { status: 409 })
+                }
                 console.error('Auth update error:', authError)
                 return NextResponse.json({ error: authError.message }, { status: 400 })
             }
@@ -113,7 +133,13 @@ export async function POST(request: Request) {
         if (has('email') && email) userUpdates.email = email
         if (has('full_name')) userUpdates.full_name = full_name
         if (has('phone')) userUpdates.phone = phone || null
-        if (has('role')) userUpdates.role = role
+        if (desiredRole !== targetRole) {
+            userUpdates.role = desiredRole
+            userUpdates.oscar = isExecutiveRole(desiredRole) ? 'Executive' : desiredRole === 'viewer' ? null : desiredRole
+        }
+        if ((has_admin_access !== undefined || desiredRole !== targetRole) && desiredAdminAccess !== targetUser.has_admin_access) {
+            userUpdates.has_admin_access = desiredAdminAccess
+        }
 
         if (photo_url !== undefined) {
             userUpdates.photo_url = photo_url
@@ -130,6 +156,9 @@ export async function POST(request: Request) {
             .eq('id', id)
 
         if (userError) {
+            if (userError.code === '23505') {
+                return NextResponse.json({ error: 'An account already uses this email address.' }, { status: 409 })
+            }
             console.error('User table update error:', userError)
             return NextResponse.json({ error: userError.message }, { status: 500 })
         }

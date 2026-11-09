@@ -14,7 +14,7 @@ export async function getChatCaller() {
   const { data: { user }, error: authError } = await auth.auth.getUser()
   if (authError || !user) return { error: chatError('Sign in to open chat.', 401) } as const
   const { data: profile, error } = await auth.from('users')
-    .select('id, role, team, activation_status, is_active')
+    .select('id, role, has_admin_access, team, activation_status, is_active')
     .eq('id', user.id).maybeSingle()
   if (error || !profile || profile.activation_status !== 'active' || profile.is_active !== true) {
     return { error: chatError('Your account does not currently have chat access.', 403) } as const
@@ -23,7 +23,7 @@ export async function getChatCaller() {
     auth,
     db: createAdminClient() as any,
     profile,
-    canManageMembers: canManageChatMemberships(profile.role),
+    canManageMembers: canManageChatMemberships(profile.role, profile.has_admin_access),
   } as const
 }
 

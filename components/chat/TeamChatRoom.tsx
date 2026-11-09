@@ -17,12 +17,12 @@ export default function TeamChatRoom({ joinOnly = false }: { joinOnly?: boolean 
   const [joiningTeam, setJoiningTeam] = useState<OfficerTeam | null>(null)
   const [joinError, setJoinError] = useState<string | null>(null)
   const joiningRef = useRef(false)
-  const rooms = getAccessibleTeamChats(currentUser?.role, currentUser?.team)
+  const rooms = getAccessibleTeamChats(currentUser?.role, currentUser?.team, currentUser?.has_admin_access)
   const team = rooms.find(room => room.value === selectedTeam)?.value
     ?? rooms.find(room => room.value === currentUser?.team)?.value
     ?? rooms[0]?.value
     ?? null
-  const canJoin = Boolean(currentUser && !currentUser.team && !isPlatformAdministrator(currentUser.role))
+  const canJoin = Boolean(currentUser && !currentUser.team && !isPlatformAdministrator(currentUser.role, currentUser.has_admin_access))
 
   const joinTeam = async (nextTeam: OfficerTeam) => {
     if (!currentUser || !canJoin || joiningRef.current) return

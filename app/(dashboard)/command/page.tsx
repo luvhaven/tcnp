@@ -77,7 +77,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser"
 
 export default function CommandPage() {
   const { data: currentUser, isLoading: userLoading } = useCurrentUser()
-  const hasAccess = Boolean(currentUser && canAccessCommandCentre(currentUser.role, currentUser.oscar))
+  const hasAccess = Boolean(currentUser && canAccessCommandCentre(currentUser.role, currentUser.oscar, currentUser.has_admin_access))
   // null = not loaded yet; a failed refresh keeps the last good numbers and flags them.
   const [stats, setStats] = useState<CommandStats | null>(null)
   const [statsStale, setStatsStale] = useState(false)
@@ -214,7 +214,7 @@ export default function CommandPage() {
               <p className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400 mt-0.5">
                 {stats ? <CountUp value={stats.onlineOfficers} /> : "—"}
               </p>
-              {isPlatformAdministrator(currentUser?.role) && (
+              {isPlatformAdministrator(currentUser?.role, currentUser?.has_admin_access) && (
                 <Link href="/officers?status=online" className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline">
                   View online officers <ArrowRight className="h-3 w-3" />
                 </Link>

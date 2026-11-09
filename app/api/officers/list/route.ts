@@ -17,14 +17,14 @@ export async function GET() {
     // service-role read behind an active platform-administrator check.
     const { data: caller, error: callerError } = await supabase
       .from('users')
-      .select('role, activation_status, is_active')
+      .select('role, has_admin_access, activation_status, is_active')
       .eq('id', user.id)
       .maybeSingle()
 
     if (callerError || !caller || caller.activation_status !== 'active' || caller.is_active === false) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
-    if (!isPlatformAdministrator(caller.role)) {
+    if (!isPlatformAdministrator(caller.role, caller.has_admin_access)) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
     }
 
@@ -33,7 +33,7 @@ export async function GET() {
     // Fetch all officers via admin client (bypasses RLS)
     const { data: officers, error } = await adminClient
       .from('users')
-      .select('id, full_name, email, phone, role, oscar, activation_status, is_active, is_online, unit, current_title_id, last_seen, created_at, photo_url, team, is_team_head, date_of_birth, gender, address, local_government_area, state, nearest_bus_stop_landmark, city, bio, profile_completed_at, updated_at')
+      .select('id, full_name, email, phone, role, has_admin_access, oscar, activation_status, is_active, is_online, unit, current_title_id, last_seen, created_at, photo_url, team, is_team_head, date_of_birth, gender, address, local_government_area, state, nearest_bus_stop_landmark, city, bio, profile_completed_at, updated_at')
       .eq('is_directory_hidden', false)
       .order('full_name')
 

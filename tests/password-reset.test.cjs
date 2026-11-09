@@ -38,12 +38,12 @@ test('password reset request requires valid email and minimum password length', 
 
 test('admin approval and rejection endpoints require platform administrator authority', () => {
   const approveSource = fs.readFileSync('app/api/admin/password-resets/approve/route.ts', 'utf8')
-  assert.match(approveSource, /isPlatformAdministrator\(caller\.role\)/)
+  assert.match(approveSource, /isPlatformAdministrator\(caller\.role, caller\.has_admin_access\)/)
   assert.match(approveSource, /password-reset:\$\{requestId\}/)
   assert.match(approveSource, /action:\s*['"]password_reset_approved['"]/)
 
   const rejectSource = fs.readFileSync('app/api/admin/password-resets/reject/route.ts', 'utf8')
-  assert.match(rejectSource, /isPlatformAdministrator\(caller\.role\)/)
+  assert.match(rejectSource, /isPlatformAdministrator\(caller\.role, caller\.has_admin_access\)/)
   assert.match(rejectSource, /action:\s*['"]password_reset_rejected['"]/)
 })
 

@@ -40,9 +40,9 @@ export function chatIds(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []
 }
 
-export function canReadChatMessage(message: ConversationMessage, user: { id: string; role?: string | null }): boolean {
+export function canReadChatMessage(message: ConversationMessage, user: { id: string; role?: string | null; has_admin_access?: boolean }): boolean {
   if (message.is_archived) return false
-  return !message.is_private || message.sender_id === user.id || isPlatformAdministrator(user.role) || chatIds(message.mentions).includes(user.id)
+  return !message.is_private || message.sender_id === user.id || isPlatformAdministrator(user.role, user.has_admin_access) || chatIds(message.mentions).includes(user.id)
 }
 
 /** Stable keyset pagination also handles many messages sent in the same instant. */

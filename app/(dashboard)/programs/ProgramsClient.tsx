@@ -45,7 +45,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
   // buttons that either silently no-op or genuinely destroy a program is not a
   // choice we get to leave to the database.
   const { data: currentUser } = useCurrentUser()
-  const canManagePrograms = isAdmin(currentUser?.role)
+  const canManagePrograms = isAdmin(currentUser?.role, currentUser?.has_admin_access)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Program | null>(null)
@@ -464,7 +464,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                         {['planning', 'active'].includes(program.status) && (
                           <>
                             <RequestAvailabilityButton programId={program.id} programName={program.name} />
-                            <AvailabilityRosterButton programId={program.id} programName={program.name} canAssign={isPlatformAdministrator(currentUser?.role)} />
+                            <AvailabilityRosterButton programId={program.id} programName={program.name} canAssign={isPlatformAdministrator(currentUser?.role, currentUser?.has_admin_access)} />
                           </>
                         )}
 

@@ -84,9 +84,9 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return null
-      const { data } = await supabase.from('users').select('role, oscar').eq('id', user.id).single()
+      const { data } = await supabase.from('users').select('role, has_admin_access, oscar').eq('id', user.id).single()
       const eff = effectiveOscarRole(data?.role, data?.oscar)
-      return eff || data?.role || null
+      return data?.has_admin_access ? 'admin' : eff || data?.role || null
     }
   })
 

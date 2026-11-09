@@ -1,7 +1,8 @@
 export const OFFICER_ROLE_OPTIONS = [
-  { value: 'admin', label: 'Admin' },
   { value: 'captain', label: 'Captain' },
   { value: 'vice_captain', label: 'Vice Captain' },
+  { value: 'prof', label: 'Prof' },
+  { value: 'duchess', label: 'Duchess' },
   { value: 'head_of_operations', label: 'Head of Operations' },
   { value: 'head_of_command', label: 'Head of Command' },
   { value: 'command', label: 'Command' },

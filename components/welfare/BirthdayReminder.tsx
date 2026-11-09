@@ -52,7 +52,7 @@ export default function BirthdayReminder() {
     queryKey: ["birthday-reminder-access", currentUser?.id],
     enabled: Boolean(currentUser?.id && today.hour >= 7),
     queryFn: async () => {
-      if (isPlatformAdministrator(currentUser?.role)) return true
+      if (isPlatformAdministrator(currentUser?.role, currentUser?.has_admin_access)) return true
       const { data: unit, error: unitError } = await (supabase as any).from("units").select("id").eq("slug", "welfare").maybeSingle()
       if (unitError) throw unitError
       if (!unit?.id) return false

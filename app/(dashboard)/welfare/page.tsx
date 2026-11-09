@@ -38,8 +38,8 @@ export default function WelfarePage() {
       return Boolean(data)
     },
   })
-  const canEdit = canManageWelfare(currentUser?.role, currentUser?.oscar) || canManageWelfareUnit
-  const canSeeDirectory = canAccessWelfareDirectory(currentUser?.role, currentUser?.oscar) || canManageWelfareUnit
+  const canEdit = canManageWelfare(currentUser?.role, currentUser?.oscar, currentUser?.has_admin_access) || canManageWelfareUnit
+  const canSeeDirectory = canAccessWelfareDirectory(currentUser?.role, currentUser?.oscar, currentUser?.has_admin_access) || canManageWelfareUnit
 
   const [alarmOpen, setAlarmOpen] = useState(false)
   const [sending, setSending] = useState(false)

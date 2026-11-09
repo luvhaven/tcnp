@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { CHAT_PRIVATE_HEADERS, assertOpenChatScope, chatError, getChatCaller } from '@/lib/chat-server'
 import { CHAT_UUID_PATTERN, canManageChatMemberships, parseChatRoomScope, type ChatRoomMember } from '@/lib/chat-access'
-import { PLATFORM_ADMIN_ROLES, isExecutiveRole } from '@/lib/utils'
+import { PLATFORM_ACCESS_FILTER, isExecutiveRole } from '@/lib/utils'
 import { isOfficerOnline } from '@/lib/presence'
 import { checkRateLimit } from '@/lib/security/rate-limit'
 import { getProgramChatAssignments } from '@/lib/chat-program-membership'
 import { getAvailableOfficerIds, getAvailableProgramDutyOfficerIds, getChatRemovals, getPapaDutyOfficerIds } from '@/lib/chat-auto-membership'
 
-const MEMBER_FIELDS = 'id, full_name, role, oscar, photo_url, is_online, last_seen, is_active, activation_status, team'
+const MEMBER_FIELDS = 'id, full_name, role, has_admin_access, oscar, photo_url, is_online, last_seen, is_active, activation_status, team'
 
 function memberView(user: any, accessType: ChatRoomMember['accessType'], available = false): ChatRoomMember {
   return {
@@ -76,27 +76,27 @@ export async function GET(request: Request) {
     if (canManageMembers) {
       activeUsers = await readUsers(baseUsers)
     } else {
-      const executives = await readUsers(() => baseUsers().in('role', [...PLATFORM_ADMIN_ROLES]))
+      const privileged = await readUsers(() => baseUsers().or(PLATFORM_ACCESS_FILTER))
       let assigned: any[] = []
       if (scope.team) assigned = await readUsers(() => baseUsers().eq('team', scope.team))
       else for (let offset = 0; offset < memberIds.length; offset += 100) {
         const ids = memberIds.slice(offset, offset + 100)
         assigned.push(...await readUsers(() => baseUsers().in('id', ids)))
       }
-      activeUsers = [...new Map([...executives, ...assigned].map((user: any) => [user.id, user])).values()]
+      activeUsers = [...new Map([...privileged, ...assigned].map((user: any) => [user.id, user])).values()]
     }
     // Team assignments remain operational data; this endpoint never moves users between teams.
     const explicitIds = new Set(memberIds)
-    const members = activeUsers.filter(user => canManageChatMemberships(user.role) || (scope.team ? user.team === scope.team : explicitIds.has(user.id)))
+    const members = activeUsers.filter(user => canManageChatMemberships(user.role, user.has_admin_access) || (scope.team ? user.team === scope.team : explicitIds.has(user.id)))
       .map(user => memberView(
         user,
-        canManageChatMemberships(user.role) ? isExecutiveRole(user.role) ? 'executive' : 'admin'
+        canManageChatMemberships(user.role, user.has_admin_access) ? isExecutiveRole(user.role) ? 'executive' : 'admin'
           : scope.team ? 'team' : dutyMemberIds.has(user.id) ? 'duty' : programMemberIds.has(user.id) ? 'program' : 'member',
         availableIds.has(user.id),
       ))
     // Available officers first (keeping alphabetical order within each group).
     const candidates = canManageMembers && !scope.team
-      ? activeUsers.filter(user => !canManageChatMemberships(user.role) && !explicitIds.has(user.id))
+      ? activeUsers.filter(user => !canManageChatMemberships(user.role, user.has_admin_access) && !explicitIds.has(user.id))
         .map(user => memberView(user, 'member', availableIds.has(user.id)))
         .sort((a, b) => Number(b.available) - Number(a.available))
       : undefined
@@ -127,11 +127,11 @@ async function changeMembership(request: Request, remove: boolean) {
     const scopeError = await assertOpenChatScope(caller.db, scope)
     if (scopeError) return scopeError
     const { data: target, error: targetError } = await caller.db.from('users')
-      .select('id, role, activation_status, is_active, is_directory_hidden').eq('id', body.userId).maybeSingle()
+      .select('id, role, has_admin_access, activation_status, is_active, is_directory_hidden').eq('id', body.userId).maybeSingle()
     if (targetError) return chatError('Could not check this officer. Please retry.', 500)
     if (!target || target.is_directory_hidden) return chatError('Choose a valid officer.', 400)
     if (!remove && (target.is_active !== true || target.activation_status !== 'active')) return chatError('Choose an active officer.', 400)
-    if (canManageChatMemberships(target.role)) return chatError('Executives and admins always have access to every chat room and cannot be removed.', 400)
+    if (canManageChatMemberships(target.role, target.has_admin_access)) return chatError('Executives and admins always have access to every chat room and cannot be removed.', 400)
     const removals = await getChatRemovals(caller.db, { programId: scope.programId!, papaId: scope.papaId, userId: body.userId })
     let automatic = false
     if (!scope.papaId) {

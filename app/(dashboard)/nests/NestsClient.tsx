@@ -744,7 +744,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
         onOpenChange={(open) => {
           if (!open) setSelectedOfficer(null)
         }}
-        canManage={Boolean(currentUser && isPlatformAdministrator(currentUser.role))}
+        canManage={Boolean(currentUser && isPlatformAdministrator(currentUser.role, currentUser.has_admin_access))}
       />
     </div>
   )

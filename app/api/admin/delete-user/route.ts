@@ -37,13 +37,13 @@ export async function DELETE(request: Request) {
     // 3. Check caller has sufficient permissions
     const { data: callerData } = await supabaseAuth
         .from('users')
-        .select('role, oscar')
+        .select('role, has_admin_access, oscar')
         .eq('id', user.id)
         .eq('activation_status', 'active')
         .or('is_active.is.null,is_active.eq.true')
         .single()
 
-    const isAllowed = callerData && isPlatformAdministrator(callerData.role)
+    const isAllowed = callerData && isPlatformAdministrator(callerData.role, callerData.has_admin_access)
     if (!isAllowed) {
         return NextResponse.json({ error: 'Forbidden: insufficient permissions' }, { status: 403 })
     }
@@ -67,7 +67,7 @@ export async function DELETE(request: Request) {
     // 5. Get target user details before deletion (for the audit log)
     const { data: targetUser } = await supabaseAdmin
       .from('users')
-      .select('email, full_name, role, oscar, is_directory_hidden')
+      .select('email, full_name, role, has_admin_access, oscar, is_directory_hidden')
       .eq('id', targetUserId)
       .single()
 
@@ -80,7 +80,7 @@ export async function DELETE(request: Request) {
 
     // Only Super Admin can remove any administrator-tier account. A regular
     // Admin can remove lower-authority accounts only.
-    if (platformAuthorityRank(targetUser?.role) >= 80 && callerData.role !== 'super_admin') {
+    if (platformAuthorityRank(targetUser?.role, targetUser?.has_admin_access) >= 80 && callerData.role !== 'super_admin') {
         return NextResponse.json({ error: 'Only Super Admin can delete administrator accounts' }, { status: 403 })
     }
 

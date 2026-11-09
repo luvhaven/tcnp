@@ -3596,6 +3596,7 @@ export type Database = {
           local_government_area?: string | null
           state?: string | null
           nearest_bus_stop_landmark?: string | null
+          has_admin_access: boolean
           avatar_url?: string | null
           bio?: string | null
           city?: string | null
@@ -3634,6 +3635,7 @@ export type Database = {
           local_government_area?: string | null
           state?: string | null
           nearest_bus_stop_landmark?: string | null
+          has_admin_access?: boolean
           avatar_url?: string | null
           bio?: string | null
           city?: string | null
@@ -3672,6 +3674,7 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
+          has_admin_access?: boolean
             referencedColumns: ["id"]
           },
           {

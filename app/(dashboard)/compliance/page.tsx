@@ -94,7 +94,7 @@ export default function CompliancePage() {
       return Boolean(data)
     },
   })
-  const canEdit = canManageCompliance(currentUser?.role, currentUser?.oscar) || canManageComplianceUnit
+  const canEdit = canManageCompliance(currentUser?.role, currentUser?.oscar, currentUser?.has_admin_access) || canManageComplianceUnit
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<CompliancePost | null>(null)

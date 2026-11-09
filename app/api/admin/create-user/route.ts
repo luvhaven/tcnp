@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/supabase'
 import { NextResponse } from 'next/server'
-import { isPlatformAdministrator, platformAuthorityRank } from '@/lib/utils'
+import { isPlatformAdministrator, platformAuthorityRank, isExecutiveRole, OFFICER_TEAMS } from '@/lib/utils'
+import { OFFICER_ROLE_OPTIONS } from '@/lib/officer-directory'
 
 export async function POST(request: Request) {
   try {
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
 
     const { data: currentUser } = await db
       .from('users')
-      .select('role')
+      .select('role, has_admin_access')
       .eq('id', user.id)
       .eq('activation_status', 'active')
       .or('is_active.is.null,is_active.eq.true')
@@ -28,27 +29,28 @@ export async function POST(request: Request) {
 
     const currentRole = (currentUser as { role?: string } | null)?.role
 
-    if (!isPlatformAdministrator(currentRole)) {
+    if (!isPlatformAdministrator(currentRole, currentUser?.has_admin_access)) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
     }
 
     // Get request body
     const body = await request.json()
-    const { email, password, full_name, phone, role, photo_url, team, is_team_head } = body
+    const { password, full_name, phone, role, photo_url, team, is_team_head, has_admin_access = false } = body
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
 
     if (!email || !password || !full_name || !role) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    if (role === 'super_admin') {
-      return NextResponse.json({ error: 'The permanent platform owner is the only Super Admin' }, { status: 403 })
+    if (!OFFICER_ROLE_OPTIONS.some(option => option.value === role) || typeof has_admin_access !== 'boolean') {
+      return NextResponse.json({ error: 'Select a valid officer role and additional access level' }, { status: 400 })
     }
 
-    if (platformAuthorityRank(role) >= 80 && currentRole !== 'super_admin') {
-      return NextResponse.json({ error: 'Only Super Admin can create administrator accounts' }, { status: 403 })
+    if (platformAuthorityRank(role, has_admin_access) >= 80 && currentRole !== 'super_admin') {
+      return NextResponse.json({ error: 'Only Super Admin can assign Admin access or Executive roles' }, { status: 403 })
     }
 
-    if (team && !['strength', 'wisdom', 'swift'].includes(team)) {
+    if (team && !OFFICER_TEAMS.some(option => option.value === team)) {
       return NextResponse.json({ error: 'Invalid team' }, { status: 400 })
     }
 
@@ -65,6 +67,9 @@ export async function POST(request: Request) {
     })
 
     if (authError) {
+      if (authError.code === 'email_exists' || authError.code === 'user_already_exists') {
+        return NextResponse.json({ error: 'An account already uses this email address.' }, { status: 409 })
+      }
       console.error('Auth error:', authError)
       return NextResponse.json({ error: authError.message }, { status: 400 })
     }
@@ -73,15 +78,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to create user' }, { status: 500 })
     }
 
-    // Generate OSCAR
-    const generateOscar = (fullName: string, userRole: string) => {
-      if (!fullName) return null
-      const initials = fullName.split(' ').map(n => n[0]).join('').toUpperCase()
-      const roleCode = userRole.toUpperCase().replace('_', '-')
-      return `OSCAR-${initials}-${roleCode}`
-    }
-
-    const oscar = generateOscar(full_name, role)
+    const oscar = isExecutiveRole(role) ? 'Executive' : role === 'viewer' ? null : role
 
     // Insert into users table using the admin client (bypasses RLS, but route is already admin-guarded)
     const insertData: any = {
@@ -91,6 +88,7 @@ export async function POST(request: Request) {
       phone: phone || null,
       oscar,
       role,
+      has_admin_access,
       activation_status: 'pending',
       is_active: false,
       created_by: user.id
@@ -114,6 +112,9 @@ export async function POST(request: Request) {
       console.error('User table error:', userError)
       // Try to clean up auth user if users table insert fails
       await adminClient.auth.admin.deleteUser(authData.user.id)
+      if (userError.code === '23505') {
+        return NextResponse.json({ error: 'An account already uses this email address.' }, { status: 409 })
+      }
       return NextResponse.json({ error: userError.message }, { status: 500 })
     }
 

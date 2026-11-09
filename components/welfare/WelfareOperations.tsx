@@ -170,7 +170,7 @@ export default function WelfareOperations() {
     },
   })
 
-  const canManage = Boolean(isPlatformAdministrator(currentUser?.role) || (membershipQuery.data?.status === "active" && MANAGER_ACCESS.has(membershipQuery.data.access_level)))
+  const canManage = Boolean(isPlatformAdministrator(currentUser?.role, currentUser?.has_admin_access) || (membershipQuery.data?.status === "active" && MANAGER_ACCESS.has(membershipQuery.data.access_level)))
 
   const campaignsQuery = useQuery({
     queryKey: ["welfare-prayer-campaigns"],
