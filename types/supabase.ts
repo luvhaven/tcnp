@@ -3572,6 +3572,7 @@ export type Database = {
           gender: string | null
           id: string
           is_active: boolean | null
+          has_admin_access: boolean
           is_directory_hidden: boolean
           is_online: boolean | null
           is_team_head: boolean
@@ -3596,7 +3597,6 @@ export type Database = {
           local_government_area?: string | null
           state?: string | null
           nearest_bus_stop_landmark?: string | null
-          has_admin_access: boolean
           avatar_url?: string | null
           bio?: string | null
           city?: string | null
@@ -3611,6 +3611,7 @@ export type Database = {
           gender?: string | null
           id: string
           is_active?: boolean | null
+          has_admin_access?: boolean
           is_directory_hidden?: boolean
           is_online?: boolean | null
           is_team_head?: boolean
@@ -3635,7 +3636,6 @@ export type Database = {
           local_government_area?: string | null
           state?: string | null
           nearest_bus_stop_landmark?: string | null
-          has_admin_access?: boolean
           avatar_url?: string | null
           bio?: string | null
           city?: string | null
@@ -3650,6 +3650,7 @@ export type Database = {
           gender?: string | null
           id?: string
           is_active?: boolean | null
+          has_admin_access?: boolean
           is_directory_hidden?: boolean
           is_online?: boolean | null
           is_team_head?: boolean
@@ -3674,7 +3675,6 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
-          has_admin_access?: boolean
             referencedColumns: ["id"]
           },
           {
