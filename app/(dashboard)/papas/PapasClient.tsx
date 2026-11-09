@@ -137,6 +137,8 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
       const papaData = {
         ...rest,
         program_id: event_id || null,
+        flight_departure_time: rest.flight_departure_time || null,
+        flight_arrival_time: rest.flight_arrival_time || null,
         speaking_schedule: speaking_schedule || [],
         personal_assistants: personal_assistants || []
       }
