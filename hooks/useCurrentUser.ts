@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
 import { isPermanentOwnerEmail } from '@/lib/platform-owner'
 import { isTransientNetworkError, isMissingSessionError } from '@/lib/supabase/error-utils'
+import { isSupabaseRequestTimeout } from '@/lib/supabase/request-timeout'
 import * as Sentry from '@sentry/nextjs'
 import { supabaseErrorCodeTag } from '@/lib/monitoring/sentry-shared'
 
@@ -50,6 +51,11 @@ export function useCurrentUser() {
                 // the user's role across every page that reads this hook.
                 if (isTransientNetworkError(authError)) throw authError
 
+                // A spent deadline is a non-answer too. It is not retried —
+                // see isTransientNetworkError — but it must still reach the
+                // error state rather than the null below.
+                if (isSupabaseRequestTimeout(authError)) throw authError
+
                 // Nobody is signed in. That is the honest answer to the
                 // question this hook asks, not something that went wrong, so
                 // report nothing and let consumers render the logged-out view.
@@ -72,6 +78,19 @@ export function useCurrentUser() {
                 // Same reasoning as the auth failure above: retry transport
                 // failures rather than caching a profile-less user.
                 if (isTransientNetworkError(error)) throw error
+
+                // The read ran out of time, so the profile table never
+                // answered. Returning null here would answer FOR it — and a
+                // returned null is a success React Query caches for the full
+                // staleTime below, signing the user out of all 30-odd screens
+                // that read this hook for five minutes because one request was
+                // slow (TCNP-2). Throwing keeps "we do not know" distinct from
+                // "nobody is signed in", and a query in an error state is
+                // stale, so the next mount or window focus retries it the
+                // moment the network comes back. The retry policy still
+                // refuses to re-run a timeout, so this costs one deadline, not
+                // three. QueryProvider's cache reports it once via `meta`.
+                if (isSupabaseRequestTimeout(error)) throw error
 
                 const isPermanentOwner = isPermanentOwnerEmail(user.email)
                 Sentry.captureException(error, {
@@ -147,6 +166,10 @@ export function useCurrentUser() {
         gcTime: 10 * 60 * 1000,     // keep in cache for 10 minutes after last subscriber
         // retry/retryDelay come from QueryProvider: transport failures are
         // retried with backoff, everything else fails on the first answer.
+        // Everything thrown above reports through here instead of at the call
+        // site, so it is filed once after the retries rather than once per
+        // attempt — a spent deadline included, which is why `transient_read`
+        // covers both a dropped connection and a timeout.
         meta: {
             sentry: {
                 tags: { feature: 'current-user', profile_stage: 'transient_read' },

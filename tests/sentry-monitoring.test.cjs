@@ -147,6 +147,79 @@ test('a caller cancelling is still an abort, not a timeout', async () => {
   )
 })
 
+test('a timeout survives PostgREST flattening it into a plain object', () => {
+  // TCNP-2. PostgREST catches the fetch rejection and answers with its own
+  // { message, details, hint, code } object, so the SupabaseRequestTimeoutError
+  // class never reaches the caller — only its text does, inside `message`,
+  // with an empty `code`. An instanceof-only check therefore returned false
+  // for every `.from(...).select()` timeout: useCurrentUser cached a null
+  // officer, and app/api/auth/login answered 503 "could not verify" instead of
+  // 504 "took too long".
+  assert.equal(isSupabaseRequestTimeout({
+    code: '',
+    details: 'o@https://tcnp.vercel.app/_next/static/chunks/1317.js:1:2726',
+    hint: '',
+    message: 'SupabaseRequestTimeoutError: TCNP_SUPABASE_REQUEST_TIMEOUT: Supabase did not respond within 15000ms.',
+  }), true)
+  // The real Error still matches, from either wrapper.
+  assert.equal(isSupabaseRequestTimeout(
+    new Error('TCNP_SUPABASE_REQUEST_TIMEOUT: Supabase did not respond within 15000ms.')), true)
+})
+
+test('an answered failure is never mistaken for a timeout', () => {
+  // Widening the check must not start calling permission denials timeouts:
+  // those would stop being reported and start telling the user to retry.
+  assert.equal(isSupabaseRequestTimeout({ code: '42501', message: 'permission denied for table users' }), false)
+  assert.equal(isSupabaseRequestTimeout({ message: 'TypeError: Load failed' }), false)
+  assert.equal(isSupabaseRequestTimeout(null), false)
+  assert.equal(isSupabaseRequestTimeout(undefined), false)
+  assert.equal(isSupabaseRequestTimeout({}), false)
+  assert.equal(isSupabaseRequestTimeout({ message: 42 }), false)
+})
+
+test('a slow profile read never becomes a cached signed-out officer', () => {
+  // useCurrentUser returning null is a SUCCESS React Query caches for the
+  // hook's 5-minute staleTime, so answering null for a read that never
+  // answered signed the officer out of every screen reading the hook until
+  // the cache expired. Both deadline checks must sit above their `return
+  // null`, and above the Sentry call that would file it as an answered error.
+  const hook = fs.readFileSync('hooks/useCurrentUser.ts', 'utf8')
+
+  const authThrow = hook.indexOf('if (isSupabaseRequestTimeout(authError)) throw authError')
+  const missingSession = hook.indexOf('if (isMissingSessionError(authError)) return null')
+  assert.ok(authThrow >= 0 && authThrow < missingSession)
+
+  const profileThrow = hook.indexOf('if (isSupabaseRequestTimeout(error)) throw error')
+  const capture = hook.indexOf('Sentry.captureException(error', profileThrow)
+  const ownerFallback = hook.indexOf('const isPermanentOwner', profileThrow)
+  assert.ok(profileThrow > authThrow)
+  assert.ok(profileThrow < ownerFallback && profileThrow < capture)
+
+  // Reporting stays with QueryProvider's cache so the throw is filed once,
+  // not once per attempt and not twice alongside an inline capture.
+  assert.match(hook, /meta: \{\s*sentry: \{/)
+})
+
+test('a clearance screen never accuses an officer it could not check', () => {
+  // An unanswered profile read leaves `data` undefined, which every gate
+  // reads as "no role" — so a slow network rendered "Access Restricted … your
+  // current role (Unassigned)" at officers who had clearance all along.
+  for (const page of ['app/(dashboard)/tracking/live/page.tsx', 'app/(dashboard)/command/page.tsx']) {
+    const source = fs.readFileSync(page, 'utf8')
+    const errorBranch = source.indexOf('if (clearanceUnknown) {')
+    const denial = source.indexOf('if (!hasAccess) {')
+    assert.ok(errorBranch >= 0, `${page} does not separate a failed read from a denial`)
+    assert.ok(errorBranch < denial, `${page} denies access before checking whether it could read the profile`)
+  }
+
+  // Chat says "Sign in" for a missing session; that must not be the answer
+  // when the session exists and the profile read failed.
+  const chat = fs.readFileSync('app/(dashboard)/chat/page.tsx', 'utf8')
+  const unavailable = chat.indexOf('userUnavailable ?')
+  const signIn = chat.indexOf("'Sign in to load your conversations.'")
+  assert.ok(unavailable >= 0 && unavailable < signIn)
+})
+
 test('only identity and PostgREST reads are bounded', async () => {
   const boundedFetch = createSupabaseReadTimeoutFetch(SUPABASE_URL, 10)
   await withFetch(

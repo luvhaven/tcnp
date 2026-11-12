@@ -16,7 +16,10 @@ import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { Button } from '@/components/ui/button'
 
 function ChatContent() {
-  const { data: me, isLoading: userLoading } = useCurrentUser()
+  // `isError` is not the same as no user: it means the profile read never
+  // got an answer, so telling this officer to sign in would be a lie about
+  // a session they still have.
+  const { data: me, isLoading: userLoading, isError: userUnavailable, refetch: refetchUser } = useCurrentUser()
   const params = useSearchParams()
   const requestKey = params.toString()
   const [selection, setSelection] = useState<{ id: string; requestKey: string } | null>(null)
@@ -58,9 +61,11 @@ function ChatContent() {
     {!loading && !query.isError && hasRequestedRoom && !requestedRoom && !selected && <p role="status" className="rounded-xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">This conversation is unavailable. It may be archived, or you may need an invitation. Choose another conversation from the dropdowns.</p>}
     {!loading && me && !me.team && !platform && <details className="rounded-xl border bg-card px-4 py-3"><summary className="cursor-pointer text-sm font-medium">Choose your team</summary><div className="pt-3"><TeamChatRoom joinOnly /></div></details>}
     <ChatWorkspace key={`${me?.id}:${requestKey}`} rooms={rooms} selectedRoomId={active?.id ?? null} loading={loading}
-      error={query.isError ? 'Conversations could not load. Check your connection and retry.' : !me && !userLoading ? 'Sign in to load your conversations.' : null}
+      error={userUnavailable ? 'Your account could not be loaded. Check your connection and retry.'
+        : query.isError ? 'Conversations could not load. Check your connection and retry.'
+        : !me && !userLoading ? 'Sign in to load your conversations.' : null}
       canManageMembers={query.data?.canManageMembers} showConversationInitially={hasRequestedRoom}
-      onSelectRoom={selectRoom} onRetry={() => void query.refetch()} onOpenMembers={() => setMembersOpen(true)}
+      onSelectRoom={selectRoom} onRetry={() => { void (userUnavailable ? refetchUser() : query.refetch()) }} onOpenMembers={() => setMembersOpen(true)}
       actions={active && platform ? <AdminChatControls programId={active.programId} papaId={active.papaId} programName={active.kind !== 'team' ? active.label : null} team={active.team} teamName={active.kind === 'team' ? active.label : null} canManageAll onChanged={() => setVersion(value => value + 1)} /> : null}>
       {active && me && <ErrorBoundary key={`${active.id}:${version}`} fallback={<div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center"><AlertTriangle className="h-6 w-6 text-muted-foreground" /><p className="text-sm">This conversation could not display.</p><Button variant="outline" onClick={() => setVersion(value => value + 1)}>Try again</Button></div>}><ChatSystem key={`${me.id}:${active.id}:${version}`} programId={active.programId ?? undefined} papaId={active.papaId ?? undefined} team={active.team ?? undefined} roomLabel={active.label} initialMessage={initialMessage} embedded onOpenMembers={() => setMembersOpen(true)} /></ErrorBoundary>}
     </ChatWorkspace>

@@ -6,9 +6,10 @@ import LiveTrackingMap from '@/components/tracking/LiveTrackingMap'
 
 import { canViewLiveTracking } from '@/lib/utils'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { ErrorState } from '@/components/ui/error-state'
 
 export default function LiveTrackingPage() {
-  const { data: currentUser, isLoading: loading } = useCurrentUser()
+  const { data: currentUser, isLoading: loading, isError: clearanceUnknown, refetch, isFetching } = useCurrentUser()
   const hasAccess = Boolean(currentUser && canViewLiveTracking(currentUser.role, currentUser.oscar, currentUser.has_admin_access))
 
   // Loading skeleton
@@ -23,6 +24,19 @@ export default function LiveTrackingPage() {
         </div>
         <div className="h-[600px] rounded-xl border bg-muted animate-pulse" />
       </div>
+    )
+  }
+
+  // The profile read failed, so this officer's clearance was never checked.
+  // Accusing them of not having it would be a guess dressed as a verdict.
+  if (clearanceUnknown) {
+    return (
+      <ErrorState
+        title="We couldn't confirm your clearance"
+        description="Live Tracking needs your profile, and it did not load. Check your connection and try again."
+        onRetry={() => { void refetch() }}
+        retrying={isFetching}
+      />
     )
   }
 
