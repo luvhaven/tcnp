@@ -74,9 +74,10 @@ const MODULES = [
 import { canAccessCommandCentre, isPlatformAdministrator } from "@/lib/utils"
 import { OFFICER_ONLINE_WINDOW_MS, OFFICER_PRESENCE_REFRESH_MS } from "@/lib/presence"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
+import { ErrorState } from "@/components/ui/error-state"
 
 export default function CommandPage() {
-  const { data: currentUser, isLoading: userLoading } = useCurrentUser()
+  const { data: currentUser, isLoading: userLoading, isError: clearanceUnknown, refetch: refetchCurrentUser, isFetching: refetchingUser } = useCurrentUser()
   const hasAccess = Boolean(currentUser && canAccessCommandCentre(currentUser.role, currentUser.oscar, currentUser.has_admin_access))
   // null = not loaded yet; a failed refresh keeps the last good numbers and flags them.
   const [stats, setStats] = useState<CommandStats | null>(null)
@@ -119,6 +120,20 @@ export default function CommandPage() {
           <div className="h-40 rounded-2xl skeleton" />
         </div>
       </div>
+    )
+  }
+
+  // Same reasoning as Live Tracking: a profile read that never answered is
+  // not a clearance decision, so do not render one.
+  if (clearanceUnknown) {
+    return (
+      <ErrorState
+        className="h-[60vh]"
+        title="We couldn't confirm your clearance"
+        description="The Command Centre needs your profile, and it did not load. Check your connection and try again."
+        onRetry={() => { void refetchCurrentUser() }}
+        retrying={refetchingUser}
+      />
     )
   }
 

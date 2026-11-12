@@ -8,10 +8,22 @@ export class SupabaseRequestTimeoutError extends Error {
   }
 }
 
+/**
+ * True when one of the deadlines above cut the request off.
+ *
+ * PostgREST never rethrows what its fetch rejected with: it catches the
+ * rejection and answers with a plain `{ message, details, hint, code }`
+ * object, carrying the original error's name and text in `message` and
+ * nothing in `code`. So a timed-out `.from(...).select()` arrives as a
+ * non-Error, and an `instanceof` test alone silently misses the exact case
+ * this predicate exists for. Match the marker on whatever shape carries it.
+ */
 export function isSupabaseRequestTimeout(error: unknown): boolean {
-  return error instanceof SupabaseRequestTimeoutError || (
-    error instanceof Error && error.message.includes(TIMEOUT_MARKER)
-  )
+  if (error instanceof SupabaseRequestTimeoutError) return true
+  if (typeof error === 'string') return error.includes(TIMEOUT_MARKER)
+  if (typeof error !== 'object' || error === null) return false
+  const { message } = error as { message?: unknown }
+  return typeof message === 'string' && message.includes(TIMEOUT_MARKER)
 }
 
 /**
