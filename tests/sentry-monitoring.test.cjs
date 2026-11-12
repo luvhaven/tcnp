@@ -166,6 +166,24 @@ test('a timeout survives PostgREST flattening it into a plain object', () => {
     new Error('TCNP_SUPABASE_REQUEST_TIMEOUT: Supabase did not respond within 15000ms.')), true)
 })
 
+test('a timeout survives auth-js rewrapping it as a retryable fetch error', () => {
+  // TCNP-J, the same deadline one stage earlier. auth-js catches whatever its
+  // fetch rejected with and rethrows `new AuthRetryableFetchError(
+  // _getErrorMessage(e), 0)`, so the class is gone but the text survives.
+  // Without this, useCurrentUser filed it under profile_stage auth_user and
+  // answered null — signing out an admin whose next request succeeded 6s later.
+  class CustomAuthError extends Error {
+    constructor(message, name, status) { super(message); this.name = name; this.status = status }
+  }
+  class AuthRetryableFetchError extends CustomAuthError {
+    constructor(message, status) { super(message, 'AuthRetryableFetchError', status) }
+  }
+  assert.equal(isSupabaseRequestTimeout(new AuthRetryableFetchError(
+    'TCNP_SUPABASE_REQUEST_TIMEOUT: Supabase did not respond within 15000ms.', 0)), true)
+  // A genuine auth-js network failure is not one of ours and must keep reporting.
+  assert.equal(isSupabaseRequestTimeout(new AuthRetryableFetchError('Failed to fetch', 0)), false)
+})
+
 test('an answered failure is never mistaken for a timeout', () => {
   // Widening the check must not start calling permission denials timeouts:
   // those would stop being reported and start telling the user to retry.
