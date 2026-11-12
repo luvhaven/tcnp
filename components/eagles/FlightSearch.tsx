@@ -67,7 +67,7 @@ export default function FlightSearch() {
   useEffect(() => {
     if (refreshTimer.current) clearInterval(refreshTimer.current)
     if (tracked) {
-      refreshTimer.current = setInterval(() => { void runSearch(true) }, 30000)
+      refreshTimer.current = setInterval(() => { if (document.visibilityState === 'visible') void runSearch(true) }, 30000)
     }
     return () => { if (refreshTimer.current) clearInterval(refreshTimer.current) }
     // eslint-disable-next-line react-hooks/exhaustive-deps

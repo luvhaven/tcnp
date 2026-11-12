@@ -86,7 +86,8 @@ export default function FlightStatusBadge({ flightNumber, departureTime, arrival
 
         fetchStatus()
         // Poll every 3 minutes so we don't blow up OpenSky rate limits
-        const interval = setInterval(fetchStatus, 180000)
+        // Skip polls while the tab is hidden; each call runs a server function.
+        const interval = setInterval(() => { if (document.visibilityState === 'visible') fetchStatus() }, 180000)
         return () => clearInterval(interval)
     }, [flightNumber, departureTime, arrivalTime])
 

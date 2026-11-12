@@ -65,7 +65,8 @@ export function useChatConversation(scope: ConversationScope) {
     queryKey: memberKey,
     queryFn: ({ signal }) => getChatRoomMembers({ programId, papaId, team }, signal),
     enabled: Boolean(me && (programId || team)),
-    staleTime: 0, refetchInterval: 15_000, retry: false,
+    // Membership rarely changes; 60s keeps it fresh without a server call every 15s.
+    staleTime: 30_000, refetchInterval: 60_000, retry: false,
   })
   const denied = membersQuery.error instanceof ChatRoomError && [401, 403, 404, 409].includes(membersQuery.error.status)
   const allowed = Boolean(membersQuery.data) && !denied

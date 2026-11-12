@@ -60,7 +60,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
       status: 200,
       headers: {
         'Content-Type': 'image/png',
-        'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate',
+        // Flow tiles change roughly once a minute. Letting the browser reuse a tile
+        // for 60s means panning back over the map does not re-run this function.
+        // Kept private because the route is behind sign-in.
+        'Cache-Control': 'private, max-age=60, stale-while-revalidate=60',
         'X-Content-Type-Options': 'nosniff',
       },
     })
