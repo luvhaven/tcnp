@@ -62,6 +62,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { name: "Serial", href: "/serial", icon: Camera },
       { name: "Compliance", href: "/compliance", icon: Shirt },
       { name: "Welfare", href: "/welfare", icon: UtensilsCrossed },
+      { name: "Training", href: "/training", icon: GraduationCap },
     ],
   },
   {
@@ -81,7 +82,6 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: "Knowledge",
     items: [
-      { name: "Training", href: "/training", icon: GraduationCap },
       { name: "Guide", href: "/guide", icon: BookOpen },
     ],
   },

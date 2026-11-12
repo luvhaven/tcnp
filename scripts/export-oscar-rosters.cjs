@@ -27,7 +27,7 @@ function completion(u) {
 }
 
 const UNITS = ['Alpha Oscar', 'Tango Oscar', 'Victor Oscar', 'November (Nest)', 'November (Den)', 'Sierra Oscar',
-  'Compliance Oscar', 'Welfare Oscar', 'Hospitality Oscar', 'Training Oscar', 'Command']
+  'Compliance Oscar', 'Welfare Oscar', 'Training Oscar', 'Command']
 const UNASSIGNED = 'No Oscar set'
 
 // Unit implied by a role key (head_* roles included).
@@ -41,7 +41,7 @@ function unitFromRole(role) {
   if (r.includes('serial') || r.includes('sierra')) return 'Sierra Oscar'
   if (r.includes('compliance')) return 'Compliance Oscar'
   if (r.includes('welfare')) return 'Welfare Oscar'
-  if (r.includes('hospitality')) return 'Hospitality Oscar'
+  if (r.includes('hospitality')) return 'November (Nest)' // Hospitality is part of Nest, not an Oscar
   if (r.includes('training')) return 'Training Oscar'
   if (['admin', 'super_admin', 'dev_admin', 'captain', 'vice_captain', 'command', 'head_of_command',
     'head_of_operations', 'hod', 'hop'].includes(r)) return 'Command'
@@ -53,7 +53,7 @@ function unitFromOscar(oscar) {
   if (!o || o.includes('echo')) return null
   if (o.includes('den') || o.includes('theatre')) return 'November (Den)'
   if (o.includes('nest')) return 'November (Nest)'
-  if (o.includes('hospitality')) return 'Hospitality Oscar'
+  if (o.includes('hospitality')) return 'November (Nest)'
   if (o.includes('training')) return 'Training Oscar'
   if (o.includes('command') || o.includes('captain') || o.includes('admin')) return 'Command'
   return unitFromRole(o.replace(/^oscar-[a-z]+-/, ''))
