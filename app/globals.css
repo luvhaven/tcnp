@@ -915,6 +915,24 @@ main,
 .btn-sheen {
   position: relative;
   isolation: isolate;
+/* ─── Boot splash ─────────────────────────────────────────────────────────── */
+/* Indeterminate bar under the logo while the session is restored
+   (components/providers/QueryProvider). A sliding segment reads as "working"
+   without implying a percentage we don't have. */
+@keyframes bootBar {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(350%);
+  }
+}
+
+.boot-bar {
+  animation: bootBar 1.2s var(--ease-out) infinite;
+}
+
 }
 
 .btn-sheen::before {
