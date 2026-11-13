@@ -4,12 +4,14 @@ import { DASHBOARD_JOURNEY_SELECT } from '@/lib/dashboard-queries'
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { JourneyAlerts } from "@/components/dashboard/JourneyAlerts"
+import { OfficerStatusReportButton } from "@/components/dashboard/OfficerStatusReportButton"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn, canAccessCommandCentre, oscarToRole } from "@/lib/utils"
+import { canDownloadOfficerStatusReport } from "@/lib/officer-status-access"
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/lib/constants/tncpCallSigns"
 import {
   Users, Car, MapPin, AlertTriangle, Download, ChevronRight, ArrowRight, Radio,
@@ -502,7 +504,13 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            {currentUser?.is_active && canDownloadOfficerStatusReport(
+              currentUser.role,
+              "has_admin_access" in currentUser && currentUser.has_admin_access === true,
+            ) && (
+              <OfficerStatusReportButton />
+            )}
             {!isInstalled ? (
               <Button onClick={handleInstallClick} variant="outline" size="sm" className="gap-2 rounded-xl self-start shrink-0 text-xs font-medium bg-background/80 shadow-xs">
                 <Download className="h-3.5 w-3.5" aria-hidden="true" />
