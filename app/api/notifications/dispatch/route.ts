@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import webPush from 'web-push'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { validPushEndpoint, safeNotificationUrl } from '@/lib/push-validation'
-import { resolveNotificationRoute } from '@/lib/notification-route'
+import { resolveNotificationRoute, describeNotificationForDevice } from '@/lib/notification-route'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -25,7 +25,9 @@ export async function POST(request: Request) {
     else {
       try {
         await webPush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth_key } }, JSON.stringify({
-          title: 'TCNP', body: 'You have a new update. Open TCNP to view it.', tag: `tcnp-${notice.id}`, targetUserId: sub.user_id,
+          // What happened and what to do about it, derived from type/kind only —
+          // never the stored title or message, which can name people.
+          ...describeNotificationForDevice(notice as any), tag: `tcnp-${notice.id}`, targetUserId: sub.user_id,
           notificationId: notice.id, critical: notice.type === 'broken_arrow',
           url: safeNotificationUrl(resolveNotificationRoute(notice as any) ?? (typeof notice.metadata?.url === 'string' ? notice.metadata.url : '/dashboard')),
         }), { vapidDetails: { subject: config.subject, publicKey: config.publicKey, privateKey: config.privateKey }, TTL: 86400, timeout: 5000, urgency: notice.type === 'broken_arrow' ? 'high' : 'normal' })

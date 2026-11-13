@@ -59,7 +59,9 @@ test('dispatcher requires secret, sends generic payload, and expires rejected su
   assert.equal((await route.POST(req('wrong'))).status, 401)
   assert.equal(calls.some(call => call.name === 'claim_notification_push'), false)
   assert.equal((await route.POST(req('valid-secret'))).status, 200)
-  assert.equal(sent[0].title, 'TCNP'); assert.equal(JSON.stringify(sent[0]).includes('Sensitive name'), false)
+  // Describes the kind of event and the action, without the stored title.
+  assert.equal(sent[0].title, 'Chat update'); assert.match(sent[0].body, /read and reply/)
+  assert.equal(JSON.stringify(sent[0]).includes('Sensitive name'), false)
   assert.equal(sent[0].url, '/chat?programId=program')
   expired = true
   await route.POST(req('valid-secret'))

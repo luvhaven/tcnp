@@ -70,14 +70,21 @@ export class NotificationService {
     }) {
         // Never prompt from here: these calls come from realtime events, not user
         // gestures. NotificationPermissionBanner asks for permission instead.
-        if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') {
+        if (typeof window === 'undefined') return
+        const foreground = !document.hidden && document.hasFocus()
+
+        // Sound and vibration belong to the event, not to whether the device
+        // allows system notifications: an officer looking at the app is still
+        // told. The chime respects the App sounds switch; vibration does not.
+        if (foreground && !options.silent) playNotificationFeedback()
+
+        if (!('Notification' in window) || Notification.permission !== 'granted') {
             return
         }
 
         // Goes through the service worker where available; `new Notification()`
         // throws on Android Chrome.
-        const foreground = !document.hidden && document.hasFocus()
-        const shown = await showSystemNotification(options.title, {
+        await showSystemNotification(options.title, {
             body: options.body,
             icon: options.icon || '/tcnp_logo.png',
             badge: '/tcnp_logo.png',
@@ -86,10 +93,6 @@ export class NotificationService {
             requireInteraction: options.requireInteraction || false,
             silent: foreground || options.silent || false,
         })
-
-        if (shown && foreground && !options.silent) {
-            playNotificationFeedback()
-        }
     }
 
     /**
