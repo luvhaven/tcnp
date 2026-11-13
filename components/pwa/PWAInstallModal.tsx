@@ -1,293 +1,195 @@
 'use client'
 
+import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import {
+  ArrowUpRight, Check, Download, EllipsisVertical, Globe, Info, MonitorDown, PanelBottom,
+  Share, SquarePlus, X,
+} from 'lucide-react'
 import { type PWAPlatform } from '@/hooks/usePWAInstall'
+import { useIsClient } from '@/hooks/useIsClient'
 
 interface PWAInstallModalProps {
   platform: PWAPlatform | null
   onClose: () => void
 }
 
-// ── SVG icons (self-contained, no external deps) ─────────────────────────────
+type Step = { icon: ReactNode; label: ReactNode }
 
-const ShareIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-    <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
-    <polyline points="16 6 12 2 8 6" />
-    <line x1="12" y1="2" x2="12" y2="15" />
-  </svg>
-)
+const ICON = 'h-5 w-5'
 
-const PlusSquareIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-    <rect x="3" y="3" width="18" height="18" rx="2" />
-    <line x1="12" y1="8" x2="12" y2="16" />
-    <line x1="8" y1="12" x2="16" y2="12" />
-  </svg>
-)
-
-const CheckIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-)
-
-const MenuDotsIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
-    <circle cx="12" cy="5" r="1.5" />
-    <circle cx="12" cy="12" r="1.5" />
-    <circle cx="12" cy="19" r="1.5" />
-  </svg>
-)
-
-const HomeIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-    <polyline points="9 22 9 12 15 12 15 22" />
-  </svg>
-)
-
-const DockIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-    <rect x="2" y="14" width="20" height="8" rx="2" />
-    <path d="M6 14V4a2 2 0 012-2h8a2 2 0 012 2v10" />
-  </svg>
-)
-
-// ── Step type ─────────────────────────────────────────────────────────────────
-
-type Step = { icon: React.ReactNode; label: React.ReactNode }
-
-const IOS_STEPS: Step[] = [
-  {
-    icon: <ShareIcon />,
-    label: (
-      <>
-        Tap the <strong>Share</strong> button{' '}
-        <span className="inline-flex items-center justify-center rounded bg-blue-500 text-white p-0.5 mx-0.5 align-middle">
-          <ShareIcon />
-        </span>{' '}
-        at the bottom of <strong>Safari</strong>
-      </>
-    ),
-  },
-  {
-    icon: <PlusSquareIcon />,
-    label: (
-      <>
-        Scroll down and tap <strong>&ldquo;Add to Home Screen&rdquo;</strong>
-      </>
-    ),
-  },
-  {
-    icon: <CheckIcon />,
-    label: (
-      <>
-        Tap <strong>&ldquo;Add&rdquo;</strong> in the top-right corner
-      </>
-    ),
-  },
-]
-
-const ANDROID_STEPS: Step[] = [
-  {
-    icon: <MenuDotsIcon />,
-    label: (
-      <>
-        Tap the <strong>⋮</strong> menu (three dots) in Chrome
-      </>
-    ),
-  },
-  {
-    icon: <HomeIcon />,
-    label: (
-      <>
-        Tap <strong>&ldquo;Add to Home screen&rdquo;</strong> or{' '}
-        <strong>&ldquo;Install app&rdquo;</strong>
-      </>
-    ),
-  },
-  {
-    icon: <CheckIcon />,
-    label: (
-      <>
-        Tap <strong>&ldquo;Install&rdquo;</strong> in the dialog
-      </>
-    ),
-  },
-]
-
-const MAC_SAFARI_STEPS: Step[] = [
-  {
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-5 w-5">
-        <rect x="3" y="3" width="18" height="13" rx="2" />
-        <line x1="3" y1="9" x2="21" y2="9" />
-        <line x1="8" y1="20" x2="16" y2="20" />
-        <line x1="12" y1="16" x2="12" y2="20" />
-      </svg>
-    ),
-    label: (
-      <>
-        Click <strong>File</strong> in the macOS menu bar
-      </>
-    ),
-  },
-  {
-    icon: <DockIcon />,
-    label: (
-      <>
-        Select <strong>&ldquo;Add to Dock&hellip;&rdquo;</strong>
-      </>
-    ),
-  },
-  {
-    icon: <CheckIcon />,
-    label: (
-      <>
-        Click <strong>&ldquo;Add&rdquo;</strong> to confirm
-      </>
-    ),
-  },
-]
-
-const DESKTOP_STEPS: Step[] = [
-  {
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-5 w-5">
-        <circle cx="11" cy="11" r="8" />
-        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-      </svg>
-    ),
-    label: (
-      <>
-        Look for the <strong>install icon ⊕</strong> in the address bar (Chrome / Edge)
-      </>
-    ),
-  },
-  {
-    icon: <CheckIcon />,
-    label: (
-      <>
-        Click it and choose <strong>&ldquo;Install&rdquo;</strong>
-      </>
-    ),
-  },
-]
-
-const CONFIG: Record<
-  PWAPlatform,
-  { title: string; subtitle: string; steps: Step[]; note?: string }
-> = {
+/**
+ * Shown only when the browser gives a page no way to install itself. Each
+ * entry says why this device needs the manual route, then the shortest path.
+ */
+const CONFIG: Record<PWAPlatform, { title: string; subtitle: string; steps: Step[]; note?: string }> = {
   ios: {
-    title: 'Install on iPhone / iPad',
-    subtitle: 'Add TCNP to your Home Screen for instant, full-screen access.',
-    steps: IOS_STEPS,
-    note: 'Must use Safari. Chrome / Firefox on iOS do not support installation.',
+    title: 'Add TCNP to your Home Screen',
+    subtitle: 'iPhone and iPad don’t let a website install itself, so it takes three taps.',
+    steps: [
+      { icon: <Share className={ICON} />, label: <>Tap the <strong>Share</strong> button in your browser’s toolbar</> },
+      { icon: <SquarePlus className={ICON} />, label: <>Scroll down and tap <strong>Add to Home Screen</strong></> },
+      { icon: <Check className={ICON} />, label: <>Tap <strong>Add</strong> in the top-right corner</> },
+    ],
+    note: 'Works in Safari, and in Chrome and Edge on iOS 16.4 or later.',
   },
   android: {
-    title: 'Install on Android',
-    subtitle: 'Install TCNP as a native app for fast, offline-ready access.',
-    steps: ANDROID_STEPS,
+    title: 'Install TCNP from your browser menu',
+    subtitle: 'This browser didn’t offer one-tap install, so use its menu instead.',
+    steps: [
+      { icon: <EllipsisVertical className={ICON} />, label: <>Open the browser <strong>menu</strong> (the three dots)</> },
+      { icon: <Download className={ICON} />, label: <>Tap <strong>Install app</strong> or <strong>Add to Home screen</strong></> },
+      { icon: <Check className={ICON} />, label: <>Tap <strong>Install</strong> to confirm</> },
+    ],
+    note: 'If TCNP is already installed, open it from your app drawer.',
   },
   'mac-safari': {
-    title: 'Install on Mac (Safari)',
-    subtitle: 'Add TCNP to your Dock for one-click access from your desktop.',
-    steps: MAC_SAFARI_STEPS,
-    note: 'Requires macOS Sonoma (14) or later with Safari 17+.',
+    title: 'Add TCNP to your Dock',
+    subtitle: 'Safari on Mac installs apps from its own menu, not from the page.',
+    steps: [
+      { icon: <Share className={ICON} />, label: <>Click <strong>File</strong> in the menu bar, or the <strong>Share</strong> button</> },
+      { icon: <PanelBottom className={ICON} />, label: <>Choose <strong>Add to Dock…</strong></> },
+      { icon: <Check className={ICON} />, label: <>Click <strong>Add</strong> to confirm</> },
+    ],
+    note: 'Needs macOS Sonoma (14) or later.',
   },
   'desktop-chrome': {
-    title: 'Install on Desktop',
-    subtitle: 'Install TCNP as a standalone app for the best experience.',
-    steps: DESKTOP_STEPS,
+    title: 'Install TCNP from the address bar',
+    subtitle: 'Your browser isn’t offering one-click install right now, so use its own control.',
+    steps: [
+      { icon: <MonitorDown className={ICON} />, label: <>Click the <strong>install icon</strong> at the right of the address bar</> },
+      { icon: <EllipsisVertical className={ICON} />, label: <>Or open the browser <strong>menu</strong> and choose <strong>Install TCNP</strong></> },
+      { icon: <Check className={ICON} />, label: <>Click <strong>Install</strong> to confirm</> },
+    ],
+    note: 'If TCNP is already installed on this computer, open it from your apps instead.',
   },
   'desktop-other': {
-    title: 'Install on Desktop',
-    subtitle: 'For the best experience, open in Chrome or Edge to install.',
-    steps: DESKTOP_STEPS,
-    note: 'Chrome and Edge provide the best PWA installation support on desktop.',
+    title: 'Open TCNP in Chrome or Edge',
+    subtitle: 'This browser can’t install web apps, so TCNP can only run in a tab here.',
+    steps: [
+      { icon: <Globe className={ICON} />, label: <>Open this page in <strong>Chrome</strong> or <strong>Edge</strong></> },
+      { icon: <Download className={ICON} />, label: <>Sign in and click <strong>Install App</strong></> },
+    ],
+  },
+  'in-app': {
+    title: 'Open TCNP in your browser first',
+    subtitle: 'You’re inside another app’s built-in browser, which can’t install apps.',
+    steps: [
+      { icon: <EllipsisVertical className={ICON} />, label: <>Open this screen’s <strong>menu</strong> (the three dots)</> },
+      { icon: <ArrowUpRight className={ICON} />, label: <>Choose <strong>Open in browser</strong></> },
+      { icon: <Download className={ICON} />, label: <>Then tap <strong>Install</strong> again</> },
+    ],
   },
 }
 
 export function PWAInstallModal({ platform, onClose }: PWAInstallModalProps) {
-  if (!platform) return null
+  const mounted = useIsClient()
+  const titleId = useId()
+  const descriptionId = useId()
+  const panelRef = useRef<HTMLDivElement>(null)
+  const closeRef = useRef(onClose)
+  useEffect(() => { closeRef.current = onClose }, [onClose])
+
+  useEffect(() => {
+    if (!mounted || !platform) return
+    const opener = document.activeElement as HTMLElement | null
+    const panel = panelRef.current
+    panel?.querySelector<HTMLElement>('[data-autofocus]')?.focus()
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        closeRef.current()
+        return
+      }
+      if (event.key !== 'Tab' || !panel) return
+      const buttons = Array.from(panel.querySelectorAll<HTMLElement>('button'))
+      const first = buttons[0]
+      const last = buttons[buttons.length - 1]
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = previousOverflow
+      opener?.focus?.()
+    }
+  }, [mounted, platform])
+
+  if (!mounted || !platform) return null
 
   const config = CONFIG[platform]
 
-  return (
-    /* Backdrop */
-    <div
-      className="fixed inset-0 z-[200] flex items-end justify-center sm:items-center p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-    >
-      {/* Blur overlay */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+  // Portalled to <body>: the header that opens this has a backdrop filter,
+  // which would otherwise trap a fixed-position sheet inside the 64px bar.
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-end justify-center p-4 sm:items-center">
+      <div className="dialog-overlay-in absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
 
-      {/* Sheet */}
-      <div className="relative z-10 w-full max-w-sm rounded-2xl bg-card border shadow-2xl shadow-black/30 animate-in slide-in-from-bottom-4 duration-300 overflow-hidden">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4">
-          {/* App icon placeholder */}
-          <div className="flex-shrink-0 h-14 w-14 rounded-2xl bg-primary flex items-center justify-center shadow-md">
-            <span className="text-2xl font-black text-primary-foreground">T</span>
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        className="dialog-content-in relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-2xl border bg-card text-card-foreground shadow-elevation-xl"
+      >
+        <div className="flex items-start gap-4 px-6 pb-4 pt-6">
+          {/* The real app icon, on white so the crest reads on either theme */}
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white p-1.5 shadow-elevation ring-1 ring-black/5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/icon-192.png" alt="" width={44} height={44} className="h-full w-full object-contain" />
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-base leading-tight">{config.title}</p>
-            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{config.subtitle}</p>
+          <div className="min-w-0 flex-1">
+            <h2 id={titleId} className="text-base font-semibold leading-tight">{config.title}</h2>
+            <p id={descriptionId} className="mt-1 text-xs leading-relaxed text-muted-foreground">{config.subtitle}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex-shrink-0 h-7 w-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-muted/80 transition-colors"
             aria-label="Close"
+            className="hit-area flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+            <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
 
-        {/* Divider */}
         <div className="mx-6 h-px bg-border" />
 
-        {/* Steps */}
-        <ol className="px-6 py-5 space-y-4">
-          {config.steps.map((step, i) => (
-            <li key={i} className="flex items-start gap-4">
-              {/* Step number */}
-              <span className="flex-shrink-0 h-7 w-7 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center mt-0.5">
-                {i + 1}
+        <ol className="space-y-4 px-6 py-5">
+          {config.steps.map((step, index) => (
+            <li key={index} className="flex items-start gap-3">
+              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                {index + 1}
               </span>
-              {/* Icon */}
-              <span className="flex-shrink-0 text-muted-foreground mt-0.5">
-                {step.icon}
-              </span>
-              {/* Label */}
-              <span className="text-sm leading-relaxed flex-1">{step.label}</span>
+              <span className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true">{step.icon}</span>
+              <span className="flex-1 text-sm leading-relaxed">{step.label}</span>
             </li>
           ))}
         </ol>
 
-        {/* Note */}
         {config.note && (
-          <div className="mx-6 mb-5 rounded-lg bg-muted/50 px-3 py-2">
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              ℹ️ {config.note}
-            </p>
-          </div>
+          <p className="mx-6 mb-5 flex items-start gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            {config.note}
+          </p>
         )}
 
-        {/* Close button */}
         <div className="px-6 pb-6">
           <button
             type="button"
+            data-autofocus
             onClick={onClose}
-            className="w-full rounded-xl bg-primary text-primary-foreground text-sm font-semibold py-3 hover:bg-primary/90 active:scale-95 transition-all duration-150"
+            className="btn-sheen h-11 w-full rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-elevation transition-[filter,scale] duration-fast ease-out hover:brightness-[1.04] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             Got it
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
