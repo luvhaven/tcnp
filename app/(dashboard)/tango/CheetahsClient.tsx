@@ -9,6 +9,8 @@ import type { Database } from "@/types/supabase"
 import { useUnitAccess } from "@/hooks/useUnitAccess"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/ui/page-header"
+import { StatCard, StatGrid } from "@/components/ui/stat-card"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
@@ -261,49 +263,26 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
 
   return (
     <div className="space-y-6 page-enter">
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-      >
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-            <Car className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Tango</h1>
-              <Badge variant="outline" className="text-xs font-semibold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
-                Cheetah Fleet & Transport
-              </Badge>
-            </div>
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              VIP Cheetah vehicles, assigned drivers, and FLOWER safety inspections.
-            </p>
-          </div>
-        </div>
-        {canManage && (
-          <Button onClick={openCreateDialog} className="shadow-sm font-semibold gap-1.5 self-start sm:self-auto">
-            <Plus className="h-4 w-4" />
+      <PageHeader
+        icon={Car}
+        title="Tango"
+        badge="Cheetah Fleet & Transport"
+        description="VIP Cheetah vehicles, assigned drivers, and FLOWER safety inspections."
+        actions={canManage && (
+          <Button onClick={openCreateDialog}>
+            <Plus aria-hidden="true" />
             Add New Cheetah
           </Button>
         )}
-      </motion.div>
+      />
 
       {/* Stats */}
-      <div className="grid gap-4 grid-cols-2 nav:grid-cols-4">
-        {[
-          { label: 'Total Fleet', value: cheetahs.length, color: 'text-foreground', ring: 'ring-border' },
-          { label: 'Available', value: cheetahs.filter(c => c.status === 'available').length, color: 'text-[hsl(var(--success))]', ring: 'ring-[hsl(var(--success)/0.2)]' },
-          { label: 'In Use', value: cheetahs.filter(c => c.status === 'in_use').length, color: 'text-blue-500', ring: 'ring-blue-500/20' },
-          { label: 'Maintenance', value: cheetahs.filter(c => c.status === 'maintenance').length, color: 'text-orange-500', ring: 'ring-orange-500/20' },
-        ].map(({ label, value, color, ring }) => (
-          <div key={label} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
-            <p className="text-xs font-medium text-muted-foreground">{label}</p>
-            <p className={`stat-figure mt-2 text-3xl font-bold ${color}`}>{value}</p>
-          </div>
-        ))}
-      </div>
+      <StatGrid>
+        <StatCard label="Total Fleet" value={cheetahs.length} />
+        <StatCard label="Available" value={cheetahs.filter(c => c.status === 'available').length} tone="success" />
+        <StatCard label="In Use" value={cheetahs.filter(c => c.status === 'in_use').length} tone="info" />
+        <StatCard label="Maintenance" value={cheetahs.filter(c => c.status === 'maintenance').length} tone="warning" />
+      </StatGrid>
 
       <TangoOperations
         cheetahs={cheetahs}

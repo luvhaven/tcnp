@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/ui/page-header"
+import { StatCard, StatGrid } from "@/components/ui/stat-card"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -235,53 +237,25 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
   return (
     <div className="space-y-6 page-enter">
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-      >
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
-              <Users className="h-5 w-5" />
-            </div>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Papas & Guest Ministers</h1>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                VIP registry, personal protocols, stage requirements, and flight coordination.
-              </p>
-            </div>
-          </div>
-        </div>
-        {canManage && (
-          <Button onClick={openCreateDialog} className="shadow-sm font-semibold gap-1.5 self-start sm:self-auto">
-            <Plus className="h-4 w-4" />
+      <PageHeader
+        icon={Users}
+        title="Papas & Guest Ministers"
+        description="VIP registry, personal protocols, stage requirements, and flight coordination."
+        actions={canManage && (
+          <Button onClick={openCreateDialog}>
+            <Plus aria-hidden="true" />
             Add Papa
           </Button>
         )}
-      </motion.div>
+      />
 
       {/* Stats Cards */}
-      <div className="grid gap-4 grid-cols-2 nav:grid-cols-4">
-        {[
-          { label: 'Total Papas', value: papas.length, icon: Users, color: 'text-foreground', bg: 'bg-muted', ring: 'ring-border' },
-          { label: 'With Flights', value: papas.filter(p => p.flight_number).length, icon: Plane, color: 'text-sky-500', bg: 'bg-sky-500/10', ring: 'ring-sky-500/20' },
-          { label: 'Stage Directives', value: papas.filter(p => p.needs_water_on_stage || p.has_slides || p.uses_stage_props).length, icon: Sparkles, color: 'text-amber-500', bg: 'bg-amber-500/10', ring: 'ring-amber-500/20' },
-          { label: 'With Entourage', value: papas.filter(p => (p.entourage_count || 0) > 0).length, icon: UserCheck, color: 'text-emerald-500', bg: 'bg-emerald-500/10', ring: 'ring-emerald-500/20' },
-        ].map(({ label, value, icon: Icon, color, bg, ring }) => (
-          <div key={label} className={`rounded-2xl border bg-card p-4 sm:p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">{label}</p>
-                <p className={`stat-figure mt-1.5 text-2xl sm:text-3xl font-bold ${color}`}>{value}</p>
-              </div>
-              <div className={`shrink-0 rounded-xl ${bg} p-2`}>
-                <Icon className={`h-4 w-4 ${color}`} />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+      <StatGrid>
+        <StatCard label="Total Papas" value={papas.length} icon={Users} />
+        <StatCard label="With Flights" value={papas.filter(p => p.flight_number).length} icon={Plane} tone="info" />
+        <StatCard label="Stage Directives" value={papas.filter(p => p.needs_water_on_stage || p.has_slides || p.uses_stage_props).length} icon={Sparkles} tone="warning" />
+        <StatCard label="With Entourage" value={papas.filter(p => (p.entourage_count || 0) > 0).length} icon={UserCheck} tone="success" />
+      </StatGrid>
 
       {/* Registry Card */}
       <Card className="overflow-hidden border-border/60">

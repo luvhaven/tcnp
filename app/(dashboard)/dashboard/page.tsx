@@ -26,6 +26,7 @@ import { MissionRequestPrompt } from "@/components/missions/MissionAvailability"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { CountUp } from "@/components/ui/count-up"
+import { StatCard, StatGrid } from "@/components/ui/stat-card"
 import { ErrorState } from "@/components/ui/error-state"
 import { EmptyState } from "@/components/ui/empty-state"
 import * as Sentry from "@sentry/nextjs"
@@ -50,46 +51,10 @@ const DashboardCharts = dynamic(
 // ─── Executive Stat Definitions ────────────────────────────────────────────────
 
 const EXECUTIVE_STATS = [
-  {
-    key: "totalPapas",
-    label: "Total Papas",
-    sub: "Registered VIP guests",
-    Icon: Users,
-    color: "text-primary",
-    bg: "bg-primary/10",
-    ring: "ring-primary/20",
-    glow: "from-primary/8",
-  },
-  {
-    key: "totalCheetahs",
-    label: "Fleet Size",
-    sub: "Active Cheetah vehicles",
-    Icon: Car,
-    color: "text-emerald-500",
-    bg: "bg-emerald-500/10",
-    ring: "ring-emerald-500/20",
-    glow: "from-emerald-500/8",
-  },
-  {
-    key: "activeJourneys",
-    label: "Active Journeys",
-    sub: "In progress or planned",
-    Icon: MapPin,
-    color: "text-sky-500",
-    bg: "bg-sky-500/10",
-    ring: "ring-sky-500/20",
-    glow: "from-sky-500/8",
-  },
-  {
-    key: "incidents",
-    label: "Open Incidents",
-    sub: "Requires attention",
-    Icon: AlertTriangle,
-    color: "text-amber-500",
-    bg: "bg-amber-500/10",
-    ring: "ring-amber-500/20",
-    glow: "from-amber-500/8",
-  },
+  { key: "totalPapas", label: "Total Papas", sub: "Registered VIP guests", Icon: Users, tone: "primary" },
+  { key: "totalCheetahs", label: "Fleet Size", sub: "Active Cheetah vehicles", Icon: Car, tone: "success" },
+  { key: "activeJourneys", label: "Active Journeys", sub: "In progress or planned", Icon: MapPin, tone: "info" },
+  { key: "incidents", label: "Open Incidents", sub: "Requires attention", Icon: AlertTriangle, tone: "warning" },
 ] as const
 
 const FALLBACK_STATUS_COLORS: Record<string, string> = {
@@ -566,108 +531,54 @@ export default function DashboardPage() {
 
       {/* ── Stat cards ────────────────────────────────────────────────────── */}
       {canViewGlobalDashboard ? (
-        <div className="grid gap-4 grid-cols-2 nav:grid-cols-4">
-          {EXECUTIVE_STATS.map(({ key, label, sub, Icon, color, bg, ring, glow }, idx) => (
-            <div
+        <StatGrid>
+          {EXECUTIVE_STATS.map(({ key, label, sub, Icon, tone }) => (
+            <StatCard
               key={key}
-              className={cn(
-                "relative overflow-hidden rounded-2xl border bg-card p-5",
-                "transition-all duration-200 hover:shadow-elevation-lg hover:-translate-y-0.5",
-                `ring-1 ${ring}`
-              )}
-              style={{ animationDelay: `${idx * 60}ms` }}
-            >
-              <div className={`absolute inset-0 bg-gradient-to-br ${glow} to-transparent pointer-events-none`} aria-hidden="true" />
-              <div className="relative flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground">{label}</p>
-                  <p className="stat-figure mt-2 text-3xl font-bold tracking-tight">
-                    <CountUp value={stats[key]} />
-                  </p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">{sub}</p>
-                </div>
-                <div className={`shrink-0 rounded-xl ${bg} p-2.5`}>
-                  <Icon className={`h-4.5 w-4.5 ${color}`} aria-hidden="true" />
-                </div>
-              </div>
-            </div>
+              label={label}
+              hint={sub}
+              icon={Icon}
+              tone={tone}
+              valueClassName="text-foreground"
+              value={<CountUp value={stats[key]} />}
+            />
           ))}
-        </div>
+        </StatGrid>
       ) : (
         /* Regular Officer Stat Cards */
-        <div className="grid gap-4 grid-cols-2 nav:grid-cols-4">
-          {/* Card 1: My Assignments */}
-          <div className="relative overflow-hidden rounded-2xl border bg-card p-5 ring-1 ring-sky-500/20 transition-all duration-200 hover:shadow-elevation-lg hover:-translate-y-0.5">
-            <div className="absolute inset-0 bg-gradient-to-br from-sky-500/8 to-transparent pointer-events-none" />
-            <div className="relative flex items-start justify-between gap-2">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">My Assignments</p>
-                <p className="stat-figure mt-2 text-3xl font-bold tracking-tight text-sky-600 dark:text-sky-400">
-                  <CountUp value={myAssignmentsCount} />
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">Active & planned journeys</p>
-              </div>
-              <div className="shrink-0 rounded-xl bg-sky-500/10 p-2.5">
-                <MapPin className="h-4.5 w-4.5 text-sky-500" aria-hidden="true" />
-              </div>
-            </div>
-          </div>
-
-          {/* Card 2: Protocol Unit */}
-          <div className="relative overflow-hidden rounded-2xl border bg-card p-5 ring-1 ring-primary/20 transition-all duration-200 hover:shadow-elevation-lg hover:-translate-y-0.5">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/8 to-transparent pointer-events-none" />
-            <div className="relative flex items-start justify-between gap-2">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">Protocol Unit</p>
-                <p className="mt-2 text-xl font-bold tracking-tight text-foreground truncate max-w-[140px]">
-                  {officerUnit}
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">Operational assignment</p>
-              </div>
-              <div className="shrink-0 rounded-xl bg-primary/10 p-2.5">
-                <Shield className="h-4.5 w-4.5 text-primary" aria-hidden="true" />
-              </div>
-            </div>
-          </div>
-
-          {/* Card 3: Protocol Team */}
-          <div className="relative overflow-hidden rounded-2xl border bg-card p-5 ring-1 ring-emerald-500/20 transition-all duration-200 hover:shadow-elevation-lg hover:-translate-y-0.5">
-            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/8 to-transparent pointer-events-none" />
-            <div className="relative flex items-start justify-between gap-2">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">Protocol Team</p>
-                <p className="mt-2 text-xl font-bold tracking-tight text-foreground truncate max-w-[140px]">
-                  {currentUser?.team ? `Team ${toTitleCase(currentUser.team)}` : "Unassigned"}
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  {currentUser?.is_team_head ? "★ Team Lead" : "Team Member"}
-                </p>
-              </div>
-              <div className="shrink-0 rounded-xl bg-emerald-500/10 p-2.5">
-                <Users className="h-4.5 w-4.5 text-emerald-500" aria-hidden="true" />
-              </div>
-            </div>
-          </div>
-
-          {/* Card 4: Program Status */}
-          <div className="relative overflow-hidden rounded-2xl border bg-card p-5 ring-1 ring-amber-500/20 transition-all duration-200 hover:shadow-elevation-lg hover:-translate-y-0.5">
-            <div className="absolute inset-0 bg-gradient-to-br from-amber-500/8 to-transparent pointer-events-none" />
-            <div className="relative flex items-start justify-between gap-2">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">Active Program</p>
-                <p className="mt-2 text-base font-bold tracking-tight text-foreground truncate max-w-[140px]">
-                  {activeProgram?.name || (activeProgram ? "Active" : "Standby")}
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  {activeProgram ? "Protocol engaged" : "Awaiting activation"}
-                </p>
-              </div>
-              <div className="shrink-0 rounded-xl bg-amber-500/10 p-2.5">
-                <Radio className="h-4.5 w-4.5 text-amber-500" aria-hidden="true" />
-              </div>
-            </div>
-          </div>
-        </div>
+        <StatGrid>
+          <StatCard
+            label="My Assignments"
+            hint="Active & planned journeys"
+            icon={MapPin}
+            tone="info"
+            value={<CountUp value={myAssignmentsCount} />}
+          />
+          <StatCard
+            label="Protocol Unit"
+            hint="Operational assignment"
+            icon={Shield}
+            tone="primary"
+            valueClassName="truncate text-lg text-foreground sm:text-xl"
+            value={officerUnit}
+          />
+          <StatCard
+            label="Protocol Team"
+            hint={currentUser?.is_team_head ? "★ Team Lead" : "Team Member"}
+            icon={Users}
+            tone="success"
+            valueClassName="truncate text-lg text-foreground sm:text-xl"
+            value={currentUser?.team ? `Team ${toTitleCase(currentUser.team)}` : "Unassigned"}
+          />
+          <StatCard
+            label="Active Program"
+            hint={activeProgram ? "Protocol engaged" : "Awaiting activation"}
+            icon={Radio}
+            tone="warning"
+            valueClassName="truncate text-lg text-foreground sm:text-xl"
+            value={activeProgram?.name || (activeProgram ? "Active" : "Standby")}
+          />
+        </StatGrid>
       )}
 
       {/* ── Leadership Only: Analytics Charts ─────────────────────────────── */}

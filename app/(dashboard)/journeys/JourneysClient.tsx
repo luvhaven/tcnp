@@ -6,6 +6,8 @@ import { useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/ui/page-header"
+import { StatCard, StatGrid } from "@/components/ui/stat-card"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -29,7 +31,8 @@ import {
   Calendar,
   Pencil,
   Trash2,
-  History
+  History,
+  Route
 } from "lucide-react"
 import { JourneyTimelineDialog } from "@/components/journeys/JourneyTimelineDialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -169,8 +172,8 @@ export default function JourneysClient({
   // Derive role/id from the shared cached hook — no async race condition
   const resolvedRole = useMemo(() => {
     if (!currentUser) return currentRole
-    const eff = effectiveOscarRole(currentUser.role, currentUser.oscar)
     if (currentUser.has_admin_access) return 'admin'
+    const eff = effectiveOscarRole(currentUser.role, currentUser.oscar)
     return eff || currentUser.role
   }, [currentUser, currentRole])
 
@@ -843,18 +846,17 @@ export default function JourneysClient({
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-3xl font-bold">Journeys</h1>
-          <p className="text-muted-foreground">Manage all Papa journeys and call-signs</p>
-        </div>
-        {canCreateJourney && (
-          <Button onClick={() => setCreateDialogOpen(true)} className="shrink-0 self-start sm:self-auto">
-            <Plus className="mr-2 h-4 w-4" />
+      <PageHeader
+        icon={Route}
+        title="Journeys"
+        description="Manage all Papa journeys and call-signs."
+        actions={canCreateJourney && (
+          <Button onClick={() => setCreateDialogOpen(true)}>
+            <Plus aria-hidden="true" />
             Create Journey
           </Button>
         )}
-      </div>
+      />
 
       {/* Registry readiness — journeys compose unit-owned registries, never create them */}
       {canCreateJourney && (
@@ -868,46 +870,12 @@ export default function JourneysClient({
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 nav:grid-cols-4">
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Journeys</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{journeys.length}</div>
-          </CardContent>
-        </Card>
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Active</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {journeys.filter(j => isActiveJourneyStatus(j.status) && !['planned', 'planning', 'scheduled'].includes(j.status)).length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Completed</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {journeys.filter(j => j.status === 'completed').length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Incidents</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {journeys.filter(j => j.status === 'broken_arrow').length}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <StatGrid>
+        <StatCard label="Total Journeys" icon={Route} value={journeys.length} />
+        <StatCard label="Active" icon={Radio} tone="info" value={journeys.filter(j => isActiveJourneyStatus(j.status) && !['planned', 'planning', 'scheduled'].includes(j.status)).length} />
+        <StatCard label="Completed" icon={CheckCircle} tone="success" value={journeys.filter(j => j.status === 'completed').length} />
+        <StatCard label="Incidents" icon={AlertTriangle} tone="destructive" value={journeys.filter(j => j.status === 'broken_arrow').length} />
+      </StatGrid>
 
       {/* Journeys Tabs */}
       <Tabs defaultValue="active" className="space-y-4">
