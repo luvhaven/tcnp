@@ -89,9 +89,11 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
       <img src="/tcnp_logo.png" alt="" width={56} height={56} className="h-14 w-14 object-contain" />
       <div className="space-y-1">
         <p className="text-title-sm text-foreground">TCN Protocol</p>
-        <p className="text-sm text-muted-foreground">
-          {delayed ? 'Your workspace is taking longer than expected to connect.' : 'Loading your workspace…'}
-        </p>
+        {/* No visible caption while loading: the logo and bar say enough. Screen
+            readers still get one, and the delayed message stays visible. */}
+        {delayed
+          ? <p className="text-sm text-muted-foreground">Your workspace is taking longer than expected to connect.</p>
+          : <span className="sr-only">Loading</span>}
       </div>
       {delayed ? (
         <>
