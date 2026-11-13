@@ -270,7 +270,13 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
                 <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-background" />
               </div>
 
-              <div className="hidden flex-col text-left nav:flex">
+              {/* While the profile loads, hold the space with bars rather than
+                  flashing a placeholder "User / Officer" identity. */}
+              <div className={cn("hidden flex-col gap-1.5 nav:flex", !userLoading && "nav:hidden")} aria-hidden="true">
+                <span className="h-2.5 w-14 animate-pulse rounded-full bg-muted" />
+                <span className="h-2 w-10 animate-pulse rounded-full bg-muted" />
+              </div>
+              <div className={cn("hidden flex-col text-left nav:flex", userLoading && "nav:hidden")}>
                 <span className="max-w-[95px] truncate text-xs font-semibold leading-tight text-foreground group-hover:text-primary transition-colors">
                   {firstName}
                 </span>
