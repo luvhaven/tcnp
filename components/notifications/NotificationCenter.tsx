@@ -170,8 +170,19 @@ export default function NotificationCenter() {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { setOpen(false); document.getElementById('notification-bell')?.focus() }
     }
+    // Closing on an outside press is done here, on the document. A full-screen
+    // backdrop cannot do it: the header has a backdrop filter, which confines
+    // any fixed-position child to the header's own 64px box, so presses on the
+    // page below never reached it.
+    const onPress = (event: PointerEvent) => {
+      if (panelRef.current && event.target instanceof Node && !panelRef.current.contains(event.target)) setOpen(false)
+    }
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    document.addEventListener('pointerdown', onPress)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('pointerdown', onPress)
+    }
   }, [open])
 
   const filtered = notifications.filter((n) => {
@@ -230,12 +241,6 @@ export default function NotificationCenter() {
       <AnimatePresence>
         {open && (
           <>
-            {/* Backdrop for closing */}
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setOpen(false)}
-            />
-
             <motion.div
               key="panel"
               id="notification-panel"
