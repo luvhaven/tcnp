@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/ui/page-header"
 import { ErrorState } from "@/components/ui/error-state"
 
 const PAGE = 200
@@ -255,10 +256,7 @@ export default function AuditLogsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Audit Log</h1>
-        <p className="text-muted-foreground">View who did what, when, and where across the system</p>
-      </div>
+      <PageHeader icon={FileText} title="Audit Log" description="View who did what, when, and where across the system." />
 
       <Card>
         <CardHeader>

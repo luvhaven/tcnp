@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { ShieldCheck, Lock, Loader2, KeyRound, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/ui/page-header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -60,15 +61,15 @@ export default function ChangePasswordPage() {
 
     return (
         <div className="space-y-6 max-w-lg mx-auto">
-            <div className="flex items-center gap-3">
-                <Button aria-label="Go back" variant="ghost" size="icon" onClick={() => router.back()} className="h-8 w-8">
-                    <ArrowLeft className="h-4 w-4" />
-                </Button>
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Change Password</h1>
-                    <p className="text-sm text-muted-foreground">Update your account credentials</p>
-                </div>
-            </div>
+            <PageHeader
+                title="Change Password"
+                description="Update your account credentials."
+                leading={
+                    <Button aria-label="Go back" variant="ghost" size="icon" onClick={() => router.back()} className="shrink-0">
+                        <ArrowLeft aria-hidden="true" />
+                    </Button>
+                }
+            />
 
             <Card>
                 <CardHeader>

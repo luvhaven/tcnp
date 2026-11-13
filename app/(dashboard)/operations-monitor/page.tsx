@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import JourneyStatusTable from "@/components/operations/JourneyStatusTable"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Activity } from "lucide-react"
+import { PageHeader } from "@/components/ui/page-header"
 
 export default function OperationsMonitorPage() {
     const [isLoading, setIsLoading] = useState(true)
@@ -49,14 +50,11 @@ export default function OperationsMonitorPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Operations Monitor</h1>
-                    <p className="text-muted-foreground">
-                        Real-time tracking of all active journeys and Papa movements
-                    </p>
-                </div>
-            </div>
+            <PageHeader
+                icon={Activity}
+                title="Operations Monitor"
+                description="Real-time tracking of all active journeys and Papa movements."
+            />
 
             <Card>
                 <CardHeader>

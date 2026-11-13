@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { PageHeader } from '@/components/ui/page-header'
 import { useConfirm } from '@/components/providers/ConfirmProvider'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -412,34 +413,25 @@ export default function IncidentsPage() {
   return (
     <div className="space-y-6 page-enter">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
-            <AlertTriangle className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Incident Management</h1>
-              <Badge variant="outline" className="text-xs font-semibold uppercase tracking-wider bg-destructive/10 text-destructive border-destructive/20">
-                Safety & Distress
-              </Badge>
-            </div>
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              Real-time distress signals, vehicle delays, route alerts, and resolution audit tracking.
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-          <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={incidents.length === 0} className="h-9 text-xs font-medium gap-1.5">
-            <Download className="h-3.5 w-3.5" />
-            Export CSV
-          </Button>
-          <Button onClick={() => openDialog()} size="sm" className="h-9 gap-1.5 text-xs font-semibold bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-sm">
-            <Plus className="h-3.5 w-3.5" />
-            Report Incident
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        icon={AlertTriangle}
+        tone="destructive"
+        title="Incident Management"
+        badge="Safety & Distress"
+        description="Real-time distress signals, vehicle delays, route alerts, and resolution audit tracking."
+        actions={
+          <>
+            <Button variant="outline" onClick={handleExportCSV} disabled={incidents.length === 0}>
+              <Download aria-hidden="true" />
+              Export CSV
+            </Button>
+            <Button variant="destructive" onClick={() => openDialog()}>
+              <Plus aria-hidden="true" />
+              Report Incident
+            </Button>
+          </>
+        }
+      />
 
       {/* Incidents Table */}
       <Card>
