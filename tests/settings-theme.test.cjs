@@ -42,6 +42,7 @@ test('Settings and the actual profile theme control share a stable, working pref
    if (name === '@/lib/utils') return { cn: require('clsx').clsx }
    if (name === '@/components/ui/button') return load('components/ui/button.tsx')
    if (name === '@/components/ui/card') return load('components/ui/card.tsx')
+   if (name === '@/components/ui/page-header') return load('components/ui/page-header.tsx')
    if (name === '@/components/ui/label') return load('components/ui/label.tsx')
    if (name === '@/components/ui/switch') return load('components/ui/switch.tsx')
    if (name === 'next/link') return { __esModule: true, default: ({ children, ...props }) => React.createElement('a', props, children) }
