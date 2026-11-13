@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { canManageCompliance, cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/ui/page-header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -264,26 +265,17 @@ export default function CompliancePage() {
   return (
     <div className="space-y-6 page-enter">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-emerald-950 via-slate-900 to-slate-900 p-6 text-white">
-        <div className="absolute -right-10 -top-16 h-56 w-56 rounded-full bg-emerald-500/20 blur-3xl" />
-        <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <Shirt className="h-6 w-6 text-emerald-300" />
-              <h1 className="text-2xl font-bold tracking-tight">Compliance</h1>
-              <Badge className="border-0 bg-emerald-500/20 text-emerald-200 uppercase text-xs tracking-wider">Grooming & Dress Code</Badge>
-            </div>
-            <p className="mt-1 max-w-xl text-sm text-slate-300">
-              The standard is perfection — outfit of the day, event dress codes and grooming excellence for every officer.
-            </p>
-          </div>
-          {canEdit && (
-            <Button onClick={() => openCreate("outfit_of_day")} className="gap-2 bg-emerald-600 hover:bg-emerald-500">
-              <Plus className="h-4 w-4" /> New Post
-            </Button>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        icon={Shirt}
+        title="Compliance"
+        badge="Grooming & Dress Code"
+        description="The standard is perfection — outfit of the day, event dress codes and grooming excellence for every officer."
+        actions={canEdit && (
+          <Button onClick={() => openCreate("outfit_of_day")}>
+            <Plus aria-hidden="true" /> New Post
+          </Button>
+        )}
+      />
 
       <ComplianceInitiatives />
 

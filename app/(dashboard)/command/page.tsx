@@ -6,6 +6,7 @@ import { motion } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/ui/page-header"
 import { createClient } from "@/lib/supabase/client"
 import { CountUp } from "@/components/ui/count-up"
 import PapaFlightMonitor from "@/components/aviation/PapaFlightMonitor"
@@ -158,48 +159,33 @@ export default function CommandPage() {
         <div className="absolute -right-12 -top-12 h-56 w-56 rounded-full bg-orange-500/10 blur-3xl pointer-events-none" />
         <div className="absolute -left-12 -bottom-12 h-56 w-56 rounded-full bg-sky-500/10 blur-3xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500">
-                <Radar className="h-5 w-5 animate-spin-slow" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-bold tracking-tight">Command Centre</h1>
-                  <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    LIVE OPS
-                  </span>
-                </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Central mission control for convoys, telemetry, operational monitoring, and field safety.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-            <Link href="/journeys">
-              <Button size="sm" className="gap-1.5 text-xs font-semibold shadow-sm">
-                <Plus className="h-3.5 w-3.5" />
-                Plan Journey
+        {/* asChild keeps each action a single link. A <button> nested inside an
+            <a> is invalid HTML and gave keyboard users two stops per action. */}
+        <PageHeader
+          className="relative z-10"
+          icon={Radar}
+          title="Command Centre"
+          badge={
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-overline uppercase text-emerald-600 dark:text-emerald-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 motion-safe:animate-pulse" aria-hidden="true" />
+              Live ops
+            </span>
+          }
+          description="Central mission control for convoys, telemetry, operational monitoring, and field safety."
+          actions={
+            <>
+              <Button asChild>
+                <Link href="/journeys"><Plus aria-hidden="true" />Plan Journey</Link>
               </Button>
-            </Link>
-            <Link href="/tracking/live">
-              <Button size="sm" variant="outline" className="gap-1.5 text-xs font-medium">
-                <Radio className="h-3.5 w-3.5 text-emerald-500" />
-                Live Map
+              <Button asChild variant="outline">
+                <Link href="/tracking/live"><Radio className="text-emerald-500" aria-hidden="true" />Live Map</Link>
               </Button>
-            </Link>
-            <Link href="/incidents">
-              <Button size="sm" variant="outline" className="gap-1.5 text-xs font-medium text-destructive hover:bg-destructive/10">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                Incidents
+              <Button asChild variant="outline">
+                <Link href="/incidents"><AlertTriangle aria-hidden="true" />Incidents</Link>
               </Button>
-            </Link>
-          </div>
-        </div>
+            </>
+          }
+        />
 
         {statsStale && (
           <p role="status" className="relative z-10 mt-4 text-xs text-amber-600 dark:text-amber-400">
