@@ -30,6 +30,6 @@ export function NotificationFeedbackControl() {
       <div className="space-y-1"><Label htmlFor="notification-vibration">In-app vibration</Label><p id="notification-vibration-description" className="text-xs text-muted-foreground">{canVibrate ? 'Short, gentle pulses for every new notification, whether App sounds are on or off. Emergency alerts keep their existing vibration.' : 'This browser does not expose vibration to web apps. System notification vibration follows your device settings.'}</p></div>
       <Switch id="notification-vibration" checked={canVibrate && preferences.vibration} disabled={!canVibrate} onCheckedChange={vibration => setFeedbackPreferences({ vibration })} aria-describedby="notification-vibration-description" />
     </div>
-    <p className="text-xs text-muted-foreground">When TCNP is closed, banner style, sounds and vibration are controlled by your phone or computer. Allow banners and sounds in its notification settings. On iPhone and iPad, install TCNP on the Home Screen to receive Web Push.</p>
+    <p className="text-xs text-muted-foreground">When TCNP is closed, this device still alerts you as long as App sounds or In-app vibration is on. Android phones buzz with two firm pulses; iPhone, iPad and computers use their own alert sound and vibration, so allow banners and sounds for TCNP in the device’s notification settings. Emergencies always alert. On iPhone and iPad, install TCNP on the Home Screen to receive notifications.</p>
   </div>
 }

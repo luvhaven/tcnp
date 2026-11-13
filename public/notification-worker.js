@@ -1,6 +1,7 @@
 /* A small push worker, independent of the app's potentially lengthy precache update. */
 const OWNER_CACHE = 'tcnp-push-owner-v1'
 const OWNER_URL = '/__tcnp_push_owner__'
+const FEEDBACK_URL = '/__tcnp_push_feedback__'
 self.addEventListener('install', event => event.waitUntil(self.skipWaiting()))
 self.addEventListener('message', event => {
   if (event.data?.type !== 'TCNP_PUSH_OWNER') return
@@ -31,16 +32,30 @@ self.addEventListener('push', event => {
     const focused = windows.filter(client => {
       try { return new URL(client.url).origin === self.location.origin && client.focused && client.visibilityState === 'visible' } catch { return false }
     })
+    // This device's own choices (App sounds, In-app vibration), copied here by
+    // the page because a worker cannot read localStorage. If either is on, the
+    // device alerts even with TCNP closed; with both off it arrives quietly in
+    // the tray. An emergency always alerts. Nothing saved yet means alert.
+    let feedback = { vibration: true, sound: true }
+    try {
+      const saved = await (await caches.open(OWNER_CACHE)).match(FEEDBACK_URL)
+      if (saved) { const value = await saved.json(); feedback = { vibration: value?.vibration !== false, sound: value?.sound !== false } }
+    } catch {}
+    const alert = payload.critical || feedback.vibration || feedback.sound
     // The server describes the event and the expected action. Anything that is
     // not a short plain string falls back to the generic wording.
     const text = (value, max, fallback) => typeof value === 'string' && value.trim() && value.length <= max ? value.trim() : fallback
     const title = text(payload.title, 80, 'TCNP')
     const options = { body: text(payload.body, 200, 'You have a new update. Open TCNP to view it.'), tag: payload.tag,
       icon: '/icon-192.png', badge: '/notification-badge.png', data: { url, notificationId: payload.notificationId }, renotify: false,
-      requireInteraction: false, silent: focused.length > 0,
+      requireInteraction: false, silent: focused.length > 0 || !alert,
       actions: [{ action: 'open', title: 'Open TCNP' }],
     }
-    if (!options.silent) options.vibrate = payload.critical ? [200, 100, 200, 100, 400] : [45, 70, 90]
+    // Android plays this pattern itself. iPhone, iPad and desktop ignore it and
+    // use their own system alert, so leaving the notification un-silenced is
+    // what lets each of them ring or buzz in its native way. With vibration
+    // switched off the pattern is omitted and the device's own setting decides.
+    if (!options.silent && (payload.critical || feedback.vibration)) options.vibrate = payload.critical ? [200, 100, 200, 100, 400] : [200, 100, 200]
     await self.registration.showNotification(title, options)
     for (const client of focused) {
       try { client.postMessage({ type: 'TCNP_NOTIFICATION', notificationId: payload.notificationId }) } catch {}

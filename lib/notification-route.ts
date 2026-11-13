@@ -90,3 +90,18 @@ export function describeNotificationForDevice(
   if (n.type === 'alert' || n.type === 'warning' || n.type === 'error') return { title: 'Action needed', body: 'An alert needs your attention. Open TCNP to review it and respond.' }
   return { title: 'New update', body: 'You have a new update. Open TCNP to view it.' }
 }
+
+/**
+ * How hard the push service should try to wake the device. "high" is delivered
+ * immediately even when a phone is dozing, which is what makes a message app
+ * buzz the moment something arrives; "normal" may be held back to save
+ * battery. Operational notifications need an officer now. Greetings and
+ * general notices can wait a few minutes.
+ */
+export function pushUrgency(n: Pick<AppNotification, 'type' | 'metadata'>): 'high' | 'normal' {
+  const kind = n.metadata?.kind
+  if (kind === 'birthday_0700' || n.type === 'birthday_reminder') return 'normal'
+  if (kind === 'announcement' || n.type === 'announcement') return 'normal'
+  if (n.type === 'info' && !kind && !n.metadata?.url) return 'normal'
+  return 'high'
+}

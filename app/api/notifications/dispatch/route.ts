@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import webPush from 'web-push'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { validPushEndpoint, safeNotificationUrl } from '@/lib/push-validation'
-import { resolveNotificationRoute, describeNotificationForDevice } from '@/lib/notification-route'
+import { resolveNotificationRoute, describeNotificationForDevice, pushUrgency } from '@/lib/notification-route'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
           ...describeNotificationForDevice(notice as any), tag: `tcnp-${notice.id}`, targetUserId: sub.user_id,
           notificationId: notice.id, critical: notice.type === 'broken_arrow',
           url: safeNotificationUrl(resolveNotificationRoute(notice as any) ?? (typeof notice.metadata?.url === 'string' ? notice.metadata.url : '/dashboard')),
-        }), { vapidDetails: { subject: config.subject, publicKey: config.publicKey, privateKey: config.privateKey }, TTL: 86400, timeout: 5000, urgency: notice.type === 'broken_arrow' ? 'high' : 'normal' })
+        }), { vapidDetails: { subject: config.subject, publicKey: config.publicKey, privateKey: config.privateKey }, TTL: 86400, timeout: 5000, urgency: pushUrgency(notice as any) })
         delivered = true; sent++
       } catch (error: any) {
         const status = Number(error?.statusCode || 0)

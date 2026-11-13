@@ -5,6 +5,21 @@ const PUSH_SCOPE = '/notifications/'
 const PUSH_SCRIPT = '/notification-worker.js'
 const OWNER_CACHE = 'tcnp-push-owner-v1'
 const OWNER_URL = '/__tcnp_push_owner__'
+const FEEDBACK_URL = '/__tcnp_push_feedback__'
+/** Two firm pulses, the rhythm a messaging app uses. Must match notification-worker.js. */
+export const PUSH_VIBRATION = [200, 100, 200]
+export interface PushFeedback { vibration: boolean; sound: boolean }
+/**
+ * Hands the worker this device's alert choices so it can honour them while
+ * TCNP is closed. The page and the worker share Cache Storage, which is the
+ * one store both can reach without the worker being awake.
+ */
+export async function syncPushFeedback(feedback: PushFeedback) {
+  if (typeof caches === 'undefined') return
+  try {
+    await (await caches.open(OWNER_CACHE)).put(FEEDBACK_URL, new Response(JSON.stringify({ vibration: feedback.vibration, sound: feedback.sound })))
+  } catch { /* Storage blocked: the worker keeps its defaults, which alert. */ }
+}
 let connection: Promise<void> | null = null
 let revision = 0
 let confirmedEndpoint: string | null = null
@@ -130,7 +145,7 @@ export function connectDevicePush(config: DevicePushConfig, askPermission = fals
 export async function sendDeviceNotificationTest() {
   const reg = await navigator.serviceWorker.getRegistration(PUSH_SCOPE)
   if (!reg || !await devicePushConnected()) throw new Error('Enable device notifications first.')
-  await reg.showNotification('TCNP notifications enabled', { body: 'Your device notification is ready. You can find this update in your notification center.', icon: '/icon-192.png', badge: '/notification-badge.png', tag: 'tcnp-device-test', silent: false, requireInteraction: false, data: { url: '/profile' }, vibrate: [45, 70, 90] } as NotificationOptions)
+  await reg.showNotification('TCNP notifications enabled', { body: 'Your device notification is ready. You can find this update in your notification center.', icon: '/icon-192.png', badge: '/notification-badge.png', tag: 'tcnp-device-test', silent: false, requireInteraction: false, data: { url: '/profile' }, vibrate: PUSH_VIBRATION } as NotificationOptions)
 }
 export async function disconnectDevicePush(disable = true) {
   revision++

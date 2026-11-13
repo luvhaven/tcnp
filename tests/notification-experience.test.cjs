@@ -15,7 +15,7 @@ test('push uses device sound and vibration in background, stays silent in foregr
  async function push(changes = {}) { let pending; handlers.push({ data: { json: () => ({ ...payload, ...changes }) }, waitUntil: work => pending = work }); await pending }
  await push()
  assert.equal(shown[0].silent, false)
- assert.deepEqual(Array.from(shown[0].vibrate), [45,70,90])
+ assert.deepEqual(Array.from(shown[0].vibrate), [200,100,200])
  assert.equal(shown[0].requireInteraction, false)
  assert.equal(shown[0].badge, '/notification-badge.png')
  assert.equal(shown[0].data.notificationId, 'notice-one')
