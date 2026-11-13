@@ -733,7 +733,19 @@ nav a {
 }
 
 /* One-shot pulse for new broken-arrow row */
-pulse-once tokens
+@keyframes pulse-once {
+  0% {
+    background-color: hsl(var(--destructive) / 0.22);
+  }
+
+  50% {
+    background-color: hsl(var(--destructive) / 0.14);
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
 
 .animate-pulse-once {
   animation: pulse-once 1.5s ease-out;
