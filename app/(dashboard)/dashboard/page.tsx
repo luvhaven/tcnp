@@ -511,17 +511,8 @@ export default function DashboardPage() {
             ) && (
               <OfficerStatusReportButton />
             )}
-            {!isInstalled ? (
-              <Button onClick={handleInstallClick} variant="outline" size="sm" className="gap-2 rounded-xl self-start shrink-0 text-xs font-medium bg-background/80 shadow-xs">
-                <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                Install App
-              </Button>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground px-3 py-1.5 rounded-xl bg-background/80 border border-border/60 shadow-xs">
-                <CheckCircle className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
-                App Installed
-              </span>
-            )}
+            {/* Install lives in the app header on every page and in the quick
+                actions below; a third copy here crowded the report button. */}
           </div>
         </div>
       </div>

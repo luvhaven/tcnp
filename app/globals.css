@@ -816,6 +816,12 @@ body {
   bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 0.75rem);
 }
 
+/* One ask at a time: while the notification reminder is up, the install
+   prompt waits. Two stacked cards covered half a phone screen on every load. */
+.floating-stack:has(.notification-reminder) .install-prompt {
+  display: none;
+}
+
 /* On phones, keep floating notices above the My Operations distress bar
    (components/operations/DistressButton) rather than over it. */
 @media (max-width: 767px) {
@@ -909,12 +915,6 @@ main,
   animation: dialogContentIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* ─── Premium button sheen ────────────────────────────────────────────────── */
-/* A faint top-edge highlight that gives filled buttons a subtle sense of depth,
-   the way Linear/Stripe/Vercel primary buttons read as "raised" rather than flat */
-.btn-sheen {
-  position: relative;
-  isolation: isolate;
 /* ─── Boot splash ─────────────────────────────────────────────────────────── */
 /* Indeterminate bar under the logo while the session is restored
    (components/providers/QueryProvider). A sliding segment reads as "working"
@@ -933,6 +933,12 @@ main,
   animation: bootBar 1.2s var(--ease-out) infinite;
 }
 
+/* ─── Premium button sheen ────────────────────────────────────────────────── */
+/* A faint top-edge highlight that gives filled buttons a subtle sense of depth,
+   the way Linear/Stripe/Vercel primary buttons read as "raised" rather than flat */
+.btn-sheen {
+  position: relative;
+  isolation: isolate;
 }
 
 .btn-sheen::before {
