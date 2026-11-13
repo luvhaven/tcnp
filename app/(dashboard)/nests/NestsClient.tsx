@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/ui/page-header"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -347,40 +348,22 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
 
   return (
     <div className="space-y-6 page-enter">
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-      >
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Hotel className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">November (Nest)</h1>
-              <Badge variant="outline" className="text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary border-primary/20">
-                Hotel & Accommodations
-              </Badge>
-            </div>
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              Papa accommodation, room readiness, guest experiences, and assigned Nest officers.
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2 self-start sm:self-auto">
-          {canManage && (
-            <Button onClick={() => {
-              setEditing(null)
-              resetForm()
-              setDialogOpen(true)
-            }} className="shadow-sm font-semibold gap-1.5">
-              <Plus className="h-4 w-4" />
-              Add Nest
-            </Button>
-          )}
-        </div>
-      </motion.div>
+      <PageHeader
+        icon={Hotel}
+        title="November (Nest)"
+        badge="Hotel & Accommodations"
+        description="Papa accommodation, room readiness, guest experiences, and assigned Nest officers."
+        actions={canManage && (
+          <Button onClick={() => {
+            setEditing(null)
+            resetForm()
+            setDialogOpen(true)
+          }}>
+            <Plus aria-hidden="true" />
+            Add Nest
+          </Button>
+        )}
+      />
 
       {/* Program Filter */}
       <motion.div layout className="flex items-center gap-4">

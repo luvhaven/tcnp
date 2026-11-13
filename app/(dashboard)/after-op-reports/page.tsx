@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { PageHeader } from '@/components/ui/page-header'
 import { Loader2, ClipboardList, Star, AlertTriangle, Download, User, Calendar, MapPin } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn, isAdmin } from '@/lib/utils'
@@ -116,22 +117,16 @@ export default function AfterOpReportPage() {
 
     return (
         <div className="space-y-6 animate-fade-in">
-            <div className="flex items-start justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-                        <ClipboardList className="h-7 w-7 text-primary" />
-                        After-Op Reports
-                    </h1>
-                    <p className="text-muted-foreground mt-1">
-                        Consolidated DO post-operation feedback. {isUserAdmin ? 'All reports visible.' : 'Your submitted reports.'}
-                    </p>
-                </div>
-                {reports.length > 0 && isUserAdmin && (
-                    <Button size="sm" variant="outline" onClick={handleExportCSV} className="gap-2 text-xs">
-                        <Download className="h-3.5 w-3.5" />Export CSV
+            <PageHeader
+                icon={ClipboardList}
+                title="After-Op Reports"
+                description={<>Consolidated DO post-operation feedback. {isUserAdmin ? 'All reports visible.' : 'Your submitted reports.'}</>}
+                actions={reports.length > 0 && isUserAdmin && (
+                    <Button variant="outline" onClick={handleExportCSV}>
+                        <Download aria-hidden="true" />Export CSV
                     </Button>
                 )}
-            </div>
+            />
 
             {loading ? (
                 <div className="flex items-center justify-center py-20">

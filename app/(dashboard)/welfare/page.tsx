@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { canManageWelfare, canAccessWelfareDirectory } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { PageHeader } from "@/components/ui/page-header"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -83,26 +83,17 @@ export default function WelfarePage() {
       <BirthdayReminder />
 
       {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-amber-950 via-slate-900 to-slate-900 p-6 text-white">
-        <div className="absolute -left-10 -top-16 h-56 w-56 rounded-full bg-amber-500/20 blur-3xl" />
-        <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <HeartHandshake className="h-6 w-6 text-amber-300" />
-              <h1 className="text-2xl font-bold tracking-tight">Welfare</h1>
-              <Badge className="border-0 bg-amber-500/20 text-amber-200 uppercase text-xs tracking-wider">Meals & Officer Care</Badge>
-            </div>
-            <p className="mt-1 max-w-xl text-sm text-slate-300">
-              Menu of the day, program meal plans — and the famous Food-is-Ready alarm.
-            </p>
-          </div>
-          {canEdit && (
-            <Button onClick={() => { setAlarmProgram(activeProgram?.id ?? ""); setAlarmOpen(true) }} disabled={programsLoading || programsFailed} title={programsFailed ? "Programs couldn't load, so the alarm can't be targeted. Refresh and try again." : undefined} className="gap-2 bg-amber-600 hover:bg-amber-500">
-              <BellRing className="h-4 w-4" /> Food is Ready
-            </Button>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        icon={HeartHandshake}
+        title="Welfare"
+        badge="Meals & Officer Care"
+        description="Menu of the day, program meal plans — and the famous Food-is-Ready alarm."
+        actions={canEdit && (
+          <Button onClick={() => { setAlarmProgram(activeProgram?.id ?? ""); setAlarmOpen(true) }} disabled={programsLoading || programsFailed} title={programsFailed ? "Programs couldn't load, so the alarm can't be targeted. Refresh and try again." : undefined}>
+            <BellRing aria-hidden="true" /> Food is Ready
+          </Button>
+        )}
+      />
 
       <WelfareOperations />
 

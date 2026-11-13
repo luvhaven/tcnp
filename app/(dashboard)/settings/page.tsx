@@ -5,6 +5,7 @@ import { useSyncExternalStore } from 'react'
 import { Settings, Sun, Moon, Monitor } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { PageHeader } from '@/components/ui/page-header'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { useTheme, type AppTheme } from '@/components/theme/ThemeProvider'
@@ -33,11 +34,7 @@ export default function SettingsPage() {
   const muted = useSyncExternalStore(audioManager.subscribe, audioManager.getMuted, () => false)
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-6">
-      <div className="flex items-center gap-3">
-        <Settings className="h-7 w-7 text-primary" aria-hidden />
-        <div><h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground">Manage your preferences and device permissions.</p></div>
-      </div>
+      <PageHeader icon={Settings} title="Settings" description="Manage your preferences and device permissions." />
       <Card>
         <CardHeader><CardTitle>Appearance</CardTitle><CardDescription>Changes apply immediately and stay in sync with the profile menu on this device.</CardDescription></CardHeader>
         <CardContent>

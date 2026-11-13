@@ -19,6 +19,7 @@ import FlowerChecklist from '@/components/cheetahs/FlowerChecklist'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { PageHeader } from '@/components/ui/page-header'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CallSignChip } from '@/components/ui/call-sign-chip'
 import { notificationService } from '@/lib/services/notificationService'
@@ -122,22 +123,21 @@ export default function MyOperationsPage() {
   return (
     <div className={cn('space-y-5', selectedIsLive && 'pb-32 md:pb-0')}>
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">My Operations</h1>
-          <p className="text-sm text-muted-foreground">
-            {isAdminUser ? 'Full operational view — leadership override enabled' : 'Your assignments, updates and journey reminders'}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <ConnectionStatusPill state={liveState} />
-          {isAdminUser && (
-            <Badge className="border border-primary/30 bg-primary/20 text-primary">
-              <Shield className="mr-1 h-3 w-3" aria-hidden />Leadership
-            </Badge>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        icon={Navigation}
+        title="My Operations"
+        description={isAdminUser ? 'Full operational view — leadership override enabled' : 'Your assignments, updates and journey reminders'}
+        actions={
+          <>
+            <ConnectionStatusPill state={liveState} />
+            {isAdminUser && (
+              <Badge className="border border-primary/30 bg-primary/20 text-primary">
+                <Shield className="mr-1 h-3 w-3" aria-hidden />Leadership
+              </Badge>
+            )}
+          </>
+        }
+      />
 
       {/* ── Current mission — always first ─────────────────────────────── */}
       {myAssigned.length > 1 && (

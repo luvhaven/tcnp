@@ -9,6 +9,8 @@ import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { canAccessSierra, canManageSierra, cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/ui/page-header"
+import { StatCard, StatGrid } from "@/components/ui/stat-card"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -223,38 +225,23 @@ export default function SerialPage() {
   return (
     <div className="space-y-6 page-enter">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-slate-800 via-slate-900 to-slate-900 p-6 text-white">
-        <div className="absolute -left-10 -top-16 h-56 w-56 rounded-full bg-primary/20 blur-3xl" />
-        <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <Camera className="h-6 w-6 text-orange-300" />
-              <h1 className="text-2xl font-bold tracking-tight">Serial</h1>
-              <Badge className="bg-primary/20 text-orange-200 border-0 uppercase text-xs tracking-wider">Social Media Unit</Badge>
-            </div>
-            <p className="mt-1 max-w-xl text-sm text-slate-300">
-              Capture, curate and publish Papa arrivals, pickups and theatre moments — from lens to Instagram.
-            </p>
-          </div>
-          <Button onClick={() => setUploadOpen(true)} className="gap-2 bg-primary hover:bg-primary/90">
-            <Upload className="h-4 w-4" /> Upload Media
+      <PageHeader
+        icon={Camera}
+        title="Serial"
+        badge="Social Media Unit"
+        description="Capture, curate and publish Papa arrivals, pickups and theatre moments — from lens to Instagram."
+        actions={
+          <Button onClick={() => setUploadOpen(true)}>
+            <Upload aria-hidden="true" /> Upload Media
           </Button>
-        </div>
-        <div className="relative z-10 mt-6 grid grid-cols-3 gap-3 max-w-md">
-          <div className="rounded-xl bg-white/5 px-4 py-3 backdrop-blur">
-            <p className="stat-figure text-2xl font-bold">{stats.total}</p>
-            <p className="text-[11px] uppercase tracking-wider text-slate-400">Assets</p>
-          </div>
-          <div className="rounded-xl bg-white/5 px-4 py-3 backdrop-blur">
-            <p className="stat-figure text-2xl font-bold">{stats.inFlight}</p>
-            <p className="text-[11px] uppercase tracking-wider text-slate-400">In Pipeline</p>
-          </div>
-          <div className="rounded-xl bg-white/5 px-4 py-3 backdrop-blur">
-            <p className="stat-figure text-2xl font-bold">{stats.posted}</p>
-            <p className="text-[11px] uppercase tracking-wider text-slate-400">Posted</p>
-          </div>
-        </div>
-      </div>
+        }
+      />
+
+      <StatGrid columns={3}>
+        <StatCard label="Assets" value={stats.total} />
+        <StatCard label="In Pipeline" value={stats.inFlight} tone="info" />
+        <StatCard label="Posted" value={stats.posted} tone="success" />
+      </StatGrid>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">

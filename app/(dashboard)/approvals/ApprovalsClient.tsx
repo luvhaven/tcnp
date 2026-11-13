@@ -9,6 +9,7 @@ import { normalizeOscarLabel } from "@/lib/utils"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/ui/page-header"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -76,21 +77,14 @@ export default function ApprovalsClient() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-bold tracking-tight">Signup Approvals</h1>
-          {data && (
-            <Badge variant="outline" className="text-xs">
-              {data.scope === "all" ? "All units" : "Your unit"}
-            </Badge>
-          )}
-        </div>
-        <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-          {data?.scope === "unit"
-            ? "People who signed up into your unit and are waiting for access. Approving lets them sign in."
-            : "People who signed up and are waiting for access. Unit heads can approve their own unit; you can approve everyone."}
-        </p>
-      </div>
+      <PageHeader
+        icon={UserCheck}
+        title="Signup Approvals"
+        badge={data ? (data.scope === "all" ? "All units" : "Your unit") : undefined}
+        description={data?.scope === "unit"
+          ? "People who signed up into your unit and are waiting for access. Approving lets them sign in."
+          : "People who signed up and are waiting for access. Unit heads can approve their own unit; you can approve everyone."}
+      />
 
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

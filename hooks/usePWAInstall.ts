@@ -1,89 +1,54 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
 import { useBrowserSnapshot } from './useBrowserSnapshot'
+import {
+  detectPlatform,
+  hasInstallPrompt,
+  isRunningInstalled,
+  requestInstall,
+  subscribeToInstall,
+  wasInstalledThisSession,
+  type InstallOutcome,
+  type PWAPlatform,
+} from '@/lib/pwa-install'
 
-export type PWAPlatform =
-  | 'android'
-  | 'ios'
-  | 'mac-safari'
-  | 'desktop-chrome'
-  | 'desktop-other'
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
-}
+export type { PWAPlatform } from '@/lib/pwa-install'
 
 export interface UsePWAInstallReturn {
-  /** true if running inside an installed PWA (standalone display-mode) */
+  /** true if running inside an installed PWA, or installed during this visit */
   isInstalled: boolean
-  /** true if the browser has fired beforeinstallprompt and we can call .prompt() */
+  /** true while the browser's native install dialog is available to raise */
   canNativeInstall: boolean
   /** detected OS / browser category */
   platform: PWAPlatform | null
   /**
-   * Trigger install.
-   * - Returns 'accepted' | 'dismissed' when the native dialog was used.
-   * - Returns 'show-instructions' when no native dialog is available
-   *   (iOS / macOS Safari / unsupported desktop) — caller should open the
-   *   instructions modal.
+   * Install the app.
+   * - 'accepted' | 'dismissed': the native dialog was shown and answered.
+   * - 'show-instructions': this device gives a page no way to install itself
+   *   (iOS, Safari on Mac, Firefox, in-app browsers), so the caller should
+   *   open the instructions modal.
    */
-  install: () => Promise<'accepted' | 'dismissed' | 'show-instructions'>
+  install: () => Promise<InstallOutcome>
 }
 
+const never = () => false
+
+/**
+ * Every install control shares one record of the browser's offer
+ * (lib/pwa-install), so it does not matter which control mounted first or
+ * which one the user clicks.
+ */
 export function usePWAInstall(): UsePWAInstallReturn {
-  const [installedThisSession, setIsInstalled] = useState(false)
-  const standalone = useBrowserSnapshot(() => ['standalone', 'window-controls-overlay', 'minimal-ui', 'fullscreen'].some(mode => window.matchMedia(`(display-mode: ${mode})`).matches) || (navigator as any).standalone === true, false)
-  const isInstalled = standalone || installedThisSession
-  const [canNativeInstall, setCanNativeInstall] = useState(false)
-  const platform = useBrowserSnapshot<PWAPlatform | null>(() => {
-    const ua = navigator.userAgent
-    if (/iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return 'ios'
-    if (/Android/.test(ua)) return 'android'
-    if (/Macintosh/.test(ua) && /Safari/.test(ua) && !/Chrome|Firefox|Edg/.test(ua)) return 'mac-safari'
-    return /Chrome|Edg/.test(ua) ? 'desktop-chrome' : 'desktop-other'
-  }, null)
-  const deferredPrompt = useRef<BeforeInstallPromptEvent | null>(null)
+  const standalone = useBrowserSnapshot(isRunningInstalled, false)
+  const installedThisSession = useSyncExternalStore(subscribeToInstall, wasInstalledThisSession, never)
+  const canNativeInstall = useSyncExternalStore(subscribeToInstall, hasInstallPrompt, never)
+  const platform = useBrowserSnapshot<PWAPlatform | null>(
+    () => detectPlatform(navigator.userAgent, navigator.platform, navigator.maxTouchPoints),
+    null,
+  )
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
+  const install = useCallback(() => requestInstall(platform), [platform])
 
-    // ── Listen for native install event ──────────────────────────────────────
-    const handleBIP = (e: Event) => {
-      e.preventDefault()
-      deferredPrompt.current = e as BeforeInstallPromptEvent
-      setCanNativeInstall(true)
-    }
-
-    const handleInstalled = () => {
-      setIsInstalled(true)
-      setCanNativeInstall(false)
-      deferredPrompt.current = null
-    }
-
-    window.addEventListener('beforeinstallprompt', handleBIP)
-    window.addEventListener('appinstalled', handleInstalled)
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBIP)
-      window.removeEventListener('appinstalled', handleInstalled)
-    }
-  }, [])
-
-  const install = useCallback(async (): Promise<
-    'accepted' | 'dismissed' | 'show-instructions'
-  > => {
-    if (deferredPrompt.current) {
-      await deferredPrompt.current.prompt()
-      const { outcome } = await deferredPrompt.current.userChoice
-      deferredPrompt.current = null
-      setCanNativeInstall(false)
-      if (outcome === 'accepted') setIsInstalled(true)
-      return outcome
-    }
-    // No native prompt available — caller shows manual instructions
-    return 'show-instructions'
-  }, [])
-
-  return { isInstalled, canNativeInstall, platform, install }
+  return { isInstalled: standalone || installedThisSession, canNativeInstall, platform, install }
 }

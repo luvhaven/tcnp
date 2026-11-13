@@ -81,7 +81,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
     return NAV_SECTIONS
       .map(section => ({ ...section, items: section.items.filter(i => allowed.has(i.href)) }))
       .filter(section => section.items.length > 0)
-  }, [currentUser?.role, currentUser?.oscar, unitSlugs])
+  }, [currentUser?.role, currentUser?.oscar, currentUser?.has_admin_access, unitSlugs])
   const filteredSections = filterNavigation(visibleSections, collapsed && !isMobile ? '' : search)
   const resultCount = filteredSections.reduce((count, section) => count + section.items.length, 0)
 

@@ -8,6 +8,8 @@ import { createClient } from "@/lib/supabase/client"
 import { isPlatformAdministrator } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/ui/page-header"
+import { StatCard, StatGrid } from "@/components/ui/stat-card"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -374,38 +376,26 @@ export default function EchoPage() {
             )}
 
             {/* Header */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-                        <Volume2 className="h-8 w-8 text-primary" />
-                        Echo - Equipment Management
-                    </h1>
-                    <p className="text-muted-foreground">
-                        Manage multimedia and sound equipment for programs
-                    </p>
-                </div>
-                {canManage && (
-                    <Button onClick={openCreateDialog} className="gap-2">
-                        <Plus className="h-4 w-4" />
+            <PageHeader
+                icon={Volume2}
+                title="Echo"
+                badge="Equipment Management"
+                description="Manage multimedia and sound equipment for programs."
+                actions={canManage && (
+                    <Button onClick={openCreateDialog}>
+                        <Plus aria-hidden="true" />
                         Add Equipment
                     </Button>
                 )}
-            </div>
+            />
 
             {/* Stats Cards */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {[
-                    { label: 'Total Equipment', value: stats.total, color: 'text-foreground', ring: 'ring-border' },
-                    { label: 'Available', value: stats.available, color: 'text-[hsl(var(--success))]', ring: 'ring-[hsl(var(--success)/0.2)]' },
-                    { label: 'In Use', value: stats.inUse, color: 'text-blue-500', ring: 'ring-blue-500/20' },
-                    { label: 'Maintenance', value: stats.maintenance, color: 'text-orange-500', ring: 'ring-orange-500/20' },
-                ].map(({ label, value, color, ring }) => (
-                    <div key={label} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
-                        <p className="text-xs font-medium text-muted-foreground">{label}</p>
-                        <p className={`stat-figure mt-2 text-3xl font-bold ${color}`}>{value}</p>
-                    </div>
-                ))}
-            </div>
+            <StatGrid>
+                <StatCard label="Total Equipment" value={stats.total} />
+                <StatCard label="Available" value={stats.available} tone="success" />
+                <StatCard label="In Use" value={stats.inUse} tone="info" />
+                <StatCard label="Maintenance" value={stats.maintenance} tone="warning" />
+            </StatGrid>
 
             {/* Filters */}
             <Card>

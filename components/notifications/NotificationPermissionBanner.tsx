@@ -45,9 +45,9 @@ export default function NotificationPermissionBanner() {
     return () => { live = false; window.clearTimeout(timer); window.removeEventListener('tcnp-push-change', onChange); window.removeEventListener('focus', onChange); document.removeEventListener('visibilitychange', onVisible) }
   }, [])
   // Remain mounted to reconnect already-authorized devices after login.
-  return <div className={visible ? 'pointer-events-auto w-full rounded-xl border bg-card p-4 shadow-lg' : 'hidden'}>
+  return <div className={visible ? 'notification-reminder pointer-events-auto w-full rounded-xl border bg-card p-4 shadow-elevation-lg' : 'hidden'}>
     <DeviceNotificationControl compact />
-    {visible && <button type="button" className="mt-3 min-h-10 text-sm text-muted-foreground underline" onClick={() => {
+    {visible && <button type="button" className="mt-1 min-h-10 rounded text-left text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground" onClick={() => {
       dismissed.current = true
       refreshRevision.current++
       setVisible(false)

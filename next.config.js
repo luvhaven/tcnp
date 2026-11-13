@@ -43,6 +43,9 @@ const securityHeaders = [
 ]
 
 const nextConfig = {
+  outputFileTracingIncludes: {
+    '/api/officers/status-report': ['./public/tcnp_logo.png'],
+  },
   // Development and production previously shared `.next`. Running `next
   // build` while the dev server was open could overwrite the dev client
   // manifest and produce "__webpack_modules__[moduleId] is not a function".

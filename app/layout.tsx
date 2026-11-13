@@ -3,6 +3,7 @@ import "./globals.css";
 import "leaflet/dist/leaflet.css";
 import { SafeProviders } from "@/components/providers/SafeProviders";
 import { THEME_BOOTSTRAP_SCRIPT } from "@/lib/theme";
+import { INSTALL_BOOTSTRAP_SCRIPT } from "@/lib/pwa-install";
 
 export const metadata: Metadata = {
   title: {
@@ -54,6 +55,13 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: THEME_BOOTSTRAP_SCRIPT,
+          }}
+        />
+        {/* Catch the browser's install offer before the app loads — it fires
+            once, long before any install button has mounted (lib/pwa-install). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: INSTALL_BOOTSTRAP_SCRIPT,
           }}
         />
         <SafeProviders>

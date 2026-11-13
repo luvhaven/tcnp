@@ -51,7 +51,7 @@ export function BottomNav({ onOpenMore, moreOpen }: BottomNavProps) {
     return TAB_HREFS.filter((href) => allowed.has(href))
       .map((href) => ALL_NAV.find((item) => item.href === href))
       .filter((item): item is (typeof ALL_NAV)[number] => Boolean(item))
-  }, [currentUser?.role, currentUser?.oscar])
+  }, [currentUser?.role, currentUser?.oscar, currentUser?.has_admin_access])
 
   const badgeFor = (href: string) => {
     if (href === "/chat" && unreadChat > 0) return unreadChat > 99 ? "99+" : String(unreadChat)

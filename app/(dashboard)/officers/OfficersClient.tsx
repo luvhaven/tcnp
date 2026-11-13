@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/ui/page-header"
+import { StatCard, StatGrid } from "@/components/ui/stat-card"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -790,38 +792,30 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-3xl font-bold tracking-tight">Officers</h1>
-          <p className="text-sm text-muted-foreground max-w-xl">Directory and management of all Protocol Officers. Online status refreshes every 30 seconds.</p>
-        </div>
-        {canManageOfficers && (
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={showOnlineOfficers} className="gap-2" aria-pressed={activeTab === 'directory' && filterStatus === 'online'}>
-              <UserCheck className="h-4 w-4" /> Online officers
+      <PageHeader
+        icon={UserCircle}
+        title="Officers"
+        description="Directory and management of all Protocol Officers. Online status refreshes every 30 seconds."
+        actions={canManageOfficers && (
+          <>
+            <Button variant="outline" onClick={showOnlineOfficers} aria-pressed={activeTab === 'directory' && filterStatus === 'online'}>
+              <UserCheck aria-hidden="true" /> Online officers
               <Badge variant="secondary">{officers.filter(o => o.is_online).length}</Badge>
             </Button>
-            <Button onClick={() => { setEditing(null); resetForm(); setDialogOpen(true) }} className="shrink-0 gap-2 self-start sm:self-auto">
-              <Plus className="h-4 w-4" />
-              <span>Add Officer</span>
+            <Button onClick={() => { setEditing(null); resetForm(); setDialogOpen(true) }}>
+              <Plus aria-hidden="true" />
+              Add Officer
             </Button>
-          </div>
+          </>
         )}
-      </motion.div>
+      />
 
-      <div className="grid gap-4 grid-cols-2 nav:grid-cols-4">
-        {[
-          { label: 'Total Officers', value: officers.length, color: 'text-foreground', bg: 'bg-primary/8', ring: 'ring-primary/15' },
-          { label: 'Active accounts', value: officers.filter((o: Officer) => officerAccountStatus(o) === 'Active').length, color: 'text-[hsl(var(--success))]', bg: 'bg-[hsl(var(--success)/0.08)]', ring: 'ring-[hsl(var(--success)/0.2)]' },
-          { label: 'Online Now', value: officers.filter((o: Officer) => o.is_online).length, color: 'text-sky-500', bg: 'bg-sky-500/8', ring: 'ring-sky-500/15' },
-          { label: 'Officers with assigned titles', value: officers.filter((o: Officer) => o.current_title_id).length, color: 'text-primary', bg: 'bg-primary/8', ring: 'ring-primary/15' },
-        ].map(({ label, value, color, bg, ring }) => (
-          <div key={label} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
-            <p className="text-xs font-medium text-muted-foreground">{label}</p>
-            <p className={`stat-figure mt-2 text-3xl font-bold ${color}`}>{value}</p>
-          </div>
-        ))}
-      </div>
+      <StatGrid>
+        <StatCard label="Total Officers" value={officers.length} icon={UserCircle} />
+        <StatCard label="Active accounts" value={officers.filter((o: Officer) => officerAccountStatus(o) === 'Active').length} icon={UserCheck} tone="success" />
+        <StatCard label="Online Now" value={officers.filter((o: Officer) => o.is_online).length} icon={Eye} tone="info" />
+        <StatCard label="Officers with assigned titles" value={officers.filter((o: Officer) => o.current_title_id).length} icon={Award} tone="primary" />
+      </StatGrid>
 
       <p className="text-xs text-muted-foreground">Account status is independent of program assignments. The title count counts officers with a recorded current title, not distinct titles or leadership roles.</p>
       <Tabs value={activeTab} onValueChange={tab => {

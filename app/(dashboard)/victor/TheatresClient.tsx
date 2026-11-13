@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/ui/page-header"
+import { StatCard, StatGrid } from "@/components/ui/stat-card"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -170,34 +172,18 @@ export default function TheatresClient({
   return (
     <div className="space-y-6">
 
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-      >
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
-            <Landmark className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Victor</h1>
-              <Badge variant="outline" className="text-xs font-semibold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
-                Venues & Seating
-              </Badge>
-            </div>
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              Event theatres, VIP seat arrangements, and hall layout management.
-            </p>
-          </div>
-        </div>
-        {canManage && (
-          <Button onClick={openDialog} className="shadow-sm font-semibold gap-1.5 self-start sm:self-auto">
-            <Plus className="h-4 w-4" />
+      <PageHeader
+        icon={Landmark}
+        title="Victor"
+        badge="Venues & Seating"
+        description="Event theatres, VIP seat arrangements, and hall layout management."
+        actions={canManage && (
+          <Button onClick={openDialog}>
+            <Plus aria-hidden="true" />
             Add Venue
           </Button>
         )}
-      </motion.div>
+      />
 
       {/* ── Papa Briefings for Victor Oscar roles ── */}
       {(victorAccess.isMember || victorAccess.isPlatformAdmin) && (
@@ -207,18 +193,11 @@ export default function TheatresClient({
       )}
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        {[
-          { label: 'Total Venues', value: theatresLoading ? '—' : theatres.length, color: 'text-foreground', ring: 'ring-border' },
-          { label: 'Total Capacity', value: theatresLoading ? '—' : theatres.reduce((sum, t) => sum + (t.capacity || 0), 0).toLocaleString(), color: 'text-[hsl(var(--success))]', ring: 'ring-[hsl(var(--success)/0.2)]' },
-          { label: 'Average Capacity', value: theatresLoading ? '—' : theatres.length > 0 ? Math.round(theatres.reduce((sum, t) => sum + (t.capacity || 0), 0) / theatres.length).toLocaleString() : 0, color: 'text-primary', ring: 'ring-primary/20' },
-        ].map(({ label, value, color, ring }) => (
-          <div key={label} className={`rounded-2xl border bg-card p-5 ring-1 ${ring} transition-all hover:shadow-elevation-md hover:-translate-y-0.5`}>
-            <p className="text-xs font-medium text-muted-foreground">{label}</p>
-            <p className={`stat-figure mt-2 text-3xl font-bold ${color}`}>{value}</p>
-          </div>
-        ))}
-      </div>
+      <StatGrid columns={3}>
+        <StatCard label="Total Venues" value={theatresLoading ? '—' : theatres.length} />
+        <StatCard label="Total Capacity" tone="success" value={theatresLoading ? '—' : theatres.reduce((sum, t) => sum + (t.capacity || 0), 0).toLocaleString()} />
+        <StatCard label="Average Capacity" tone="primary" value={theatresLoading ? '—' : theatres.length > 0 ? Math.round(theatres.reduce((sum, t) => sum + (t.capacity || 0), 0) / theatres.length).toLocaleString() : 0} />
+      </StatGrid>
 
       {theatresError && (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">

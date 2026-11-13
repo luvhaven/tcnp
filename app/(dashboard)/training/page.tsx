@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { isPlatformAdministrator } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/ui/page-header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -323,25 +324,16 @@ export default function TrainingPage() {
     <div className="space-y-6 page-enter">
       {(deleteMutation.isError || deleteDocMutation.isError) && <p role="alert" className="rounded-lg border border-destructive/30 p-4 text-sm">The record could not be deleted. It has not been removed from this view. Refresh and try again, or contact an administrator.</p>}
       {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl border bg-card p-6">
-        <div className="absolute -left-10 -top-16 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
-        <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <GraduationCap className="h-6 w-6 text-primary" />
-              <h1 className="text-2xl font-bold tracking-tight">Training</h1>
-            </div>
-            <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-              The SOP manual and every scheduled training session — topics, venues, times and speakers.
-            </p>
-          </div>
-          {canEdit && (
-            <Button onClick={openCreate} className="gap-2">
-              <Plus className="h-4 w-4" /> Schedule Training
-            </Button>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        icon={GraduationCap}
+        title="Training"
+        description="The SOP manual and every scheduled training session — topics, venues, times and speakers."
+        actions={canEdit && (
+          <Button onClick={openCreate}>
+            <Plus aria-hidden="true" /> Schedule Training
+          </Button>
+        )}
+      />
 
       <TrainingOperations />
 

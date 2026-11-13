@@ -82,5 +82,27 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
     })
     return () => subscription.unsubscribe()
   }, [queryClient])
-  return <QueryClientProvider client={queryClient}>{ready ? children : <div role="status" className="mx-auto max-w-lg space-y-4 p-6 text-sm"><p>{delayed ? 'Your workspace is taking longer than expected to connect.' : 'Loading your workspace…'}</p>{delayed && <><p>Check your connection and retry. Your saved device submissions will not be removed.</p><button type="button" onClick={() => window.location.reload()} className="rounded-lg border px-4 py-3 font-medium focus-visible:outline focus-visible:outline-2">Retry connection</button></>}</div>}</QueryClientProvider>
+  return <QueryClientProvider client={queryClient}>{ready ? children : (
+    <div role="status" className="flex min-h-dvh flex-col items-center justify-center gap-5 bg-background px-6 text-center">
+      {/* Plain <img>: this paints before the session exists, so it must not wait on the image optimizer. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/tcnp_logo.png" alt="" width={56} height={56} className="h-14 w-14 object-contain" />
+      <div className="space-y-1">
+        <p className="text-title-sm text-foreground">TCN Protocol</p>
+        <p className="text-sm text-muted-foreground">
+          {delayed ? 'Your workspace is taking longer than expected to connect.' : 'Loading your workspace…'}
+        </p>
+      </div>
+      {delayed ? (
+        <>
+          <p className="max-w-sm text-sm text-muted-foreground">Check your connection and retry. Your saved device submissions will not be removed.</p>
+          <button type="button" onClick={() => window.location.reload()} className="inline-flex h-11 items-center justify-center rounded-md border border-input bg-background px-5 text-sm font-medium shadow-xs hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">Retry connection</button>
+        </>
+      ) : (
+        <div className="h-1 w-40 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+          <div className="boot-bar h-full w-2/5 rounded-full bg-primary" />
+        </div>
+      )}
+    </div>
+  )}</QueryClientProvider>
 }

@@ -733,7 +733,19 @@ nav a {
 }
 
 /* One-shot pulse for new broken-arrow row */
-pulse-once tokens
+@keyframes pulse-once {
+  0% {
+    background-color: hsl(var(--destructive) / 0.22);
+  }
+
+  50% {
+    background-color: hsl(var(--destructive) / 0.14);
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
 
 .animate-pulse-once {
   animation: pulse-once 1.5s ease-out;
@@ -802,6 +814,12 @@ body {
 /* components/layout/FloatingStack */
 .floating-stack {
   bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 0.75rem);
+}
+
+/* One ask at a time: while the notification reminder is up, the install
+   prompt waits. Two stacked cards covered half a phone screen on every load. */
+.floating-stack:has(.notification-reminder) .install-prompt {
+  display: none;
 }
 
 /* On phones, keep floating notices above the My Operations distress bar
@@ -895,6 +913,24 @@ main,
 
 .dialog-content-in {
   animation: dialogContentIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ─── Boot splash ─────────────────────────────────────────────────────────── */
+/* Indeterminate bar under the logo while the session is restored
+   (components/providers/QueryProvider). A sliding segment reads as "working"
+   without implying a percentage we don't have. */
+@keyframes bootBar {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(350%);
+  }
+}
+
+.boot-bar {
+  animation: bootBar 1.2s var(--ease-out) infinite;
 }
 
 /* ─── Premium button sheen ────────────────────────────────────────────────── */

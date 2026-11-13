@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/ui/page-header"
+import { StatCard, StatGrid } from "@/components/ui/stat-card"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
@@ -289,50 +291,39 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
 
   return (
     <div className="space-y-6 page-enter">
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-      >
-        <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Programs & Events</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground max-w-xl">Central registry of ministry programs, theatre venues, schedules, and rosters.</p>
-        </div>
-        {canManagePrograms && (
-          <Button onClick={openDialog} className="shrink-0 self-start sm:self-auto shadow-sm font-semibold gap-1.5">
-            <Plus className="h-4 w-4" />
+      <PageHeader
+        icon={Calendar}
+        title="Programs & Events"
+        description="Central registry of ministry programs, theatre venues, schedules, and rosters."
+        actions={canManagePrograms && (
+          <Button onClick={openDialog}>
+            <Plus aria-hidden="true" />
             Add Program
           </Button>
         )}
-      </motion.div>
+      />
 
       {/* Stats */}
-      <div className="grid gap-4 grid-cols-2 nav:grid-cols-4">
-        {[
-          { status: 'planning', label: 'Planning', Icon: Calendar, color: 'text-sky-500', bg: 'bg-sky-500/10', ring: 'ring-sky-500/20' },
-          { status: 'active', label: 'Active', Icon: CheckCircle, color: 'text-emerald-500', bg: 'bg-emerald-500/10', ring: 'ring-emerald-500/20' },
-          { status: 'completed', label: 'Completed', Icon: CheckCircle, color: 'text-success', bg: 'bg-success/10', ring: 'ring-success/20' },
-          { status: 'archived', label: 'Archived', Icon: Archive, color: 'text-muted-foreground', bg: 'bg-muted/60', ring: 'ring-border' },
-        ].map(({ status, label, Icon, color, bg, ring }) => (
-          <div
+      {/* Each card doubles as a status filter, so they are real buttons:
+          reachable by keyboard and announced as pressed when active. */}
+      <StatGrid>
+        {([
+          { status: 'planning', label: 'Planning', Icon: Calendar, tone: 'info' },
+          { status: 'active', label: 'Active', Icon: CheckCircle, tone: 'success' },
+          { status: 'completed', label: 'Completed', Icon: CheckCircle, tone: 'primary' },
+          { status: 'archived', label: 'Archived', Icon: Archive, tone: 'neutral' },
+        ] as const).map(({ status, label, Icon, tone }) => (
+          <StatCard
             key={status}
+            label={label}
+            icon={Icon}
+            tone={tone}
+            value={programs.filter(p => p.status === status).length}
+            selected={statusFilter === status}
             onClick={() => setStatusFilter(prev => prev === status ? 'all' : status)}
-            className={`rounded-2xl border bg-card p-4 sm:p-5 ring-1 ${ring} transition-all cursor-pointer hover:shadow-elevation-md hover:-translate-y-0.5 ${statusFilter === status ? 'border-primary shadow-xs' : ''}`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">{label}</p>
-                <p className={`stat-figure mt-1.5 text-2xl sm:text-3xl font-bold ${color}`}>
-                  {programs.filter(p => p.status === status).length}
-                </p>
-              </div>
-              <div className={`shrink-0 rounded-xl ${bg} p-2`}>
-                <Icon className={`h-4 w-4 ${color}`} aria-hidden="true" />
-              </div>
-            </div>
-          </div>
+          />
         ))}
-      </div>
+      </StatGrid>
 
       <Card className="border-border/60 overflow-hidden">
         <CardHeader className="pb-3 border-b bg-muted/20">
