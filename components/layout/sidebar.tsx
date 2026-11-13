@@ -92,16 +92,16 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
         isMobile ? "w-64" : collapsed ? "w-[76px]" : "w-[248px]"
       )}
     >
-      {/* Desktop collapse toggle. Centred in the 64px top-bar row, straddling the
-          sidebar edge: (64 - 24) / 2 = 20px. It used to sit level with the first
-          nav item, which put it against the search field once that was added. */}
+      {/* Desktop collapse toggle. Centred in the 64px top-bar row — (64 - 24) / 2
+          = 20px — and kept wholly inside the sidebar: the app header beside it
+          is a later, higher layer, so anything overhanging the edge is covered. */}
       {!isMobile && (
         <button
           type="button"
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           aria-expanded={!collapsed}
           onClick={() => setCollapsed(!collapsed)}
-          className="hit-area absolute -right-3 top-5 z-50 hidden h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-md transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 nav:flex"
+          className="hit-area absolute right-1.5 top-5 z-50 hidden h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-md transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 nav:flex"
         >
           <ChevronLeft
             className={cn(
@@ -113,7 +113,9 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
       )}
 
       {/* Logo */}
-      <div className="flex h-16 items-center border-b px-4">
+      {/* Leaves room for the toggle: text stops short of it when open, and the
+          crest shifts left a little when collapsed. */}
+      <div className={cn("flex h-16 items-center border-b", isMobile ? "px-4" : collapsed ? "pl-2.5 pr-9" : "pl-4 pr-9")}>
         <Link
           href="/dashboard"
           className="flex items-center justify-start gap-2 overflow-hidden"
