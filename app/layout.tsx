@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import { SafeProviders } from "@/components/providers/SafeProviders";
 import { THEME_BOOTSTRAP_SCRIPT } from "@/lib/theme";
 import { INSTALL_BOOTSTRAP_SCRIPT } from "@/lib/pwa-install";
+import { InlineScript } from "@/components/utils/InlineScript";
 
 export const metadata: Metadata = {
   title: {
@@ -52,18 +53,10 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body>
         {/* Apply saved theme before first paint — prevents light-mode flash for dark users */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: THEME_BOOTSTRAP_SCRIPT,
-          }}
-        />
+        <InlineScript html={THEME_BOOTSTRAP_SCRIPT} />
         {/* Catch the browser's install offer before the app loads — it fires
             once, long before any install button has mounted (lib/pwa-install). */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: INSTALL_BOOTSTRAP_SCRIPT,
-          }}
-        />
+        <InlineScript html={INSTALL_BOOTSTRAP_SCRIPT} />
         <SafeProviders>
           {children}
         </SafeProviders>
