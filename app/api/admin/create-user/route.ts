@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/supabase'
 import { NextResponse } from 'next/server'
 import { isPlatformAdministrator, platformAuthorityRank, isExecutiveRole, OFFICER_TEAMS } from '@/lib/utils'
-import { OFFICER_ROLE_OPTIONS } from '@/lib/officer-directory'
+import { OFFICER_ROLE_OPTIONS, adminNeedsOscar, ADMIN_NEEDS_OSCAR_MESSAGE } from '@/lib/officer-directory'
 
 export async function POST(request: Request) {
   try {
@@ -44,6 +44,10 @@ export async function POST(request: Request) {
 
     if (!OFFICER_ROLE_OPTIONS.some(option => option.value === role) || typeof has_admin_access !== 'boolean') {
       return NextResponse.json({ error: 'Select a valid officer role and additional access level' }, { status: 400 })
+    }
+
+    if (adminNeedsOscar(role, has_admin_access)) {
+      return NextResponse.json({ error: ADMIN_NEEDS_OSCAR_MESSAGE }, { status: 400 })
     }
 
     if (platformAuthorityRank(role, has_admin_access) >= 80 && currentRole !== 'super_admin') {

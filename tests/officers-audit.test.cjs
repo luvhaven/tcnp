@@ -4,7 +4,7 @@ function compile(file, imports = {}, globals = {}) {
  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true, target: ts.ScriptTarget.ES2020 } }).outputText, { module: mod, exports: mod.exports, require: name => imports[name] || require(name), console, ...globals })
  return mod.exports
 }
-const directory = compile('lib/officer-directory.ts')
+const directory = compile('lib/officer-directory.ts', { '@/lib/utils': compile('lib/utils.ts') })
 const base = { email: 'officer@example.test', is_active: true, activation_status: 'active', team: null, oscar: null, created_at: '2026-10-01', phone: null, unit: null, current_title_id: null }
 const officers = [
  { ...base, id: 'captain', full_name: 'Captain One', role: 'captain', current_title_id: 'captain-title' },
@@ -26,8 +26,10 @@ test('role aliases share a category and label, and readable role searches trim w
  const filter = { status: 'all', role: 'all', team: 'all', search: '  vice captain  ' }
  assert.equal(directory.filterDirectoryOfficers(officers, filter).length, 2)
  assert.equal(directory.filterDirectoryOfficers(officers, { ...filter, search: '', role: 'noscar_nest' })[0].id, 'legacy')
- assert.ok(directory.OFFICER_CATEGORIES.find(category => category.id === 'others').roles.includes('super_admin'))
- for (const officer of officers) assert.equal(directory.OFFICER_CATEGORIES.filter(category => category.roles.includes(directory.canonicalOfficerRole(officer.role))).length, 1, officer.role)
+ // Admin is an access level, not a group: no category claims an admin role by itself.
+ assert.ok(!directory.OFFICER_CATEGORIES.some(category => category.roles.includes('super_admin')))
+ const ids = directory.OFFICER_CATEGORIES.map(category => category.id)
+ for (const officer of officers) assert.ok(ids.includes(directory.officerCategoryId(officer)), officer.role)
 })
 test('pending, active and inactive are disjoint even when stored flags disagree', () => {
  assert.equal(directory.officerAccountStatus({ is_active: true, activation_status: 'pending' }), 'Pending')
@@ -194,4 +196,33 @@ test('actual Officers page shows both Vice Captains, filters correctly and keeps
   try { await act(async () => button('List view').click()); assert.ok(document.querySelector('table')) }
   finally { dom.window.Storage.prototype.setItem = original }
  })
+})
+
+test('admins are listed under their Oscar, and Viewers stand alone', () => {
+ const group = officer => directory.officerCategoryId({ oscar: null, has_admin_access: false, ...officer })
+ // Admin access granted on an Oscar role: the role already names the unit.
+ assert.equal(group({ role: 'tango_oscar', has_admin_access: true }), 'tango')
+ assert.equal(group({ role: 'head_welfare_oscar', has_admin_access: true }), 'welfare')
+ // Legacy admin roles carry the unit in the oscar column, in several spellings.
+ assert.equal(group({ role: 'admin', oscar: 'tango_oscar' }), 'tango')
+ assert.equal(group({ role: 'super_admin', oscar: 'Head Serial Oscar' }), 'serial')
+ assert.equal(group({ role: 'dev_admin', oscar: 'alpha_oscar' }), 'alpha')
+ assert.equal(group({ role: 'admin', oscar: 'hospitality_oscar' }), 'november_nest')
+ // An admin with no Oscar is surfaced for fixing, never filed with Viewers.
+ assert.equal(group({ role: 'admin' }), directory.ADMIN_WITHOUT_OSCAR)
+ assert.equal(group({ role: 'super_admin', oscar: 'not a unit' }), directory.ADMIN_WITHOUT_OSCAR)
+ assert.equal(group({ role: 'viewer', has_admin_access: true }), directory.ADMIN_WITHOUT_OSCAR)
+ // Viewers are their own group, with no admins in it.
+ assert.equal(group({ role: 'viewer' }), 'viewers')
+ assert.deepEqual([...directory.OFFICER_CATEGORIES.find(category => category.id === 'viewers').roles], ['viewer'])
+ assert.ok(!directory.OFFICER_CATEGORIES.some(category => /Administration/.test(category.label)))
+ assert.equal(group({ role: 'captain' }), 'leadership')
+ assert.equal(group({ role: 'made_up_role' }), null)
+})
+
+test('Admin access cannot be given to an account with no Oscar', () => {
+ assert.equal(directory.adminNeedsOscar('viewer', true), true)
+ assert.equal(directory.adminNeedsOscar('viewer', false), false)
+ assert.equal(directory.adminNeedsOscar('tango_oscar', true), false)
+ assert.equal(directory.adminNeedsOscar('captain', true), false)
 })

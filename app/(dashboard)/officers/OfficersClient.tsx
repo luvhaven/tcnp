@@ -29,7 +29,7 @@ import { isPermanentOwnerEmail } from "@/lib/platform-owner"
 import { OFFICER_PRESENCE_REFRESH_MS } from "@/lib/presence"
 import { useSearchParams } from "next/navigation"
 import { PasswordResetRequestsTab } from "@/components/officers/PasswordResetRequestsTab"
-import { OFFICER_ROLE_OPTIONS, OFFICER_CATEGORIES, officerRoleLabel, canonicalOfficerRole, officerAccountStatus, leadershipSummary, filterDirectoryOfficers, toggleVisibleOfficerSelection, officerCSVCell } from '@/lib/officer-directory'
+import { OFFICER_ROLE_OPTIONS, OFFICER_CATEGORIES, officerRoleLabel, canonicalOfficerRole, officerAccountStatus, leadershipSummary, filterDirectoryOfficers, toggleVisibleOfficerSelection, officerCSVCell, officerCategoryId, adminNeedsOscar, ADMIN_NEEDS_OSCAR_MESSAGE, ADMIN_WITHOUT_OSCAR } from '@/lib/officer-directory'
 
 type Officer = {
   id: string
@@ -535,6 +535,12 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (officerSavePending) return
+    // Caught here so the officer manager is told which field to change; the
+    // API enforces the same rule.
+    if (adminNeedsOscar(formData.role, formData.has_admin_access)) {
+      toast.error(ADMIN_NEEDS_OSCAR_MESSAGE)
+      return
+    }
     if (!editing) {
       createOfficerMutation.mutate(formData)
     } else {
@@ -738,7 +744,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
       <div className="space-y-8 pb-8">
         {CATEGORIES.map(category => {
           const categoryOfficers = officersList
-            .filter(o => category.roles.includes(canonicalOfficerRole(o.role)))
+            .filter(o => officerCategoryId(o) === category.id)
             .sort(sortOfficersByHierarchy);
 
           if (categoryOfficers.length === 0) return null;
@@ -752,6 +758,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                 </Badge>
               </div>
               {category.id === 'leadership' && <p className="text-sm text-muted-foreground">{leadershipSummary(categoryOfficers)}</p>}
+              {category.id === ADMIN_WITHOUT_OSCAR && <p className="text-sm text-muted-foreground">Every admin must belong to an Oscar. Edit each of these officers and choose their Oscar so they appear under their unit.</p>}
               <motion.div layout className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <AnimatePresence>
                   {categoryOfficers.map(renderCard)}
@@ -763,9 +770,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
 
         {/* Render Uncategorized at the bottom if any */}
         {(() => {
-          const categorizedRoles = CATEGORIES.flatMap(c => c.roles);
           const uncategorized = officersList
-            .filter(o => !categorizedRoles.includes(canonicalOfficerRole(o.role)))
+            .filter(o => officerCategoryId(o) === null)
             .sort(sortOfficersByHierarchy);
 
           if (uncategorized.length === 0) return null;
@@ -960,7 +966,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                         .filter((o: Officer) => o.activation_status !== 'pending')
                         .sort(sortOfficersByHierarchy)
                         .map((officer: Officer) => {
-                          const category = CATEGORIES.find(c => c.roles.includes(canonicalOfficerRole(officer.role)))
+                          const category = CATEGORIES.find(c => c.id === officerCategoryId(officer))
                           return (
                             <TableRow
                               key={officer.id}

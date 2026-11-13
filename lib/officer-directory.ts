@@ -1,3 +1,5 @@
+import { oscarToRole } from '@/lib/utils'
+
 export const OFFICER_ROLE_OPTIONS = [
   { value: 'captain', label: 'Captain' },
   { value: 'vice_captain', label: 'Vice Captain' },
@@ -37,6 +39,8 @@ export function officerRoleLabel(role?: string | null) {
   const canonical = canonicalOfficerRole(role)
   return OFFICER_ROLE_OPTIONS.find(option => option.value === canonical)?.label || ({ super_admin: 'Super Admin', dev_admin: 'Developer Admin', prof: 'Prof', duchess: 'Duchess' } as Record<string,string>)[canonical] || canonical.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase())
 }
+export const ADMIN_WITHOUT_OSCAR = 'admin_without_oscar'
+const ADMIN_ACCOUNT_ROLES = ['super_admin', 'admin', 'dev_admin']
 export const OFFICER_CATEGORIES = [
   { id: 'leadership', label: 'Leadership', roles: ['captain', 'vice_captain', 'prof', 'duchess'] },
   { id: 'command', label: 'Command Centre', roles: ['head_of_command', 'command', 'head_of_operations'] },
@@ -51,9 +55,33 @@ export const OFFICER_CATEGORIES = [
   { id: 'welfare', label: 'Welfare Oscar (WO)', roles: ['head_welfare_oscar', 'welfare_oscar'] },
   { id: 'training', label: 'Training Oscar', roles: ['head_training_oscar', 'training_oscar'] },
   { id: 'legacy_echo', label: 'Echo (Legacy)', roles: ['head_echo_oscar', 'echo_oscar'] },
-  { id: 'others', label: 'Administration & Viewers', roles: ['super_admin', 'admin', 'dev_admin', 'viewer'] },
+  // Admins are listed under their Oscar (officerCategoryId). This group only
+  // ever holds admins who have none yet, so the gap is visible and gets fixed.
+  { id: ADMIN_WITHOUT_OSCAR, label: 'Admins without an Oscar', roles: [] as string[] },
+  { id: 'viewers', label: 'Viewers', roles: ['viewer'] },
 ]
-export type DirectoryOfficer = { id: string; role: string; full_name: string | null; email: string; is_active: boolean; activation_status: string; current_title_id?: string | null; oscar?: string | null; phone?: string | null; team?: string | null; is_online?: boolean }
+export type DirectoryOfficer = { id: string; role: string; has_admin_access?: boolean | null; full_name: string | null; email: string; is_active: boolean; activation_status: string; current_title_id?: string | null; oscar?: string | null; phone?: string | null; team?: string | null; is_online?: boolean }
+const categoryForRole = (role: string) => OFFICER_CATEGORIES.find(category => category.roles.includes(role))
+
+/**
+ * Which directory group an officer belongs in. Admin is an access level, not a
+ * unit: every admin belongs to an Oscar and is listed there, whether the admin
+ * status is a grant on an Oscar role or a legacy admin role with the unit held
+ * in the oscar column. Returns null only for a role no group recognises.
+ */
+export function officerCategoryId(officer: Pick<DirectoryOfficer, 'role' | 'oscar' | 'has_admin_access'>): string | null {
+  const role = canonicalOfficerRole(officer.role)
+  const isAdminAccount = ADMIN_ACCOUNT_ROLES.includes(role) || (officer.has_admin_access === true && role === 'viewer')
+  if (!isAdminAccount) return categoryForRole(role)?.id ?? null
+  const unitRole = oscarToRole(officer.oscar)
+  const unit = unitRole ? categoryForRole(canonicalOfficerRole(unitRole)) : undefined
+  return unit && unit.id !== 'viewers' ? unit.id : ADMIN_WITHOUT_OSCAR
+}
+
+/** Admin access may only sit on an account that belongs to an Oscar. */
+export const adminNeedsOscar = (role: string, hasAdminAccess: boolean) => hasAdminAccess && canonicalOfficerRole(role) === 'viewer'
+export const ADMIN_NEEDS_OSCAR_MESSAGE = 'Every admin must belong to an Oscar. Choose the officer’s Oscar before granting Admin access.'
+
 export function officerAccountStatus(officer: Pick<DirectoryOfficer, 'is_active' | 'activation_status'>): 'Active' | 'Pending' | 'Inactive' {
   return officer.activation_status === 'pending' ? 'Pending' : officer.is_active && officer.activation_status === 'active' ? 'Active' : 'Inactive'
 }

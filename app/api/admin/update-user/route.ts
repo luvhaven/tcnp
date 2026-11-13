@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { isExecutiveRole, isPlatformAdministrator, OFFICER_TEAMS, platformAuthorityRank } from '@/lib/utils'
-import { OFFICER_ROLE_OPTIONS } from '@/lib/officer-directory'
+import { OFFICER_ROLE_OPTIONS, adminNeedsOscar, ADMIN_NEEDS_OSCAR_MESSAGE } from '@/lib/officer-directory'
 import { isPermanentOwnerEmail } from '@/lib/platform-owner'
 
 export async function POST(request: Request) {
@@ -57,6 +57,11 @@ export async function POST(request: Request) {
             (has_admin_access !== undefined && typeof has_admin_access !== 'boolean') ||
             (body.email !== undefined && !email)) {
             return NextResponse.json({ error: 'Check the email, officer role and additional access level' }, { status: 400 })
+        }
+        // Only when this request is the one changing role or access, so an
+        // unrelated edit (a phone number) to an older record is not blocked.
+        if ((role !== undefined || has_admin_access !== undefined) && adminNeedsOscar(desiredRole, desiredAdminAccess === true)) {
+            return NextResponse.json({ error: ADMIN_NEEDS_OSCAR_MESSAGE }, { status: 400 })
         }
         if (targetRole === 'admin' && desiredRole === 'admin' && has_admin_access === false) {
             return NextResponse.json({ error: 'Select an officer role before removing legacy Admin access' }, { status: 400 })
