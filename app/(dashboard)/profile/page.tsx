@@ -139,6 +139,12 @@ export default function ProfilePage() {
     [form, photoUrl]
   )
 
+  // Fields the officer can still fill in here. Oscar and team are assigned by
+  // someone else, so reminding the officer to "add" them would be misleading.
+  const stillToAdd = completion.missing.filter(spec => spec.key !== "oscar" && spec.key !== "team")
+  const blank = new Set(stillToAdd.map(spec => spec.key))
+  const stillToAddLabels = stillToAdd.map(spec => spec.label).join(", ")
+
   const set = <K extends keyof ProfileFields>(key: K, value: ProfileFields[K]) =>
     setForm(prev => ({ ...prev, [key]: value }))
 
@@ -207,6 +213,9 @@ export default function ProfilePage() {
       const justCompleted = result.isComplete && !currentUser.profile_completed_at
       if (justCompleted) {
         celebrate("Profile complete — thank you!")
+      } else if (stillToAdd.length) {
+        // Saving is never blocked — this is only a nudge towards 100%.
+        toast.success("Profile saved", { description: `Still to add: ${stillToAddLabels}`, duration: 8000 })
       } else {
         toast.success("Profile saved")
       }
@@ -309,7 +318,7 @@ export default function ProfilePage() {
             <CardTitle className="flex items-center gap-2 text-base"><User className="h-4 w-4 text-primary" /> Identity</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
-            <Field label="Full name" icon={User} required>
+            <Field label="Full name" icon={User} required blank={blank.has("full_name")}>
               <Input value={form.full_name ?? ""} onChange={e => set("full_name", e.target.value)} placeholder="John Doe" />
             </Field>
             <Field label="Oscar unit" icon={Briefcase} required>
@@ -318,7 +327,7 @@ export default function ProfilePage() {
                 Unit assignments are managed by your Head of Unit or an administrator.
               </p>
             </Field>
-            <Field label="Phone" icon={Phone} required>
+            <Field label="Phone" icon={Phone} required blank={blank.has("phone")}>
               <Input type="tel" inputMode="tel" autoComplete="tel" value={form.phone ?? ""} onChange={e => set("phone", e.target.value)} placeholder="+234 800 000 0000" />
             </Field>
             <Field label="Email" icon={Mail}>
@@ -345,7 +354,7 @@ export default function ProfilePage() {
             <CardTitle className="flex items-center gap-2 text-base"><Cake className="h-4 w-4 text-primary" /> Personal</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
-            <Field label="Birthday" icon={Cake}>
+            <Field label="Birthday" icon={Cake} blank={blank.has("date_of_birth")}>
               <div className="grid grid-cols-2 gap-2">
                 <Select value={monthVal} onValueChange={v => handleBirthdayChange(v, dayVal)}>
                   <SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger>
@@ -364,7 +373,7 @@ export default function ProfilePage() {
                 </Select>
               </div>
             </Field>
-            <Field label="Gender" icon={User}>
+            <Field label="Gender" icon={User} blank={blank.has("gender")}>
               <Select value={form.gender ?? ""} onValueChange={v => { if (v) set("gender", v) }}>
                 <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                 <SelectContent>
@@ -372,20 +381,20 @@ export default function ProfilePage() {
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="City" icon={MapPin}>
+            <Field label="City" icon={MapPin} blank={blank.has("city")}>
               <Input value={form.city ?? ""} onChange={e => set("city", e.target.value)} placeholder="Lagos" />
             </Field>
-            <Field label="Local government area" icon={MapPin} htmlFor="profile-lga">
+            <Field label="Local government area" icon={MapPin} htmlFor="profile-lga" blank={blank.has("local_government_area")}>
               <Input id="profile-lga" autoComplete="address-level2" value={form.local_government_area ?? ""} onChange={e => set("local_government_area", e.target.value)} placeholder="e.g. Ikeja" />
             </Field>
-            <Field label="State" icon={MapPin} htmlFor="profile-state">
+            <Field label="State" icon={MapPin} htmlFor="profile-state" blank={blank.has("state")}>
               <Input id="profile-state" autoComplete="address-level1" value={form.state ?? ""} onChange={e => set("state", e.target.value)} placeholder="e.g. Lagos" />
             </Field>
-            <Field label="Nearest bus stop / landmark" icon={MapPin} htmlFor="profile-landmark">
+            <Field label="Nearest bus stop / landmark" icon={MapPin} htmlFor="profile-landmark" blank={blank.has("nearest_bus_stop_landmark")}>
               <Input id="profile-landmark" value={form.nearest_bus_stop_landmark ?? ""} onChange={e => set("nearest_bus_stop_landmark", e.target.value)} placeholder="e.g. Allen Junction" />
             </Field>
             <div className="sm:col-span-2">
-              <Field label="Short bio" icon={Sparkles}>
+              <Field label="Short bio" icon={Sparkles} blank={blank.has("bio")}>
                 <Textarea rows={3} value={form.bio ?? ""} onChange={e => set("bio", e.target.value)} placeholder="A sentence or two about your protocol experience…" />
               </Field>
             </div>
@@ -401,6 +410,17 @@ export default function ProfilePage() {
             <DeviceNotificationControl />
           </CardContent>
         </Card>
+
+        {stillToAdd.length > 0 && (
+          <div role="status" className="flex items-start gap-2 rounded-lg border border-amber-400/50 bg-amber-500/5 px-3 py-2.5 text-sm">
+            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <p>
+              <span className="font-medium">Still to add: </span>
+              {stillToAddLabels}.
+              <span className="text-muted-foreground"> You can save now and add {stillToAdd.length === 1 ? "it" : "these"} later — your profile reaches 100% once everything is filled in.</span>
+            </p>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href="/change-password" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
@@ -424,20 +444,23 @@ export default function ProfilePage() {
 }
 
 function Field({
-  label, icon: Icon, required, htmlFor, children,
+  label, icon: Icon, required, blank, htmlFor, children,
 }: {
   label: string
   icon: React.ComponentType<{ className?: string }>
   required?: boolean
+  /** Nothing entered yet — draws a soft amber outline as a reminder, never an error. */
+  blank?: boolean
   htmlFor?: string
   children: React.ReactNode
 }) {
   return (
-    <div className="space-y-1.5">
+    <div className={cn("space-y-1.5", blank && "[&_input]:border-amber-400/70 [&_textarea]:border-amber-400/70 [&_button]:border-amber-400/70")}>
       <Label htmlFor={htmlFor} className="flex items-center gap-1.5 text-xs">
         <Icon className="h-3.5 w-3.5 text-muted-foreground" />
         {label}
         {required && <span className="text-amber-500">*</span>}
+        {blank && <span className="font-normal text-amber-600 dark:text-amber-400">· not added yet</span>}
       </Label>
       {children}
     </div>
