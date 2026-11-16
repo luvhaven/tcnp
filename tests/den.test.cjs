@@ -7,7 +7,7 @@ const mod = { exports: {} }
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/den.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2021 },
 }).outputText, { exports: mod.exports, module: mod, require })
-const { isDenOfficer, legacyDenAccessLevel, normalizeDenAccessLevel, compareDenMembers, resolveDenTab, describeProgrammeStanding, hasFloorAccessFor } = mod.exports
+const { isDenOfficer, legacyDenAccessLevel, normalizeDenAccessLevel, compareDenMembers, resolveDenTab, describeProgrammeStanding, hasFloorAccessFor, resolveDenProgramme } = mod.exports
 
 const migration = fs.readFileSync('supabase/migrations/20261115120000_november_den_unit_foundation.sql', 'utf8')
 
@@ -136,4 +136,25 @@ test('an officer on the signup default role can still be added to a programme th
   assert.match(route, /select\('id, current_title_id, role, oscar, is_active, activation_status'\)/)
   // Still platform administrators only: who may add officers is unchanged.
   assert.match(route, /isPlatformAdministrator\(role, currentUser\?\.has_admin_access\)/)
+})
+
+test('the page opens on the one programme being worked on, unless the officer chose otherwise', () => {
+  const one = [{ id: 'a', status: 'planning' }, { id: 'old', status: 'completed' }]
+  const two = [{ id: 'a', status: 'planning' }, { id: 'b', status: 'active' }]
+  assert.equal(resolveDenProgramme(null, one), 'a')
+  assert.equal(resolveDenProgramme(null, two), 'all')
+  assert.equal(resolveDenProgramme(null, []), 'all')
+  // An explicit choice always wins, including "all".
+  assert.equal(resolveDenProgramme('all', one), 'all')
+  assert.equal(resolveDenProgramme('old', one), 'old')
+  assert.equal(resolveDenProgramme('b', two), 'b')
+})
+
+test('a link to a programme that no longer exists falls back instead of showing nothing', () => {
+  const one = [{ id: 'a', status: 'active' }]
+  assert.equal(resolveDenProgramme('deleted', one), 'a')
+  assert.equal(resolveDenProgramme('deleted', []), 'all')
+  // While the list is still loading, a requested programme is trusted rather than flashing "all".
+  assert.equal(resolveDenProgramme('from-link', [], false), 'from-link')
+  assert.equal(resolveDenProgramme(null, [], false), 'all')
 })

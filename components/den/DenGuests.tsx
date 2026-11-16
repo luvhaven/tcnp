@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
+import ChooseProgramme from "@/components/den/ChooseProgramme"
 import { initialsOf } from "@/components/den/DenTeam"
 import {
   DEN_GUESTS_KEY,
@@ -104,7 +105,7 @@ export default function DenGuests({ selectedProgram, programName, currentUserId,
         </CardHeader>
         <CardContent>
           {!scoped ? (
-            <EmptyState icon={Users} title="Choose a programme" description="Guests are shown one programme at a time. Pick one in the Programme filter above." className="py-8" />
+            <ChooseProgramme icon={Users} description="Guests are shown one programme at a time." className="py-8" />
           ) : guests.isLoading ? (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {Array.from({ length: 3 }, (_, index) => <Skeleton key={index} className="h-36 rounded-xl" />)}

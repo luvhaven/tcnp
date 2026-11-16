@@ -6,7 +6,7 @@ export default async function DenPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
-  const [{ tab }, supabase] = await Promise.all([searchParams, createClient()])
+  const [{ tab, programme }, supabase] = await Promise.all([searchParams, createClient()])
 
   const { data: initialDens } = await supabase
     .from('nests')
@@ -22,6 +22,7 @@ export default async function DenPage({
     <DenClient
       initialDens={initialDens || []}
       initialTab={Array.isArray(tab) ? tab[0] ?? null : tab ?? null}
+      initialProgramme={Array.isArray(programme) ? programme[0] ?? null : programme ?? null}
     />
   )
 }

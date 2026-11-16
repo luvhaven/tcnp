@@ -3,12 +3,13 @@
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
-import { AlertTriangle, Boxes, History, Minus, PackagePlus, Plus } from "lucide-react"
+import { AlertTriangle, Boxes, MoreHorizontal, Minus, PackagePlus, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { Input } from "@/components/ui/input"
@@ -211,14 +212,14 @@ export default function DenInventory({ selectedProgram, programName, canManage, 
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <StatCard label="Items" value={list.length} icon={Boxes} tone="primary" />
         <StatCard label="Low stock" value={low} hint={low ? "At or below reorder level" : "None"} icon={AlertTriangle} tone={low ? "warning" : "neutral"} />
         <StatCard label="Out of stock" value={out} hint={out ? "Nothing left" : "None"} icon={AlertTriangle} tone={out ? "destructive" : "neutral"} />
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1.5">
             <CardTitle className="flex flex-wrap items-center gap-2 text-base">
               <Boxes className="h-5 w-5" aria-hidden="true" />
@@ -252,8 +253,8 @@ export default function DenInventory({ selectedProgram, programName, canManage, 
                 const reserved = reservedFor(item.id)
                 const here = reservationHere(item.id)
                 return (
-                  <li key={item.id} className="flex flex-wrap items-center gap-3 p-3">
-                    <div className="min-w-0 flex-1 basis-56">
+                  <li key={item.id} className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 p-3 sm:flex sm:flex-nowrap">
+                    <div className="min-w-0 sm:flex-1">
                       <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
                         {item.name}
                         {level === "out" && <Badge variant="destructive">Out of stock</Badge>}
@@ -270,29 +271,43 @@ export default function DenInventory({ selectedProgram, programName, canManage, 
                       <span className="stat-figure text-xl font-bold tabular-nums">{formatQuantity(item.quantity)}</span>
                       <span className="ml-1 text-xs text-muted-foreground">{item.unit}</span>
                     </p>
-                    <div className="flex shrink-0 flex-wrap gap-1">
+                    {/* On a phone the actions take their own full-width row, sized for a thumb. */}
+                    <div className="col-span-2 flex shrink-0 items-center gap-2 sm:col-span-1">
                       {canUse && (
-                        <Button size="sm" variant="outline" disabled={level === "out"} onClick={() => openMove(item, "use")}>
+                        <Button size="sm" variant="outline" className="flex-1 sm:flex-none" disabled={level === "out"} onClick={() => openMove(item, "use")}>
                           <Minus className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
                           Use
                         </Button>
                       )}
                       {canManage && (
-                        <Button size="sm" variant="outline" onClick={() => openMove(item, "receive")}>
+                        <Button size="sm" variant="outline" className="flex-1 sm:flex-none" onClick={() => openMove(item, "receive")}>
                           <PackagePlus className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
                           Receive
                         </Button>
                       )}
-                      {canCoordinate && scoped && (
-                        <Button size="sm" variant="ghost" onClick={() => { setReserveAmount(here ? formatQuantity(here.quantity) : ""); setReserve({ item, current: here }) }}>
-                          Reserve
-                        </Button>
-                      )}
-                      {canManage && <Button size="sm" variant="ghost" onClick={() => openMove(item, "count")}>Count</Button>}
-                      {canManage && <Button size="sm" variant="ghost" onClick={() => openItem(item)}>Edit</Button>}
-                      <Button aria-label={`History of ${item.name}`} size="icon" variant="ghost" className="h-8 w-8" onClick={() => setHistoryOf(item)}>
-                        <History className="h-4 w-4" />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button aria-label={`More for ${item.name}`} size="icon" variant="ghost" className="h-9 w-9 shrink-0">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onSelect={() => setHistoryOf(item)}>History</DropdownMenuItem>
+                          {canCoordinate && scoped && (
+                            <DropdownMenuItem onSelect={() => { setReserveAmount(here ? formatQuantity(here.quantity) : ""); setReserve({ item, current: here }) }}>
+                              {here ? "Change reservation" : "Reserve for this programme"}
+                            </DropdownMenuItem>
+                          )}
+                          {canManage && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onSelect={() => openMove(item, "count")}>Stock count</DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => openMove(item, "adjust")}>Adjust with a reason</DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => openItem(item)}>Edit item</DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </li>
                 )

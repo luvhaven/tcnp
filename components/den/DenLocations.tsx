@@ -39,15 +39,13 @@ type Props = {
   programs: DenProgram[]
   selectedProgram: string // 'all' or a program id
   canManage: boolean
-  /** Bumped by the page header's "Add Den" button to open the dialog from outside. */
-  addRequest: number
   onOpenProfile: (member: DenTeamMember) => void
 }
 
 const EMPTY_FORM = { name: "", address: "", city: "", phone: "", email: "", rating: 5, amenities: "", program_id: "" }
 
 /** Den lounges and the officers posted to each one. */
-export default function DenLocations({ dens, programs, selectedProgram, canManage, addRequest, onOpenProfile }: Props) {
+export default function DenLocations({ dens, programs, selectedProgram, canManage, onOpenProfile }: Props) {
   const supabase = createClient()
   const confirm = useConfirm()
   const queryClient = useQueryClient()
@@ -58,16 +56,6 @@ export default function DenLocations({ dens, programs, selectedProgram, canManag
   const [form, setForm] = useState(EMPTY_FORM)
   const [assignTo, setAssignTo] = useState<any>(null)
   const [officerId, setOfficerId] = useState("")
-
-  // Open the "add" dialog when the header button is pressed. Derived during
-  // render (not in an effect) so the dialog opens in the same paint.
-  const [seenAddRequest, setSeenAddRequest] = useState(addRequest)
-  if (addRequest !== seenAddRequest) {
-    setSeenAddRequest(addRequest)
-    setEditing(null)
-    setForm(EMPTY_FORM)
-    setDialogOpen(true)
-  }
 
   const { data: assignments = [] } = useQuery({
     queryKey: ["noscar_assignments", "den"],
@@ -211,12 +199,20 @@ export default function DenLocations({ dens, programs, selectedProgram, canManag
   return (
     <>
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Home className="h-5 w-5" aria-hidden="true" />
-            Den locations
-          </CardTitle>
-          <CardDescription>Private lounges and the officers posted to each one.</CardDescription>
+        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1.5">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Home className="h-5 w-5" aria-hidden="true" />
+              Den locations
+            </CardTitle>
+            <CardDescription>Private lounges and the officers posted to each one.</CardDescription>
+          </div>
+          {canManage && visibleDens.length > 0 && (
+            <Button size="sm" className="shrink-0" onClick={() => { setEditing(null); setForm(EMPTY_FORM); setDialogOpen(true) }}>
+              <Plus aria-hidden="true" />
+              Add Den
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {visibleDens.length === 0 ? (

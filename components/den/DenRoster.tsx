@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
+import ChooseProgramme from "@/components/den/ChooseProgramme"
 import { initialsOf } from "@/components/den/DenTeam"
 import { useDenProgrammeTeam } from "@/hooks/useDenProgrammeTeam"
 import { DEN_PLAN_KEY } from "@/lib/den-plan"
@@ -165,7 +166,7 @@ export default function DenRoster({ selectedProgram, programName, dens, canCoord
     return (
       <Card>
         <CardContent>
-          <EmptyState icon={CalendarDays} title="Choose a programme" description="The roster is built one programme at a time. Pick one in the Programme filter above." />
+          <ChooseProgramme icon={CalendarDays} description="The roster is built one programme at a time." />
         </CardContent>
       </Card>
     )
@@ -174,7 +175,7 @@ export default function DenRoster({ selectedProgram, programName, dens, canCoord
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1.5">
             <CardTitle className="flex flex-wrap items-center gap-2 text-base">
               <CalendarDays className="h-5 w-5" aria-hidden="true" />
@@ -259,7 +260,7 @@ export default function DenRoster({ selectedProgram, programName, dens, canCoord
                               <button
                                 type="button"
                                 aria-label={`Take ${name} off ${shift.title}`}
-                                className="rounded-full p-0.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                className="-mr-1 rounded-full p-1.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 onClick={() => removeMember.mutate(member.id)}
                               >
                                 <X className="h-3 w-3" />
@@ -281,7 +282,7 @@ export default function DenRoster({ selectedProgram, programName, dens, canCoord
                         }}
                       >
                         <Select value={adding[shift.id] ?? ""} onValueChange={(value) => setAdding(current => ({ ...current, [shift.id]: value }))}>
-                          <SelectTrigger className="h-8" aria-label={`Choose an officer for ${shift.title}`}>
+                          <SelectTrigger className="h-9 min-w-0" aria-label={`Choose an officer for ${shift.title}`}>
                             <SelectValue placeholder={available.length ? "Choose an officer" : "No one else on this programme"} />
                           </SelectTrigger>
                           <SelectContent>

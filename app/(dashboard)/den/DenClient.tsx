@@ -1,9 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import { useQuery } from "@tanstack/react-query"
-import { Home, Plus } from "lucide-react"
+import {
+  BarChart3, Boxes, CalendarDays, ClipboardCheck, ClipboardList, FileText, FolderOpen, Home,
+  LayoutDashboard, MapPin, Store, Users, UtensilsCrossed, type LucideIcon,
+} from "lucide-react"
+import { DenProgrammeProvider } from "@/components/den/ChooseProgramme"
 import DenLocations, { type DenProgram } from "@/components/den/DenLocations"
 import DenMenus from "@/components/den/DenMenus"
 import DenGuests from "@/components/den/DenGuests"
@@ -18,7 +22,6 @@ import PapaMealOrders from "@/components/den/PapaMealOrders"
 import VendorDirectory from "@/components/den/VendorDirectory"
 import { OfficerProfileDialog, type OfficerProfileData } from "@/components/officers/OfficerProfileDialog"
 import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
-import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { PageHeader } from "@/components/ui/page-header"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -27,7 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import type { DenTeamMember } from "@/hooks/useDenTeam"
 import { useUnitAccess } from "@/hooks/useUnitAccess"
-import { DEN_FLOOR_GRANTS_KEY, DEN_TABS, hasFloorAccessFor, resolveDenTab, type DenTab } from "@/lib/den"
+import { DEN_FLOOR_GRANTS_KEY, DEN_TABS, hasFloorAccessFor, resolveDenProgramme, resolveDenTab, type DenTab } from "@/lib/den"
 import { createClient } from "@/lib/supabase/client"
 import { canManageNoscarDen, canManageWelfare, isAdmin } from "@/lib/utils"
 
@@ -53,6 +56,21 @@ const TAB_LABEL: Record<DenTab, string> = {
   reports: "Reports",
 }
 
+const TAB_ICON: Record<DenTab, LucideIcon> = {
+  overview: LayoutDashboard,
+  dashboard: BarChart3,
+  plan: ClipboardCheck,
+  work: ClipboardList,
+  roster: CalendarDays,
+  guests: Users,
+  service: UtensilsCrossed,
+  vendors: Store,
+  inventory: Boxes,
+  locations: MapPin,
+  repository: FolderOpen,
+  reports: FileText,
+}
+
 const BRIEFING_ROLES = ["noscar_nest", "head_noscar_nest", "noscar_den", "head_noscar_den", "november_oscar"]
 
 function toProfile(member: DenTeamMember): OfficerProfileData {
@@ -72,14 +90,26 @@ function toProfile(member: DenTeamMember): OfficerProfileData {
   }
 }
 
-export default function DenClient({ initialDens, initialTab }: { initialDens: any[]; initialTab: string | null }) {
+export default function DenClient({ initialDens, initialTab, initialProgramme }: { initialDens: any[]; initialTab: string | null; initialProgramme: string | null }) {
   const supabase = createClient()
   const { data: currentUser } = useCurrentUser()
   const denUnit = useUnitAccess("november_den")
 
-  const [selectedProgram, setSelectedProgram] = useState("all")
+  const [chosenProgram, setChosenProgram] = useState<string | null>(initialProgramme)
   const [profile, setProfile] = useState<OfficerProfileData | null>(null)
-  const [addRequest, setAddRequest] = useState(0)
+
+  const { data: programs = [], isSuccess: programsLoaded } = useQuery({
+    // Same shape (id, name, status) as OfficersClient's programs query, so
+    // it's safe to share this key — see ProgramsClient.tsx for why pages
+    // with DIFFERENT select() shapes must not share the bare ['programs'] key.
+    queryKey: ["programs", "lite-status"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("programs").select("id, name, status").order("name")
+      if (error) throw error
+      return data as DenProgram[]
+    },
+  })
+  const selectedProgram = resolveDenProgramme(chosenProgram, programs, programsLoaded)
 
   const role = currentUser?.role ?? null
   const oscar = currentUser?.oscar ?? null
@@ -115,15 +145,36 @@ export default function DenClient({ initialDens, initialTab }: { initialDens: an
   const [requestedTab, setRequestedTab] = useState<string | null>(initialTab)
   const tab = resolveDenTab(requestedTab, tabs)
 
-  const selectTab = (next: string) => {
-    setRequestedTab(next)
-    // Keep the tab in the address bar so a link or a refresh lands on it,
-    // without a navigation (and without re-running the server component).
+  // The tab and the programme live in the address bar, so a link, a refresh or
+  // a notification lands on exactly this view — without a navigation (and
+  // without re-running the server component).
+  const writeAddress = (name: "tab" | "programme", value: string | null) => {
     const url = new URL(window.location.href)
-    if (next === "overview") url.searchParams.delete("tab")
-    else url.searchParams.set("tab", next)
+    if (value) url.searchParams.set(name, value)
+    else url.searchParams.delete(name)
     window.history.replaceState(null, "", url)
   }
+  const selectTab = (next: string) => {
+    setRequestedTab(next)
+    writeAddress("tab", next === "overview" ? null : next)
+  }
+  const selectProgram = (next: string) => {
+    setChosenProgram(next)
+    writeAddress("programme", next)
+  }
+
+  // On a phone the tabs are one swipeable row; keep the open one in sight.
+  const tabListRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const list = tabListRef.current
+    const active = list?.querySelector<HTMLElement>('[data-state="active"]')
+    if (!list || !active || list.scrollWidth <= list.clientWidth) return
+    // Measured against the row itself and set directly: an animated scroll is
+    // cancelled when the tab takes focus, and never runs in a background tab.
+    const target = active.getBoundingClientRect().left - list.getBoundingClientRect().left + list.scrollLeft
+      - (list.clientWidth - active.offsetWidth) / 2
+    list.scrollLeft = Math.max(0, target)
+  }, [tab])
 
   const { data: dens = [] } = useQuery({
     queryKey: ["nests"],
@@ -135,52 +186,26 @@ export default function DenClient({ initialDens, initialTab }: { initialDens: an
     initialData: initialDens,
   })
 
-  const { data: programs = [] } = useQuery({
-    // Same shape (id, name, status) as OfficersClient's programs query, so
-    // it's safe to share this key — see ProgramsClient.tsx for why pages
-    // with DIFFERENT select() shapes must not share the bare ['programs'] key.
-    queryKey: ["programs", "lite-status"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("programs").select("id, name, status").order("name")
-      if (error) throw error
-      return data as DenProgram[]
-    },
-  })
-
   const programName = selectedProgram === "all"
     ? null
     : programs.find(program => program.id === selectedProgram)?.name ?? null
   const openProfile = (member: DenTeamMember) => setProfile(toProfile(member))
 
   return (
-    <div className="space-y-6 page-enter">
+    <DenProgrammeProvider value={{ programs, loaded: programsLoaded, select: selectProgram }}>
+    <div className="space-y-5 page-enter">
       <PageHeader
         icon={Home}
         title="November (Den)"
         badge="VIP Lounge & Den"
-        description="Guest hospitality in one place: the team, today's menus and orders, vendors and Den locations."
-        actions={canManage && (
-          <Button onClick={() => { selectTab("locations"); setAddRequest(count => count + 1) }}>
-            <Plus aria-hidden="true" />
-            Add Den
-          </Button>
-        )}
-      />
-
-      <Tabs value={tab} onValueChange={selectTab} className="space-y-4">
-        {/* The tabs need the full width: the filter sits on its own line above
-            them, and the tabs wrap instead of hiding behind a scrollbar. */}
-        <div className="flex flex-col gap-3">
-          {/* Phones get one swipeable row; four wrapped rows would push the content off the first screen. */}
-          <TabsList className="order-2 w-full justify-start sm:h-auto sm:flex-wrap">
-            {tabs.map(value => (
-              <TabsTrigger key={value} value={value}>{TAB_LABEL[value]}</TabsTrigger>
-            ))}
-          </TabsList>
-          <div className="order-1 flex items-center gap-2">
+        description="Guest hospitality in one place: plan the programme, run the floor, keep what was learned."
+        // The programme is the page's one global control, so it sits with the
+        // title: beside it on wide screens, directly under it on a phone.
+        actions={
+          <div className="flex w-full items-center gap-2 sm:w-auto">
             <Label htmlFor="den-program-filter" className="shrink-0 text-sm text-muted-foreground">Programme</Label>
-            <Select value={selectedProgram} onValueChange={setSelectedProgram}>
-              <SelectTrigger id="den-program-filter" className="w-full sm:w-[280px]">
+            <Select value={selectedProgram} onValueChange={selectProgram}>
+              <SelectTrigger id="den-program-filter" className="min-w-0 flex-1 sm:w-[260px] sm:flex-none">
                 <SelectValue placeholder="All programmes" />
               </SelectTrigger>
               <SelectContent>
@@ -191,7 +216,28 @@ export default function DenClient({ initialDens, initialTab }: { initialDens: an
               </SelectContent>
             </Select>
           </div>
-        </div>
+        }
+      />
+
+      <Tabs value={tab} onValueChange={selectTab} className="space-y-4">
+        {/* A phone gets one swipeable row (the open tab is kept in view, and
+            the row bleeds to the screen edge so it reads as scrollable);
+            from tablet width up every tab is visible and they wrap. */}
+        <TabsList
+          ref={tabListRef}
+          aria-label="November (Den) sections"
+          className="-mx-4 flex w-auto justify-start gap-1 rounded-none px-4 [scrollbar-width:none] sm:mx-0 sm:h-auto sm:w-full sm:flex-wrap sm:rounded-lg sm:px-1 [&::-webkit-scrollbar]:hidden"
+        >
+          {tabs.map(value => {
+            const Icon = TAB_ICON[value]
+            return (
+              <TabsTrigger key={value} value={value} className="gap-1.5 px-3 py-2 sm:py-1.5">
+                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {TAB_LABEL[value]}
+              </TabsTrigger>
+            )
+          })}
+        </TabsList>
 
         <TabsContent value="overview">
           <DenOverview
@@ -239,7 +285,6 @@ export default function DenClient({ initialDens, initialTab }: { initialDens: an
             programs={programs}
             selectedProgram={selectedProgram}
             canManage={canManage}
-            addRequest={addRequest}
             onOpenProfile={openProfile}
           />
         </TabsContent>
@@ -324,5 +369,6 @@ export default function DenClient({ initialDens, initialTab }: { initialDens: an
         canManage={Boolean(currentUser && (isAdmin(currentUser.role, currentUser.has_admin_access) || isAdmin(currentUser.oscar)))}
       />
     </div>
+    </DenProgrammeProvider>
   )
 }

@@ -3,12 +3,14 @@
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
-import { AlertTriangle, CalendarClock, ClipboardList, ListChecks, Plus, Trash2 } from "lucide-react"
+import { AlertTriangle, CalendarClock, ClipboardList, ListChecks, MoreHorizontal, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
+import ChooseProgramme from "@/components/den/ChooseProgramme"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { Input } from "@/components/ui/input"
@@ -274,7 +276,7 @@ export default function DenWork({ selectedProgram, programName, canCoordinate, c
       <div className="space-y-6">
         <Card>
           <CardContent>
-            <EmptyState icon={ClipboardList} title="Choose a programme" description="Tasks and checklists belong to a programme. Pick one in the Programme filter above." />
+            <ChooseProgramme icon={ClipboardList} description="Tasks and checklists belong to a programme." />
           </CardContent>
         </Card>
         {templateSection()}
@@ -286,7 +288,7 @@ export default function DenWork({ selectedProgram, programName, canCoordinate, c
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1.5">
             <CardTitle className="flex flex-wrap items-center gap-2 text-base">
               <ClipboardList className="h-5 w-5" aria-hidden="true" />
@@ -319,8 +321,8 @@ export default function DenWork({ selectedProgram, programName, canCoordinate, c
                 const mine = task.assigned_to === currentUserId
                 const editable = canCoordinate || mine
                 return (
-                  <li key={task.id} className="flex flex-wrap items-center gap-3 p-3">
-                    <div className="min-w-0 flex-1 basis-56">
+                  <li key={task.id} className="flex items-start gap-2 p-3 sm:items-center sm:gap-3">
+                    <div className="min-w-0 flex-1">
                       <p className={cn("text-sm font-medium", task.status === "done" && "text-muted-foreground line-through")}>{task.title}</p>
                       <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                         <span>{nameOf(task.assigned_to)}</span>
@@ -335,7 +337,7 @@ export default function DenWork({ selectedProgram, programName, canCoordinate, c
                     </div>
                     {editable ? (
                       <Select value={task.status} disabled={setStatus.isPending} onValueChange={(value) => setStatus.mutate({ task, status: value as DenTaskStatus })}>
-                        <SelectTrigger className="h-8 w-[140px] shrink-0" aria-label={`Status of ${task.title}`}><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-9 w-[124px] shrink-0 sm:w-[140px]" aria-label={`Status of ${task.title}`}><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {DEN_MY_TASK_STATUSES.map(status => <SelectItem key={status} value={status}>{DEN_TASK_STATUS_LABEL[status]}</SelectItem>)}
                         </SelectContent>
@@ -344,16 +346,23 @@ export default function DenWork({ selectedProgram, programName, canCoordinate, c
                       <Badge variant={task.status === "done" ? "secondary" : "outline"} className="shrink-0">{DEN_TASK_STATUS_LABEL[task.status]}</Badge>
                     )}
                     {canCoordinate && (
-                      <div className="flex shrink-0 gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => openTask(task)}>Edit</Button>
-                        <Button
-                          aria-label={`Remove task ${task.title}`}
-                          variant="ghost" size="icon" className="h-8 w-8"
-                          onClick={async () => { if (await confirm({ message: `Remove the task "${task.title}"?`, variant: "destructive" })) setStatus.mutate({ task, status: "cancelled" }) }}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button aria-label={`More for task ${task.title}`} variant="ghost" size="icon" className="h-9 w-9 shrink-0">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onSelect={() => openTask(task)}>Edit task</DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onSelect={async () => { if (await confirm({ message: `Remove the task "${task.title}"?`, variant: "destructive" })) setStatus.mutate({ task, status: "cancelled" }) }}
+                          >
+                            Remove task
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
                   </li>
                 )
@@ -364,7 +373,7 @@ export default function DenWork({ selectedProgram, programName, canCoordinate, c
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1.5">
             <CardTitle className="flex items-center gap-2 text-base">
               <ListChecks className="h-5 w-5" aria-hidden="true" />
@@ -416,10 +425,10 @@ export default function DenWork({ selectedProgram, programName, canCoordinate, c
                     <ul className="mt-3 space-y-1">
                       {list.items.map(item => (
                         <li key={item.id} className="flex items-center gap-2">
-                          <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-sm hover:bg-muted">
+                          <label className="flex min-h-10 min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-sm hover:bg-muted">
                             <input
                               type="checkbox"
-                              className="h-4 w-4 shrink-0 accent-primary"
+                              className="h-5 w-5 shrink-0 accent-primary"
                               checked={Boolean(item.done_at)}
                               onChange={(event) => tick.mutate({ item, done: event.target.checked })}
                             />
@@ -540,7 +549,7 @@ export default function DenWork({ selectedProgram, programName, canCoordinate, c
     if (!canManage && list.length === 0) return null
     return (
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1.5">
             <CardTitle className="text-base">Checklist templates</CardTitle>
             <CardDescription>The Den&apos;s standard ways of working, reused on every programme.</CardDescription>

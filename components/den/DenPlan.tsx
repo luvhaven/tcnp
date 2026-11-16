@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ArrowRight, CheckCircle2, CircleDashed, ClipboardCheck, Users } from "lucide-react"
 import { toast } from "sonner"
+import ChooseProgramme from "@/components/den/ChooseProgramme"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -129,11 +130,7 @@ export default function DenPlan({ selectedProgram, programName, canCoordinate, c
     return (
       <Card>
         <CardContent>
-          <EmptyState
-            icon={ClipboardCheck}
-            title="Choose a programme"
-            description="Each programme has its own Den plan and readiness score. Pick one in the Programme filter above."
-          />
+          <ChooseProgramme icon={ClipboardCheck} description="Each programme has its own Den plan and readiness score." />
         </CardContent>
       </Card>
     )

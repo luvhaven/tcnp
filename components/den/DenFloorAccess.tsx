@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import ChooseProgramme from "@/components/den/ChooseProgramme"
 import { initialsOf } from "@/components/den/DenTeam"
 import { useDenTeam, type DenTeamMember } from "@/hooks/useDenTeam"
 import { DEN_FLOOR_GRANTS_KEY, DEN_UNIT_SLUG, describeProgrammeStanding, type DenFloorCandidate } from "@/lib/den"
@@ -130,12 +131,7 @@ export default function DenFloorAccess({ selectedProgram, programName, currentUs
       </CardHeader>
       <CardContent>
         {!scoped ? (
-          <EmptyState
-            icon={KeyRound}
-            title="Choose a programme"
-            description="The team is set one programme at a time. Pick one in the Programme filter above."
-            className="py-8"
-          />
+          <ChooseProgramme icon={KeyRound} description="The team is set one programme at a time." className="py-8" />
         ) : candidates.isLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-12 rounded-xl" />)}
@@ -153,12 +149,12 @@ export default function DenFloorAccess({ selectedProgram, programName, currentUs
               const name = member.full_name ?? "Officer"
               const adding = addToProgramme.isPending && addToProgramme.variables?.member.id === member.id
               return (
-                <li key={member.id} className="flex flex-wrap items-center gap-3 p-3">
+                <li key={member.id} className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2 p-3">
                   <Avatar className="h-8 w-8 shrink-0">
                     {member.photo_url && <AvatarImage src={member.photo_url} alt="" />}
                     <AvatarFallback className="text-xs">{initialsOf(member.full_name)}</AvatarFallback>
                   </Avatar>
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 basis-40">
                     <p className="truncate text-sm font-medium">{name}</p>
                     <p className="text-xs text-muted-foreground">{standing.label}</p>
                   </div>

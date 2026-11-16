@@ -275,7 +275,7 @@ export default function DenReports({ selectedProgram, programName, programs, can
       )}
 
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1.5">
             <CardTitle className="flex flex-wrap items-center gap-2 text-base">
               <FileText className="h-5 w-5" aria-hidden="true" />
@@ -285,7 +285,7 @@ export default function DenReports({ selectedProgram, programName, programs, can
             <CardDescription>What happened, what to change, and what the next team should know. A submitted report is filed in the repository automatically.</CardDescription>
           </div>
           {scoped && (canCoordinate || isMember) && (
-            <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+            <div className="flex shrink-0 flex-wrap gap-2">
               {isMember && (
                 <Button size="sm" variant="outline" onClick={() => openNew("field", selectedProgram)}>
                   <Plus aria-hidden="true" />

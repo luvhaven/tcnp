@@ -99,3 +99,21 @@ export function describeProgrammeStanding(
 export function hasFloorAccessFor(grantedProgramIds: readonly string[], selectedProgram: string): boolean {
   return selectedProgram === 'all' ? grantedProgramIds.length > 0 : grantedProgramIds.includes(selectedProgram)
 }
+
+/**
+ * Which programme the Den page shows. In order: what the officer picked (or a
+ * link asked for), then — when exactly one programme is being planned or run —
+ * that one, so most officers land on their programme without choosing. A
+ * programme that no longer exists falls back the same way.
+ */
+export function resolveDenProgramme(
+  chosen: string | null | undefined,
+  programs: readonly { id: string; status: string }[],
+  loaded = true,
+): string {
+  if (chosen === 'all') return 'all'
+  // Until the list has loaded, trust a requested id rather than flashing "all".
+  if (chosen && (!loaded || programs.some(program => program.id === chosen))) return chosen
+  const open = programs.filter(program => program.status === 'planning' || program.status === 'active')
+  return open.length === 1 ? open[0].id : 'all'
+}

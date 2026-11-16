@@ -99,7 +99,7 @@ export default function DenDashboard({ onNavigate }: Props) {
                     </p>
                   </div>
                   <Badge variant="outline" className="shrink-0">{DEN_PLAN_STATUS_LABEL[programme.plan_status as DenPlanStatus] ?? programme.plan_status}</Badge>
-                  <div className="flex w-40 shrink-0 items-center gap-2" role="img" aria-label={`${score} percent ready`}>
+                  <div className="flex w-full shrink-0 items-center gap-2 sm:w-40" role="img" aria-label={`${score} percent ready`}>
                     <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
                       <div className={cn("h-full rounded-full transition-[width] duration-500", TONE_BAR[readinessTone(score)])} style={{ width: `${score}%` }} />
                     </div>
@@ -113,7 +113,7 @@ export default function DenDashboard({ onNavigate }: Props) {
       </Section>
 
       <Section icon={Users} title="Team" description="Who is carrying the work. Participation counts officers added to at least one Den programme.">
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <StatCard label="Officers" value={team.members} icon={Users} />
           <StatCard label="Participation" value={percentLabel(team.participating, team.members)} hint={`${team.participating} of ${team.members} on a programme`} tone="info" />
           <StatCard label="Tasks completed" value={percentLabel(operational.tasks_done, operational.tasks_done + operational.open_tasks)} hint={`${operational.tasks_done} of ${operational.tasks_done + operational.open_tasks}`} icon={CheckCircle2} tone="success" />
@@ -124,10 +124,15 @@ export default function DenDashboard({ onNavigate }: Props) {
           <>
             <div className="h-64 w-full" role="img" aria-label="Tasks done and open for each officer">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={workload.slice(0, 12)} layout="vertical" margin={{ left: 8, right: 16 }}>
+                <BarChart data={workload.slice(0, 12)} layout="vertical" margin={{ left: 0, right: 12 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
                   <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                  <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis
+                    type="category" dataKey="name" width={104}
+                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    // Long names would squeeze the bars off a phone; the table below has them in full.
+                    tickFormatter={(name: string) => (name.length > 15 ? `${name.slice(0, 14)}…` : name)}
+                  />
                   <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Bar dataKey="done" name="Done" stackId="tasks" fill={CHART.done} radius={[0, 0, 0, 0]} />
@@ -159,7 +164,7 @@ export default function DenDashboard({ onNavigate }: Props) {
       </Section>
 
       <Section icon={Boxes} title="Inventory" description="Stock levels, what needs reordering, and how fast stock is being used.">
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           <StatCard label="Items" value={inventory.items} icon={Boxes} onClick={() => onNavigate("inventory")} />
           <StatCard label="Low stock" value={inventory.low_stock} tone={inventory.low_stock ? "warning" : "neutral"} onClick={() => onNavigate("inventory")} />
           <StatCard label="Out of stock" value={inventory.out_of_stock} tone={inventory.out_of_stock ? "destructive" : "neutral"} onClick={() => onNavigate("inventory")} />

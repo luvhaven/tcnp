@@ -159,7 +159,7 @@ export default function DenRepository({ canManage, currentUserId, selectedProgra
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1.5">
             <CardTitle className="flex items-center gap-2 text-base">
               <FolderOpen className="h-5 w-5" aria-hidden="true" />
