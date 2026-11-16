@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, type KeyboardEvent } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -221,8 +221,41 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
     refetchOnWindowFocus: true,
   })
 
+  // The open tab lives in the address bar so a refresh or a shared link lands
+  // on it, without a navigation. A stale ?status=online is dropped once the
+  // filter has moved on, or the URL effect above would put it back.
+  const selectTab = (tab: string, nextStatus: string = filterStatus) => {
+    setActiveTab(tab)
+    const url = new URL(window.location.href)
+    if (tab === 'directory') url.searchParams.delete('tab')
+    else url.searchParams.set('tab', tab)
+    if (nextStatus === 'online') url.searchParams.set('status', 'online')
+    else url.searchParams.delete('status')
+    window.history.replaceState(null, '', url)
+  }
+
+  // Enter or Space opens a clickable card or row, as a click would.
+  const openOnKey = (open: () => void) => (event: KeyboardEvent<HTMLElement>) => {
+    if (event.target !== event.currentTarget) return
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      open()
+    }
+  }
+
+  // On a phone the tabs are one swipeable row; keep the open one in sight.
+  const tabListRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const list = tabListRef.current
+    const active = list?.querySelector<HTMLElement>('[data-state="active"]')
+    if (!list || !active || list.scrollWidth <= list.clientWidth) return
+    const target = active.getBoundingClientRect().left - list.getBoundingClientRect().left + list.scrollLeft
+      - (list.clientWidth - active.offsetWidth) / 2
+    list.scrollLeft = Math.max(0, target)
+  }, [activeTab])
+
   const showOnlineOfficers = () => {
-    setActiveTab('directory')
+    selectTab('directory', 'online')
     setFilterStatus('online')
     setFilterRole('all')
     setFilterTeam('all')
@@ -258,7 +291,9 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
   }
 
   const filteredOfficers = filterDirectoryOfficers(officers, { status: filterStatus, role: filterRole, team: filterTeam, search: globalSearch })
-  const visibleSelectedOfficers = selectedOfficers.filter(id => filteredOfficers.some(officer => officer.id === id))
+  // Manage keeps signups awaiting approval (badged Pending) so they can be bulk-selected and deleted.
+  const manageOfficers = filteredOfficers
+  const visibleSelectedOfficers = selectedOfficers.filter(id => manageOfficers.some(officer => officer.id === id))
   const roleFilterOptions = Array.from(new Set([...roles.map(role => role.value), ...officers.map(officer => canonicalOfficerRole(officer.role))]))
     .map(value => ({ value, label: getRoleLabel(value) }))
   const exportToCSV = () => {
@@ -399,6 +434,22 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
     },
     onError: (error: any) => notifyError(error, 'Failed to update officer status')
   })
+
+  // Deactivating signs the officer out of TCNP, so it is confirmed first;
+  // activating and approving go straight through as before.
+  const toggleActivation = async (officer: Officer) => {
+    if (toggleActivationMutation.isPending) return
+    if (officerAccountStatus(officer) === 'Active') {
+      const ok = await confirm({
+        title: 'Deactivate officer?',
+        message: `${officer.full_name || officer.email} will be signed out and cannot use TCNP until their account is activated again.`,
+        confirmText: 'Deactivate',
+      })
+      if (!ok) return
+    }
+    toggleActivationMutation.mutate(officer)
+  }
+  const isToggling = (officer: Officer) => toggleActivationMutation.isPending && toggleActivationMutation.variables?.id === officer.id
 
   const assignTitleMutation = useMutation({
     mutationFn: async (payload: any) => {
@@ -825,11 +876,17 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
 
       <p className="text-xs text-muted-foreground">Account status is independent of program assignments. The title count counts officers with a recorded current title, not distinct titles or leadership roles.</p>
       <Tabs value={activeTab} onValueChange={tab => {
-        setActiveTab(tab)
-        if (tab === 'pending' || filterStatus === 'pending') setFilterStatus('all')
+        const nextStatus = tab === 'pending' || filterStatus === 'pending' ? 'all' : filterStatus
+        if (nextStatus !== filterStatus) setFilterStatus(nextStatus)
+        selectTab(tab, nextStatus)
       }} className="space-y-4">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-          <TabsList>
+        <div className="flex min-w-0 flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4">
+          {/* A phone gets one swipeable row instead of squeezed tabs. */}
+          <TabsList
+            ref={tabListRef}
+            aria-label="Officer sections"
+            className="w-full max-w-full justify-start [scrollbar-width:none] lg:w-auto [&::-webkit-scrollbar]:hidden"
+          >
             <TabsTrigger value="directory">Directory</TabsTrigger>
             {canManageOfficers && <TabsTrigger value="manage">Manage</TabsTrigger>}
             {canManageOfficers && <TabsTrigger value="pending">
@@ -851,14 +908,13 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
           </TabsList>
           <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
             {canManageOfficers && (
-              <Button variant="outline" size="sm" onClick={exportToCSV} title="Export to CSV" className="h-9 px-2">
-                <Download className="h-4 w-4" />
+              <Button variant="outline" size="sm" onClick={exportToCSV} title="Export to CSV" aria-label="Export officers to CSV" className="h-9 px-2">
+                <Download className="h-4 w-4" aria-hidden="true" />
               </Button>
             )}
             <Select value={filterStatus} onValueChange={status => {
               setFilterStatus(status)
-              if (status === 'pending') setActiveTab('pending')
-              else if (activeTab === 'pending') setActiveTab('directory')
+              selectTab(status === 'pending' ? 'pending' : activeTab === 'pending' ? 'directory' : activeTab, status)
             }}>
               <SelectTrigger className="w-[120px] h-9" aria-label="Filter by account status">
                 <SelectValue placeholder="Status" />
@@ -970,8 +1026,11 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                           return (
                             <TableRow
                               key={officer.id}
-                              className="hover:bg-accent/50 transition-colors cursor-pointer group"
+                              className="hover:bg-accent/50 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                               onClick={() => setViewingOfficer(officer)}
+                              tabIndex={0}
+                              aria-label={`Open profile of ${officer.full_name || officer.email}`}
+                              onKeyDown={openOnKey(() => setViewingOfficer(officer))}
                             >
                               <TableCell>
                                 <div className="flex items-center gap-3">
@@ -1053,8 +1112,9 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                                     setViewingOfficer(officer)
                                   }}
                                   title="View Full Profile"
+                                  aria-label={`View profile of ${officer.full_name || officer.email}`}
                                 >
-                                  <Eye className="h-4 w-4" />
+                                  <Eye className="h-4 w-4" aria-hidden="true" />
                                 </Button>
                               </TableCell>
                             </TableRow>
@@ -1075,7 +1135,11 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                       transition={{ duration: 0.2 }}
                       key={officer.id}
                       onClick={() => setViewingOfficer(officer)}
-                      className="group flex min-w-0 items-center gap-3 overflow-hidden rounded-lg border bg-card p-4 transition-all hover:bg-accent hover:border-primary/40 hover:shadow-md cursor-pointer relative"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Open profile of ${officer.full_name || officer.email}`}
+                      onKeyDown={openOnKey(() => setViewingOfficer(officer))}
+                      className="group flex min-w-0 items-center gap-3 overflow-hidden rounded-lg border bg-card p-4 transition-all hover:bg-accent hover:border-primary/40 hover:shadow-md cursor-pointer relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <Avatar className="shrink-0 group-hover:ring-2 group-hover:ring-primary/40 transition">
                         {officer.photo_url ? <AvatarImage src={officer.photo_url} /> : <AvatarFallback className={getRoleBadgeColor(officer.role)}>{getInitials(officer.full_name || officer.email)}</AvatarFallback>}
@@ -1119,22 +1183,26 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
               <p className="text-sm text-muted-foreground">
                 Edit officer details and assign titles and duties across programs
               </p>
-              <div className="flex items-center gap-2">
+              {/* Wraps on a phone, with the long labels shortened there. */}
+              <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
                 {visibleSelectedOfficers.length > 0 && (
                   <>
-                    <Button variant="ghost" onClick={() => setSelectedOfficers([])} className="text-muted-foreground mr-1 h-9 px-3">
-                      Cancel Selection
+                    <Button variant="ghost" onClick={() => setSelectedOfficers([])} className="text-muted-foreground h-9 px-3">
+                      <span className="sm:hidden">Clear</span>
+                      <span className="hidden sm:inline">Cancel Selection</span>
                     </Button>
                     <Button variant="outline" onClick={() => {
                       setAssignForm({ officer_ids: visibleSelectedOfficers, program_id: '' })
                       setAssignFromDirectoryOpen(true)
                     }} className="gap-2 text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-900 dark:hover:bg-blue-950">
-                      <UserCheck className="h-4 w-4" />
-                      <span>Assign Selected ({visibleSelectedOfficers.length}) to Program</span>
+                      <UserCheck className="h-4 w-4" aria-hidden="true" />
+                      <span className="sm:hidden">Assign ({visibleSelectedOfficers.length})</span>
+                      <span className="hidden sm:inline">Assign Selected ({visibleSelectedOfficers.length}) to Program</span>
                     </Button>
                     <Button variant="destructive" onClick={handleBulkDelete} className="gap-2">
-                      <Trash2 className="h-4 w-4" />
-                      <span>Delete Selected ({visibleSelectedOfficers.length})</span>
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      <span className="sm:hidden">Delete ({visibleSelectedOfficers.length})</span>
+                      <span className="hidden sm:inline">Delete Selected ({visibleSelectedOfficers.length})</span>
                     </Button>
                   </>
                 )}
@@ -1142,13 +1210,13 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                   setAssignForm({ officer_ids: [], program_id: '' })
                   setAssignFromDirectoryOpen(true)
                 }} className="gap-2">
-                  <UserCheck className="h-4 w-4" />
+                  <UserCheck className="h-4 w-4" aria-hidden="true" />
                   <span>Assign from Directory</span>
                 </Button>
               </div>
             </div>
 
-            {renderOfficersStatus(filteredOfficers.length, "border rounded-lg bg-card") ?? (viewMode === 'table' ? (
+            {renderOfficersStatus(manageOfficers.length, "border rounded-lg bg-card") ?? (viewMode === 'table' ? (
               <div className="rounded-md border table-scroll-wrapper">
                 <Table>
                   <TableHeader className="bg-muted/50">
@@ -1157,9 +1225,9 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                         <input
                           type="checkbox"
                           aria-label="Select all visible officers"
-                          checked={filteredOfficers.length > 0 && filteredOfficers.every(officer => selectedOfficers.includes(officer.id))}
+                          checked={manageOfficers.length > 0 && manageOfficers.every(officer => selectedOfficers.includes(officer.id))}
                           onChange={(e) => {
-                            setSelectedOfficers(current => toggleVisibleOfficerSelection(current, filteredOfficers.map(officer => officer.id), e.target.checked))
+                            setSelectedOfficers(current => toggleVisibleOfficerSelection(current, manageOfficers.map(officer => officer.id), e.target.checked))
                           }}
                           className="h-4 w-4 rounded border-input text-primary focus:ring-primary bg-background dark:bg-background/50 accent-primary/80"
                         />
@@ -1171,7 +1239,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredOfficers.sort(sortOfficersByHierarchy).map((officer: Officer) => (
+                    {manageOfficers.sort(sortOfficersByHierarchy).map((officer: Officer) => (
                       <TableRow key={officer.id} className="hover:bg-accent/50 transition-colors">
                         <TableCell className="text-center">
                           <input
@@ -1199,6 +1267,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                         <TableCell>
                           {officerAccountStatus(officer) === 'Active' ? (
                             <Badge variant="outline" className="bg-[hsl(var(--success)/0.1)] text-[hsl(var(--success))] border-[hsl(var(--success)/0.3)]">Active</Badge>
+                          ) : officerAccountStatus(officer) === 'Pending' ? (
+                            <Badge variant="outline" className="bg-[hsl(var(--warning)/0.1)] text-[hsl(var(--warning))] border-[hsl(var(--warning)/0.3)]">Pending</Badge>
                           ) : (
                             <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30">Inactive</Badge>
                           )}
@@ -1211,21 +1281,30 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
-                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:text-primary" onClick={() => setViewingOfficer(officer)} title="View Full Profile">
-                              <Eye className="h-4 w-4" />
+                            <Button size="sm" variant="ghost" className="h-9 w-9 p-0 hover:text-primary" onClick={() => setViewingOfficer(officer)} title="View Full Profile" aria-label={`View profile of ${officer.full_name || officer.email}`}>
+                              <Eye className="h-4 w-4" aria-hidden="true" />
                             </Button>
-                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleEdit(officer)} title="Edit">
-                              <Edit className="h-4 w-4" />
+                            <Button size="sm" variant="ghost" className="h-9 w-9 p-0" onClick={() => handleEdit(officer)} title="Edit" aria-label={`Edit ${officer.full_name || officer.email}`}>
+                              <Edit className="h-4 w-4" aria-hidden="true" />
                             </Button>
-                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleAssignTitleClick(officer)} title="Assign Title">
-                              <Award className="h-4 w-4" />
+                            <Button size="sm" variant="ghost" className="h-9 w-9 p-0" onClick={() => handleAssignTitleClick(officer)} title="Assign Title" aria-label={`Assign title to ${officer.full_name || officer.email}`}>
+                              <Award className="h-4 w-4" aria-hidden="true" />
                             </Button>
-                            <Button size="sm" variant="ghost" className={`h-8 w-8 p-0 ${officerAccountStatus(officer) === 'Active' ? 'text-orange-500' : 'text-green-600'}`} onClick={() => toggleActivationMutation.mutate(officer)} title={officerAccountStatus(officer) === 'Active' ? "Deactivate" : "Activate"}>
-                              {officerAccountStatus(officer) === 'Active' ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className={`h-9 w-9 p-0 ${officerAccountStatus(officer) === 'Active' ? 'text-orange-500' : 'text-green-600'}`}
+                              onClick={() => { void toggleActivation(officer) }}
+                              pending={isToggling(officer)}
+                              disabled={toggleActivationMutation.isPending}
+                              title={officerAccountStatus(officer) === 'Active' ? "Deactivate" : "Activate"}
+                              aria-label={`${officerAccountStatus(officer) === 'Active' ? 'Deactivate' : 'Activate'} ${officer.full_name || officer.email}`}
+                            >
+                              {!isToggling(officer) && (officerAccountStatus(officer) === 'Active' ? <UserX className="h-4 w-4" aria-hidden="true" /> : <UserCheck className="h-4 w-4" aria-hidden="true" />)}
                             </Button>
                             {officer.role !== 'dev_admin' && officer.id !== currentUser?.id && (
-                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={() => handleDelete(officer)} title="Delete">
-                                <Trash2 className="h-4 w-4 shrink-0 transition" />
+                              <Button size="sm" variant="ghost" className="h-9 w-9 p-0 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={() => handleDelete(officer)} title="Delete" aria-label={`Delete ${officer.full_name || officer.email}`}>
+                                <Trash2 className="h-4 w-4 shrink-0 transition" aria-hidden="true" />
                               </Button>
                             )}
                           </div>
@@ -1237,7 +1316,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
               </div>
             ) : (
               renderCategorizedOfficers(
-                filteredOfficers,
+                manageOfficers,
                 (officer: Officer) => (
                   <motion.div
                     layout
@@ -1275,6 +1354,10 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                             {officerAccountStatus(officer) === 'Active' ? (
                               <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                                 Active
+                              </Badge>
+                            ) : officerAccountStatus(officer) === 'Pending' ? (
+                              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                                Pending
                               </Badge>
                             ) : (
                               <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
@@ -1325,12 +1408,20 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                             <Award className="h-3 w-3 mr-1" />
                             Title
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => toggleActivationMutation.mutate(officer)}>
-                            {officerAccountStatus(officer) === 'Active' ? <UserX className="h-3 w-3" /> : <UserCheck className="h-3 w-3" />}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => { void toggleActivation(officer) }}
+                            pending={isToggling(officer)}
+                            disabled={toggleActivationMutation.isPending}
+                            title={officerAccountStatus(officer) === 'Active' ? "Deactivate" : "Activate"}
+                            aria-label={`${officerAccountStatus(officer) === 'Active' ? 'Deactivate' : 'Activate'} ${officer.full_name || officer.email}`}
+                          >
+                            {!isToggling(officer) && (officerAccountStatus(officer) === 'Active' ? <UserX className="h-3 w-3" aria-hidden="true" /> : <UserCheck className="h-3 w-3" aria-hidden="true" />)}
                           </Button>
                           {officer.role !== 'dev_admin' && officer.id !== currentUser?.id && (
-                            <Button size="sm" variant="outline" onClick={() => handleDelete(officer)}>
-                              <Trash2 className="h-3 w-3 text-red-600" />
+                            <Button size="sm" variant="outline" onClick={() => handleDelete(officer)} title="Delete" aria-label={`Delete ${officer.full_name || officer.email}`}>
+                              <Trash2 className="h-3 w-3 text-red-600" aria-hidden="true" />
                             </Button>
                           )}
                         </div>
@@ -1351,8 +1442,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
               </p>
             </div>
             {officersPending || (officersError && officers.length === 0) ? renderOfficersStatus(0) : filteredOfficers.filter(o => o.activation_status === 'pending').length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center bg-white/5 rounded-xl border border-white/10">
-                <UserCheck className="h-12 w-12 text-muted-foreground/50" />
+              <div className="flex flex-col items-center justify-center py-12 text-center bg-muted/40 rounded-xl border">
+                <UserCheck className="h-12 w-12 text-muted-foreground/50" aria-hidden="true" />
                 <p className="mt-4 text-sm font-medium">No pending approvals</p>
               </div>
             ) : viewMode === 'table' ? (
@@ -1408,16 +1499,16 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
-                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setViewingOfficer(officer)} title="View Full Profile">
-                                <Eye className="h-4 w-4" />
+                              <Button size="sm" variant="ghost" className="h-9 w-9 p-0" onClick={() => setViewingOfficer(officer)} title="View Full Profile" aria-label={`View profile of ${officer.full_name || officer.email}`}>
+                                <Eye className="h-4 w-4" aria-hidden="true" />
                               </Button>
-                              <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-8 px-2 text-xs" onClick={() => toggleActivationMutation.mutate(officer)}>
-                                <UserCheck className="h-3.5 w-3.5 mr-1" />
+                              <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-9 px-2 text-xs" onClick={() => { void toggleActivation(officer) }} pending={isToggling(officer)} disabled={toggleActivationMutation.isPending}>
+                                {!isToggling(officer) && <UserCheck className="h-3.5 w-3.5 mr-1" aria-hidden="true" />}
                                 Approve
                               </Button>
                               {officer.role !== 'dev_admin' && officer.id !== currentUser?.id && (
-                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={() => handleDelete(officer)} title="Delete">
-                                  <Trash2 className="h-4 w-4" />
+                                <Button size="sm" variant="ghost" className="h-9 w-9 p-0 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={() => handleDelete(officer)} title="Delete" aria-label={`Delete ${officer.full_name || officer.email}`}>
+                                  <Trash2 className="h-4 w-4" aria-hidden="true" />
                                 </Button>
                               )}
                             </div>
@@ -1483,13 +1574,13 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                               <Eye className="h-4 w-4 mr-1" />
                               Details
                             </Button>
-                            <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={() => toggleActivationMutation.mutate(officer)}>
-                              <UserCheck className="h-4 w-4 mr-2" />
+                            <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={() => { void toggleActivation(officer) }} pending={isToggling(officer)} disabled={toggleActivationMutation.isPending}>
+                              {!isToggling(officer) && <UserCheck className="h-4 w-4 mr-2" aria-hidden="true" />}
                               Approve
                             </Button>
                             {officer.role !== 'dev_admin' && officer.id !== currentUser?.id && (
-                              <Button size="sm" variant="outline" onClick={() => handleDelete(officer)}>
-                                <Trash2 className="h-4 w-4 text-red-600" />
+                              <Button size="sm" variant="outline" onClick={() => handleDelete(officer)} title="Delete" aria-label={`Delete ${officer.full_name || officer.email}`}>
+                                <Trash2 className="h-4 w-4 text-red-600" aria-hidden="true" />
                               </Button>
                             )}
                           </div>
@@ -1743,7 +1834,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
           <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Assign Officer to Program</DialogTitle>
-              <DialogDescription>Choose any existing Protocol Officer and assign them an official title for a specific program.</DialogDescription>
+              <DialogDescription>Choose one or more existing Protocol Officers and add them to a programme that is in planning or active. This does not give them a title; use Assign Title for that.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleAssignFromDirectory} className="space-y-4 mt-4">
               <div className="space-y-2">
@@ -1811,7 +1902,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
         canManage={!!canManageOfficers}
         onEdit={(officer) => handleEdit(officer as Officer)}
         onAssignTitle={(officer) => handleAssignTitleClick(officer as Officer)}
-        onToggleActivation={(officer) => toggleActivationMutation.mutate(officer as Officer)}
+        onToggleActivation={(officer) => { void toggleActivation(officer as Officer) }}
         onDelete={(officer) => handleDelete(officer as Officer)}
         onAssignmentUpdated={(officerId, assignment) => {
           setViewingOfficer((current) => current?.id === officerId ? { ...current, ...assignment } : current)

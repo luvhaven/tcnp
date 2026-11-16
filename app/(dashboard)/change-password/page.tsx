@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ShieldCheck, Lock, Loader2, KeyRound, ArrowLeft } from "lucide-react"
+import { ShieldCheck, Lock, Loader2, KeyRound, ArrowLeft, Eye, EyeOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/ui/page-header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,12 +12,72 @@ import { notifyError } from '@/lib/notify'
 import { useRouter } from "next/navigation"
 import { startForgotPasswordFlow } from '@/lib/password-reset-handoff'
 
+/** A password input with a lock icon and a show/hide toggle. */
+function PasswordField({
+    id, label, value, onChange, autoComplete, placeholder, describedBy, invalid, labelAction,
+}: {
+    id: string
+    label: string
+    value: string
+    onChange: (value: string) => void
+    autoComplete: string
+    placeholder?: string
+    describedBy?: string
+    invalid?: boolean
+    labelAction?: React.ReactNode
+}) {
+    const [visible, setVisible] = useState(false)
+    return (
+        <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label htmlFor={id}>{label}</Label>
+                {labelAction}
+            </div>
+            <div className="relative">
+                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                <Input
+                    id={id}
+                    type={visible ? "text" : "password"}
+                    autoComplete={autoComplete}
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    className="h-10 pl-9 pr-11"
+                    placeholder={placeholder}
+                    aria-describedby={describedBy}
+                    aria-invalid={invalid || undefined}
+                    required
+                />
+                <button
+                    type="button"
+                    onClick={() => setVisible(v => !v)}
+                    aria-label={visible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+                    aria-pressed={visible}
+                    aria-controls={id}
+                    className="absolute right-0.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                >
+                    {visible ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+                </button>
+            </div>
+        </div>
+    )
+}
+
 export default function ChangePasswordPage() {
     const router = useRouter()
     const [loading, setLoading] = useState(false)
     const [currentPassword, setCurrentPassword] = useState("")
     const [password, setPassword] = useState("")
     const [confirmPassword, setConfirmPassword] = useState("")
+
+    const tooShort = password.length > 0 && password.length < 8
+    const mismatch = Boolean(password && confirmPassword && password !== confirmPassword)
+
+    // Opened directly (a bookmark, a new tab) there is nothing to go back to,
+    // so "back" goes to Settings, where this page is linked from.
+    const goBack = () => {
+        if (window.history.length > 1) router.back()
+        else router.push("/settings")
+    }
 
     const handlePasswordChange = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -65,7 +125,7 @@ export default function ChangePasswordPage() {
                 title="Change Password"
                 description="Update your account credentials."
                 leading={
-                    <Button aria-label="Go back" variant="ghost" size="icon" onClick={() => router.back()} className="shrink-0">
+                    <Button aria-label="Go back" variant="ghost" size="icon" onClick={goBack} className="h-10 w-10 shrink-0">
                         <ArrowLeft aria-hidden="true" />
                     </Button>
                 }
@@ -74,7 +134,7 @@ export default function ChangePasswordPage() {
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <ShieldCheck className="h-5 w-5 text-primary" />
+                        <ShieldCheck className="h-5 w-5 text-primary" aria-hidden="true" />
                         Set New Password
                     </CardTitle>
                     <CardDescription>
@@ -83,69 +143,50 @@ export default function ChangePasswordPage() {
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handlePasswordChange} className="space-y-5">
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between gap-2">
-                                <Label htmlFor="current-password">Current Password</Label>
+                        <PasswordField
+                            id="current-password"
+                            label="Current Password"
+                            value={currentPassword}
+                            onChange={setCurrentPassword}
+                            autoComplete="current-password"
+                            labelAction={
                                 <button
                                     type="button"
                                     onClick={() => { void startForgotPasswordFlow() }}
-                                    className="text-xs font-medium text-primary hover:underline"
+                                    className="-mr-2 inline-flex h-9 items-center rounded-md px-2 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                                 >
                                     Forgot password?
                                 </button>
-                            </div>
-                            <div className="relative">
-                                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    id="current-password"
-                                    type="password"
-                                    autoComplete="current-password"
-                                    value={currentPassword}
-                                    onChange={(e) => setCurrentPassword(e.target.value)}
-                                    className="pl-9"
-                                    required
-                                />
-                            </div>
-                        </div>
+                            }
+                        />
 
-                        <div className="space-y-2">
-                            <Label htmlFor="new-password">New Password</Label>
-                            <div className="relative">
-                                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    id="new-password"
-                                    type="password"
-                                    autoComplete="new-password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="pl-9"
-                                    placeholder="Minimum 8 characters"
-                                    required
-                                />
-                            </div>
-                        </div>
+                        <PasswordField
+                            id="new-password"
+                            label="New Password"
+                            value={password}
+                            onChange={setPassword}
+                            autoComplete="new-password"
+                            placeholder="Minimum 8 characters"
+                            describedBy={tooShort ? "new-password-error" : undefined}
+                            invalid={tooShort}
+                        />
 
-                        <div className="space-y-2">
-                            <Label htmlFor="confirm-password">Confirm Password</Label>
-                            <div className="relative">
-                                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    id="confirm-password"
-                                    type="password"
-                                    value={confirmPassword}
-                                    onChange={(e) => setConfirmPassword(e.target.value)}
-                                    className="pl-9"
-                                    placeholder="Re-type your new password"
-                                    required
-                                />
-                            </div>
-                        </div>
+                        <PasswordField
+                            id="confirm-password"
+                            label="Confirm Password"
+                            value={confirmPassword}
+                            onChange={setConfirmPassword}
+                            autoComplete="new-password"
+                            placeholder="Re-type your new password"
+                            describedBy={mismatch ? "confirm-password-error" : undefined}
+                            invalid={mismatch}
+                        />
 
-                        {password && confirmPassword && password !== confirmPassword && (
-                            <p className="text-sm text-destructive">Passwords do not match</p>
+                        {mismatch && (
+                            <p id="confirm-password-error" className="text-sm text-destructive dark:text-red-400">Passwords do not match</p>
                         )}
-                        {password && password.length > 0 && password.length < 8 && (
-                            <p className="text-sm text-destructive">Password must be at least 8 characters</p>
+                        {tooShort && (
+                            <p id="new-password-error" className="text-sm text-destructive dark:text-red-400">Password must be at least 8 characters</p>
                         )}
 
                         <Button
@@ -154,9 +195,9 @@ export default function ChangePasswordPage() {
                             className="w-full"
                         >
                             {loading ? (
-                                <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Updating...</>
+                                <><Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" /> Updating...</>
                             ) : (
-                                <><KeyRound className="h-4 w-4 mr-2" /> Update Password</>
+                                <><KeyRound className="h-4 w-4 mr-2" aria-hidden="true" /> Update Password</>
                             )}
                         </Button>
                     </form>

@@ -1,15 +1,20 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { Suspense, useState, useMemo, useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
+import { PageHeader } from '@/components/ui/page-header'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
     BookOpen, Search, ChevronRight, Shield, Car, Plane, Hotel, Users,
     Radio, Zap, MapPin, FileText, AlertTriangle, ClipboardList, Mic,
     Clock, CheckSquare, Navigation, Volume2, Landmark, Lock, Star,
-    ChevronDown, Info, Terminal
+    ChevronDown, Info, Terminal, RefreshCw, ScrollText
 } from 'lucide-react'
 import { cn, effectiveOscarRole, isAdmin as hasAdminAccess } from '@/lib/utils'
 
@@ -664,31 +669,67 @@ const SOP_SECTIONS: SOPSection[] = [
 ]
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function SOPPage() {
+type UnitDoc = { id: string, oscar: string, title: string, content: string, doc_type: string }
+
+const subsectionKey = (sectionId: string, index: number) => `${sectionId}-${index}`
+
+const subsectionMatches = (sub: SubSection, q: string) =>
+    sub.heading.toLowerCase().includes(q) ||
+    (sub.body ?? '').toLowerCase().includes(q) ||
+    (sub.list ?? []).some(l => l.toLowerCase().includes(q))
+
+function SOPContent() {
     const supabase = createClient()
+    const params = useSearchParams()
     const [search, setSearch] = useState('')
-    const [active, setActive] = useState('call-signs')
     const [adminGranted, setAdminGranted] = useState(false)
     const [userRole, setUserRole] = useState<string | null>(null)
     const [userOscar, setUserOscar] = useState<string | null>(null)
-    const [customDocs, setCustomDocs] = useState<{ id: string, oscar: string, title: string, content: string, doc_type: string }[]>([])
+    const [customDocs, setCustomDocs] = useState<UnitDoc[]>([])
+    const [docsStatus, setDocsStatus] = useState<'loading' | 'error' | 'ready'>('loading')
+    // Bumped by "Try again" to run the loader once more.
+    const [reloadToken, setReloadToken] = useState(0)
+    const contentRef = useRef<HTMLDivElement>(null)
+
+    // The open section lives in ?section=, so a refresh or a shared link lands on it.
+    const requestedSection = params.get('section')
+    const active = requestedSection || 'call-signs'
+
     const [expandedSections, setExpandedSections] = useState<Set<string>>(() => {
-        // Start with all subsections of the first section expanded
-        return new Set(SOP_SECTIONS[0].subsections.map((_, i) => `${SOP_SECTIONS[0].id}-${i}`))
+        // Start with every subsection of the opening section expanded
+        const opening = SOP_SECTIONS.find(s => s.id === active) ?? SOP_SECTIONS[0]
+        return new Set(opening.subsections.map((_, i) => subsectionKey(opening.id, i)))
     })
 
     useEffect(() => {
+        let cancelled = false
         const load = async () => {
-            const { data: { user } } = await supabase.auth.getUser()
-            if (!user) return
-            const { data } = await supabase.from('users').select('role, has_admin_access, oscar').eq('id', user.id).single()
-            if (data) { setUserRole(data.role); setUserOscar(data.oscar); setAdminGranted(data.has_admin_access) }
+            try {
+                const { data: { user } } = await supabase.auth.getUser()
+                if (!user) { if (!cancelled) setDocsStatus('ready'); return }
+                const { data, error: userError } = await supabase.from('users').select('role, has_admin_access, oscar').eq('id', user.id).single()
+                if (userError) throw userError
+                if (cancelled) return
+                if (data) { setUserRole(data.role); setUserOscar(data.oscar); setAdminGranted(data.has_admin_access) }
 
-            const { data: docs } = await supabase.from('oscar_documents').select('*')
-            if (docs) setCustomDocs(docs)
+                const { data: docs, error: docsError } = await supabase.from('oscar_documents').select('*')
+                if (docsError) throw docsError
+                if (cancelled) return
+                setCustomDocs((docs ?? []) as UnitDoc[])
+                setDocsStatus('ready')
+            } catch (err) {
+                console.error('Unit SOP documents failed to load:', err)
+                if (!cancelled) setDocsStatus('error')
+            }
         }
         void load()
-    }, [supabase])
+        return () => { cancelled = true }
+    }, [supabase, reloadToken])
+
+    const retryDocs = () => {
+        setDocsStatus('loading')
+        setReloadToken(token => token + 1)
+    }
 
     const dynamicSections = useMemo(() => {
         if (!userRole) return SOP_SECTIONS
@@ -732,22 +773,30 @@ export default function SOPPage() {
     const isDO = userRole === 'delta_oscar'
     const isAdmin = hasAdminAccess(userRole, adminGranted)
 
+    const query = search.trim().toLowerCase()
+
     const filtered = useMemo(() =>
         dynamicSections.filter(s => {
-            if (search === '') return true
-            const q = search.toLowerCase()
-            return s.title.toLowerCase().includes(q) ||
-                s.badge.toLowerCase().includes(q) ||
-                s.subsections.some(sub =>
-                    sub.heading.toLowerCase().includes(q) ||
-                    (sub.body ?? '').toLowerCase().includes(q) ||
-                    (sub.list ?? []).some(l => l.toLowerCase().includes(q))
-                )
+            if (query === '') return true
+            return s.title.toLowerCase().includes(query) ||
+                s.badge.toLowerCase().includes(query) ||
+                s.subsections.some(sub => subsectionMatches(sub, query))
         }),
-        [search, dynamicSections]
+        [query, dynamicSections]
     )
 
+    // Each result keeps its own section id and its position in that section,
+    // so opening one never opens a card from another section.
+    const resultsFor = (q: string) => dynamicSections.flatMap(s =>
+        s.subsections
+            .map((sub, index) => ({ sub, key: subsectionKey(s.id, index), section: s }))
+            .filter(({ sub }) => subsectionMatches(sub, q))
+    )
+    const results = query ? resultsFor(query) : []
+
     const activeSection = dynamicSections.find(s => s.id === active) ?? dynamicSections[0]
+    // A unit document's section only exists once the documents have loaded.
+    const waitingForSection = Boolean(requestedSection) && !dynamicSections.some(s => s.id === requestedSection) && docsStatus === 'loading'
 
     const toggleSection = (id: string) => {
         setExpandedSections(prev => {
@@ -758,18 +807,32 @@ export default function SOPPage() {
         })
     }
 
-    // When navigating between SOP sections, auto-expand all subsections
-    const navigateTo = (id: string) => {
-        setActive(id)
-        setSearch('')
-        const section = dynamicSections.find(s => s.id === id)
-        if (section) {
-            setExpandedSections(new Set(section.subsections.map((_, i) => `${id}-${i}`)))
-        }
+    const changeSearch = (value: string) => {
+        setSearch(value)
+        const q = value.trim().toLowerCase()
+        // Matches open as they are found, so a result is readable at once.
+        if (q) setExpandedSections(prev => new Set([...prev, ...resultsFor(q).map(r => r.key)]))
     }
 
-    const renderSubsection = (sub: SubSection, i: number) => (
-        <div key={i} className="pb-4 last:pb-0">
+    // When navigating between SOP sections, auto-expand all subsections
+    const navigateTo = (id: string) => {
+        setSearch('')
+        const url = new URL(window.location.href)
+        if (id === 'call-signs') url.searchParams.delete('section')
+        else url.searchParams.set('section', id)
+        window.history.replaceState(null, '', url)
+        const section = dynamicSections.find(s => s.id === id)
+        if (section) {
+            setExpandedSections(new Set(section.subsections.map((_, i) => subsectionKey(id, i))))
+        }
+        // On a phone the section list sits below the content: bring the
+        // newly opened section into view.
+        const content = contentRef.current
+        if (content && content.getBoundingClientRect().top < 0) content.scrollIntoView({ block: 'start' })
+    }
+
+    const renderSubsection = (sub: SubSection) => (
+        <div className="pb-4 last:pb-0">
             {sub.heading && (
                 <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
                     <span className="h-1 w-4 rounded-full bg-primary/60 inline-block" />
@@ -829,151 +892,223 @@ export default function SOPPage() {
         </div>
     )
 
+    const doQuickReference = (isDO || isAdmin) && (
+        <button
+            type="button"
+            onClick={() => navigateTo('delta-oscar')}
+            aria-current={!query && active === 'delta-oscar' ? 'page' : undefined}
+            className={cn(
+                "flex min-h-11 w-full items-center gap-2 rounded-xl p-3 text-left text-xs border transition-all",
+                !query && active === 'delta-oscar'
+                    ? 'bg-red-500/20 border-red-500/40 text-red-600 dark:text-red-400'
+                    : 'bg-red-500/5 border-red-500/20 text-red-600/70 hover:bg-red-500/10 dark:text-red-400/80'
+            )}
+        >
+            <Navigation className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+            <div>
+                <div className="font-bold">DO Quick Reference</div>
+                <div className="text-xs opacity-70">Scripts, SITREPs & Checklists</div>
+            </div>
+        </button>
+    )
+
+    const docsNotice = docsStatus === 'loading' ? (
+        <div className="space-y-1.5" aria-label="Loading unit documents">
+            <Skeleton className="h-9 rounded-lg" />
+            <Skeleton className="h-9 rounded-lg" />
+        </div>
+    ) : docsStatus === 'error' ? (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs">
+            <span className="min-w-0 text-muted-foreground">Unit SOPs and codes of conduct could not load.</span>
+            <Button variant="outline" size="sm" className="h-9" onClick={retryDocs}>
+                <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Try again
+            </Button>
+        </div>
+    ) : null
+
+    const ActiveIcon = activeSection.icon
+    const shownCards = query
+        ? results
+        : activeSection.subsections.map((sub, index) => ({ sub, key: subsectionKey(activeSection.id, index), section: activeSection }))
+
     return (
-        <div className="flex h-[calc(100vh-5rem)] gap-4 overflow-hidden page-enter">
-            {/* Left sidebar nav */}
-            <aside className="hidden w-64 flex-shrink-0 flex-col gap-3 overflow-y-auto md:flex">
-                {/* Search */}
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                    <Input placeholder="Search SOP..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-8 text-xs" />
-                </div>
-
-                {/* DO Quick Access Banner */}
-                {(isDO || isAdmin) && (
-                    <button
-                        onClick={() => navigateTo('delta-oscar')}
-                        className={cn(
-                            "flex items-center gap-2 rounded-xl p-3 text-left text-xs border transition-all",
-                            active === 'delta-oscar'
-                                ? 'bg-red-500/20 border-red-500/40 text-red-600 dark:text-red-400'
-                                : 'bg-red-500/5 border-red-500/20 text-red-600/70 hover:bg-red-500/10'
-                        )}
-                    >
-                        <Navigation className="h-4 w-4 flex-shrink-0" />
-                        <div>
-                            <div className="font-bold">DO Quick Reference</div>
-                            <div className="text-xs opacity-70">Scripts, SITREPs & Checklists</div>
-                        </div>
-                    </button>
-                )}
-
-                {/* Nav */}
-                <nav className="space-y-0.5">
-                    {filtered.map(section => {
-                        const Icon = section.icon
-                        const isActive = active === section.id
-                        return (
-                            <button
-                                key={section.id}
-                                type="button"
-                                onClick={() => navigateTo(section.id)}
-                                className={cn(
-                                    "w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs transition-colors",
-                                    isActive ? 'bg-primary/10 text-primary font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                                )}
-                            >
-                                <div className={cn('rounded-md p-1.5 flex-shrink-0', section.bg)}>
-                                    <Icon className={cn('h-3 w-3', section.color)} />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="truncate">{section.title}</div>
-                                    <div className="text-[11px] opacity-60 font-mono">{section.badge}</div>
-                                </div>
-                                {isActive && <ChevronRight className="h-3 w-3 flex-shrink-0" />}
-                            </button>
-                        )
-                    })}
-                </nav>
-
-                {/* Version footer */}
-                <div className="mt-auto rounded-xl border bg-muted/30 p-3 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1.5 mb-1"><FileText className="h-3 w-3" /><span className="font-medium">TCNP SOP Manual</span></div>
-                    <p>Version 1.0 · 2021 Update</p>
-                    <p className="mt-1 opacity-60">Strictly Confidential — Protocol Members Only</p>
-                </div>
-            </aside>
-
-            {/* Content area */}
-            <main className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border/40 hover:[&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full">
-                {filtered.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
-                        <Search className="h-10 w-10 text-muted-foreground/30" />
-                        <p className="font-medium text-muted-foreground">No results for &ldquo;{search}&rdquo;</p>
+        <div className="space-y-5 page-enter">
+            <PageHeader
+                icon={ScrollText}
+                title="SOP Manual"
+                description="TCNP standard operating procedures, call signs and checklists."
+                actions={
+                    <div className="relative w-full sm:w-64">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                        <Input
+                            type="search"
+                            aria-label="Search the SOP manual"
+                            placeholder="Search SOP..."
+                            value={search}
+                            onChange={e => changeSearch(e.target.value)}
+                            className="h-10 pl-9 text-base sm:text-sm"
+                        />
                     </div>
-                ) : (
-                    <div className="max-w-3xl pb-12 space-y-4">
-                        {/* Page header */}
-                        <div className="flex items-start gap-4 mb-6">
-                            <div className={cn('rounded-2xl p-3 flex-shrink-0', activeSection.bg)}>
-                                {(() => { const I = activeSection.icon; return <I className={cn('h-6 w-6', activeSection.color)} /> })()}
-                            </div>
-                            <div>
-                                <div className="flex items-center gap-2 mb-0.5">
-                                    <h1 className="text-xl font-bold">{activeSection.title}</h1>
-                                    <Badge variant="secondary" className="text-[11px] font-mono tracking-widest">{activeSection.badge}</Badge>
-                                </div>
-                                {activeSection.roleGate && (
-                                    <div className="flex items-center gap-1 text-xs text-red-500 font-semibold">
-                                        <Lock className="h-2.5 w-2.5" /> Delta Oscar reference material
+                }
+            />
+
+            <div className="flex flex-col gap-6 md:flex-row md:items-start">
+                {/* Left sidebar nav (tablet and up) */}
+                <aside className="hidden w-64 flex-shrink-0 flex-col gap-3 md:sticky md:top-0 md:flex md:max-h-[calc(100dvh-4rem-3rem)] md:overflow-y-auto">
+                    {doQuickReference}
+
+                    {/* Nav */}
+                    <nav aria-label="SOP sections" className="space-y-0.5">
+                        {filtered.map(section => {
+                            const Icon = section.icon
+                            const isActive = !query && activeSection.id === section.id
+                            return (
+                                <button
+                                    key={section.id}
+                                    type="button"
+                                    onClick={() => navigateTo(section.id)}
+                                    aria-current={isActive ? 'page' : undefined}
+                                    className={cn(
+                                        "w-full flex min-h-10 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs transition-colors",
+                                        isActive ? 'bg-primary/10 text-primary font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                    )}
+                                >
+                                    <div className={cn('rounded-md p-1.5 flex-shrink-0', section.bg)}>
+                                        <Icon className={cn('h-3 w-3', section.color)} aria-hidden="true" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="truncate">{section.title}</div>
+                                        <div className="text-[11px] opacity-60 font-mono">{section.badge}</div>
+                                    </div>
+                                    {isActive && <ChevronRight className="h-3 w-3 flex-shrink-0" aria-hidden="true" />}
+                                </button>
+                            )
+                        })}
+                    </nav>
+
+                    {docsNotice}
+
+                    {/* Version footer */}
+                    <div className="rounded-xl border bg-muted/30 p-3 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1.5 mb-1"><FileText className="h-3 w-3" aria-hidden="true" /><span className="font-medium">TCNP SOP Manual</span></div>
+                        <p>Version 1.0 · 2021 Update</p>
+                        <p className="mt-1 opacity-60">Strictly Confidential — Protocol Members Only</p>
+                    </div>
+                </aside>
+
+                {/* Content area */}
+                <div ref={contentRef} className="min-w-0 flex-1 scroll-mt-4">
+                    {doQuickReference && <div className="mb-4 md:hidden">{doQuickReference}</div>}
+
+                    {waitingForSection ? (
+                        <div className="max-w-3xl space-y-4" aria-label="Loading section">
+                            <Skeleton className="h-12 w-2/3 rounded-xl" />
+                            <Skeleton className="h-24 rounded-xl" />
+                            <Skeleton className="h-24 rounded-xl" />
+                        </div>
+                    ) : query && results.length === 0 ? (
+                        <EmptyState
+                            icon={Search}
+                            title={<>No results for &ldquo;{search.trim()}&rdquo;</>}
+                            description="Try a different word, or browse the sections."
+                            action={<Button variant="outline" size="sm" className="h-9" onClick={() => setSearch('')}>Clear search</Button>}
+                        />
+                    ) : (
+                        <div className="max-w-3xl space-y-4">
+                            {/* Section heading */}
+                            <div className="flex items-start gap-4 mb-6">
+                                {query ? (
+                                    <div className="rounded-2xl bg-muted p-3 flex-shrink-0">
+                                        <Search className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+                                    </div>
+                                ) : (
+                                    <div className={cn('rounded-2xl p-3 flex-shrink-0', activeSection.bg)}>
+                                        <ActiveIcon className={cn('h-6 w-6', activeSection.color)} aria-hidden="true" />
                                     </div>
                                 )}
-                            </div>
-                        </div>
-
-                        {/* Subsections */}
-                        {(search
-                            ? filtered.flatMap(s => s.subsections.filter(sub =>
-                                sub.heading.toLowerCase().includes(search.toLowerCase()) ||
-                                (sub.body ?? '').toLowerCase().includes(search.toLowerCase()) ||
-                                (sub.list ?? []).some(l => l.toLowerCase().includes(search.toLowerCase()))
-                            ))
-                            : activeSection.subsections
-                        ).map((sub, i) => (
-                            <Card key={i} className="border-border/50 shadow-sm overflow-hidden">
-                                <button
-                                    type="button"
-                                    className="w-full text-left"
-                                    onClick={() => toggleSection(`${activeSection.id}-${i}`)}
-                                >
-                                    <CardHeader className="pb-3 pt-4 px-5">
-                                        <div className="flex items-center justify-between">
-                                            <CardTitle className="text-sm font-semibold">{sub.heading}</CardTitle>
-                                            <ChevronDown
-                                                className={cn('h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform',
-                                                    expandedSections.has(`${activeSection.id}-${i}`) ? 'rotate-180' : '')}
-                                            />
+                                <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                                        <h2 className="text-xl font-bold">{query ? 'Search results' : activeSection.title}</h2>
+                                        <Badge variant="secondary" className="text-[11px] font-mono tracking-widest">
+                                            {query ? `${results.length} ${results.length === 1 ? 'MATCH' : 'MATCHES'}` : activeSection.badge}
+                                        </Badge>
+                                    </div>
+                                    {!query && activeSection.roleGate && (
+                                        <div className="flex items-center gap-1 text-xs text-red-500 font-semibold">
+                                            <Lock className="h-2.5 w-2.5" aria-hidden="true" /> Delta Oscar reference material
                                         </div>
-                                    </CardHeader>
-                                </button>
-                                {expandedSections.has(`${activeSection.id}-${i}`) && (
-                                    <CardContent className="px-5 pb-5 pt-0">
-                                        <div className="h-px bg-border/50 mb-4 -mx-5 px-5" />
-                                        {renderSubsection(sub, i)}
-                                    </CardContent>
-                                )}
-                            </Card>
-                        ))}
-
-                        {/* Mobile section list */}
-                        <div className="md:hidden pt-6 border-t">
-                            <p className="text-xs text-muted-foreground font-medium mb-3">All SOP Sections</p>
-                            <div className="grid grid-cols-2 gap-2">
-                                {SOP_SECTIONS.map(s => {
-                                    const I = s.icon
-                                    return (
-                                        <button key={s.id} type="button" onClick={() => navigateTo(s.id)}
-                                            className="flex items-center gap-2 rounded-xl border p-3 text-left text-xs hover:bg-muted transition-colors">
-                                            <div className={cn('rounded-md p-1', s.bg)}><I className={cn('h-3 w-3', s.color)} /></div>
-                                            <span className="truncate font-medium">{s.title}</span>
-                                        </button>
-                                    )
-                                })}
+                                    )}
+                                </div>
                             </div>
+
+                            {/* Subsections */}
+                            {shownCards.map(({ sub, key, section }) => {
+                                const open = expandedSections.has(key)
+                                return (
+                                    <Card key={key} className="border-border/50 shadow-sm overflow-hidden">
+                                        <button
+                                            type="button"
+                                            className="w-full text-left"
+                                            aria-expanded={open}
+                                            onClick={() => toggleSection(key)}
+                                        >
+                                            <CardHeader className="pb-3 pt-4 px-5">
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        {query && <p className="text-[11px] font-medium text-muted-foreground">{section.title}</p>}
+                                                        <CardTitle className="text-sm font-semibold">{sub.heading}</CardTitle>
+                                                    </div>
+                                                    <ChevronDown
+                                                        aria-hidden="true"
+                                                        className={cn('h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform', open ? 'rotate-180' : '')}
+                                                    />
+                                                </div>
+                                            </CardHeader>
+                                        </button>
+                                        {open && (
+                                            <CardContent className="px-5 pb-5 pt-0">
+                                                <div className="h-px bg-border/50 mb-4 -mx-5 px-5" />
+                                                {renderSubsection(sub)}
+                                            </CardContent>
+                                        )}
+                                    </Card>
+                                )
+                            })}
                         </div>
-                    </div>
-                )}
-            </main>
+                    )}
+
+                    {/* Phones: every section, including unit documents */}
+                    <nav aria-label="All SOP sections" className="mt-6 border-t pt-6 md:hidden">
+                        <p className="text-xs text-muted-foreground font-medium mb-3">All SOP Sections</p>
+                        <div className="grid grid-cols-2 gap-2">
+                            {dynamicSections.map(s => {
+                                const I = s.icon
+                                const isActive = !query && activeSection.id === s.id
+                                return (
+                                    <button key={s.id} type="button" onClick={() => navigateTo(s.id)}
+                                        aria-current={isActive ? 'page' : undefined}
+                                        className={cn(
+                                            "flex min-h-11 min-w-0 items-center gap-2 rounded-xl border p-3 text-left text-xs transition-colors",
+                                            isActive ? 'border-primary/40 bg-primary/10 text-primary' : 'hover:bg-muted'
+                                        )}>
+                                        <div className={cn('shrink-0 rounded-md p-1', s.bg)}><I className={cn('h-3 w-3', s.color)} aria-hidden="true" /></div>
+                                        <span className="truncate font-medium">{s.title}</span>
+                                    </button>
+                                )
+                            })}
+                        </div>
+                        {docsNotice && <div className="mt-3">{docsNotice}</div>}
+                    </nav>
+                </div>
+            </div>
         </div>
+    )
+}
+
+export default function SOPPage() {
+    return (
+        <Suspense fallback={<Skeleton className="h-96 rounded-2xl" aria-label="Loading the SOP manual" />}>
+            <SOPContent />
+        </Suspense>
     )
 }

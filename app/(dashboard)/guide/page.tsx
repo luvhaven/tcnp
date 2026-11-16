@@ -1,13 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
+import { PageHeader } from '@/components/ui/page-header'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
-  BookOpen, Search, MapPin, MessageCircle, Shield, Car, Users,
-  Bell, Radio, Zap, ChevronRight, Clock, AlertTriangle, Lock, AtSign,
-  BarChart2, Navigation, Smartphone, Settings, HelpCircle
+  BookOpen, Search, MapPin, MessageCircle, Shield, Bell, ChevronRight,
+  BarChart2, Navigation, Smartphone, HelpCircle, Home,
 } from 'lucide-react'
 
 const sections = [
@@ -25,7 +29,7 @@ const sections = [
       },
       {
         heading: 'Core Concepts',
-        body: '• **Papa** — The principal being protected\n• **Cheetah** — An assigned vehicle with a call sign\n• **Delta Oscar (DO)** — Duty Officer assigned to a journey\n• **Call Sign** — The live status code for a journey phase (e.g. HOTEL means stationary at destination)\n• **Broken Arrow** — A major incident declaration that triggers a system-wide alert',
+        body: '• **Papa** — The principal being protected\n• **Cheetah** — An assigned vehicle with a call sign\n• **Delta Oscar (DO)** — Duty Officer assigned to a journey\n• **Call Sign** — The live status code for a journey phase (e.g. Chapman means arrival at the Theatre gate)\n• **Broken Arrow** — A major incident declaration that triggers a system-wide alert',
       },
       {
         heading: 'Role Hierarchy',
@@ -47,7 +51,7 @@ const sections = [
       },
       {
         heading: 'Call Signs',
-        body: 'Call signs indicate the live phase of a journey:\n• **ALPHA** — Departure initiated\n• **BRAVO** — En route\n• **CHARLIE** — Approaching destination\n• **DELTA** — Arrived at waypoint\n• **ECHO** — Stationary (planned stop)\n• **FOXTROT** — Returning\n• **GOLF** — En route back\n• **HOTEL** — Arrived at final destination\n• **BROKEN ARROW** — 🚨 Major incident — triggers system-wide alert',
+        body: 'Call signs indicate the live phase of a journey:\n• **First Course** — Departure from Nest to Theatre\n• **Cocktail** — Principal in transit\n• **Blue Cocktail** — In transit, mild traffic\n• **Red Cocktail** — In transit, heavy traffic\n• **Re-order** — Route change\n• **Chapman** — Arrival at Theatre gate\n• **Dessert** — Departure from Theatre to Nest\n• **Broken Arrow** — 🚨 Distress call for a major incident while transporting the Principal — triggers a system-wide alert\n\nA journey starts as **Planned** and ends as **Completed** or **Cancelled**.',
       },
       {
         heading: 'Updating Call Signs',
@@ -128,24 +132,24 @@ const sections = [
     badge: 'Communications',
     content: [
       {
-        heading: 'Chat Channels',
-        body: 'Chat is organised by context:\n• **Global** — visible to all users\n• **Program chat** — only users assigned to that program\n• **Papa-specific** — tied to a specific Papa\'s journey context\n\nUse the tabs at the top of the Chat page to switch between channels.',
+        heading: 'Choosing a Room',
+        body: 'At the top of the Chat page, choose **Programs** or **Teams**.\n• **Programs** — pick the program, then the room under **Room**: **Program chat** (active officers assigned to the program join automatically) or a **Papa room** (each needs its own invitation)\n• **Teams** — your team\'s room\n\nExecutives and admins can open every room. Archived programs are not available. The room you pick stays in the address, so a refresh or a shared link opens the same room.',
       },
       {
         heading: 'Mentions',
-        body: '• Type **@FirstName** to publicly mention someone — they receive a notification\n• Type **@@FirstName** to send a **private message** — only the sender, recipient, and admins can see it\n• A suggestion dropdown appears as you type — select from the list or keep typing to filter',
+        body: '• Type **@Name** to mention someone — they receive a notification\n• Type **@@Name** to send a **restricted message** — only the mentioned members, executives and admins can read it. Choose each @@ recipient from the suggestions before sending\n• Editing a message keeps its original audience; send a new message to change who can read it',
       },
       {
         heading: 'Search Messages',
-        body: 'Use the search bar in the chat header to filter messages by keyword. Matching text is shown inline. Clear the search bar to see all messages again.',
+        body: 'Use the search box above the messages to filter by keyword. It searches only the messages loaded so far: if nothing matches, load earlier messages to search further back. Clear the search to see all messages again.',
       },
       {
         heading: 'Load Earlier Messages',
-        body: 'The chat loads the most recent 50 messages by default. Click **Load earlier messages** at the top of the list to load the previous 50. This can be repeated to scroll back through the full history.',
+        body: 'The chat loads the most recent 50 messages. Tap **Load earlier messages** at the top of the list to load the previous 50. Repeat to go further back.',
       },
       {
         heading: 'Message Actions',
-        body: '• **Reply** — hover a message and click the reply icon to thread a response\n• **Edit** — you can edit your own messages within 3 minutes of sending\n• **Delete** — soft-delete removes the message from view\n• **Read receipts** — message turns blue when the recipient has seen it',
+        body: '• On a phone, **tap a message** to show its actions; on a computer, hover over it\n• **Reply** — answer a specific message\n• **Edit** — you can edit your own messages within 3 minutes of sending\n• **Delete** — removes the message from view\n• **React** — add an emoji reaction\n• **Read receipts** — a double tick shows the message has been seen',
       },
       {
         heading: 'Presence & Typing',
@@ -176,20 +180,28 @@ const sections = [
     ],
   },
   {
-    id: 'echo',
-    icon: Radio,
-    color: 'text-teal-500',
-    bg: 'bg-teal-500/10',
-    title: 'Equipment (Echo)',
-    badge: 'Inventory',
+    id: 'den',
+    icon: Home,
+    color: 'text-primary',
+    bg: 'bg-primary/10',
+    title: 'November (Den)',
+    badge: 'Unit',
     content: [
       {
-        heading: 'Purpose',
-        body: 'The Echo page manages all operational equipment — radios, trackers, vests, and other field gear. Each item is categorised and can be assigned to personnel.',
+        heading: 'Choose the programme first',
+        body: 'Open **November (Den)** and pick the programme in the **Programme** box beside the title. The plan, tasks, roster and reports then show that programme.',
       },
       {
-        heading: 'Adding Equipment',
-        body: 'Admin roles can add new equipment items via the **Add Equipment** button. Fill in the name, category, serial number, and assigned user. Equipment status (available/in use/maintenance) is tracked in real time.',
+        heading: 'Tasks & Checklists',
+        body: 'Your Den tasks and shifts also appear under **My Den work** on the Dashboard. Mark a task done there or on the **Tasks & Checklists** tab.',
+      },
+      {
+        heading: 'Roster check-in',
+        body: 'On the **Roster** tab (or the Dashboard), check in from two hours before your shift until it ends, and check out when you leave.',
+      },
+      {
+        heading: 'Reports',
+        body: 'Write field reports on the **Reports** tab. After the programme, the post-operation report is submitted and filed in the repository so the next team can learn from it.',
       },
     ],
   },
@@ -239,22 +251,43 @@ const sections = [
   },
 ]
 
-export default function GuidePage() {
-  const [search, setSearch] = useState('')
-  const [active, setActive] = useState('overview')
+const TOPIC_IDS = sections.map((section) => section.id)
 
+function GuideContent() {
+  const params = useSearchParams()
+  const [search, setSearch] = useState('')
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  // The open topic lives in ?topic=, so a refresh or a shared link lands on it.
+  const requestedTopic = params.get('topic')
+  const active = requestedTopic && TOPIC_IDS.includes(requestedTopic) ? requestedTopic : 'overview'
+
+  const query = search.trim().toLowerCase()
+  const matches = (text: string) => text.toLowerCase().includes(query)
   const filtered = sections.filter(
-    (s) =>
-      search === '' ||
-      s.title.toLowerCase().includes(search.toLowerCase()) ||
-      s.content.some(
-        (c) =>
-          c.heading.toLowerCase().includes(search.toLowerCase()) ||
-          c.body.toLowerCase().includes(search.toLowerCase())
-      )
+    (s) => query === '' || matches(s.title) || s.content.some((c) => matches(c.heading) || matches(c.body))
   )
+  const results = query
+    ? filtered.flatMap((s) =>
+        s.content
+          .filter((c) => matches(c.heading) || matches(c.body) || matches(s.title))
+          .map((c) => ({ ...c, topic: s.title, key: `${s.id}:${c.heading}` }))
+      )
+    : []
 
   const activeSection = sections.find((s) => s.id === active) ?? sections[0]
+
+  const selectTopic = (id: string) => {
+    setSearch('')
+    const url = new URL(window.location.href)
+    if (id === 'overview') url.searchParams.delete('topic')
+    else url.searchParams.set('topic', id)
+    window.history.replaceState(null, '', url)
+    // On a phone the topic list sits below the content: bring the newly
+    // opened topic into view instead of leaving the reader at the bottom.
+    const content = contentRef.current
+    if (content && content.getBoundingClientRect().top < 0) content.scrollIntoView({ block: 'start' })
+  }
 
   const renderBody = (body: string) => {
     return body.split('\n').map((line, i) => {
@@ -275,137 +308,154 @@ export default function GuidePage() {
     })
   }
 
+  const ActiveIcon = activeSection.icon
+
   return (
-    <div className="flex h-[calc(100vh-5rem)] gap-4 overflow-hidden page-enter">
-      {/* Left nav */}
-      <aside className="hidden w-64 flex-shrink-0 flex-col gap-3 overflow-y-auto md:flex">
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search guide..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-9 text-sm"
-            aria-label="Search guide"
-          />
-        </div>
-
-        {/* Nav items */}
-        <nav className="space-y-0.5">
-          {filtered.map((section) => {
-            const Icon = section.icon
-            const isActive = active === section.id
-            return (
-              <button
-                key={section.id}
-                type="button"
-                onClick={() => setActive(section.id)}
-                className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
-                  isActive
-                    ? 'bg-primary/10 text-primary font-medium'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                }`}
-              >
-                <div className={`flex-shrink-0 rounded-md p-1.5 ${section.bg}`}>
-                  <Icon className={`h-3.5 w-3.5 ${section.color}`} />
-                </div>
-                <span className="flex-1 truncate">{section.title}</span>
-                {isActive && <ChevronRight className="h-3.5 w-3.5 flex-shrink-0" />}
-              </button>
-            )
-          })}
-        </nav>
-
-        {/* Help footer */}
-        <div className="mt-auto rounded-lg border bg-muted/40 p-3">
-          <div className="flex items-center gap-2 mb-1">
-            <HelpCircle className="h-4 w-4 text-muted-foreground" />
-            <span className="text-xs font-medium">Need help?</span>
+    <div className="space-y-5 page-enter">
+      <PageHeader
+        icon={BookOpen}
+        title="Guide"
+        description="How TCNP works, topic by topic."
+        actions={
+          <div className="relative w-full sm:w-64">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <Input
+              type="search"
+              placeholder="Search the guide..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-10 pl-9 text-base sm:text-sm"
+              aria-label="Search the guide"
+            />
           </div>
-          <p className="text-xs text-muted-foreground">
-            Contact your system administrator or Super Admin for account issues.
-          </p>
-        </div>
-      </aside>
+        }
+      />
 
-      {/* Content area */}
-      <main className="flex-1 overflow-y-auto">
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
-            <Search className="h-10 w-10 text-muted-foreground/40" />
-            <div>
-              <p className="font-medium text-muted-foreground">No results for &ldquo;{search}&rdquo;</p>
-              <p className="text-sm text-muted-foreground mt-1">Try a different search term</p>
+      <div className="flex flex-col gap-6 md:flex-row md:items-start">
+        {/* Topic list (tablet and up); phones get the grid under the content */}
+        <aside className="hidden w-64 shrink-0 flex-col gap-3 md:sticky md:top-0 md:flex">
+          <nav aria-label="Guide topics" className="space-y-0.5">
+            {filtered.map((section) => {
+              const Icon = section.icon
+              const isActive = !query && active === section.id
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => selectTopic(section.id)}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                    isActive
+                      ? 'bg-primary/10 text-primary font-medium'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  }`}
+                >
+                  <div className={`flex-shrink-0 rounded-md p-1.5 ${section.bg}`}>
+                    <Icon className={`h-3.5 w-3.5 ${section.color}`} aria-hidden="true" />
+                  </div>
+                  <span className="flex-1 truncate">{section.title}</span>
+                  {isActive && <ChevronRight className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />}
+                </button>
+              )
+            })}
+          </nav>
+
+          {/* Help footer */}
+          <div className="rounded-lg border bg-muted/40 p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <HelpCircle className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <span className="text-xs font-medium">Need help?</span>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Contact your system administrator or Super Admin for account issues.
+            </p>
           </div>
-        ) : (
-          <div className="max-w-3xl space-y-8 pb-12">
-            {/* Page header */}
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className={`rounded-xl p-2.5 ${activeSection.bg}`}>
-                  {(() => {
-                    const Icon = activeSection.icon
-                    return <Icon className={`h-5 w-5 ${activeSection.color}`} />
-                  })()}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h1 className="text-xl font-bold">{activeSection.title}</h1>
+        </aside>
+
+        {/* Content area */}
+        <div ref={contentRef} className="min-w-0 flex-1 scroll-mt-4">
+          {query && results.length === 0 ? (
+            <EmptyState
+              icon={Search}
+              title={<>No results for &ldquo;{search.trim()}&rdquo;</>}
+              description="Try a different word, or browse the topics."
+              action={<Button variant="outline" size="sm" className="h-9" onClick={() => setSearch('')}>Clear search</Button>}
+            />
+          ) : (
+            <div className="max-w-3xl space-y-6 pb-4">
+              {/* Section heading */}
+              <div>
+                <div className="flex items-center gap-3">
+                  {query ? (
+                    <div className="rounded-xl bg-muted p-2.5">
+                      <Search className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                    </div>
+                  ) : (
+                    <div className={`rounded-xl p-2.5 ${activeSection.bg}`}>
+                      <ActiveIcon className={`h-5 w-5 ${activeSection.color}`} aria-hidden="true" />
+                    </div>
+                  )}
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <h2 className="text-xl font-bold">{query ? 'Search results' : activeSection.title}</h2>
                     <Badge variant="secondary" className="text-xs">
-                      {activeSection.badge}
+                      {query ? `${results.length} ${results.length === 1 ? 'match' : 'matches'}` : activeSection.badge}
                     </Badge>
                   </div>
                 </div>
+                <div className="h-px bg-border mt-4" />
               </div>
-              <div className="h-px bg-border mt-4" />
-            </div>
 
-            {/* Section content */}
-            {(search
-              ? filtered.flatMap((s) => s.content.filter(
-                  (c) =>
-                    c.heading.toLowerCase().includes(search.toLowerCase()) ||
-                    c.body.toLowerCase().includes(search.toLowerCase())
-                ))
-              : activeSection.content
-            ).map((item, i) => (
-              <Card key={i} className="border-border/60 shadow-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base font-semibold">{item.heading}</CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0 space-y-1">
-                  {renderBody(item.body)}
-                </CardContent>
-              </Card>
-            ))}
-
-            {/* Mobile: show all sections inline */}
-            <div className="md:hidden pt-4 border-t">
-              <p className="text-xs text-muted-foreground font-medium mb-3">All Topics</p>
-              <div className="grid grid-cols-2 gap-2">
-                {sections.map((section) => {
-                  const Icon = section.icon
-                  return (
-                    <button
-                      key={section.id}
-                      type="button"
-                      onClick={() => setActive(section.id)}
-                      className="flex items-center gap-2 rounded-lg border p-3 text-left text-sm hover:bg-muted transition-colors"
-                    >
-                      <div className={`rounded-md p-1 ${section.bg}`}>
-                        <Icon className={`h-3 w-3 ${section.color}`} />
-                      </div>
-                      <span className="truncate text-xs font-medium">{section.title}</span>
-                    </button>
-                  )
-                })}
-              </div>
+              {/* Section content */}
+              {(query ? results : activeSection.content.map((c) => ({ ...c, topic: null as string | null, key: c.heading }))).map((item) => (
+                <Card key={item.key} className="border-border/60 shadow-sm">
+                  <CardHeader className="pb-3">
+                    {item.topic && <p className="text-xs font-medium text-muted-foreground">{item.topic}</p>}
+                    <CardTitle className="text-base font-semibold">{item.heading}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0 space-y-1">
+                    {renderBody(item.body)}
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-          </div>
-        )}
-      </main>
+          )}
+
+          {/* Phones: every topic, under the content */}
+          <nav aria-label="All guide topics" className="mt-6 border-t pt-4 md:hidden">
+            <p className="text-xs text-muted-foreground font-medium mb-3">All Topics</p>
+            <div className="grid grid-cols-2 gap-2">
+              {sections.map((section) => {
+                const Icon = section.icon
+                const isActive = !query && active === section.id
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => selectTopic(section.id)}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`flex min-h-11 min-w-0 items-center gap-2 rounded-lg border p-3 text-left text-sm transition-colors ${
+                      isActive ? 'border-primary/40 bg-primary/10 text-primary' : 'hover:bg-muted'
+                    }`}
+                  >
+                    <div className={`shrink-0 rounded-md p-1 ${section.bg}`}>
+                      <Icon className={`h-3 w-3 ${section.color}`} aria-hidden="true" />
+                    </div>
+                    <span className="truncate text-xs font-medium">{section.title}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </nav>
+        </div>
+      </div>
     </div>
+  )
+}
+
+export default function GuidePage() {
+  return (
+    <Suspense fallback={<Skeleton className="h-96 rounded-2xl" aria-label="Loading the guide" />}>
+      <GuideContent />
+    </Suspense>
   )
 }

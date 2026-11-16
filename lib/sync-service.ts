@@ -8,6 +8,29 @@ import { toast } from 'sonner'
 class SyncService {
     private isSyncing = false
     private syncListeners: Set<() => void> = new Set()
+    // The entry the loop is sending right now, entries it has sent, and entries
+    // the officer discarded on this page. Each is checked and set without an
+    // await in between, so a discard and a send can never both win for one entry.
+    private sendingId: string | null = null
+    private sentIds: Set<string> = new Set()
+    private discardedIds: Set<string> = new Set()
+
+    // Removes a queued entry unless it has already gone to the server.
+    // 'sent' means the background sync delivered it before the discard;
+    // 'sending' means it is in flight now.
+    async discard(id: string): Promise<'discarded' | 'sent' | 'sending'> {
+        if (this.sendingId === id) return 'sending'
+        if (this.sentIds.has(id)) return 'sent'
+        this.discardedIds.add(id)
+        try {
+            await offlineQueue.removeFromQueue(id)
+            return 'discarded'
+        } catch (error) {
+            // Nothing was removed, so the entry must stay sendable.
+            this.discardedIds.delete(id)
+            throw error
+        }
+    }
 
     async syncAll(options: { quiet?: boolean } = {}): Promise<void> {
         if (this.isSyncing) return
@@ -52,7 +75,11 @@ class SyncService {
                 try {
                     const { data: { user: currentUser }, error: currentAuthError } = await supabase.auth.getUser()
                     if (currentAuthError || currentUser?.id !== submission.ownerId) break
+                    // The snapshot may be stale: skip anything discarded since it was taken.
+                    if (this.discardedIds.has(submission.id)) continue
+                    this.sendingId = submission.id
                     await this.syncSubmission(supabase, submission)
+                    this.sentIds.add(submission.id)
                     await offlineQueue.removeFromQueue(submission.id)
                     processed++
                 } catch (error) {
@@ -61,6 +88,8 @@ class SyncService {
                     errors++
 
                     // Preserve failed submissions for retry; never discard data.
+                } finally {
+                    this.sendingId = null
                 }
             }
 

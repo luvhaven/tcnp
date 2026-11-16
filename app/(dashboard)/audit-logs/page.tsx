@@ -2,12 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/ui/page-header"
+import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 const PAGE = 200
 import { formatDistanceToNow } from "date-fns"
@@ -216,14 +220,18 @@ export default function AuditLogsPage() {
     })
   }, [logs, actionFilter, entityFilter, userFilter])
 
-  if (!authorized) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-sm text-muted-foreground">You do not have permission to view audit logs.</p>
-      </div>
-    )
+  const actionOptions = Array.from(new Set(logs.map((l) => l.action).filter(Boolean))) as string[]
+  const entityOptions = (Array.from(new Set(logs.map((l) => l.target_type).filter(Boolean))) as string[])
+    .sort((a, b) => formatTargetType(a).localeCompare(formatTargetType(b)))
+  const filtersActive = userFilter.trim() !== "" || actionFilter !== "all" || entityFilter !== "all"
+  const clearFilters = () => {
+    setUserFilter("")
+    setActionFilter("all")
+    setEntityFilter("all")
   }
 
+  // Loading is checked first: `authorized` is only known once the check has run,
+  // so testing it first showed "no permission" to everyone for a moment.
   if (loading) {
     return (
       <div className="space-y-6 animate-in fade-in duration-300">
@@ -254,19 +262,20 @@ export default function AuditLogsPage() {
     )
   }
 
+  if (!authorized) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-sm text-muted-foreground">You do not have permission to view audit logs.</p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
-      <PageHeader icon={FileText} title="Audit Log" description="View who did what, when, and where across the system." />
+      <PageHeader icon={FileText} title="Audit Log" description="View who did what, when, and where across the system, newest first." />
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <FileText className="h-5 w-5" />
-            <span>Activity Logs</span>
-          </CardTitle>
-          <CardDescription>Complete audit trail of system activities, newest first</CardDescription>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           {loadFailed ? (
             <ErrorState title="Audit logs couldn't load" onRetry={() => { setLoading(true); void loadLogs() }} />
           ) : logs.length === 0 ? (
@@ -277,63 +286,72 @@ export default function AuditLogsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between text-[11px] sm:text-xs">
-                  <div className="flex flex-wrap gap-2">
-                    <div className="flex flex-col gap-1">
-                      <span className="font-semibold text-[11px] text-muted-foreground">Filter by user</span>
-                      <input
-                        className="h-7 w-44 rounded border bg-background px-2 text-[11px]"
-                        placeholder="Name, email, or ID"
-                        value={userFilter}
-                        onChange={(e) => setUserFilter(e.target.value)}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="font-semibold text-[11px] text-muted-foreground">Action</span>
-                      <select
-                        className="h-7 rounded border bg-background px-2 text-[11px]"
-                        value={actionFilter}
-                        onChange={(e) => setActionFilter(e.target.value)}
-                      >
-                        <option value="all">All</option>
-                        {Array.from(new Set(logs.map((l) => l.action).filter(Boolean))).map((action: string) => (
-                          <option key={action} value={action}>
-                            {action.toUpperCase()}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="font-semibold text-[11px] text-muted-foreground">Entity</span>
-                      <select
-                        className="h-7 rounded border bg-background px-2 text-[11px]"
-                        value={entityFilter}
-                        onChange={(e) => setEntityFilter(e.target.value)}
-                      >
-                        <option value="all">All</option>
-                        {Array.from(new Set(logs.map((l) => l.target_type).filter(Boolean))).map((entity: string) => (
-                          <option key={entity} value={entity}>
-                            {entity}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+                <div className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap">
+                  <div className="flex min-w-0 flex-col gap-1.5">
+                    <Label htmlFor="audit-user-filter" className="text-sm">Filter by user</Label>
+                    <Input
+                      id="audit-user-filter"
+                      type="search"
+                      className="sm:w-56"
+                      placeholder="Name, email, or ID"
+                      value={userFilter}
+                      onChange={(e) => setUserFilter(e.target.value)}
+                    />
                   </div>
-                  <div className="text-[11px] text-muted-foreground text-right">
-                    <span>
-                      Showing {filteredLogs.length} of {logs.length} events
-                    </span>
+                  <div className="flex min-w-0 flex-col gap-1.5">
+                    <Label htmlFor="audit-action-filter" className="text-sm">Action</Label>
+                    <Select value={actionFilter} onValueChange={setActionFilter}>
+                      <SelectTrigger id="audit-action-filter" className="sm:w-40">
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All actions</SelectItem>
+                        {actionOptions.map((action) => (
+                          <SelectItem key={action} value={action}>
+                            {action.toUpperCase()}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex min-w-0 flex-col gap-1.5">
+                    <Label htmlFor="audit-entity-filter" className="text-sm">Entity</Label>
+                    <Select value={entityFilter} onValueChange={setEntityFilter}>
+                      <SelectTrigger id="audit-entity-filter" className="sm:w-56">
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All entities</SelectItem>
+                        {entityOptions.map((entity) => (
+                          <SelectItem key={entity} value={entity}>
+                            {formatTargetType(entity)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
+                <p className="text-sm text-muted-foreground sm:text-right" role="status">
+                  Showing {filteredLogs.length} of {logs.length} events
+                </p>
               </div>
+              {filteredLogs.length === 0 && filtersActive && (
+                <EmptyState
+                  icon={FileText}
+                  title="No events match these filters"
+                  description={hasMore ? "Only the loaded events are searched. Load older events to look further back." : undefined}
+                  action={<Button variant="outline" size="sm" onClick={clearFilters}>Clear filters</Button>}
+                  className="rounded-lg border py-10"
+                />
+              )}
               <div className="space-y-2">
                 {filteredLogs.map((log) => (
                   <div
                     key={log.id}
-                    className="flex items-start justify-between rounded-lg border p-3 text-xs sm:text-sm bg-card/40"
+                    className="flex flex-col gap-2 rounded-lg border p-3 text-xs sm:flex-row sm:items-start sm:justify-between sm:text-sm bg-card/40"
                   >
-                    <div className="flex-1 pr-4">
+                    <div className="min-w-0 flex-1 sm:pr-4">
                       <div className="flex items-center gap-3 mb-1">
                         <span className="text-base sm:text-lg">
                           {getActionIcon(log.action)}
@@ -417,7 +435,8 @@ export default function AuditLogsPage() {
                       )}
                     </div>
 
-                    <div className="flex flex-col items-end gap-1 text-[11px] text-muted-foreground whitespace-nowrap">
+                    {/* Under the text on a phone, in its own right-hand column from tablet width up. */}
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground sm:flex-col sm:items-end sm:gap-1 sm:whitespace-nowrap">
                       {log.created_at && (
                         <>
                           <span>{formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}</span>

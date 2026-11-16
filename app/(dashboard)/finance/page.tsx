@@ -23,9 +23,10 @@ import {
 } from "@/components/ui/select"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
 import {
-  Banknote, Upload, Download, Trash2, FileText, Lock, Loader2, FileSpreadsheet, Receipt, FileBarChart,
+  Banknote, Upload, Download, Trash2, FileText, Lock, Loader2, FileSpreadsheet, Receipt, FileBarChart, Search,
 } from "lucide-react"
 import { UPLOAD_RULES, validateUploadFiles } from "@/lib/security/upload-validation"
+import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 
 // ─── Singleton client ───
@@ -73,6 +74,7 @@ export default function FinancePage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [filterCategory, setFilterCategory] = useState("all")
+  const [search, setSearch] = useState("")
   const [form, setForm] = useState({
     title: "",
     category: "report",
@@ -105,10 +107,15 @@ export default function FinancePage() {
     enabled: allowed,
   })
 
-  const filtered = useMemo(
-    () => docs.filter(d => filterCategory === "all" || d.category === filterCategory),
-    [docs, filterCategory]
-  )
+  const filtered = useMemo(() => {
+    const needle = search.trim().toLowerCase()
+    return docs.filter(d =>
+      (filterCategory === "all" || d.category === filterCategory) &&
+      (!needle || d.title.toLowerCase().includes(needle))
+    )
+  }, [docs, filterCategory, search])
+  const filtersActive = filterCategory !== "all" || search.trim() !== ""
+  const clearFilters = () => { setFilterCategory("all"); setSearch("") }
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -161,13 +168,19 @@ export default function FinancePage() {
   }
 
   const deleteMutation = useMutation({
+    // The entry goes first: if that fails nothing is lost. Only once it is gone
+    // is the stored file removed, so a failed delete never leaves an entry
+    // whose download is broken.
     mutationFn: async (doc: FinanceDoc) => {
-      await supabase.storage.from("finance-documents").remove([doc.storage_path])
-      const { error } = await supabase.from("finance_documents").delete().eq("id", doc.id)
+      const { data, error } = await supabase.from("finance_documents").delete().eq("id", doc.id).select("id")
       if (error) throw error
+      if (data && data.length === 0) throw new Error("This document could not be deleted. You may not have permission, or it was already removed.")
+      const { error: fileError } = await supabase.storage.from("finance-documents").remove([doc.storage_path])
+      return { fileLeft: Boolean(fileError) }
     },
-    onSuccess: () => {
-      toast.success("Document removed")
+    onSuccess: ({ fileLeft }) => {
+      if (fileLeft) toast.warning("Document removed, but its stored file could not be deleted. Ask an admin to tidy up storage.")
+      else toast.success("Document removed")
       queryClient.invalidateQueries({ queryKey: ["finance-documents"] })
     },
     onError: (err: any) => notifyError(err, "Delete failed"),
@@ -205,15 +218,28 @@ export default function FinancePage() {
       />
 
       {/* Filter */}
-      <div className="flex items-center gap-2">
-        <Select value={filterCategory} onValueChange={setFilterCategory}>
-          <SelectTrigger className="w-full sm:w-[170px] h-9"><SelectValue placeholder="Category" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Categories</SelectItem>
-            {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <p className="text-sm text-muted-foreground">{filtered.length} document{filtered.length === 1 ? "" : "s"}</p>
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="relative min-w-0 sm:w-[260px]">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search titles"
+            aria-label="Search document titles"
+            className="h-9 pl-9"
+          />
+        </div>
+        <div className="flex min-w-0 items-center gap-2">
+          <Select value={filterCategory} onValueChange={setFilterCategory}>
+            <SelectTrigger aria-label="Filter by category" className="h-9 min-w-0 flex-1 sm:w-[170px] sm:flex-none"><SelectValue placeholder="Category" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <p className="shrink-0 text-sm text-muted-foreground">{filtered.length} document{filtered.length === 1 ? "" : "s"}</p>
+        </div>
       </div>
 
       {/* Documents */}
@@ -223,6 +249,14 @@ export default function FinancePage() {
         </div>
       ) : listFailed ? (
         <ErrorState onRetry={() => { void refetchList() }} retrying={listRetrying} />
+      ) : filtered.length === 0 && docs.length > 0 && filtersActive ? (
+        <EmptyState
+          icon={Search}
+          title="No documents match these filters"
+          description="Try another title or category."
+          action={<Button variant="outline" size="sm" onClick={clearFilters}>Clear filters</Button>}
+          className="rounded-xl border py-10"
+        />
       ) : filtered.length === 0 ? (
         <div className="empty-state rounded-xl border">
           <FileText className="h-10 w-10" />
@@ -256,14 +290,16 @@ export default function FinancePage() {
                         <Button variant="outline" size="sm" className="gap-1" onClick={() => download(doc)}>
                           <Download className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Download</span>
                         </Button>
-                        <Button aria-label="Delete document"
+                        <Button aria-label={`Delete ${doc.title}`}
                           variant="ghost" size="icon" className="h-9 w-9 text-red-500"
+                          pending={deleteMutation.isPending && deleteMutation.variables?.id === doc.id}
+                          disabled={deleteMutation.isPending}
                           onClick={async () => {
-                            const ok = await confirm({ title: "Delete document?", message: `"${doc.title}" will be permanently removed.` })
+                            const ok = await confirm({ title: "Delete document?", message: `"${doc.title}" will be permanently removed.`, confirmText: "Delete", variant: "destructive" })
                             if (ok) deleteMutation.mutate(doc)
                           }}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          {!(deleteMutation.isPending && deleteMutation.variables?.id === doc.id) && <Trash2 className="h-4 w-4" aria-hidden="true" />}
                         </Button>
                       </div>
                     </CardContent>
@@ -284,33 +320,33 @@ export default function FinancePage() {
           </DialogHeader>
           <form onSubmit={handleUpload} className="mt-2 space-y-4">
             <div className="space-y-2">
-              <Label>File *</Label>
-              <Input type="file" accept=".pdf,.xls,.xlsx,.csv,.doc,.docx,image/*" className="cursor-pointer" required
+              <Label htmlFor="finance-file">File *</Label>
+              <Input id="finance-file" type="file" accept=".pdf,.xls,.xlsx,.csv,.doc,.docx,image/*" className="cursor-pointer" required
                 onChange={(e) => setForm({ ...form, file: e.target.files?.[0] ?? null })} />
             </div>
             <div className="space-y-2">
-              <Label>Title *</Label>
-              <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Q2 2026 Operations Budget" required />
+              <Label htmlFor="finance-title">Title *</Label>
+              <Input id="finance-title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Q2 2026 Operations Budget" required />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Category *</Label>
+                <Label htmlFor="finance-category">Category *</Label>
                 <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="finance-category"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Period</Label>
-                <Input value={form.period} onChange={(e) => setForm({ ...form, period: e.target.value })} placeholder="e.g. Q2 2026" />
+                <Label htmlFor="finance-period">Period</Label>
+                <Input id="finance-period" value={form.period} onChange={(e) => setForm({ ...form, period: e.target.value })} placeholder="e.g. Q2 2026" />
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Program</Label>
+              <Label htmlFor="finance-programme">Programme</Label>
               <Select value={form.program_id || "none"} onValueChange={(v) => setForm({ ...form, program_id: v === "none" ? "" : v })}>
-                <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectTrigger id="finance-programme"><SelectValue placeholder="None" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">None</SelectItem>
                   {programs.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
@@ -318,8 +354,8 @@ export default function FinancePage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Notes</Label>
-              <Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              <Label htmlFor="finance-notes">Notes</Label>
+              <Textarea id="finance-notes" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </div>
             <div className="flex gap-2 pt-1">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setDialogOpen(false)}>Cancel</Button>

@@ -39,15 +39,20 @@ export default function ApprovalsClient() {
   const queryClient = useQueryClient()
   const [approvingId, setApprovingId] = useState<string | null>(null)
 
-  const { data, isLoading, isError, refetch, isRefetching } = useQuery<ApprovalsResponse>({
+  // `null` means the viewer may not approve signups (403) — e.g. the Head of
+  // Command, who reaches this page for programme additions only. The signups
+  // section is then hidden rather than shown as a failure.
+  const { data, isLoading, isError, refetch, isRefetching } = useQuery<ApprovalsResponse | null>({
     queryKey: QUERY_KEY,
     queryFn: async () => {
       const res = await fetch("/api/officers/signup-approvals")
+      if (res.status === 403) return null
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new UserFacingError(body.error || "Couldn't load pending signups")
       return body
     },
   })
+  const signupsHidden = data === null
 
   const approve = useMutation({
     mutationFn: async (applicant: PendingSignup) => {
@@ -62,7 +67,7 @@ export default function ApprovalsClient() {
       return applicant
     },
     onSuccess: applicant => {
-      queryClient.setQueryData<ApprovalsResponse>(QUERY_KEY, prev =>
+      queryClient.setQueryData<ApprovalsResponse | null>(QUERY_KEY, prev =>
         prev ? { ...prev, pending: prev.pending.filter(p => p.id !== applicant.id) } : prev)
       queryClient.invalidateQueries({ queryKey: ["officers"] })
       toast.success(`${applicant.full_name || applicant.email} can now sign in`)
@@ -80,68 +85,82 @@ export default function ApprovalsClient() {
     <div className="space-y-6">
       <PageHeader
         icon={UserCheck}
-        title="Signup Approvals"
+        title="Approvals"
         badge={data ? (data.scope === "all" ? "All units" : "Your unit") : undefined}
-        description={data?.scope === "unit"
-          ? "People who signed up into your unit and are waiting for access. Approving lets them sign in."
-          : "People who signed up and are waiting for access. Unit heads can approve their own unit; you can approve everyone."}
+        description="New signups waiting for access, and officers a unit head wants added to a programme. Decide on each one here."
       />
 
-      <ProgramAdditionApprovals />
+      <ProgramAdditionApprovals
+        emptyFallback={signupsHidden
+          ? <EmptyState icon={UserCheck} title="Nothing waiting for you" description="Programme additions that need your decision will appear here." />
+          : null}
+      />
 
-      {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}
-        </div>
-      ) : isError ? (
-        <ErrorState onRetry={() => refetch()} retrying={isRefetching} />
-      ) : pending.length === 0 ? (
-        <EmptyState icon={UserCheck} title="No pending signups" description="New signups for your unit will appear here." />
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {pending.map(applicant => {
-            const name = applicant.full_name || applicant.email
-            const busy = approvingId === applicant.id
-            return (
-              <Card key={applicant.id} className="flex flex-col">
-                <CardContent className="flex flex-1 flex-col gap-4 p-5">
-                  <div className="flex items-start gap-3">
-                    <Avatar>
-                      {applicant.photo_url && <AvatarImage src={applicant.photo_url} alt="" />}
-                      <AvatarFallback className="bg-orange-500 text-white">{initials(name)}</AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Signed up {new Date(applicant.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5 text-sm">
-                    {applicant.oscar && (
-                      <div className="flex flex-wrap gap-2">
-                        <Badge variant="outline">{normalizeOscarLabel(applicant.oscar)}</Badge>
-                        {applicant.team && <Badge variant="outline" className="capitalize"><Users className="mr-1 h-3 w-3" aria-hidden="true" />Team {applicant.team}</Badge>}
+      {!signupsHidden && (
+        <section aria-labelledby="signups-heading" className="space-y-3">
+          <div>
+            <h2 id="signups-heading" className="text-base font-semibold">Signups</h2>
+            <p className="text-sm text-muted-foreground">
+              {data?.scope === "unit"
+                ? "People who signed up into your unit and are waiting for access. Approving lets them sign in."
+                : "People who signed up and are waiting for access. Unit heads can approve their own unit; you can approve everyone."}
+            </p>
+          </div>
+          {isLoading ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}
+            </div>
+          ) : isError ? (
+            <ErrorState onRetry={() => refetch()} retrying={isRefetching} />
+          ) : pending.length === 0 ? (
+            <EmptyState icon={UserCheck} title="No pending signups" description="New signups for your unit will appear here." />
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {pending.map(applicant => {
+                const name = applicant.full_name || applicant.email
+                const busy = approvingId === applicant.id
+                return (
+                  <Card key={applicant.id} className="flex flex-col">
+                    <CardContent className="flex flex-1 flex-col gap-4 p-5">
+                      <div className="flex items-start gap-3">
+                        <Avatar>
+                          {applicant.photo_url && <AvatarImage src={applicant.photo_url} alt="" />}
+                          <AvatarFallback className="bg-orange-500 text-white">{initials(name)}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium">{name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Signed up {new Date(applicant.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
+                          </p>
+                        </div>
                       </div>
-                    )}
-                    <p className="flex items-center gap-2 truncate text-muted-foreground"><Mail className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{applicant.email}</p>
-                    {applicant.phone && <p className="flex items-center gap-2 text-muted-foreground"><Phone className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{applicant.phone}</p>}
-                  </div>
 
-                  <Button
-                    className="mt-auto w-full bg-green-600 text-white hover:bg-green-700"
-                    disabled={approve.isPending}
-                    onClick={() => approve.mutate(applicant)}
-                  >
-                    {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <UserCheck className="mr-2 h-4 w-4" aria-hidden="true" />}
-                    {busy ? "Approving…" : "Approve"}
-                  </Button>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
+                      <div className="space-y-1.5 text-sm">
+                        {applicant.oscar && (
+                          <div className="flex flex-wrap gap-2">
+                            <Badge variant="outline">{normalizeOscarLabel(applicant.oscar)}</Badge>
+                            {applicant.team && <Badge variant="outline" className="capitalize"><Users className="mr-1 h-3 w-3" aria-hidden="true" />Team {applicant.team}</Badge>}
+                          </div>
+                        )}
+                        <p className="flex items-center gap-2 truncate text-muted-foreground"><Mail className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{applicant.email}</p>
+                        {applicant.phone && <p className="flex items-center gap-2 text-muted-foreground"><Phone className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{applicant.phone}</p>}
+                      </div>
+
+                      <Button
+                        className="mt-auto w-full bg-green-600 text-white hover:bg-green-700"
+                        disabled={approve.isPending}
+                        onClick={() => approve.mutate(applicant)}
+                      >
+                        {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <UserCheck className="mr-2 h-4 w-4" aria-hidden="true" />}
+                        {busy ? "Approving…" : "Approve"}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+        </section>
       )}
     </div>
   )

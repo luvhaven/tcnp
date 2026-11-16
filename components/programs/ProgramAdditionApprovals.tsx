@@ -1,5 +1,6 @@
 "use client"
 
+import type { ReactNode } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { CalendarPlus, Check, X } from "lucide-react"
 import { toast } from "sonner"
@@ -7,6 +8,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ErrorState } from "@/components/ui/error-state"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { notifyError, UserFacingError } from "@/lib/notify"
 import { PROGRAM_ADDITIONS_KEY, type PendingAddition } from "@/lib/program-additions"
 
@@ -20,12 +24,13 @@ function initials(name: string | null) {
  * Officers a unit head wants on a programme although they had not indicated
  * availability. Executives, admins and the Head of Command decide; the unit
  * head sees the same list without the buttons. Renders nothing when there is
- * nothing waiting, so it can sit on any page.
+ * nothing waiting (or `emptyFallback`, when given), so it can sit on any page.
  */
-export default function ProgramAdditionApprovals() {
+export default function ProgramAdditionApprovals({ emptyFallback = null }: { emptyFallback?: ReactNode } = {}) {
   const queryClient = useQueryClient()
+  const confirm = useConfirm()
 
-  const { data } = useQuery<Response>({
+  const { data, isLoading, isError, refetch, isRefetching } = useQuery<Response>({
     queryKey: [...PROGRAM_ADDITIONS_KEY, "pending"],
     queryFn: async () => {
       const res = await fetch("/api/program-additions")
@@ -58,7 +63,27 @@ export default function ProgramAdditionApprovals() {
   })
 
   const pending = data?.pending ?? []
-  if (pending.length === 0) return null
+
+  if (isLoading) {
+    return <Skeleton className="h-24 rounded-xl" role="status" aria-label="Loading programme additions" />
+  }
+  if (isError && !data) {
+    return (
+      <Card>
+        <ErrorState title="Could not load programme additions" onRetry={() => { void refetch() }} retrying={isRefetching} className="py-8" />
+      </Card>
+    )
+  }
+  if (pending.length === 0) return <>{emptyFallback}</>
+
+  const decline = async (addition: PendingAddition) => {
+    const ok = await confirm({
+      title: "Decline this addition?",
+      message: `${addition.officer.full_name ?? "This officer"} will not be added to ${addition.program.name}.`,
+      confirmText: "Decline",
+    })
+    if (ok) decide.mutate({ addition, decision: "reject" })
+  }
 
   return (
     <Card>
@@ -97,7 +122,7 @@ export default function ProgramAdditionApprovals() {
                 </div>
                 {data?.canDecide && (
                   <div className="flex shrink-0 gap-2">
-                    <Button size="sm" variant="outline" disabled={decide.isPending} onClick={() => decide.mutate({ addition, decision: "reject" })}>
+                    <Button size="sm" variant="outline" pending={busy && decide.variables?.decision === "reject"} disabled={decide.isPending} onClick={() => { void decline(addition) }}>
                       <X className="mr-1 h-4 w-4" aria-hidden="true" />
                       Decline
                     </Button>

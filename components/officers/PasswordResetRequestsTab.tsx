@@ -14,6 +14,7 @@ import { formatDistanceToNow } from "date-fns"
 import { Check, X, KeyRound, Clock, Search, RefreshCw, AlertCircle, ShieldAlert, CheckCircle2 } from "lucide-react"
 import { toast } from "sonner"
 import { notifyError, UserFacingError } from '@/lib/notify'
+import { ErrorState } from "@/components/ui/error-state"
 import type { PasswordResetRequest } from "@/types/database.types"
 
 export function PasswordResetRequestsTab() {
@@ -24,7 +25,7 @@ export function PasswordResetRequestsTab() {
   const [rejectReason, setRejectReason] = useState("")
 
   // Fetch password reset requests
-  const { data: requests = [], isLoading, isFetching, refetch } = useQuery<PasswordResetRequest[]>({
+  const { data: requests = [], isLoading, isError, isFetching, refetch } = useQuery<PasswordResetRequest[]>({
     queryKey: ['admin-password-resets'],
     queryFn: async () => {
       const res = await fetch('/api/admin/password-resets')
@@ -193,8 +194,8 @@ export function PasswordResetRequestsTab() {
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-lg border border-border/60 p-0.5 bg-card/60 text-xs">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="inline-flex min-w-0 max-w-full overflow-x-auto rounded-lg border border-border/60 p-0.5 bg-card/60 text-xs [scrollbar-width:none]">
             {['all', 'pending', 'approved', 'completed', 'rejected'].map((s) => (
               <button
                 key={s}
@@ -227,15 +228,22 @@ export function PasswordResetRequestsTab() {
             disabled={isFetching}
             className="h-9 px-2.5 shrink-0"
             title="Refresh requests"
+            aria-label="Refresh requests"
           >
-            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} aria-hidden="true" />
           </Button>
         </div>
       </div>
 
       {/* Table Container */}
-      <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-sm">
-        <Table>
+      {/* A failed load is not "no requests": say so and offer a retry. */}
+      {isError && requests.length === 0 ? (
+        <div className="rounded-xl border border-border/60 bg-card shadow-sm">
+          <ErrorState title="Could not load password reset requests" onRetry={() => { void refetch() }} retrying={isFetching} />
+        </div>
+      ) : (
+      <div className="rounded-xl border border-border/60 bg-card overflow-x-auto shadow-sm">
+        <Table className="min-w-[720px]">
           <TableHeader>
             <TableRow className="border-border/60 hover:bg-transparent">
               <TableHead className="w-[30%]">User / Officer</TableHead>
@@ -371,6 +379,7 @@ export function PasswordResetRequestsTab() {
           </TableBody>
         </Table>
       </div>
+      )}
 
       {/* Reject Confirmation Dialog */}
       <Dialog open={Boolean(rejectDialogItem)} onOpenChange={(open) => !open && setRejectDialogItem(null)}>

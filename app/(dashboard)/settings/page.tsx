@@ -19,15 +19,6 @@ const themes: { value: AppTheme; label: string; icon: typeof Sun }[] = [
   { value: 'dark', label: 'Dark', icon: Moon },
   { value: 'auto', label: 'Follow device', icon: Monitor },
 ]
-const unavailable = [
-  ['Organization details', 'Organization name, contact information and address'],
-  ['Email and SMS delivery', 'Email and SMS notification preferences'],
-  ['Journey automation', 'Default duration, automatic vehicle assignment and approval rules'],
-  ['Security policies', 'Session timeout, enforced two-factor authentication and password expiry'],
-  ['Language and formats', 'Language, time zone, date and time formatting'],
-  ['Map configuration', 'Map provider, default coordinates, zoom and tracking interval'],
-  ['Offline preferences', 'A configurable offline mode'],
-]
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme()
@@ -69,19 +60,6 @@ export default function SettingsPage() {
         <CardContent className="flex flex-wrap gap-3">
           <Button asChild variant="outline"><Link href="/profile">My profile</Link></Button>
           <Button asChild variant="outline"><Link href="/change-password">Change password</Link></Button>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader><CardTitle>Unavailable settings</CardTitle><CardDescription>These previous controls are not connected to app behavior. They are disabled until the corresponding features are implemented. Previously saved values are preserved.</CardDescription></CardHeader>
-        <CardContent>
-          <fieldset disabled aria-label="Unavailable settings" className="space-y-4">
-            {unavailable.map(([label, description]) => (
-              <label key={label} className="flex items-start gap-3 text-sm text-muted-foreground">
-                <input type="checkbox" disabled className="mt-1 h-4 w-4 shrink-0" />
-                <span><span className="font-medium">{label} · Unavailable</span><span className="mt-0.5 block">{description}</span></span>
-              </label>
-            ))}
-          </fieldset>
         </CardContent>
       </Card>
     </div>
