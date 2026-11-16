@@ -3,6 +3,7 @@
 import { useId, useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { format } from "date-fns"
 import { notifyError, UserFacingError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
 import { isMissionAudience, MISSION_AUDIENCES, type MissionAudience } from "@/lib/mission-audiences"
@@ -59,19 +60,48 @@ function initials(name?: string | null) {
   return (parts.length >= 2 ? parts[0][0] + parts[parts.length - 1][0] : parts[0].slice(0, 2)).toUpperCase()
 }
 
+/**
+ * Optional control over the dialog, so a page can open it from somewhere other
+ * than the built-in trigger (for example a phone overflow menu) while keeping
+ * one dialog per program. `triggerClassName` lets that page hide the trigger
+ * at sizes where the menu takes over.
+ */
+type DialogControlProps = {
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  triggerClassName?: string
+}
+
+function useDialogState(open: boolean | undefined, onOpenChange: ((open: boolean) => void) | undefined) {
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isControlled = open !== undefined
+  const value = isControlled ? open : internalOpen
+  const setValue = (next: boolean) => {
+    if (!isControlled) setInternalOpen(next)
+    onOpenChange?.(next)
+  }
+  return [value, setValue] as const
+}
+
+// A datetime-local input takes local wall-clock time. Building this from
+// toISOString() gave a UTC time, so the default was off by the officer's
+// UTC offset (an hour in Lagos).
+function defaultDeadline() {
+  const d = new Date(Date.now() + 48 * 60 * 60 * 1000)
+  d.setMinutes(0, 0, 0)
+  return format(d, "yyyy-MM-dd'T'HH:mm")
+}
+
 /** Admin: broadcast an availability request for a program */
-export function RequestAvailabilityButton({ programId, programName }: { programId: string; programName: string }) {
-  const [open, setOpen] = useState(false)
+export function RequestAvailabilityButton({
+  programId, programName, open: openProp, onOpenChange, triggerClassName,
+}: { programId: string; programName: string } & DialogControlProps) {
+  const [open, setOpen] = useDialogState(openProp, onOpenChange)
   const [sending, setSending] = useState(false)
   const [audience, setAudience] = useState<MissionAudience>("all")
   const audienceId = useId()
   const queryClient = useQueryClient()
-  const defaultDeadline = () => {
-    const d = new Date(Date.now() + 48 * 60 * 60 * 1000)
-    d.setMinutes(0, 0, 0)
-    return d.toISOString().slice(0, 16)
-  }
-  const [form, setForm] = useState({ message: "", deadline: defaultDeadline() })
+  const [form, setForm] = useState(() => ({ message: "", deadline: defaultDeadline() }))
 
   const send = async () => {
     setSending(true)
@@ -102,8 +132,14 @@ export function RequestAvailabilityButton({ programId, programName }: { programI
 
   return (
     <>
-      <Button variant="outline" size="sm" className="gap-1 border-orange-300 text-orange-600 hover:bg-orange-50 dark:border-orange-900 dark:text-orange-400 dark:hover:bg-orange-950" onClick={() => setOpen(true)}>
-        <Megaphone className="h-4 w-4" /> <span className="hidden lg:inline">Request Availability</span>
+      <Button
+        variant="outline"
+        size="sm"
+        className={cn("h-9 gap-1 border-orange-300 text-orange-600 hover:bg-orange-50 dark:border-orange-900 dark:text-orange-400 dark:hover:bg-orange-950", triggerClassName)}
+        onClick={() => setOpen(true)}
+        aria-label={`Request availability for ${programName}`}
+      >
+        <Megaphone className="h-4 w-4" aria-hidden="true" /> <span className="hidden lg:inline">Request Availability</span>
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md">
@@ -152,8 +188,10 @@ export function RequestAvailabilityButton({ programId, programName }: { programI
 
 /** Admin: live roster of responses with filtering and bulk program assignment */
 /** `canAssign` (platform administrators) enables bulk-assigning confirmed officers. */
-export function AvailabilityRosterButton({ programId, programName, canAssign = false }: { programId: string; programName: string; canAssign?: boolean }) {
-  const [open, setOpen] = useState(false)
+export function AvailabilityRosterButton({
+  programId, programName, canAssign = false, open: openProp, onOpenChange, triggerClassName,
+}: { programId: string; programName: string; canAssign?: boolean } & DialogControlProps) {
+  const [open, setOpen] = useDialogState(openProp, onOpenChange)
   const [filter, setFilter] = useState<"yes" | "no" | "all">("yes")
   const [search, setSearch] = useState("")
   const [selected, setSelected] = useState<string[]>([])
@@ -270,8 +308,14 @@ export function AvailabilityRosterButton({ programId, programName, canAssign = f
 
   return (
     <>
-      <Button variant="outline" size="sm" className="gap-1" onClick={() => setOpen(true)}>
-        <Users className="h-4 w-4" /> <span className="hidden lg:inline">Roster</span>
+      <Button
+        variant="outline"
+        size="sm"
+        className={cn("h-9 gap-1", triggerClassName)}
+        onClick={() => setOpen(true)}
+        aria-label={`Availability roster for ${programName}`}
+      >
+        <Users className="h-4 w-4" aria-hidden="true" /> <span className="hidden lg:inline">Roster</span>
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

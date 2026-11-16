@@ -1,7 +1,5 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import LiveTrackingMap from '@/components/tracking/LiveTrackingMap'
 
 import { canViewLiveTracking } from '@/lib/utils'
@@ -49,14 +47,14 @@ export default function LiveTrackingPage() {
         </div>
         <h2 className="text-xl font-bold tracking-tight">Access Restricted</h2>
         <p className="mt-2 max-w-md text-muted-foreground">
-          Live Tracking is restricted to Admin, Command, Captain, Vice Captain, and Operations Leadership. Your current role (<span className="font-semibold text-foreground">{currentUser?.role || 'Unassigned'}</span>) does not have clearance.
+          Live tracking is available to Command and leadership.
         </p>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] -mx-3 -mb-4 sm:-mx-4 sm:-mb-6 overflow-hidden bg-background">
+    <div className="flex flex-col h-[calc(100dvh-4rem)] -mx-3 -mb-4 sm:-mx-4 sm:-mb-6 overflow-hidden bg-background">
       <LiveTrackingMap />
     </div>
   )

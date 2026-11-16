@@ -77,9 +77,32 @@ import { OFFICER_ONLINE_WINDOW_MS, OFFICER_PRESENCE_REFRESH_MS } from "@/lib/pre
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { ErrorState } from "@/components/ui/error-state"
 
+const STAT_TILE = "flex min-h-[4.5rem] items-center justify-between gap-3 rounded-xl bg-background/80 backdrop-blur-sm border border-border/60 px-4 py-3.5 shadow-sm"
+const STAT_TILE_LINK = `${STAT_TILE} transition-colors hover:border-primary/40 hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`
+
+function OfficersOnlineTile({ value }: { value: number | null }) {
+  return (
+    <>
+      <div className="min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Officers Online</p>
+        </div>
+        <p className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400 mt-0.5">
+          {value != null ? <CountUp value={value} /> : "—"}
+        </p>
+      </div>
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
+        <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+      </div>
+    </>
+  )
+}
+
 export default function CommandPage() {
   const { data: currentUser, isLoading: userLoading, isError: clearanceUnknown, refetch: refetchCurrentUser, isFetching: refetchingUser } = useCurrentUser()
   const hasAccess = Boolean(currentUser && canAccessCommandCentre(currentUser.role, currentUser.oscar, currentUser.has_admin_access))
+  const canOpenOfficers = isPlatformAdministrator(currentUser?.role, currentUser?.has_admin_access)
   // null = not loaded yet; a failed refresh keeps the last good numbers and flags them.
   const [stats, setStats] = useState<CommandStats | null>(null)
   const [statsStale, setStatsStale] = useState(false)
@@ -92,7 +115,7 @@ export default function CommandPage() {
         const [journeys, officers, incidents] = await Promise.all([
           supabase.from("journeys").select("id", { count: "exact", head: true }).not("status", "in", "(completed,cancelled)").or("is_deleted.is.null,is_deleted.eq.false"),
           supabase.from("users").select("id", { count: "exact", head: true }).gte("last_seen", onlineSince).eq("is_online", true).eq("is_active", true).eq("activation_status", "active").eq("is_directory_hidden", false),
-          supabase.from("incidents").select("id", { count: "exact", head: true }).neq("status", "resolved"),
+          supabase.from("incidents").select("id", { count: "exact", head: true }).not("status", "in", "(resolved,closed)"),
         ])
         const failed = journeys.error || officers.error || incidents.error
         if (failed) throw failed
@@ -192,51 +215,55 @@ export default function CommandPage() {
             Live figures couldn&apos;t refresh{stats ? ' — showing the last known values' : ''}. Retrying automatically.
           </p>
         )}
-        {/* Live telemetry stat cards */}
+        {/* Live telemetry stat cards — each opens the list behind its number */}
         <div className="relative z-10 mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="flex items-center justify-between rounded-xl bg-background/80 backdrop-blur-sm border border-border/60 px-4 py-3.5 shadow-sm">
-            <div>
+          <Link
+            href="/journeys"
+            aria-label={`Active journeys: ${stats ? stats.activeJourneys : "loading"}. Open Journeys`}
+            className={STAT_TILE_LINK}
+          >
+            <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Active Journeys</p>
               <p className="text-2xl font-bold tracking-tight text-foreground mt-0.5">
                 {stats ? <CountUp value={stats.activeJourneys} /> : "—"}
               </p>
             </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500">
-              <Route className="h-5 w-5" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500">
+              <Route className="h-5 w-5" aria-hidden="true" />
             </div>
-          </div>
+          </Link>
 
-          <div className="flex items-center justify-between rounded-xl bg-background/80 backdrop-blur-sm border border-border/60 px-4 py-3.5 shadow-sm">
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Officers Online</p>
-              </div>
-              <p className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400 mt-0.5">
-                {stats ? <CountUp value={stats.onlineOfficers} /> : "—"}
-              </p>
-              {isPlatformAdministrator(currentUser?.role, currentUser?.has_admin_access) && (
-                <Link href="/officers?status=online" className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                  View online officers <ArrowRight className="h-3 w-3" />
-                </Link>
-              )}
+          {/* The officer directory is limited to platform administrators
+              (officers/page.tsx), so only they get a link; Command still sees the count. */}
+          {canOpenOfficers ? (
+            <Link
+              href="/officers?status=online"
+              aria-label={`Officers online: ${stats ? stats.onlineOfficers : "loading"}. View online officers`}
+              className={STAT_TILE_LINK}
+            >
+              <OfficersOnlineTile value={stats?.onlineOfficers ?? null} />
+            </Link>
+          ) : (
+            <div className={STAT_TILE}>
+              <OfficersOnlineTile value={stats?.onlineOfficers ?? null} />
             </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
-              <ShieldCheck className="h-5 w-5" />
-            </div>
-          </div>
+          )}
 
-          <div className="flex items-center justify-between rounded-xl bg-background/80 backdrop-blur-sm border border-border/60 px-4 py-3.5 shadow-sm">
-            <div>
+          <Link
+            href="/incidents?status=open"
+            aria-label={`Open incidents: ${stats ? stats.openIncidents : "loading"}. Open Incidents`}
+            className={STAT_TILE_LINK}
+          >
+            <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Open Incidents</p>
               <p className={`text-2xl font-bold tracking-tight mt-0.5 ${(stats?.openIncidents ?? 0) > 0 ? "text-amber-500" : "text-foreground"}`}>
                 {stats ? <CountUp value={stats.openIncidents} /> : "—"}
               </p>
             </div>
-            <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${(stats?.openIncidents ?? 0) > 0 ? "bg-amber-500/15 text-amber-500" : "bg-muted text-muted-foreground"}`}>
-              <AlertTriangle className="h-5 w-5" />
+            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${(stats?.openIncidents ?? 0) > 0 ? "bg-amber-500/15 text-amber-500" : "bg-muted text-muted-foreground"}`}>
+              <AlertTriangle className="h-5 w-5" aria-hidden="true" />
             </div>
-          </div>
+          </Link>
         </div>
       </div>
 

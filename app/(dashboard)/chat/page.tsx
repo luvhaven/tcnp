@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { startTransition, Suspense, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'next/navigation'
 import { AlertTriangle, MessagesSquare } from 'lucide-react'
@@ -48,7 +48,29 @@ function ChatContent() {
     : requestedProgram ? room.programId === requestedProgram && !room.papaId
       : requestedTeam ? room.team === requestedTeam : false)
   const active = selected ? rooms.find(room => room.id === selected) : requestedRoom || (!hasRequestedRoom ? rooms.find(room => room.kind === 'program') || rooms.find(room => room.kind === 'papa') || rooms[0] : undefined)
-  const selectRoom = (room: ChatRoomSummary) => { setSelection({ id: room.id, requestKey }); setMembersOpen(false) }
+  // Addresses written by selectRoom below. They change useSearchParams like a
+  // navigation would, but they are not one: the workspace (and its remembered
+  // Programs/Teams choices) must not be remounted for them.
+  const [ownKeys, setOwnKeys] = useState<string[]>([])
+  const [workspaceKey, setWorkspaceKey] = useState(requestKey)
+  if (requestKey !== workspaceKey && !ownKeys.includes(requestKey)) setWorkspaceKey(requestKey)
+  const selectRoom = (room: ChatRoomSummary) => {
+    // The picked room goes in the address so a refresh or a shared link opens
+    // it. The other room params named the previous room, and a ?message= seed
+    // or ?highlight= belonged to it, so they go; anything else is kept.
+    const url = new URL(window.location.href)
+    for (const name of ['programId', 'program', 'papaId', 'papa', 'team', 'message', 'highlight']) url.searchParams.delete(name)
+    url.searchParams.set('roomId', room.id)
+    const nextKey = url.searchParams.toString()
+    // One transition with the router's own update for replaceState, so no
+    // render sees the new selection against the old address (or vice versa).
+    startTransition(() => {
+      setOwnKeys(previous => previous.includes(nextKey) ? previous : [...previous, nextKey])
+      setSelection({ id: room.id, requestKey: nextKey })
+      setMembersOpen(false)
+      window.history.replaceState(null, '', url)
+    })
+  }
   const platform = isPlatformAdministrator(me?.role, me?.has_admin_access)
   const loading = userLoading || (Boolean(me) && query.isPending)
   const initialMessage = !selected && !consumedSeeds.includes(requestKey) ? params.get('message') || undefined : undefined
@@ -60,7 +82,7 @@ function ChatContent() {
     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl border bg-card text-primary"><MessagesSquare className="h-5 w-5" /></span><div><h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Chat</h1><p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">Stay connected. Keep everyone in step.</p></div></div>
     {!loading && !query.isError && hasRequestedRoom && !requestedRoom && !selected && <p role="status" className="rounded-xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">This conversation is unavailable. It may be archived, or you may need an invitation. Choose another conversation from the dropdowns.</p>}
     {!loading && me && !me.team && !platform && <details className="rounded-xl border bg-card px-4 py-3"><summary className="cursor-pointer text-sm font-medium">Choose your team</summary><div className="pt-3"><TeamChatRoom joinOnly /></div></details>}
-    <ChatWorkspace key={`${me?.id}:${requestKey}`} rooms={rooms} selectedRoomId={active?.id ?? null} loading={loading}
+    <ChatWorkspace key={`${me?.id}:${workspaceKey}`} rooms={rooms} selectedRoomId={active?.id ?? null} loading={loading}
       error={userUnavailable ? 'Your account could not be loaded. Check your connection and retry.'
         : query.isError ? 'Conversations could not load. Check your connection and retry.'
         : !me && !userLoading ? 'Sign in to load your conversations.' : null}

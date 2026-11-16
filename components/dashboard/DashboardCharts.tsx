@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ErrorState } from "@/components/ui/error-state";
 import {
   ResponsiveContainer,
   BarChart,
@@ -82,6 +83,8 @@ export function DashboardCharts() {
   const [incidentTrendData, setIncidentTrendData] = useState<TimeSeriesDatum[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Bumped by "Try again" to run the loader once more.
+  const [reloadToken, setReloadToken] = useState(0);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [animationKey, setAnimationKey] = useState(0);
@@ -298,7 +301,13 @@ export function DashboardCharts() {
     };
 
     load();
-  }, [supabase]);
+  }, [supabase, reloadToken]);
+
+  const retry = () => {
+    setError(null);
+    setLoading(true);
+    setReloadToken((token) => token + 1);
+  };
 
   if (loading) {
     return (
@@ -315,8 +324,10 @@ export function DashboardCharts() {
       <Card>
         <CardHeader>
           <CardTitle>Operational Analytics</CardTitle>
-          <CardDescription>{error}</CardDescription>
         </CardHeader>
+        <CardContent>
+          <ErrorState className="py-6" title={error} onRetry={retry} />
+        </CardContent>
       </Card>
     );
   }

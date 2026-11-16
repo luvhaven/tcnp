@@ -1,53 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import JourneyStatusTable from "@/components/operations/JourneyStatusTable"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Activity } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
 
 export default function OperationsMonitorPage() {
-    const [isLoading, setIsLoading] = useState(true)
-
-    useEffect(() => {
-        // Simulate initial load
-        const timer = setTimeout(() => setIsLoading(false), 100)
-        return () => clearTimeout(timer)
-    }, [])
-
-    if (isLoading) {
-        return (
-            <div className="space-y-6">
-                <div>
-                    <div className="h-9 w-64 rounded-md bg-muted animate-pulse" />
-                    <div className="mt-2 h-5 w-96 rounded-md bg-muted animate-pulse" />
-                </div>
-
-                <Card>
-                    <CardHeader>
-                        <div className="h-6 w-48 rounded-md bg-muted animate-pulse" />
-                        <div className="h-4 w-80 rounded-md bg-muted animate-pulse mt-2" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
-                            <div className="flex gap-4">
-                                <div className="h-10 flex-1 rounded-md bg-muted animate-pulse" />
-                                <div className="h-10 w-[180px] rounded-md bg-muted animate-pulse" />
-                                <div className="h-10 w-[200px] rounded-md bg-muted animate-pulse" />
-                            </div>
-                            <div className="rounded-md border">
-                                <div className="h-12 border-b bg-muted/50" />
-                                {[...Array(5)].map((_, index) => (
-                                    <div key={index} className="h-16 border-b last:border-b-0 bg-muted/20 animate-pulse" />
-                                ))}
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-        )
-    }
-
+    // The table renders its own skeleton while journeys load; the page frame
+    // has nothing to wait for, so it appears immediately.
     return (
         <div className="space-y-6">
             <PageHeader
@@ -59,7 +19,7 @@ export default function OperationsMonitorPage() {
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <Activity className="h-5 w-5 text-primary" />
+                        <Activity className="h-5 w-5 text-primary" aria-hidden="true" />
                         Live Journey Status
                     </CardTitle>
                     <CardDescription>

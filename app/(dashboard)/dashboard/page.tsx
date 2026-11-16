@@ -16,9 +16,10 @@ import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/l
 import {
   Users, Car, MapPin, AlertTriangle, Download, ChevronRight, ArrowRight, Radio,
   MessageSquare, Zap, Shield, Plane, Landmark, Hotel, Home, Camera,
-  UtensilsCrossed, CheckCircle, BookOpen,
+  UtensilsCrossed, BookOpen, LayoutDashboard, RefreshCw,
 } from "lucide-react"
-import { formatDistanceToNow } from "date-fns"
+import { format, formatDistanceToNow, isThisYear, isToday, isTomorrow, isYesterday } from "date-fns"
+import { PageHeader } from "@/components/ui/page-header"
 import { toast } from "sonner"
 import { usePWAInstall } from "@/hooks/usePWAInstall"
 import { PWAInstallModal } from "@/components/pwa/PWAInstallModal"
@@ -99,6 +100,19 @@ const getStatusIndicatorClass = (status: string) =>
 const getStatusLabel = (status: string) =>
   getCallSignLabel(status) || FALLBACK_STATUS_LABELS[status] || toTitleCase(status)
 
+/** "ETD Today 14:30", "ETD Tomorrow 09:00", "ETD Sat 28 Nov 09:00". A bare time
+ *  was ambiguous for anything not departing today. */
+function formatEtd(etd: string | null | undefined): string | null {
+  if (!etd) return null
+  const date = new Date(etd)
+  if (Number.isNaN(date.getTime())) return null
+  const time = format(date, "HH:mm")
+  if (isToday(date)) return `Today ${time}`
+  if (isTomorrow(date)) return `Tomorrow ${time}`
+  if (isYesterday(date)) return `Yesterday ${time}`
+  return format(date, isThisYear(date) ? "EEE d MMM HH:mm" : "EEE d MMM yyyy HH:mm")
+}
+
 function getUnitActionForRole(role?: string | null, oscar?: string | null) {
   const r = (oscarToRole(oscar) || oscarToRole(role) || oscar || role || "").toLowerCase()
   if (r.includes("alpha")) {
@@ -129,6 +143,18 @@ function getUnitActionForRole(role?: string | null, oscar?: string | null) {
     return { href: "/welfare", label: "Welfare Portal", sub: "Officer welfare & meals", Icon: UtensilsCrossed, color: "text-emerald-500", bg: "bg-emerald-500/10" }
   }
   return null
+}
+
+/** Compact on phones (where it used to be hidden, leaving only a colour dot). */
+function JourneyStatusBadge({ status }: { status: string }) {
+  return (
+    <Badge
+      variant={status === "broken_arrow" ? "destructive" : "secondary"}
+      className="max-w-[7.5rem] px-1.5 py-0 text-[10px] uppercase tracking-wide sm:max-w-none sm:px-2 sm:text-xs"
+    >
+      <span className="min-w-0 truncate">{getStatusLabel(status)}</span>
+    </Badge>
+  )
 }
 
 // ─── Loading skeleton ─────────────────────────────────────────────────────────
@@ -180,6 +206,16 @@ export default function DashboardPage() {
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const { isInstalled, install, platform: pwaplatform } = usePWAInstall()
   const [showInstallModal, setShowInstallModal] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  // Bumped by the Refresh button so the alerts and charts (which load their
+  // own data) reload together with the rest of the page.
+  const [refreshKey, setRefreshKey] = useState(0)
+  // Re-render once a minute so "Updated X ago" stays true while the page is open.
+  const [, setClockTick] = useState(0)
+  useEffect(() => {
+    const id = window.setInterval(() => setClockTick((tick) => tick + 1), 60_000)
+    return () => window.clearInterval(id)
+  }, [])
   const { data: currentUser, isLoading: userLoading, refetch: refetchCurrentUser } = useCurrentUser()
 
   // Global operational summaries contain sensitive journey, Papa, fleet and
@@ -383,6 +419,18 @@ export default function DashboardPage() {
     void loadDashboardData()
   }
 
+  // A quiet reload: the page stays on screen and only the button shows progress.
+  const handleRefresh = async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    setRefreshKey((key) => key + 1)
+    try {
+      await loadDashboardData(true)
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   useEffect(() => {
     if (!userLoading) {
       void loadDashboardData()
@@ -439,38 +487,59 @@ export default function DashboardPage() {
     <div className="space-y-6 page-enter">
 
       {/* ── Page header ──────────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-card via-card/95 to-background p-6 shadow-xs">
-        <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {canViewGlobalDashboard ? "Command Overview" : `${officerUnit} Portal`}
-              </span>
-              {activeProgram && (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+      {/* Up to three actions here (updated time, Refresh, the report button)
+          are ~500px wide and PageHeader never shrinks them, so a side-by-side
+          row squeezed the greeting into the buttons below ~1000px. Keep them
+          under the title until xl, where the title column has room. */}
+      <PageHeader
+        className="sm:flex-col sm:items-start sm:justify-start xl:flex-row xl:items-center xl:justify-between"
+        icon={LayoutDashboard}
+        title={firstName ? `Welcome back, ${firstName}` : canViewGlobalDashboard ? "Command Dashboard" : "Operations Dashboard"}
+        badge={
+          <>
+            <span className="inline-flex items-center whitespace-nowrap rounded-full border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-overline uppercase text-primary">
+              {canViewGlobalDashboard ? "Command Overview" : `${officerUnit} Portal`}
+            </span>
+            {activeProgram && (
+              <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
+                <span className="truncate">
                   {canViewGlobalDashboard && activeProgram.name ? `Latest active program: ${activeProgram.name}` : "Active program"}
                 </span>
-              )}
-            </div>
-            <h1 className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-              {firstName ? `Welcome back, ${firstName}` : canViewGlobalDashboard ? "Command Dashboard" : "Operations Dashboard"}
-            </h1>
-            <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
-              {canViewGlobalDashboard ? (
-                activeProgram ? (
-                  <>Active operational protocol is currently engaged for <span className="font-semibold text-foreground">{activeProgram.name}</span>.</>
-                ) : (
-                  "All systems nominal — stand by for program assignments and journey dispatch."
-                )
-              ) : (
-                <>Operational duty assigned to <span className="font-semibold text-foreground">{officerUnit}</span> • <span className="font-semibold text-foreground">{officerTeam}</span>.</>
-              )}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+              </span>
+            )}
+          </>
+        }
+        description={
+          canViewGlobalDashboard ? (
+            activeProgram ? (
+              <>Active operational protocol is currently engaged for <span className="font-semibold text-foreground">{activeProgram.name}</span>.</>
+            ) : (
+              "All systems nominal — stand by for program assignments and journey dispatch."
+            )
+          ) : (
+            <>Operational duty assigned to <span className="font-semibold text-foreground">{officerUnit}</span> • <span className="font-semibold text-foreground">{officerTeam}</span>.</>
+          )
+        }
+        actions={
+          <>
+            {updatedAt && (
+              // No aria-live: the text ticks every minute without new data.
+              <span className="text-xs text-muted-foreground">
+                Updated {formatDistanceToNow(updatedAt, { addSuffix: true })}
+              </span>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5"
+              onClick={() => void handleRefresh()}
+              disabled={refreshing}
+              aria-label="Refresh dashboard"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} aria-hidden="true" />
+              {refreshing ? "Refreshing" : "Refresh"}
+            </Button>
             {currentUser?.is_active && canDownloadOfficerStatusReport(
               currentUser.role,
               "has_admin_access" in currentUser && currentUser.has_admin_access === true,
@@ -479,9 +548,9 @@ export default function DashboardPage() {
             )}
             {/* Install lives in the app header on every page and in the quick
                 actions below; a third copy here crowded the report button. */}
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {showInstallModal && (
         <PWAInstallModal platform={pwaplatform} onClose={() => setShowInstallModal(false)} />
@@ -515,9 +584,7 @@ export default function DashboardPage() {
                     {getStatusLabel(myAssignment.status)}
                   </Badge>
                   <span className="text-xs text-muted-foreground">
-                    {myAssignment.etd
-                      ? `ETD ${new Date(myAssignment.etd).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                      : "No ETD set"}
+                    {formatEtd(myAssignment.etd) ? `ETD ${formatEtd(myAssignment.etd)}` : "No ETD set"}
                   </span>
                 </div>
               </div>
@@ -531,7 +598,7 @@ export default function DashboardPage() {
       )}
 
       {/* ── Leadership Only: Live alerts ─────────────────────────────────── */}
-      {canViewGlobalDashboard && <JourneyAlerts />}
+      {canViewGlobalDashboard && <JourneyAlerts key={refreshKey} />}
 
       {/* ── Stat cards ────────────────────────────────────────────────────── */}
       {canViewGlobalDashboard ? (
@@ -588,7 +655,7 @@ export default function DashboardPage() {
       {/* ── Leadership Only: Analytics Charts ─────────────────────────────── */}
       {canViewGlobalDashboard && (
         <ErrorBoundary>
-          <DashboardCharts />
+          <DashboardCharts key={refreshKey} />
         </ErrorBoundary>
       )}
 
@@ -636,7 +703,8 @@ export default function DashboardPage() {
                   <li key={journey.id}>
                     <button
                       className="w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:bg-accent/50"
-                      onClick={() => router.push("/journeys")}
+                      // Journeys scrolls to and highlights this journey.
+                      onClick={() => router.push(`/journeys?highlight=${journey.id}`)}
                     >
                       <div
                         className={`h-2.5 w-2.5 shrink-0 rounded-full ${getStatusIndicatorClass(journey.status)}`}
@@ -650,16 +718,15 @@ export default function DashboardPage() {
                           {[journey.cheetahs?.call_sign, journey.cheetahs?.registration_number].filter(Boolean).join(" · ")}
                         </p>
                       </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <Badge
-                          variant={journey.status === "broken_arrow" ? "destructive" : "secondary"}
-                          className="uppercase tracking-wide text-xs px-2 py-0 hidden sm:flex"
-                        >
-                          {getStatusLabel(journey.status)}
-                        </Badge>
-                        <span className="text-[11px] text-muted-foreground whitespace-nowrap">
-                          {isValidDate ? formatDistanceToNow(createdDate!, { addSuffix: true }) : "Just now"}
-                        </span>
+                      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                        {/* Phones stack the status over the time so the label
+                            is never reduced to a colour dot. */}
+                        <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
+                          <JourneyStatusBadge status={journey.status} />
+                          <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                            {isValidDate ? formatDistanceToNow(createdDate!, { addSuffix: true }) : "Just now"}
+                          </span>
+                        </div>
                         <ChevronRight className="h-4 w-4 text-muted-foreground/40" aria-hidden="true" />
                       </div>
                     </button>
@@ -684,9 +751,6 @@ export default function DashboardPage() {
           ) : (
             <ul className="divide-y divide-border/60">
               {myScheduledJourneys.map((journey) => {
-                const createdDate = journey.created_at ? new Date(journey.created_at) : null
-                const isValidDate = createdDate && !isNaN(createdDate.getTime())
-
                 return (
                   <li key={journey.id}>
                     <button
@@ -705,16 +769,13 @@ export default function DashboardPage() {
                           {[journey.cheetahs?.call_sign, journey.cheetahs?.registration_number].filter(Boolean).join(" · ") || "Fleet details pending"}
                         </p>
                       </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <Badge
-                          variant={journey.status === "broken_arrow" ? "destructive" : "secondary"}
-                          className="uppercase tracking-wide text-xs px-2 py-0 hidden sm:flex"
-                        >
-                          {getStatusLabel(journey.status)}
-                        </Badge>
-                        <span className="text-[11px] text-muted-foreground whitespace-nowrap">
-                          {journey.etd ? `ETD ${new Date(journey.etd).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "No ETD"}
-                        </span>
+                      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                        <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
+                          <JourneyStatusBadge status={journey.status} />
+                          <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                            {formatEtd(journey.etd) ? `ETD ${formatEtd(journey.etd)}` : "No ETD"}
+                          </span>
+                        </div>
                         <ChevronRight className="h-4 w-4 text-muted-foreground/40" aria-hidden="true" />
                       </div>
                     </button>

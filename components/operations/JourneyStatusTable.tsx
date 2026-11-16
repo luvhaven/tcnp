@@ -24,9 +24,11 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
-import { formatDistanceToNow } from 'date-fns'
-import { Search, Radio, Clock, Loader2, ChevronDown, Download, Waves, AlertTriangle } from 'lucide-react'
-import { CALL_SIGNS, getCallSignLabel, getCallSignColor, SITREP_CODES, CALL_SIGN_KEY_TO_DB_ENUM, type CallSignKey } from '@/lib/constants/call-signs'
+import { format, formatDistanceToNow } from 'date-fns'
+import { Search, Radio, Clock, Loader2, ChevronDown, Download, AlertTriangle } from 'lucide-react'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
+import { CALL_SIGNS, getCallSignLabel, SITREP_CODES, CALL_SIGN_KEY_TO_DB_ENUM, type CallSignKey } from '@/lib/constants/call-signs'
 import { CallSignChip } from '@/components/ui/call-sign-chip'
 import { toast } from 'sonner'
 import { cn, isAdmin, effectiveOscarRole } from '@/lib/utils'
@@ -69,7 +71,7 @@ interface Journey {
     status_updated_at: string
     created_at: string
     papas: { full_name: string; title: string; flight_number?: string; flight_departure_time?: string; flight_arrival_time?: string } | null
-    cheetahs: { call_sign: string; registration_number: string } | null
+    cheetahs: { call_sign: string | null; registration_number: string | null } | null
     assigned_do: { full_name: string; oscar: string } | null
     duty_officers?: DutyOfficerRow[]
 }
@@ -79,6 +81,10 @@ export default function JourneyStatusTable() {
     const [journeys, setJourneys] = useState<Journey[]>([])
     const [broadcasts, setBroadcasts] = useState<Record<string, LiveBroadcast>>({})
     const [loading, setLoading] = useState(true)
+    // The last load failed. With no journeys on screen this shows an error
+    // instead of "No active journeys", which would be a guess.
+    const [loadFailed, setLoadFailed] = useState(false)
+    const [retrying, setRetrying] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState<string>('all')
     const [programs, setPrograms] = useState<any[]>([])
@@ -99,6 +105,9 @@ export default function JourneyStatusTable() {
     const channelName = useRef(`journey-monitor-${Math.random().toString(36).slice(2)}`).current
     // Debounce timer for INSERT-triggered full reloads
     const insertDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    // True once the profile read succeeds; until then the poll and retry try again,
+    // so a one-off failed read doesn't hide Set Times for the whole visit
+    const currentUserLoadedRef = useRef(false)
 
     useEffect(() => {
         let mounted = true
@@ -155,14 +164,14 @@ export default function JourneyStatusTable() {
                         if (mounted) loadActiveJourneys()
                     }, 500)
 
-                    // Flash effect for visual feedback
-                    const element = document.querySelector(`[data-journey-id="${payload.new?.id}"]`)
-                    if (element) {
+                    // Flash effect for visual feedback (the phone card and the
+                    // table row both carry the id; only one is visible)
+                    document.querySelectorAll(`[data-journey-id="${payload.new?.id}"]`).forEach(element => {
                         element.classList.add('animate-pulse', 'bg-primary/10')
                         setTimeout(() => {
-                            element?.classList.remove('animate-pulse', 'bg-primary/10')
+                            element.classList.remove('animate-pulse', 'bg-primary/10')
                         }, 2000)
-                    }
+                    })
                 }
             )
             .on(
@@ -237,11 +246,10 @@ export default function JourneyStatusTable() {
                         }
                     }))
                     // Flash the affected row + audible cue for traffic / emergency
-                    const el = document.querySelector(`[data-journey-id="${row.journey_id}"]`)
-                    if (el) {
+                    document.querySelectorAll(`[data-journey-id="${row.journey_id}"]`).forEach(el => {
                         el.classList.add('animate-pulse', 'bg-primary/10')
                         setTimeout(() => el.classList.remove('animate-pulse', 'bg-primary/10'), 2000)
-                    }
+                    })
                     if (meta.kind === 'emergency') {
                         try { audioManager.playChime('broken_arrow') } catch { /* ignore */ }
                         toast.error(meta.code, { description: meta.meaning })
@@ -264,7 +272,9 @@ export default function JourneyStatusTable() {
 
         // Reduced polling to 60 seconds as fallback (realtime is primary)
         const pollInterval = setInterval(() => {
-            if (mounted) loadActiveJourneys()
+            if (!mounted) return
+            if (!currentUserLoadedRef.current) loadCurrentUser()
+            loadActiveJourneys()
         }, 60000)
 
         return () => {
@@ -282,10 +292,12 @@ export default function JourneyStatusTable() {
 
             const { data: userData } = await supabase
                 .from('users')
-                .select('id, full_name, role, oscar')
+                .select('id, full_name, role, oscar, has_admin_access')
                 .eq('id', user.id)
                 .single()
 
+            if (!userData) return
+            currentUserLoadedRef.current = true
             setCurrentUser(userData)
 
             // Check if user can update call signs (DO or admin)
@@ -349,6 +361,7 @@ export default function JourneyStatusTable() {
 
             if (seq !== loadSeqRef.current) return
             setJourneys(rawJourneys.map(j => ({ ...j, duty_officers: doMap[j.id] || [] })))
+            setLoadFailed(false)
 
             // Seed the latest live broadcast (traffic / route / emergency) per journey
             // so a monitor opened mid-operation shows the last SITREP, not a blank.
@@ -376,17 +389,26 @@ export default function JourneyStatusTable() {
             }
         } catch (error) {
             console.error('Error loading journeys:', JSON.stringify(error, null, 2))
-            toast.error('Failed to load active journeys')
+            if (seq === loadSeqRef.current) setLoadFailed(true)
+            toast.error('Failed to load active journeys', { id: 'ops-monitor-load-failed' })
         } finally {
             setLoading(false)
         }
     }
 
+    // datetime-local wants the officer's local wall-clock time. toISOString()
+    // is UTC, which shifted every pre-filled time by the UTC offset.
+    const toLocalInput = (iso: string | null) => {
+        if (!iso) return ''
+        const date = new Date(iso)
+        return Number.isNaN(date.getTime()) ? '' : format(date, "yyyy-MM-dd'T'HH:mm")
+    }
+
     const handleSetTimes = (journey: Journey) => {
         setSelectedJourneyForTimes(journey)
         setTimesForm({
-            eta: journey.eta ? new Date(journey.eta).toISOString().slice(0, 16) : '',
-            etd: journey.etd ? new Date(journey.etd).toISOString().slice(0, 16) : '',
+            eta: toLocalInput(journey.eta),
+            etd: toLocalInput(journey.etd),
         })
         setSetTimesDialogOpen(true)
     }
@@ -395,14 +417,22 @@ export default function JourneyStatusTable() {
         if (!selectedJourneyForTimes) return
         setSavingTimes(true)
         try {
-            const { error } = await (supabase as any)
+            // new Date('yyyy-MM-ddTHH:mm') parses as local time, so this is the
+            // exact inverse of toLocalInput above.
+            const { data: updated, error } = await (supabase as any)
                 .from('journeys')
                 .update({
                     eta: timesForm.eta ? new Date(timesForm.eta).toISOString() : null,
                     etd: timesForm.etd ? new Date(timesForm.etd).toISOString() : null,
                 })
                 .eq('id', selectedJourneyForTimes.id)
+                .select('id')
             if (error) throw error
+            // Row-level security refuses silently (no error, no rows), which used
+            // to report "updated" for a change that never happened.
+            if (!updated || updated.length === 0) {
+                throw new Error('These times were not saved. Only leadership or the journey\'s assigned DO can change them.')
+            }
             toast.success('Journey times updated')
             setSetTimesDialogOpen(false)
             setSelectedJourneyForTimes(null)
@@ -485,13 +515,31 @@ export default function JourneyStatusTable() {
 
     const isLeadership = Boolean(currentUser?.role && (isAdmin(currentUser.role, currentUser.has_admin_access) || isAdmin(effectiveOscarRole(currentUser.role, currentUser.oscar))))
 
+    // Mirrors journeys_update_role_scoped (supabase/migrations/20260927120000):
+    // leadership roles, or a DO on this journey whose assignment wasn't rejected.
+    // Everyone else is refused by the database, so the button would only fail.
+    const canEditTimes = (journey: Journey) => {
+        if (isLeadership) return true
+        const uid = currentUser?.id as string | undefined
+        if (!uid) return false
+        const ownRow = journey.duty_officers?.find(d => d.user_id === uid)
+        if (ownRow) return ownRow.status !== 'rejected'
+        return journey.assigned_duty_officer_id === uid || (journey as any).assigned_do_id === uid
+    }
+
+    const query = searchQuery.trim().toLowerCase()
     const filteredJourneys = journeys.filter(journey => {
-        const doNames = journey.duty_officers?.map(d => d.users?.full_name?.toLowerCase() ?? '').join(' ') ??
-            (journey.assigned_do?.full_name?.toLowerCase() ?? '')
-        const matchesSearch =
-            journey.papas?.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            doNames.includes(searchQuery.toLowerCase()) ||
-            journey.cheetahs?.call_sign.toLowerCase().includes(searchQuery.toLowerCase())
+        // `[].join(' ')` is '' (never nullish), so the old `??` fallback to the
+        // legacy lead-DO column was dead code. Search both.
+        const doNames = [
+            ...(journey.duty_officers ?? []).map(d => d.users?.full_name ?? ''),
+            journey.assigned_do?.full_name ?? '',
+        ].join(' ').toLowerCase()
+        const matchesSearch = !query ||
+            (journey.papas?.full_name ?? '').toLowerCase().includes(query) ||
+            doNames.includes(query) ||
+            (journey.cheetahs?.call_sign ?? '').toLowerCase().includes(query) ||
+            (journey.cheetahs?.registration_number ?? '').toLowerCase().includes(query)
 
         const matchesStatus = statusFilter === 'all' || journey.current_call_sign === statusFilter || journey.status === statusFilter
         const matchesProgram = selectedProgram === 'all' || journey.program_id === selectedProgram
@@ -533,9 +581,135 @@ export default function JourneyStatusTable() {
         planned: journeys.filter(j => j.status === 'planned').length,
     }
 
+    // 24-hour time with the day, so a 01:30 ETA tomorrow can't be read as today.
+    const formatWhen = (iso: string | null) => {
+        if (!iso) return null
+        const date = new Date(iso)
+        return Number.isNaN(date.getTime()) ? null : format(date, 'EEE d MMM, HH:mm')
+    }
+
+    const retryLoad = () => {
+        setRetrying(true)
+        if (!currentUserLoadedRef.current) void loadCurrentUser()
+        void loadActiveJourneys().finally(() => setRetrying(false))
+    }
+
+    const filtersActive = query !== '' || statusFilter !== 'all' || selectedProgram !== 'all'
+    const clearFilters = () => {
+        setSearchQuery('')
+        setStatusFilter('all')
+        setSelectedProgram('all')
+    }
+
+    const renderStatus = (journey: Journey) => {
+        const callSign = journey.status || journey.current_call_sign || 'planned'
+        const callSignLabel = getCallSignLabel(callSign) || callSign.replace(/_/g, ' ')
+        const canClick = !!(journey.duty_officers?.some(d => d.user_id === currentUser?.id) || currentUser?.id === journey.assigned_duty_officer_id || currentUser?.id === (journey as any).assigned_do_id)
+        const broadcast = broadcasts[journey.id]
+        return (
+            <>
+                {/* Only the assigned DO can change a call sign. Previously the
+                    read-only case rendered the same button at 70% opacity, which
+                    reads as "disabled control" rather than "status" — so admins
+                    now get a plain chip with no false affordance. */}
+                {canClick ? (
+                    <button
+                        type="button"
+                        onClick={() => handleCallSignClick(journey)}
+                        title={`Update call sign — currently ${callSignLabel}`}
+                        aria-label={`Update call sign, currently ${callSignLabel}`}
+                        className={cn(
+                            "group flex min-h-9 w-full items-center gap-1.5 rounded-full p-0.5 pr-2 text-left transition-all",
+                            "hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        )}
+                    >
+                        <CallSignChip callSign={callSign} />
+                        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-y-0.5" aria-hidden="true" />
+                    </button>
+                ) : (
+                    <CallSignChip callSign={callSign} />
+                )}
+                {/* A Broken Arrow pulses its own badge, not the whole row: a
+                    pulsing row is hard to read and drowns out the rest of the table. */}
+                {callSign === 'broken_arrow' && (
+                    <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-destructive px-2 py-0.5 text-[11px] font-semibold text-white motion-safe:animate-pulse">
+                        <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                        Emergency
+                    </span>
+                )}
+                {/* Latest live SITREP broadcast (traffic / route / emergency).
+                    Rendered through the same chip as the status above so a
+                    "Red Cocktail" here is the exact colour it is everywhere else. */}
+                {broadcast && broadcast.kind !== 'status' && (
+                    <div
+                        className="mt-1.5 flex flex-wrap items-center gap-1.5"
+                        title={broadcast.notes || broadcast.meaning}
+                    >
+                        <CallSignChip callSign={broadcast.key} variant="soft" size="sm" />
+                        <span className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
+                            {formatDistanceToNow(new Date(broadcast.at), { addSuffix: true })}
+                        </span>
+                    </div>
+                )}
+            </>
+        )
+    }
+
+    const renderDOTeam = (journey: Journey) => {
+        const allDOs = journey.duty_officers ?? []
+        if (allDOs.length === 0) {
+            return <span className="text-xs text-muted-foreground">{journey.assigned_do?.full_name || 'Unassigned'}</span>
+        }
+        return (
+            <div className="flex min-w-0 flex-col gap-0.5">
+                {allDOs.map(d => (
+                    <button
+                        key={d.user_id}
+                        type="button"
+                        onClick={() => setSelectedOfficer({
+                            id: d.user_id,
+                            full_name: d.users?.full_name ?? null,
+                            email: '',
+                            phone: null,
+                            oscar: d.users?.oscar ?? null,
+                            role: 'officer',
+                            unit: null,
+                            current_title_id: null,
+                            is_active: true,
+                            activation_status: 'active',
+                            created_at: new Date().toISOString()
+                        })}
+                        className="group -mx-1 flex min-h-8 min-w-0 cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-left text-xs transition-colors hover:bg-accent/50 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        title="View Officer Full Profile"
+                        aria-label={`View profile of ${d.users?.full_name ?? 'this officer'}${d.is_lead ? ', team lead' : ''}`}
+                    >
+                        {d.is_lead && <span className="text-yellow-500" aria-hidden="true">⭐</span>}
+                        <span className={cn('truncate group-hover:underline', d.is_lead && 'font-semibold')}>{d.users?.full_name ?? '—'}</span>
+                        <Badge variant={d.status === 'rejected' ? 'destructive' : d.status === 'acknowledged' ? 'secondary' : 'outline'} className="ml-1 h-4 shrink-0 px-1 text-[9px] leading-none">
+                            {d.status === 'rejected' ? 'Declined' : d.status === 'acknowledged' ? 'Accepted' : 'Pending'}
+                        </Badge>
+                    </button>
+                ))}
+            </div>
+        )
+    }
+
+    const renderTimesButton = (journey: Journey, className?: string) => canEditTimes(journey) ? (
+        <Button
+            variant="outline"
+            size="sm"
+            className={cn('h-9 text-xs', className)}
+            onClick={() => handleSetTimes(journey)}
+            aria-label={`${journey.eta || journey.etd ? 'Edit' : 'Set'} times for ${journey.papas?.full_name ?? 'this journey'}`}
+        >
+            <Clock className="h-3 w-3 mr-1" aria-hidden="true" />
+            {journey.eta || journey.etd ? 'Edit Times' : 'Set Times'}
+        </Button>
+    ) : null
+
     if (loading) {
         return (
-            <div className="space-y-4">
+            <div className="space-y-4" role="status" aria-label="Loading active journeys">
                 {/* Stats strip skeleton */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {[...Array(4)].map((_, i) => (
@@ -549,14 +723,30 @@ export default function JourneyStatusTable() {
                     ))}
                 </div>
                 {/* Filter bar skeleton */}
-                <div className="flex flex-col md:flex-row gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                     <div className="h-10 flex-1 rounded-md skeleton" />
-                    <div className="h-10 w-[180px] rounded-md skeleton" />
-                    <div className="h-10 w-[180px] rounded-md skeleton" />
-                    <div className="h-10 w-24 rounded-md skeleton" />
+                    <div className="h-10 w-full rounded-md skeleton sm:w-[180px]" />
+                    <div className="h-10 w-full rounded-md skeleton sm:w-[180px]" />
+                    <div className="h-10 w-full rounded-md skeleton sm:w-24" />
+                </div>
+                {/* Card skeleton (phones) */}
+                <div className="space-y-3 sm:hidden">
+                    {[...Array(3)].map((_, i) => (
+                        <div key={i} className="space-y-3 rounded-lg border p-3">
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="h-4 w-36 rounded skeleton" />
+                                <div className="h-6 w-20 rounded-full skeleton" />
+                            </div>
+                            <div className="h-3 w-48 rounded skeleton" />
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="h-8 rounded skeleton" />
+                                <div className="h-8 rounded skeleton" />
+                            </div>
+                        </div>
+                    ))}
                 </div>
                 {/* Table skeleton */}
-                <div className="border rounded-lg overflow-hidden">
+                <div className="hidden border rounded-lg overflow-hidden sm:block">
                     <div className="bg-muted/50 px-4 py-3 border-b flex gap-4">
                         {['w-24', 'w-28', 'w-20', 'w-16', 'w-16', 'w-20', 'w-16'].map((w, i) => (
                             <div key={i} className={`h-3 ${w} rounded skeleton`} />
@@ -619,18 +809,19 @@ export default function JourneyStatusTable() {
                 </div>
             </div>
             {/* Filters + Export */}
-            <div className="flex flex-col md:flex-row gap-3">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <div className="relative min-w-0 flex-1 sm:min-w-[220px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
                     <Input
                         placeholder="Search Papa, DO, or Cheetah..."
+                        aria-label="Search journeys by Papa, DO or Cheetah"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="pl-10"
                     />
                 </div>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-[180px]">
+                    <SelectTrigger className="w-full sm:w-[180px]" aria-label="Filter by status">
                         <SelectValue placeholder="Filter by Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -643,7 +834,7 @@ export default function JourneyStatusTable() {
                     </SelectContent>
                 </Select>
                 <Select value={selectedProgram} onValueChange={setSelectedProgram}>
-                    <SelectTrigger className="w-[180px]">
+                    <SelectTrigger className="w-full sm:w-[180px]" aria-label="Filter by program">
                         <SelectValue placeholder="Filter by Program" />
                     </SelectTrigger>
                     <SelectContent>
@@ -668,174 +859,168 @@ export default function JourneyStatusTable() {
                 </Button>
             </div>
 
-            {/* Journey Table */}
-            <div className="table-scroll-wrapper border rounded-lg">
-                <Table>
-                    <TableHeader>
-                        <TableRow className="bg-muted/50">
-                            <TableHead className="font-semibold">Papa</TableHead>
-                            <TableHead className="font-semibold">DO Team</TableHead>
-                            <TableHead className="font-semibold">Status</TableHead>
-                            <TableHead className="font-semibold">ETA</TableHead>
-                            <TableHead className="font-semibold">ETD</TableHead>
-                            <TableHead className="font-semibold">Updated</TableHead>
-                            <TableHead className="font-semibold">Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {filteredJourneys.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                                    <Radio className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                                    <p>No active journeys at the moment</p>
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            filteredJourneys.map((journey) => {
-                                const callSign = journey.status || journey.current_call_sign || 'planned'
-                                const callSignLabel = getCallSignLabel(callSign) || callSign.replace(/_/g, ' ')
-                                const canClick = !!(journey.duty_officers?.some(d => d.user_id === currentUser?.id) || currentUser?.id === journey.assigned_duty_officer_id || currentUser?.id === (journey as any).assigned_do_id)
-                                const isBroken = callSign === 'broken_arrow'
-                                const broadcast = broadcasts[journey.id]
-                                const leadDO = journey.duty_officers?.find(d => d.is_lead) ?? null
-                                const allDOs = journey.duty_officers ?? []
+            {filteredJourneys.length === 0 ? (
+                journeys.length === 0 && loadFailed ? (
+                    <ErrorState
+                        className="rounded-lg border"
+                        title="We couldn't load active journeys"
+                        onRetry={retryLoad}
+                        retrying={retrying}
+                    />
+                ) : (
+                    <EmptyState
+                        className="rounded-lg border"
+                        icon={Radio}
+                        title={journeys.length === 0 ? 'No active journeys at the moment' : 'No journeys match your filters'}
+                        action={filtersActive && journeys.length > 0 ? (
+                            <Button variant="outline" className="h-9" onClick={clearFilters}>Clear filters</Button>
+                        ) : undefined}
+                    />
+                )
+            ) : (
+                <>
+                    {/* Phones: one card per journey. Seven columns don't fit. */}
+                    <ul className="space-y-3 sm:hidden" aria-label="Active journeys">
+                        {filteredJourneys.map((journey) => {
+                            const isBroken = (journey.status || journey.current_call_sign) === 'broken_arrow'
+                            const eta = formatWhen(journey.eta)
+                            const etd = formatWhen(journey.etd)
+                            return (
+                                <li
+                                    key={journey.id}
+                                    data-journey-id={journey.id}
+                                    className={cn(
+                                        "min-w-0 rounded-lg border bg-card p-3 transition-colors duration-300",
+                                        isBroken && "border-destructive/50 bg-destructive/5"
+                                    )}
+                                >
+                                    <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate font-medium">{journey.papas?.full_name || 'Unknown Papa'}</p>
+                                            {(journey.papas?.title || journey.cheetahs?.call_sign) && (
+                                                <p className="truncate text-xs text-muted-foreground">
+                                                    {[journey.papas?.title, journey.cheetahs?.call_sign && `Cheetah ${journey.cheetahs.call_sign}`].filter(Boolean).join(' · ')}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <div className="max-w-full shrink-0">{renderStatus(journey)}</div>
+                                    </div>
+                                    {journey.papas?.flight_number && (
+                                        <div className="mt-1">
+                                            <FlightStatusBadge
+                                                flightNumber={journey.papas.flight_number}
+                                                departureTime={journey.papas.flight_departure_time}
+                                                arrivalTime={journey.papas.flight_arrival_time}
+                                            />
+                                        </div>
+                                    )}
+                                    <div className="mt-2">
+                                        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">DO team</p>
+                                        {renderDOTeam(journey)}
+                                    </div>
+                                    <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                                        <div className="min-w-0 rounded-md bg-muted/40 px-2 py-1.5">
+                                            <dt className="text-muted-foreground">ETA</dt>
+                                            <dd className="font-medium tabular-nums">{eta ?? '—'}</dd>
+                                        </div>
+                                        <div className="min-w-0 rounded-md bg-muted/40 px-2 py-1.5">
+                                            <dt className="text-muted-foreground">ETD</dt>
+                                            <dd className="font-medium tabular-nums">{etd ?? '—'}</dd>
+                                        </div>
+                                    </dl>
+                                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                                        <span className="text-xs text-muted-foreground">
+                                            {journey.status_updated_at
+                                                ? `Updated ${formatDistanceToNow(new Date(journey.status_updated_at), { addSuffix: true })}`
+                                                : 'No status update yet'}
+                                        </span>
+                                        {renderTimesButton(journey)}
+                                    </div>
+                                </li>
+                            )
+                        })}
+                    </ul>
 
-                                return (
-                                    <TableRow
-                                        key={journey.id}
-                                        data-journey-id={journey.id}
-                                        className={cn(
-                                            "hover:bg-muted/30 transition-all duration-300",
-                                            isBroken && "border-destructive/50 bg-destructive/5 animate-pulse"
-                                        )}
-                                    >
-                                        <TableCell>
-                                            <div className="flex flex-col items-start min-w-[140px]">
-                                                <span className="font-medium">{journey.papas?.full_name || 'Unknown Papa'}</span>
-                                                <span className="text-xs text-muted-foreground">{journey.papas?.title}</span>
-                                                {journey.papas?.flight_number && (
-                                                    <FlightStatusBadge
-                                                        flightNumber={journey.papas.flight_number}
-                                                        departureTime={journey.papas.flight_departure_time}
-                                                        arrivalTime={journey.papas.flight_arrival_time}
-                                                    />
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            {allDOs.length > 0 ? (
-                                                <div className="flex flex-col gap-0.5">
-                                                    {allDOs.map(d => (
-                                                        <button
-                                                            key={d.user_id}
-                                                            type="button"
-                                                            onClick={() => setSelectedOfficer({
-                                                                id: d.user_id,
-                                                                full_name: d.users?.full_name ?? null,
-                                                                email: '',
-                                                                phone: null,
-                                                                oscar: d.users?.oscar ?? null,
-                                                                role: 'officer',
-                                                                unit: null,
-                                                                current_title_id: null,
-                                                                is_active: true,
-                                                                activation_status: 'active',
-                                                                created_at: new Date().toISOString()
-                                                            })}
-                                                            className="flex items-center gap-1 text-xs text-left cursor-pointer hover:text-primary transition-colors py-0.5 group rounded px-1 -mx-1 hover:bg-accent/50"
-                                                            title="View Officer Full Profile"
-                                                        >
-                                                            {d.is_lead && <span className="text-yellow-500" title="Team Lead">⭐</span>}
-                                                            <span className={cn(d.is_lead ? 'font-semibold' : '', "group-hover:underline")}>{d.users?.full_name ?? '—'}</span>
-                                                            <Badge variant={d.status === 'rejected' ? 'destructive' : d.status === 'acknowledged' ? 'secondary' : 'outline'} className="ml-1 h-4 px-1 text-[9px] leading-none">
-                                                                {d.status === 'rejected' ? 'Declined' : d.status === 'acknowledged' ? 'Accepted' : 'Pending'}
-                                                            </Badge>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <span className="text-xs text-muted-foreground">{journey.assigned_do?.full_name || 'Unassigned'}</span>
+                    {/* Journey Table (sm and up) */}
+                    <div className="table-scroll-wrapper hidden border rounded-lg sm:block">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="bg-muted/50">
+                                    <TableHead className="font-semibold">Papa</TableHead>
+                                    <TableHead className="font-semibold">DO Team</TableHead>
+                                    <TableHead className="font-semibold">Status</TableHead>
+                                    <TableHead className="font-semibold">ETA</TableHead>
+                                    <TableHead className="font-semibold">ETD</TableHead>
+                                    <TableHead className="font-semibold">Updated</TableHead>
+                                    <TableHead className="font-semibold">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {filteredJourneys.map((journey) => {
+                                    const isBroken = (journey.status || journey.current_call_sign) === 'broken_arrow'
+                                    const eta = formatWhen(journey.eta)
+                                    const etd = formatWhen(journey.etd)
+                                    return (
+                                        <TableRow
+                                            key={journey.id}
+                                            data-journey-id={journey.id}
+                                            className={cn(
+                                                "hover:bg-muted/30 transition-all duration-300",
+                                                isBroken && "border-destructive/50 bg-destructive/5"
                                             )}
-                                        </TableCell>
-                                        <TableCell colSpan={1}>
-                                            {/* Only the assigned DO can change a call sign. Previously the
-                                                read-only case rendered the same button at 70% opacity, which
-                                                reads as "disabled control" rather than "status" — so admins
-                                                now get a plain chip with no false affordance. */}
-                                            {canClick ? (
-                                                <button
-                                                    onClick={() => handleCallSignClick(journey)}
-                                                    title={`Update call sign — currently ${callSignLabel}`}
-                                                    className={cn(
-                                                        "group flex w-full items-center gap-1.5 rounded-full p-0.5 pr-2 text-left transition-all",
-                                                        "hover:bg-muted/60 focus-visible:outline-none"
+                                        >
+                                            <TableCell>
+                                                <div className="flex flex-col items-start min-w-[140px]">
+                                                    <span className="font-medium">{journey.papas?.full_name || 'Unknown Papa'}</span>
+                                                    <span className="text-xs text-muted-foreground">{journey.papas?.title}</span>
+                                                    {journey.papas?.flight_number && (
+                                                        <FlightStatusBadge
+                                                            flightNumber={journey.papas.flight_number}
+                                                            departureTime={journey.papas.flight_departure_time}
+                                                            arrivalTime={journey.papas.flight_arrival_time}
+                                                        />
                                                     )}
-                                                >
-                                                    <CallSignChip callSign={callSign} />
-                                                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-y-0.5" />
-                                                </button>
-                                            ) : (
-                                                <CallSignChip callSign={callSign} />
-                                            )}
-                                            {/* Latest live SITREP broadcast (traffic / route / emergency).
-                                                Rendered through the same chip as the status above so a
-                                                "Red Cocktail" here is the exact colour it is everywhere else. */}
-                                            {broadcast && broadcast.kind !== 'status' && (
-                                                <div
-                                                    className="mt-1.5 flex items-center gap-1.5"
-                                                    title={broadcast.notes || broadcast.meaning}
-                                                >
-                                                    <CallSignChip callSign={broadcast.key} variant="soft" size="sm" />
-                                                    <span className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
-                                                        {formatDistanceToNow(new Date(broadcast.at), { addSuffix: true })}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>{renderDOTeam(journey)}</TableCell>
+                                            <TableCell>{renderStatus(journey)}</TableCell>
+                                            <TableCell>
+                                                {eta ? (
+                                                    <div className="flex items-center gap-1 whitespace-nowrap text-sm tabular-nums">
+                                                        <Clock className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+                                                        {eta}
+                                                    </div>
+                                                ) : <span className="text-muted-foreground text-xs">—</span>}
+                                            </TableCell>
+                                            <TableCell>
+                                                {etd ? (
+                                                    <div className="flex items-center gap-1 whitespace-nowrap text-sm tabular-nums">
+                                                        <Clock className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+                                                        {etd}
+                                                    </div>
+                                                ) : <span className="text-muted-foreground text-xs">—</span>}
+                                            </TableCell>
+                                            <TableCell>
+                                                {journey.status_updated_at ? (
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {formatDistanceToNow(new Date(journey.status_updated_at), { addSuffix: true })}
                                                     </span>
-                                                </div>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {journey.eta ? (
-                                                <div className="flex items-center gap-1 text-sm">
-                                                    <Clock className="h-3 w-3 text-muted-foreground" />
-                                                    {new Date(journey.eta).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                                                </div>
-                                            ) : <span className="text-muted-foreground text-xs">—</span>}
-                                        </TableCell>
-                                        <TableCell>
-                                            {journey.etd ? (
-                                                <div className="flex items-center gap-1 text-sm">
-                                                    <Clock className="h-3 w-3 text-muted-foreground" />
-                                                    {new Date(journey.etd).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                                                </div>
-                                            ) : <span className="text-muted-foreground text-xs">—</span>}
-                                        </TableCell>
-                                        <TableCell>
-                                            {journey.status_updated_at ? (
-                                                <span className="text-xs text-muted-foreground">
-                                                    {formatDistanceToNow(new Date(journey.status_updated_at), { addSuffix: true })}
-                                                </span>
-                                            ) : <span className="text-xs text-muted-foreground">—</span>}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 text-xs"
-                                                onClick={() => handleSetTimes(journey)}
-                                            >
-                                                <Clock className="h-3 w-3 mr-1" />
-                                                {journey.eta ? 'Edit Times' : 'Set Times'}
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                )
-                            })
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
+                                                ) : <span className="text-xs text-muted-foreground">—</span>}
+                                            </TableCell>
+                                            <TableCell>
+                                                {renderTimesButton(journey) ?? <span className="text-xs text-muted-foreground">—</span>}
+                                            </TableCell>
+                                        </TableRow>
+                                    )
+                                })}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </>
+            )}
 
             {/* Summary Stats + Realtime Status */}
-            <div className="flex items-center justify-between text-sm text-muted-foreground border-t pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground border-t pt-4">
                 <span>
                     Showing {filteredJourneys.length} of {journeys.length} active {journeys.length === 1 ? 'journey' : 'journeys'}
                 </span>
@@ -924,8 +1109,9 @@ export default function JourneyStatusTable() {
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
-                            <label className="text-sm font-medium">ETA — Estimated Time of Arrival</label>
+                            <label htmlFor="ops-monitor-eta" className="text-sm font-medium">ETA — Estimated Time of Arrival</label>
                             <input
+                                id="ops-monitor-eta"
                                 type="datetime-local"
                                 value={timesForm.eta}
                                 onChange={(e) => setTimesForm(prev => ({ ...prev, eta: e.target.value }))}
@@ -933,8 +1119,9 @@ export default function JourneyStatusTable() {
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-sm font-medium">ETD — Estimated Time of Departure</label>
+                            <label htmlFor="ops-monitor-etd" className="text-sm font-medium">ETD — Estimated Time of Departure</label>
                             <input
+                                id="ops-monitor-etd"
                                 type="datetime-local"
                                 value={timesForm.etd}
                                 onChange={(e) => setTimesForm(prev => ({ ...prev, etd: e.target.value }))}

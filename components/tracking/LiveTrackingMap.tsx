@@ -195,13 +195,16 @@ export default function LiveTrackingMap() {
   const handleEnableLocation = () => setSharingEnabled(true)
 
   useEffect(() => {
+    // Unique per subscription: a fast remount (navigation, Strict Mode's
+    // double effect) must not join a topic the previous run is still tearing down.
+    const channelSuffix = Math.random().toString(36).slice(2, 10)
     loadData()
     const locationChannel = supabase
-      .channel('user-locations-realtime')
+      .channel(`user-locations-realtime-${channelSuffix}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_locations' }, () => loadUserLocations())
       .subscribe()
     const journeyChannel = supabase
-      .channel('journeys-realtime')
+      .channel(`journeys-realtime-${channelSuffix}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'journeys' }, () => loadJourneys())
       .subscribe()
     const interval = setInterval(() => loadUserLocations(), 30000)

@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,6 +12,8 @@ import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ErrorState } from "@/components/ui/error-state"
 import {
   Users,
   Plus,
@@ -27,9 +30,10 @@ import {
   Sliders,
   UserCheck,
   Eye,
+  PlaneLanding,
 } from "lucide-react"
 import { toast } from "sonner"
-import { notifyError } from '@/lib/notify'
+import { notifyError, UserFacingError } from '@/lib/notify'
 import PapaFormTabs from "@/components/papas/PapaFormTabs"
 import PapaPhotoStep from "@/components/papas/PapaPhotoStep"
 import PapaDetailsView from "@/components/papas/PapaDetailsView"
@@ -47,6 +51,7 @@ type Papa = {
   phone: string
   flight_number?: string
   airline?: string
+  flight_arrival_time?: string | null
   arrival_city?: string
   arrival_country?: string
   nationality?: string
@@ -78,6 +83,26 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingPapa, setEditingPapa] = useState<Papa | null>(null)
   const [search, setSearch] = useState('')
+  // The programme and the arrivals quick filter live in the address bar so a
+  // shared link or a refresh lands on the same view.
+  const searchParams = useSearchParams()
+  const [programmeFilter, setProgrammeFilter] = useState<string>(() => searchParams.get('programme') || 'all')
+  const [arrivingSoon, setArrivingSoon] = useState<boolean>(() => searchParams.get('arriving') === '24h')
+  const writeAddress = (name: 'programme' | 'arriving', value: string | null) => {
+    const url = new URL(window.location.href)
+    if (value) url.searchParams.set(name, value)
+    else url.searchParams.delete(name)
+    window.history.replaceState(null, '', url)
+  }
+  const selectProgramme = (next: string) => {
+    setProgrammeFilter(next)
+    writeAddress('programme', next === 'all' ? null : next)
+  }
+  const toggleArrivingSoon = () => {
+    const next = !arrivingSoon
+    setArrivingSoon(next)
+    writeAddress('arriving', next ? '24h' : null)
+  }
   // After a Papa is created (or from the details view) we walk through photo → details.
   const [viewer, setViewer] = useState<{ papaId: string; step: 'photo' | 'details'; fromCreate?: boolean } | null>(null)
 
@@ -92,7 +117,12 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
     }
   })
 
-  const { data: papas = [] } = useQuery({
+  const {
+    data: papas = [],
+    isError: papasFailed,
+    isFetching: papasFetching,
+    refetch: refetchPapas,
+  } = useQuery({
     queryKey: ['papas'],
     queryFn: async () => {
       // Read every Papa (PostgREST caps a single response), never a silent first page.
@@ -126,12 +156,25 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
 
   const filteredPapas = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return papas
-    return papas.filter((p) =>
-      [p.full_name, p.title, p.nationality, p.phone, p.email, p.flight_number, p.airline]
+    const now = new Date().getTime()
+    const horizon = now + 24 * 60 * 60 * 1000
+    return papas.filter((p) => {
+      if (programmeFilter !== 'all' && p.program_id !== programmeFilter) return false
+      if (arrivingSoon) {
+        const arrival = p.flight_arrival_time ? new Date(p.flight_arrival_time).getTime() : NaN
+        if (Number.isNaN(arrival) || arrival < now || arrival > horizon) return false
+      }
+      if (!q) return true
+      return [p.full_name, p.title, p.nationality, p.phone, p.email, p.flight_number, p.airline]
         .filter(Boolean).join(' ').toLowerCase().includes(q)
-    )
-  }, [papas, search])
+    })
+  }, [papas, search, programmeFilter, arrivingSoon])
+  const hasFilters = !!search || programmeFilter !== 'all' || arrivingSoon
+  const clearFilters = () => {
+    setSearch('')
+    selectProgramme('all')
+    if (arrivingSoon) toggleArrivingSoon()
+  }
 
   const saveMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -177,8 +220,13 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('papas').delete().eq('id', id)
+      // RLS turns a refused delete into "0 rows" rather than an error, so ask
+      // for the deleted row back and treat an empty result as a refusal.
+      const { data, error } = await supabase.from('papas').delete().eq('id', id).select('id')
       if (error) throw error
+      if (!data || data.length === 0) {
+        throw new UserFacingError('You are not allowed to delete this Papa, or it has already been removed.')
+      }
       return id
     },
     onMutate: async (id) => {
@@ -189,13 +237,15 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
       )
       return { previousPapas }
     },
-    onError: (_err, _id, context) => {
+    onSuccess: () => {
+      toast.success('Papa deleted successfully!')
+    },
+    onError: (err, _id, context) => {
       queryClient.setQueryData(['papas'], context?.previousPapas)
-      toast.error('Failed to delete Papa')
+      notifyError(err, 'Failed to delete Papa')
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['papas'] })
-      toast.success('Papa deleted successfully!')
     }
   })
 
@@ -275,19 +325,46 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
             </Badge>
           </div>
 
-          {/* Search bar */}
-          <div className="mt-3 flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          {/* Search and filters */}
+          <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
+            <div className="relative min-w-[12rem] flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <Input
                 placeholder="Search by name, title, nationality, flight number…"
-                className="pl-9 bg-background h-9 text-xs"
+                aria-label="Search Papas"
+                className="pl-9 bg-background h-9 text-base sm:text-xs"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            {search && (
-              <Button variant="ghost" size="sm" onClick={() => setSearch('')} className="text-xs h-9">
+            <Select value={programmeFilter} onValueChange={selectProgramme}>
+              <SelectTrigger className="h-9 w-full bg-background text-xs sm:w-56" aria-label="Filter by programme">
+                <SelectValue placeholder="All programmes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All programmes</SelectItem>
+                {programs.map(p => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+                {/* A programme from the link that is not in the list (deleted, or not visible to you). */}
+                {programmeFilter !== 'all' && !programMap.has(programmeFilter) && (
+                  <SelectItem value={programmeFilter}>Unknown programme</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              variant={arrivingSoon ? 'default' : 'outline'}
+              size="sm"
+              aria-pressed={arrivingSoon}
+              onClick={toggleArrivingSoon}
+              className="h-9 gap-1.5 text-xs"
+            >
+              <PlaneLanding className="h-3.5 w-3.5" aria-hidden="true" />
+              Arriving in the next 24 hours
+            </Button>
+            {hasFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="text-xs h-9">
                 Clear
               </Button>
             )}
@@ -295,16 +372,35 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
         </CardHeader>
 
         <CardContent className="p-4 sm:p-6">
-          {filteredPapas.length === 0 ? (
+          {papasFailed && papas.length > 0 && (
+            <ErrorState
+              className="mb-4 rounded-xl border border-destructive/30 py-4"
+              title="Couldn't refresh the Papa list"
+              description="Showing the last list we loaded."
+              onRetry={() => { void refetchPapas() }}
+              retrying={papasFetching}
+            />
+          )}
+          {papasFailed && papas.length === 0 ? (
+            <ErrorState
+              title="Couldn't load Papas"
+              onRetry={() => { void refetchPapas() }}
+              retrying={papasFetching}
+            />
+          ) : filteredPapas.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="h-12 w-12 rounded-2xl bg-muted/60 flex items-center justify-center text-muted-foreground/60 mb-3">
                 <Users className="h-6 w-6" />
               </div>
-              <p className="text-sm font-semibold">{search ? 'No matching Papas found' : 'No Papas registered'}</p>
+              <p className="text-sm font-semibold">{hasFilters ? 'No matching Papas found' : 'No Papas registered'}</p>
               <p className="text-xs text-muted-foreground max-w-sm mt-1">
-                {search ? `No results matched "${search}". Try checking the spelling or search term.` : 'Register guest ministers to track flights, stage preferences, and hotel nests.'}
+                {search
+                  ? `No results matched "${search}". Try checking the spelling or search term.`
+                  : hasFilters
+                    ? 'No Papas match these filters. Try another programme or clear the filters.'
+                    : 'Register guest ministers to track flights, stage preferences, and hotel nests.'}
               </p>
-              {canManage && !search && (
+              {canManage && !hasFilters && (
                 <Button className="mt-4 gap-1.5 text-xs font-semibold" size="sm" onClick={openCreateDialog}>
                   <Plus className="h-3.5 w-3.5" />
                   Add First Papa
@@ -393,25 +489,25 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
                           {(papa.needs_water_on_stage || papa.has_slides || papa.mic_preference || (papa.entourage_count || 0) > 0) && (
                             <div className="mt-2 flex flex-wrap items-center gap-1.5">
                               {papa.needs_water_on_stage && (
-                                <Badge variant="secondary" className="text-[9px] font-medium gap-1 py-0 h-4.5 bg-sky-500/10 text-sky-600 dark:text-sky-400 border-0">
+                                <Badge variant="secondary" className="text-[11px] font-medium gap-1 py-0 h-5 bg-sky-500/10 text-sky-600 dark:text-sky-400 border-0">
                                   <Droplets className="h-2.5 w-2.5" />
                                   Stage Water ({papa.water_temperature || "Room"})
                                 </Badge>
                               )}
                               {papa.has_slides && (
-                                <Badge variant="secondary" className="text-[9px] font-medium gap-1 py-0 h-4.5 bg-primary/10 text-primary border-0">
+                                <Badge variant="secondary" className="text-[11px] font-medium gap-1 py-0 h-5 bg-primary/10 text-primary border-0">
                                   <Sliders className="h-2.5 w-2.5" />
                                   Slides Ready
                                 </Badge>
                               )}
                               {papa.mic_preference && (
-                                <Badge variant="secondary" className="text-[9px] font-medium gap-1 py-0 h-4.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-0">
+                                <Badge variant="secondary" className="text-[11px] font-medium gap-1 py-0 h-5 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-0">
                                   <Mic className="h-2.5 w-2.5" />
                                   Mic: {papa.mic_preference}
                                 </Badge>
                               )}
                               {(papa.entourage_count || 0) > 0 && (
-                                <Badge variant="secondary" className="text-[9px] font-medium gap-1 py-0 h-4.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-0">
+                                <Badge variant="secondary" className="text-[11px] font-medium gap-1 py-0 h-5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-0">
                                   <Users className="h-2.5 w-2.5" />
                                   Entourage: {papa.entourage_count}
                                 </Badge>
@@ -423,25 +519,25 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
 
                       {/* Actions */}
                       <div className="flex shrink-0 items-center gap-1.5 self-end sm:self-center pt-2 sm:pt-0 border-t sm:border-t-0 border-border/40 w-full sm:w-auto justify-end">
-                        <Button variant="outline" size="sm" onClick={() => setViewer({ papaId: papa.id, step: 'details' })} className="h-8 gap-1 text-xs">
-                          <Eye className="h-3.5 w-3.5" />
+                        <Button variant="outline" size="sm" onClick={() => setViewer({ papaId: papa.id, step: 'details' })} className="h-9 gap-1 text-xs" aria-label={`View ${papa.full_name}`}>
+                          <Eye className="h-3.5 w-3.5" aria-hidden="true" />
                           <span className="hidden sm:inline">View</span>
                         </Button>
                         {papa.phone && (
-                          <a href={`tel:${papa.phone}`} className="inline-flex">
-                            <Button variant="outline" size="sm" className="h-8 gap-1 text-xs text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10">
-                              <Phone className="h-3.5 w-3.5" />
+                          <Button asChild variant="outline" size="sm" className="h-9 gap-1 text-xs text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10">
+                            <a href={`tel:${papa.phone}`} aria-label={`Call ${papa.full_name}`}>
+                              <Phone className="h-3.5 w-3.5" aria-hidden="true" />
                               <span className="hidden sm:inline">Call</span>
-                            </Button>
-                          </a>
+                            </a>
+                          </Button>
                         )}
                         {canManage && (
                           <>
-                            <Button variant="ghost" size="icon" onClick={() => handleEdit(papa)} className="h-8 w-8 hover:bg-primary/10" aria-label={`Edit ${papa.full_name}`}>
-                              <Edit className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground" />
+                            <Button variant="ghost" size="icon" onClick={() => handleEdit(papa)} className="h-9 w-9 hover:bg-primary/10" aria-label={`Edit ${papa.full_name}`}>
+                              <Edit className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground" aria-hidden="true" />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDelete(papa.id)} className="h-8 w-8 hover:bg-destructive/10 text-destructive" aria-label={`Delete ${papa.full_name}`}>
-                              <Trash2 className="h-3.5 w-3.5" />
+                            <Button variant="ghost" size="icon" onClick={() => handleDelete(papa.id)} className="h-9 w-9 hover:bg-destructive/10 text-destructive" aria-label={`Delete ${papa.full_name}`}>
+                              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                             </Button>
                           </>
                         )}
@@ -496,6 +592,7 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
               papa={viewerPapa}
               programName={viewerPapa.program_id ? programMap.get(viewerPapa.program_id) : null}
               canManage={canManage}
+              canViewPassport={canManage}
               onChangePhoto={() => setViewer({ papaId: viewerPapa.id, step: 'photo' })}
               onEdit={() => {
                 setViewer(null)

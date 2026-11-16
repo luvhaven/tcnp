@@ -32,11 +32,14 @@ import {
   Pencil,
   Trash2,
   History,
-  Route
+  Route,
+  Search
 } from "lucide-react"
 import { JourneyTimelineDialog } from "@/components/journeys/JourneyTimelineDialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { formatDistanceToNow } from "date-fns"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useConfirm } from "@/components/providers/ConfirmProvider"
+import { format, formatDistanceToNow, isValid } from "date-fns"
 import { toast } from "sonner"
 import { notifyError } from '@/lib/notify'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -107,6 +110,7 @@ type Journey = {
   notes: string | null
   created_at: string
   updated_at?: string | null
+  is_deleted?: boolean | null
   eta: string | null
   etd: string | null
   papas: { full_name: string; title: string } | null
@@ -121,6 +125,25 @@ type Journey = {
 // DO sent a later call sign.
 const FINISHED_JOURNEY_STATUSES = new Set(['completed', 'cancelled'])
 const isActiveJourneyStatus = (status?: string | null) => !!status && !FINISHED_JOURNEY_STATUSES.has(status)
+
+type JourneyTab = 'active' | 'completed'
+const resolveJourneyTab = (value: string | null): JourneyTab => value === 'completed' ? 'completed' : 'active'
+
+/** ETD as a timestamp for sorting; journeys without a usable ETD sort last. */
+const etdSortKey = (journey: Journey) => {
+  const time = journey.etd ? new Date(journey.etd).getTime() : NaN
+  return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time
+}
+
+const formatEtd = (etd: string | null) => {
+  if (!etd) return 'No ETD'
+  const date = new Date(etd)
+  return isValid(date) ? `ETD: ${format(date, 'EEE d MMM, HH:mm')}` : 'No ETD'
+}
+
+// Realtime sends one event per changed row; a DO sending a call sign can touch
+// several rows at once. Wait for the burst to settle and reload once.
+const REALTIME_RELOAD_DELAY_MS = 1000
 
 export default function JourneysClient({
   initialJourneys,
@@ -141,7 +164,10 @@ export default function JourneysClient({
   initialEagleSquares: any[]
 }) {
   const supabase = createClient()
-  const [journeys, setJourneys] = useState<Journey[]>(initialJourneys ?? [])
+  // The server's first page does not exclude soft-deleted journeys; hide them
+  // here and re-read that page (below) so "Load more" offsets line up.
+  const [journeys, setJourneys] = useState<Journey[]>(() => (initialJourneys ?? []).filter(j => j.is_deleted !== true))
+  const serverJourneysIncludedDeleted = useRef((initialJourneys ?? []).some(j => j.is_deleted === true))
   const [papas, setPapas] = useState<any[]>(initialPapas)
   const [cheetahs, setCheetahs] = useState<any[]>(initialCheetahs)
   const [programs, setPrograms] = useState<any[]>(initialPrograms)
@@ -189,6 +215,45 @@ export default function JourneysClient({
   const [doSearch, setDoSearch] = useState('')
   const searchParams = useSearchParams()
   const [pulsingJourneyId, setPulsingJourneyId] = useState<string | null>(null)
+  const confirm = useConfirm()
+
+  // The tab, search and programme live in the address bar, so a link or a
+  // refresh lands on the same view.
+  const [activeTab, setActiveTab] = useState<JourneyTab>(() => resolveJourneyTab(searchParams.get('tab')))
+  const [journeySearch, setJourneySearch] = useState(() => searchParams.get('q') ?? '')
+  const [programmeFilter, setProgrammeFilter] = useState(() => searchParams.get('programme') || 'all')
+  const writeAddress = (name: 'tab' | 'q' | 'programme', value: string | null) => {
+    const url = new URL(window.location.href)
+    if (value) url.searchParams.set(name, value)
+    else url.searchParams.delete(name)
+    // A notification's ?highlight= has done its job once the view changes;
+    // leaving it would re-scroll to that journey on every filter change.
+    url.searchParams.delete('highlight')
+    window.history.replaceState(null, '', url)
+  }
+  const selectTab = (next: string) => {
+    const tab = resolveJourneyTab(next)
+    setActiveTab(tab)
+    writeAddress('tab', tab === 'active' ? null : tab)
+  }
+  const changeSearch = (next: string) => {
+    setJourneySearch(next)
+    writeAddress('q', next.trim() ? next : null)
+  }
+  const selectProgramme = (next: string) => {
+    setProgrammeFilter(next)
+    writeAddress('programme', next === 'all' ? null : next)
+  }
+  const clearFilters = () => {
+    setJourneySearch('')
+    setProgrammeFilter('all')
+    const url = new URL(window.location.href)
+    url.searchParams.delete('q')
+    url.searchParams.delete('programme')
+    url.searchParams.delete('highlight')
+    window.history.replaceState(null, '', url)
+  }
+  const hasFilters = journeySearch.trim() !== '' || programmeFilter !== 'all'
 
   const filteredDOOfficers = programOfficers
     .filter(officer => !['captain', 'head_of_operations'].includes(officer.role))
@@ -317,8 +382,10 @@ export default function JourneysClient({
     }
     init()
     if (serverJourneysMissing.current) void loadJourneys(false)
+    else if (serverJourneysIncludedDeleted.current) void loadJourneys(false, false)
 
     // Subscribe to real-time updates
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null
     const channel = supabase
       .channel(`journeys_changes_${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'journeys' }, () => {
@@ -326,11 +393,17 @@ export default function JourneysClient({
         // throwing the user back to page one on each DO call sign.
         // Realtime refreshes are background work. Their failures must not
         // emit a second, contradictory toast after a successful create/update.
-        void loadJourneys(false, false, loadedCountRef.current)
+        // Debounced so a burst of changes triggers a single reload.
+        if (reloadTimer) clearTimeout(reloadTimer)
+        reloadTimer = setTimeout(() => {
+          reloadTimer = null
+          void loadJourneys(false, false, loadedCountRef.current)
+        }, REALTIME_RELOAD_DELAY_MS)
       })
       .subscribe()
 
     return () => {
+      if (reloadTimer) clearTimeout(reloadTimer)
       supabase.removeChannel(channel)
     }
   }, [])
@@ -354,6 +427,8 @@ export default function JourneysClient({
         eagle_squares (name, code),
         programs (name, status)
       `)
+        // Soft-deleted journeys are hidden, as in My Operations and Ops Monitor.
+        .or('is_deleted.is.null,is_deleted.eq.false')
         .order('created_at', { ascending: false })
         .range(rangeFrom, rangeTo)
 
@@ -698,6 +773,8 @@ export default function JourneysClient({
       ])
 
       toast.success(`Call-sign ${newStatus.toUpperCase()} executed!`)
+      // Close the dialog too: clearing the journey alone left an empty dialog open.
+      setCallSignDialogOpen(false)
       setSelectedJourney(null)
       resetPage()
       loadJourneys(false)
@@ -762,12 +839,61 @@ export default function JourneysClient({
       },
     }
     const workflow = workflows[type] ?? workflows.airport_to_nest_to_theatre
-    return workflow[currentStatus] ?? []
+    // Statuses a type's map leaves out (e.g. cocktail after an Eagle Square
+    // escort) fall back to the default workflow, so Broken Arrow and Cancel
+    // stay available on every active status.
+    return workflow[currentStatus] ?? workflows.airport_to_nest_to_theatre[currentStatus] ?? []
   }
 
-  const canUpdateSelectedJourney = selectedJourney && resolvedRole && resolvedUserId
-    ? canManageJourney(resolvedRole, selectedJourney.assigned_do_id === resolvedUserId)
+  // One rule for opening the call-sign dialog, showing its actions and
+  // executing a call sign (handleCallSign applies the same check).
+  const canUpdateJourney = (journey: Journey | null) => journey && resolvedRole && resolvedUserId
+    ? canManageJourney(resolvedRole, journey.assigned_do_id === resolvedUserId)
     : false
+  const canUpdateSelectedJourney = canUpdateJourney(selectedJourney)
+
+  const openCallSignDialog = (journey: Journey) => {
+    setSelectedJourney(journey)
+    setCallSignDialogOpen(true)
+  }
+
+  // Broken Arrow raises an incident and Cancelled ends the journey: ask first.
+  const executeCallSign = async (journey: Journey, callSign: string) => {
+    if (callSign === 'broken_arrow' && !await confirm({
+      title: 'Declare Broken Arrow?',
+      message: `This marks the journey for ${journey.papas?.title ?? ''} ${journey.papas?.full_name ?? 'this Papa'} as an incident (BROKEN ARROW).`.replace(/\s+/g, ' '),
+      confirmText: 'Declare Broken Arrow',
+      // Not 'destructive': that variant plays the delete animation.
+    })) return
+    if (callSign === 'cancelled' && !await confirm({
+      title: 'Cancel this journey?',
+      message: `The journey for ${journey.papas?.title ?? ''} ${journey.papas?.full_name ?? 'this Papa'} will be marked Cancelled and leave the active list.`.replace(/\s+/g, ' '),
+      confirmText: 'Cancel journey',
+      cancelText: 'Keep journey',
+    })) return
+    await handleCallSign(journey, callSign)
+  }
+
+  const matchesJourneyFilters = (journey: Journey) => {
+    if (programmeFilter !== 'all' && journey.program_id !== programmeFilter) return false
+    const q = journeySearch.trim().toLowerCase()
+    if (!q) return true
+    return [
+      journey.papas?.title,
+      journey.papas?.full_name,
+      journey.assigned_do?.full_name,
+      journey.cheetahs?.call_sign,
+      journey.cheetahs?.registration_number,
+      getStatusLabel(journey.status),
+    ].filter(Boolean).join(' ').toLowerCase().includes(q)
+  }
+  const allActiveJourneys = journeys.filter(j => isActiveJourneyStatus(j.status))
+  const allFinishedJourneys = journeys.filter(j => ['completed', 'cancelled'].includes(j.status))
+  // Soonest ETD first; journeys without an ETD after them, newest first.
+  const activeJourneys = allActiveJourneys
+    .filter(matchesJourneyFilters)
+    .sort((a, b) => etdSortKey(a) - etdSortKey(b) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  const finishedJourneys = allFinishedJourneys.filter(matchesJourneyFilters)
 
   if (loading) {
     return (
@@ -878,11 +1004,46 @@ export default function JourneysClient({
       </StatGrid>
 
       {/* Journeys Tabs */}
-      <Tabs defaultValue="active" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={selectTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="active">Active Journeys</TabsTrigger>
           <TabsTrigger value="completed">Completed / Archived</TabsTrigger>
         </TabsList>
+
+        {/* Search and programme filter apply to both tabs. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="relative min-w-[12rem] flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <Input
+              type="search"
+              aria-label="Search journeys"
+              placeholder="Search Papa, DO or call sign…"
+              className="h-9 bg-background pl-9 text-base sm:text-sm"
+              value={journeySearch}
+              onChange={(e) => changeSearch(e.target.value)}
+            />
+          </div>
+          <Select value={programmeFilter} onValueChange={selectProgramme}>
+            <SelectTrigger className="h-9 w-full bg-background sm:w-56" aria-label="Filter by programme">
+              <SelectValue placeholder="All programmes" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All programmes</SelectItem>
+              {programs.map((program: any) => (
+                <SelectItem key={program.id} value={program.id}>{program.name}</SelectItem>
+              ))}
+              {/* A programme from the link that is not in the list (deleted, or not visible to you). */}
+              {programmeFilter !== 'all' && !programs.some((program: any) => program.id === programmeFilter) && (
+                <SelectItem value={programmeFilter}>Unknown programme</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+          {hasFilters && (
+            <Button variant="ghost" size="sm" className="h-9" onClick={clearFilters}>
+              Clear
+            </Button>
+          )}
+        </div>
 
         <TabsContent value="active" className="space-y-4">
           <Card>
@@ -893,11 +1054,11 @@ export default function JourneysClient({
             <CardContent>
               {journeysLoadFailed && journeys.length === 0 ? (
                 <ErrorState title="Couldn't load journeys" onRetry={() => { setLoading(true); void loadJourneys(false) }} />
-              ) : journeys.filter(j => isActiveJourneyStatus(j.status)).length === 0 ? (
+              ) : allActiveJourneys.length === 0 ? (
                 <EmptyState
                   icon={MapPin}
                   title="No active journeys"
-                  description="Create a new journey to get started"
+                  description={canCreateJourney ? "Create a new journey to get started" : "Journeys will appear here once they are planned."}
                   action={canCreateJourney && (
                     <Button onClick={() => setCreateDialogOpen(true)}>
                       <Plus className="mr-2 h-4 w-4" />
@@ -905,38 +1066,65 @@ export default function JourneysClient({
                     </Button>
                   )}
                 />
+              ) : activeJourneys.length === 0 ? (
+                <EmptyState
+                  icon={Search}
+                  title="No active journeys match"
+                  description="Try another search or programme."
+                  action={<Button variant="outline" className="h-9" onClick={clearFilters}>Clear filters</Button>}
+                />
               ) : (
                 <div className="space-y-4">
-                  {journeys
-                    .filter(j => isActiveJourneyStatus(j.status))
-                    .map((journey) => (
+                  {activeJourneys
+                    .map((journey) => {
+                      // Only people the call-sign dialog would accept can open it.
+                      const canOpen = canUpdateJourney(journey)
+                      return (
                       <div
                         key={journey.id}
                         id={`journey-${journey.id}`}
                         className={cn(
-                          "flex flex-col gap-4 rounded-lg border p-4 transition-all hover:bg-accent/50 hover:shadow-md cursor-pointer animate-slide-up",
+                          "flex flex-col gap-4 rounded-lg border p-4 transition-all animate-slide-up",
+                          canOpen && "cursor-pointer hover:bg-accent/50 hover:shadow-md",
                           pulsingJourneyId === journey.id && "ring-2 ring-primary animate-pulse-highlight"
                         )}
-                        onClick={() => {
-                          setSelectedJourney(journey)
-                          setCallSignDialogOpen(true)
-                        }}
+                        // The card stays a plain container so its History/Edit/Delete
+                        // buttons remain separate controls; the status badge below is
+                        // the real button for keyboard and screen-reader users.
+                        onClick={canOpen ? () => openCallSignDialog(journey) : undefined}
                       >
                         {/* Header Row: Status & Time */}
                         <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex min-w-0 flex-wrap items-center gap-3">
-                            <Badge
-                              variant="secondary"
-                              className={cn(
-                                getStatusColor(journey.status),
-                                "px-3 py-1 text-sm font-medium text-white"
-                              )}
-                            >
-                              {getStatusLabel(journey.status)}
-                            </Badge>
+                            {(() => {
+                              const badge = (
+                                <Badge
+                                  variant="secondary"
+                                  className={cn(
+                                    getStatusColor(journey.status),
+                                    "px-3 py-1 text-sm font-medium text-white"
+                                  )}
+                                >
+                                  {getStatusLabel(journey.status)}
+                                </Badge>
+                              )
+                              return canOpen ? (
+                                <button
+                                  type="button"
+                                  className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  aria-label={`Execute call-sign for ${[journey.papas?.title, journey.papas?.full_name].filter(Boolean).join(' ') || 'this journey'} (status: ${getStatusLabel(journey.status)})`}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    openCallSignDialog(journey)
+                                  }}
+                                >
+                                  {badge}
+                                </button>
+                              ) : badge
+                            })()}
                             <span className="text-sm text-muted-foreground flex items-center gap-1">
                               <Clock className="h-3 w-3" />
-                              {journey.etd ? `ETD: ${new Date(journey.etd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'No ETD'}
+                              {formatEtd(journey.etd)}
                             </span>
                           </div>
 
@@ -947,7 +1135,7 @@ export default function JourneysClient({
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 hover:bg-muted text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                              className="h-9 w-9 hover:bg-muted text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 setTimelineJourneyId(journey.id)
@@ -963,7 +1151,7 @@ export default function JourneysClient({
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8 hover:bg-muted"
+                                  className="h-9 w-9 hover:bg-muted"
                                   onClick={(e) => handleEditClick(journey, e)}
                                   title="Edit Journey"
                                 >
@@ -973,7 +1161,7 @@ export default function JourneysClient({
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8 hover:bg-destructive/10 text-destructive hover:text-destructive"
+                                  className="h-9 w-9 hover:bg-destructive/10 text-destructive hover:text-destructive"
                                   onClick={(e) => handleDeleteClick(journey, e)}
                                   title="Delete Journey"
                                 >
@@ -1043,7 +1231,8 @@ export default function JourneysClient({
                           </div>
                         </div>
                       </div>
-                    ))}
+                      )
+                    })}
                 </div>
               )}
               {hasMore && (
@@ -1065,8 +1254,7 @@ export default function JourneysClient({
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {journeys
-                  .filter(j => ['completed', 'cancelled'].includes(j.status))
+                {finishedJourneys
                   .map((journey) => (
                     <div
                       key={journey.id}
@@ -1094,7 +1282,7 @@ export default function JourneysClient({
                         <Button aria-label="View timeline"
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 hover:bg-muted text-blue-600"
+                          className="h-9 w-9 hover:bg-muted text-blue-600"
                           onClick={(e) => {
                             e.stopPropagation()
                             setTimelineJourneyId(journey.id)
@@ -1108,7 +1296,7 @@ export default function JourneysClient({
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 hover:bg-destructive/10 text-destructive hover:text-destructive"
+                            className="h-9 w-9 hover:bg-destructive/10 text-destructive hover:text-destructive"
                             onClick={(e) => handleDeleteClick(journey, e)}
                             title="Delete Journey"
                           >
@@ -1122,9 +1310,17 @@ export default function JourneysClient({
                       </div>
                     </div>
                   ))}
-                {!journeysLoadFailed && journeys.filter(j => ['completed', 'cancelled'].includes(j.status)).length === 0 && (
+                {journeysLoadFailed && journeys.length === 0 && (
+                  <ErrorState title="Couldn't load journeys" onRetry={() => { setLoading(true); void loadJourneys(false) }} />
+                )}
+                {!journeysLoadFailed && finishedJourneys.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
-                    No completed journeys found
+                    {allFinishedJourneys.length > 0 ? (
+                      <div className="flex flex-col items-center gap-3">
+                        <span>No completed journeys match these filters</span>
+                        <Button variant="outline" className="h-9" onClick={clearFilters}>Clear filters</Button>
+                      </div>
+                    ) : 'No completed journeys found'}
                   </div>
                 )}
                 {hasMore && (
@@ -1388,12 +1584,12 @@ export default function JourneysClient({
                 {selectedJourney.papa_id && <DutyJourneyActions journey={selectedJourney} onChanged={() => { setSelectedJourney(null); void loadJourneys(false) }} />}
                 <Label>Available Call-Signs:</Label>
                 <div className="grid gap-2">
-                  {getAvailableCallSigns(selectedJourney.status).filter(sign => !selectedJourney.papa_id || sign !== 'completed').map((callSign) => (
+                  {getAvailableCallSigns(selectedJourney.status, selectedJourney.journey_type).filter(sign => !selectedJourney.papa_id || sign !== 'completed').map((callSign) => (
                     <Button
                       key={callSign}
                       variant={callSign === 'broken_arrow' ? 'destructive' : 'outline'}
                       className="justify-start"
-                      onClick={() => handleCallSign(selectedJourney, callSign)}
+                      onClick={() => { void executeCallSign(selectedJourney, callSign) }}
                     >
                       {callSign === 'first_course' && <Navigation className="mr-2 h-4 w-4" />}
                       {callSign === 'chapman' && <Flag className="mr-2 h-4 w-4" />}

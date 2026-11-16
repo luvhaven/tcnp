@@ -1,7 +1,7 @@
 "use client"
 
 import { useReloadOnDeletion } from "@/hooks/useDashboardDeletions"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertCircle,
   CalendarClock,
@@ -179,6 +179,21 @@ export default function PapaFlightMonitor({
   const [liveChecks, setLiveChecks] = useState<Record<string, LiveCheck>>({})
   const [refreshingKey, setRefreshingKey] = useState<string | null>(null)
   const [autoRefresh, setAutoRefresh] = useState(true)
+  const listRef = useRef<HTMLDivElement>(null)
+  const detailRef = useRef<HTMLElement>(null)
+
+  // On phones the detail panel sits below the list, so a tap would otherwise
+  // change content the officer cannot see. Side-by-side layouts are left alone.
+  const selectFlight = useCallback((key: string) => {
+    setSelectedKey(key)
+    window.requestAnimationFrame(() => {
+      const list = listRef.current
+      const detail = detailRef.current
+      if (!list || !detail) return
+      const panelIsBelowList = detail.getBoundingClientRect().top >= list.getBoundingClientRect().bottom - 1
+      if (panelIsBelowList) detail.scrollIntoView({ behavior: "smooth", block: "start" })
+    })
+  }, [])
 
   const loadFlights = useCallback(async () => {
     setLoading(true)
@@ -514,7 +529,7 @@ export default function PapaFlightMonitor({
             </div>
           ) : (
             <div className="grid min-h-[26rem] lg:grid-cols-[minmax(0,1fr)_22rem]">
-              <div className="max-h-[38rem] overflow-y-auto p-3 sm:p-4">
+              <div ref={listRef} className="max-h-[38rem] overflow-y-auto p-3 sm:p-4">
                 {filteredEntries.length === 0 ? (
                   <div className="flex h-48 items-center justify-center text-center text-sm text-muted-foreground">No flights match these filters.</div>
                 ) : (
@@ -527,7 +542,7 @@ export default function PapaFlightMonitor({
                         <button
                           key={entry.key}
                           type="button"
-                          onClick={() => setSelectedKey(entry.key)}
+                          onClick={() => selectFlight(entry.key)}
                           className={cn(
                             "w-full rounded-xl border p-3 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                             isSelected ? "border-sky-500/40 bg-sky-500/5 shadow-sm" : "border-border/60 bg-card hover:border-sky-500/25 hover:bg-muted/20"
@@ -559,7 +574,7 @@ export default function PapaFlightMonitor({
                 )}
               </div>
 
-              <aside className="border-t bg-muted/10 p-4 lg:border-l lg:border-t-0">
+              <aside ref={detailRef} className="scroll-mt-24 border-t bg-muted/10 p-4 lg:border-l lg:border-t-0">
                 {selectedEntry && selectedStatus ? (
                   <div className="space-y-4">
                     <div>

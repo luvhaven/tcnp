@@ -44,6 +44,8 @@ type PapaDetailsViewProps = {
   papa: PapaDetails
   programName?: string | null
   canManage?: boolean
+  /** Passport numbers are for the people who manage Papas only. Hidden unless set. */
+  canViewPassport?: boolean
   onEdit?: () => void
   onChangePhoto?: () => void
 }
@@ -74,7 +76,7 @@ function Field({ label, value, wide }: { label: string; value?: ReactNode; wide?
 }
 
 /** Read-only dossier for a single Papa: photo, contact, flight, stage and entourage details. */
-export default function PapaDetailsView({ papa, programName, canManage, onEdit, onChangePhoto }: PapaDetailsViewProps) {
+export default function PapaDetailsView({ papa, programName, canManage, canViewPassport = false, onEdit, onChangePhoto }: PapaDetailsViewProps) {
   const initials = papa.full_name.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
   const schedule = Array.isArray(papa.speaking_schedule) ? papa.speaking_schedule : []
   const assistants = Array.isArray(papa.personal_assistants) ? papa.personal_assistants : []
@@ -115,14 +117,14 @@ export default function PapaDetailsView({ papa, programName, canManage, onEdit, 
           </div>
           <div className="flex flex-wrap justify-center gap-2 pt-1 sm:justify-start">
             {papa.phone && (
-              <a href={`tel:${papa.phone}`}>
-                <Button size="sm" variant="outline" className="gap-1.5"><Phone className="h-3.5 w-3.5" />{papa.phone}</Button>
-              </a>
+              <Button asChild size="sm" variant="outline" className="h-9 gap-1.5">
+                <a href={`tel:${papa.phone}`}><Phone className="h-3.5 w-3.5" aria-hidden="true" />{papa.phone}</a>
+              </Button>
             )}
             {papa.email && (
-              <a href={`mailto:${papa.email}`}>
-                <Button size="sm" variant="outline" className="gap-1.5"><Mail className="h-3.5 w-3.5" />Email</Button>
-              </a>
+              <Button asChild size="sm" variant="outline" className="h-9 gap-1.5">
+                <a href={`mailto:${papa.email}`} aria-label={`Email ${papa.full_name}`}><Mail className="h-3.5 w-3.5" aria-hidden="true" />Email</a>
+              </Button>
             )}
             {canManage && onChangePhoto && (
               <Button size="sm" variant="ghost" onClick={onChangePhoto} className="gap-1.5">
@@ -151,7 +153,7 @@ export default function PapaDetailsView({ papa, programName, canManage, onEdit, 
           <Field label="Arrives" value={formatDateTime(papa.flight_arrival_time)} />
           <Field label="Departs" value={formatDateTime(papa.flight_departure_time)} />
           <Field label="Arrival city" value={[papa.arrival_city, papa.arrival_country].filter(Boolean).join(', ') || null} />
-          <Field label="Passport" value={papa.passport_number} />
+          {canViewPassport && <Field label="Passport" value={papa.passport_number} />}
         </Section>
       )}
 

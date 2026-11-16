@@ -21,13 +21,21 @@ function workspace(initialUrl = '', initialRooms = [team, program, papa]) {
   const state = []
   let cursor = 0
   let pendingEffects = []
+  // Like React, a state update made during render re-runs the render before it is used.
+  let rendering = false
+  let renderPhaseUpdate = false
   const imports = {
     react: {
       Suspense: 'Suspense',
+      startTransition(update) { update() },
       useState(initial) {
         const index = cursor++
         if (!(index in state)) state[index] = initial
-        return [state[index], update => { state[index] = typeof update === 'function' ? update(state[index]) : update }]
+        return [state[index], update => {
+          const next = typeof update === 'function' ? update(state[index]) : update
+          if (rendering && !Object.is(next, state[index])) renderPhaseUpdate = true
+          state[index] = next
+        }]
       },
       useEffect(effect, deps) {
         const index = cursor++
@@ -51,7 +59,16 @@ function workspace(initialUrl = '', initialRooms = [team, program, papa]) {
   const mod = { exports: {} }
   vm.runInNewContext(ts.transpileModule(fs.readFileSync('app/(dashboard)/chat/page.tsx', 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX },
-  }).outputText, { module: mod, exports: mod.exports, require: name => name in imports ? imports[name] : require(name) })
+  }).outputText, {
+    module: mod, exports: mod.exports, require: name => name in imports ? imports[name] : require(name),
+    // The page writes the chosen room into the address. As in a browser with
+    // the App Router, replaceState is what useSearchParams then reports.
+    URL,
+    window: {
+      get location() { return { href: `http://localhost/chat${params.toString() ? `?${params}` : ''}` } },
+      history: { replaceState(_state, _title, url) { params = new URLSearchParams(new URL(String(url)).search) } },
+    },
+  })
   const Content = mod.exports.default().props.children.type
   return {
     navigate(url) { params = new URLSearchParams(url) },
@@ -60,8 +77,14 @@ function workspace(initialUrl = '', initialRooms = [team, program, papa]) {
     setProfile(value) { profile = value },
     commitEffects() { const effects = pendingEffects; pendingEffects = []; effects.forEach(effect => effect()) },
     render() {
-      cursor = 0
-      const tree = Content()
+      let tree
+      let passes = 0
+      do {
+        cursor = 0
+        renderPhaseUpdate = false
+        rendering = true
+        try { tree = Content() } finally { rendering = false }
+      } while (renderPhaseUpdate && ++passes < 5)
       const elements = nodes(tree)
       return {
         tree,

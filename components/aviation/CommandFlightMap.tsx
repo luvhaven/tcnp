@@ -109,9 +109,15 @@ export default function CommandFlightMap() {
     }
   }, [])
 
-  const refreshAfterSeconds = watch?.refreshAfterSeconds ?? 900
+  // First load once on mount. It used to live in the polling effect below,
+  // which re-runs when the first response changes refreshAfterSeconds — so
+  // every visit fetched twice.
   useEffect(() => {
     void refresh()
+  }, [refresh])
+
+  const refreshAfterSeconds = watch?.refreshAfterSeconds ?? 900
+  useEffect(() => {
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") void refresh()
     }, refreshAfterSeconds * 1000)
@@ -146,7 +152,7 @@ export default function CommandFlightMap() {
           <Badge variant="outline" className="h-7 gap-1.5 border-emerald-500/30 bg-emerald-500/10 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
             <Signal className="h-3 w-3" /> {liveFlights.length} fresh positions
           </Badge>
-          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => void refresh(true)} disabled={refreshing}>
+          <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5 text-xs" onClick={() => void refresh(true)} disabled={refreshing}>
             {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
             Refresh
           </Button>
@@ -161,14 +167,24 @@ export default function CommandFlightMap() {
       )}
 
       <CardContent className="p-0">
-        <div className="grid min-h-[28rem] lg:grid-cols-[minmax(0,1fr)_20rem]">
-          <div className="relative min-h-[28rem] bg-muted/30" role="region" aria-label="Map of live Papa flight positions">
+        <div className="grid sm:min-h-[28rem] lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="relative h-64 bg-muted/30 sm:h-auto sm:min-h-[28rem]" role="region" aria-label="Map of live Papa flight positions">
             {loading && !watch ? (
               <div className="absolute inset-0 z-10 grid place-items-center bg-background/70 text-sm text-muted-foreground">
                 <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Connecting to flight tracking…</span>
               </div>
             ) : null}
-            <MapContainer center={[20, 0]} zoom={2} minZoom={2} maxZoom={12} worldCopyJump className="h-[28rem] w-full">
+            {/* On phones one finger scrolls the page instead of panning the map
+                (pinch still zooms); otherwise a 16rem map traps the scroll. */}
+            <MapContainer
+              center={[20, 0]}
+              zoom={2}
+              minZoom={2}
+              maxZoom={12}
+              worldCopyJump
+              dragging={!L.Browser.mobile}
+              className="h-64 w-full sm:h-[28rem]"
+            >
               <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -199,7 +215,7 @@ export default function CommandFlightMap() {
             </div>
           </div>
 
-          <aside className="flex min-h-[28rem] flex-col border-t bg-card lg:border-l lg:border-t-0">
+          <aside className="flex flex-col border-t bg-card sm:min-h-[28rem] lg:border-l lg:border-t-0">
             <div className="border-b px-4 py-3">
               <p className="text-xs font-semibold">Papa flights in tracking window</p>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">

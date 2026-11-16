@@ -14,7 +14,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Calendar, Plus, Edit, Trash2, Archive, CheckCircle, Building2, Search, Filter } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Calendar, Plus, Edit, Trash2, Archive, CheckCircle, Building2, Search, MoreHorizontal, Megaphone, Users } from "lucide-react"
+import { format, isValid, parseISO, startOfDay } from "date-fns"
 import { toast } from "sonner"
 import { notifyError } from '@/lib/notify'
 import { motion, AnimatePresence } from "framer-motion"
@@ -36,6 +38,42 @@ type Program = {
   theatres: { name: string } | null
 }
 
+// Mirrors the role rule in app/api/missions/request-availability/route.ts.
+// It is deliberately not isAdmin(): that also admits `hod` and `hop`, whom the
+// API refuses, so they would see a button that can only fail.
+const MISSION_REQUEST_ROLES = new Set([
+  'super_admin', 'dev_admin', 'admin', 'captain', 'vice_captain',
+  'command', 'head_of_command', 'head_of_operations',
+])
+
+/** Programme dates are stored as calendar dates; parse them as local days. */
+function parseProgramDate(value: string | null | undefined): Date | null {
+  if (!value) return null
+  const date = parseISO(value)
+  return isValid(date) ? date : null
+}
+
+function formatProgramDate(value: string | null | undefined): string {
+  const date = parseProgramDate(value)
+  return date ? format(date, 'dd MMM yyyy') : '—'
+}
+
+/**
+ * Soonest upcoming (or still running) first, then past programmes with the
+ * most recent first. Undated programmes go last.
+ */
+function compareByStartDate(a: Program, b: Program, today: Date): number {
+  const aStart = parseProgramDate(a.start_date)
+  const bStart = parseProgramDate(b.start_date)
+  if (!aStart || !bStart) return aStart ? -1 : bStart ? 1 : 0
+  const aLast = parseProgramDate(a.end_date) ?? aStart
+  const bLast = parseProgramDate(b.end_date) ?? bStart
+  const aUpcoming = aLast >= today
+  const bUpcoming = bLast >= today
+  if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1
+  return aUpcoming ? aStart.getTime() - bStart.getTime() : bStart.getTime() - aStart.getTime()
+}
+
 export default function ProgramsClient({ initialPrograms, initialTheatres }: { initialPrograms: Program[], initialTheatres: any[] }) {
   const supabase = createClient()
   const confirm = useConfirm()
@@ -48,6 +86,10 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
   // choice we get to leave to the database.
   const { data: currentUser } = useCurrentUser()
   const canManagePrograms = isAdmin(currentUser?.role, currentUser?.has_admin_access)
+  const canRequestAvailability = !!currentUser && (currentUser.has_admin_access === true || MISSION_REQUEST_ROLES.has(currentUser.role ?? ''))
+  // One availability dialog per programme row; the phone overflow menu opens
+  // the same dialog the desktop button does.
+  const [availabilityDialog, setAvailabilityDialog] = useState<{ programId: string; kind: 'request' | 'roster' } | null>(null)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Program | null>(null)
@@ -112,7 +154,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
       const { data, error } = await supabase
         .from('programs')
         .select(`*, theatres(name)`)
-        .order('created_at', { ascending: false })
+        .order('start_date', { ascending: true })
       if (error) throw error
       return data as Program[]
     },
@@ -236,11 +278,21 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
     deleteMutation.mutate(id)
   }
 
-  const handleStatusChange = async (id: string, newStatus: string) => {
+  const handleStatusChange = async (id: string, newStatus: string, name?: string) => {
     if (!canManagePrograms) {
       toast.error('Only Command and leadership can change a program’s status.')
       return
     }
+    if (newStatus === 'completed' && !await confirm({
+      title: 'Complete program',
+      message: `Mark ${name ? `"${name}"` : 'this program'} as completed? It will no longer be treated as a live program.`,
+      confirmText: 'Mark completed',
+    })) return
+    if (newStatus === 'archived' && !await confirm({
+      title: 'Archive program',
+      message: `Archive ${name ? `"${name}"` : 'this program'}? It moves out of the working list into the archive.`,
+      confirmText: 'Archive',
+    })) return
     statusMutation.mutate({ id, status: newStatus })
   }
 
@@ -253,6 +305,11 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
       end_date: '',
       status: 'planning'
     })
+  }
+
+  const openSchedule = (program: Program) => {
+    setScheduleProgram(program)
+    setScheduleOpen(true)
   }
 
   const openDialog = () => {
@@ -278,6 +335,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
   }
 
   const filteredPrograms = useMemo(() => {
+    const today = startOfDay(new Date())
     return programs.filter((program) => {
       const matchesSearch = search.trim() === '' || 
         program.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -286,7 +344,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
 
       const matchesStatus = statusFilter === 'all' || program.status === statusFilter
       return matchesSearch && matchesStatus
-    })
+    }).sort((a, b) => compareByStartDate(a, b, today))
   }, [programs, search, statusFilter])
 
   return (
@@ -337,16 +395,19 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                 Operational lifecycle from initial planning to completion & archiving
               </CardDescription>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5" role="group" aria-label="Filter programs by status">
               {(['all', 'active', 'planning', 'completed', 'archived'] as const).map(tab => (
-                <Badge
+                <Button
                   key={tab}
+                  type="button"
+                  size="sm"
                   variant={statusFilter === tab ? 'default' : 'outline'}
+                  aria-pressed={statusFilter === tab}
                   onClick={() => setStatusFilter(tab)}
-                  className={`text-xs font-semibold uppercase tracking-wider cursor-pointer transition-colors ${statusFilter === tab ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+                  className={`h-9 rounded-full px-3 text-xs font-semibold uppercase tracking-wider ${statusFilter === tab ? '' : 'bg-background hover:bg-muted'}`}
                 >
                   {tab}
-                </Badge>
+                </Button>
               ))}
             </div>
           </div>
@@ -357,7 +418,8 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search programs by name, theatre venue, or description…"
-                className="pl-9 bg-background h-9 text-xs"
+                aria-label="Search programs"
+                className="pl-9 bg-background h-9 text-base sm:text-xs"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -397,6 +459,9 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                     archived: { label: 'Archived', className: 'bg-muted text-muted-foreground border-border' },
                   }
                   const badgeInfo = statusBadges[program.status] || { label: program.status, className: 'bg-muted' }
+                  const hasLifecycleStep = ['planning', 'active', 'completed'].includes(program.status)
+                  const showAvailability = canRequestAvailability && ['planning', 'active'].includes(program.status)
+                  const hasOverflowActions = hasLifecycleStep || showAvailability || canManagePrograms
 
                   return (
                     <motion.div
@@ -429,11 +494,14 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                               )}
                               <span>•</span>
                               <span>
-                                Starts{' '}
-                                {program.start_date && !Number.isNaN(new Date(program.start_date).getTime())
-                                  ? new Date(program.start_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-                                  : '—'}
+                                Starts {formatProgramDate(program.start_date)}
                               </span>
+                              {program.end_date && (
+                                <>
+                                  <span aria-hidden="true">•</span>
+                                  <span>Ends {formatProgramDate(program.end_date)}</span>
+                                </>
+                              )}
                             </p>
                             {program.description && (
                               <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">{program.description}</p>
@@ -448,19 +516,33 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                           status={program.status}
                         />
 
-                        {['planning', 'active'].includes(program.status) && (
+                        {showAvailability && (
                           <>
-                            <RequestAvailabilityButton programId={program.id} programName={program.name} />
-                            <AvailabilityRosterButton programId={program.id} programName={program.name} canAssign={isPlatformAdministrator(currentUser?.role, currentUser?.has_admin_access)} />
+                            <RequestAvailabilityButton
+                              programId={program.id}
+                              programName={program.name}
+                              triggerClassName="hidden sm:inline-flex"
+                              open={availabilityDialog?.programId === program.id && availabilityDialog.kind === 'request'}
+                              onOpenChange={open => setAvailabilityDialog(open ? { programId: program.id, kind: 'request' } : null)}
+                            />
+                            <AvailabilityRosterButton
+                              programId={program.id}
+                              programName={program.name}
+                              canAssign={isPlatformAdministrator(currentUser?.role, currentUser?.has_admin_access)}
+                              triggerClassName="hidden sm:inline-flex"
+                              open={availabilityDialog?.programId === program.id && availabilityDialog.kind === 'roster'}
+                              onOpenChange={open => setAvailabilityDialog(open ? { programId: program.id, kind: 'roster' } : null)}
+                            />
                           </>
                         )}
 
+                        {/* The next lifecycle step is the row's primary action and stays visible on phones. */}
                         {program.status === 'planning' && (
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-8 text-xs font-semibold text-sky-600 dark:text-sky-400 hover:bg-sky-500/10"
-                            onClick={() => handleStatusChange(program.id, 'active')}
+                            className="h-9 text-xs font-semibold text-sky-600 dark:text-sky-400 hover:bg-sky-500/10"
+                            onClick={() => handleStatusChange(program.id, 'active', program.name)}
                           >
                             Activate
                           </Button>
@@ -470,10 +552,10 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-8 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
-                            onClick={() => handleStatusChange(program.id, 'completed')}
+                            className="h-9 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                            onClick={() => handleStatusChange(program.id, 'completed', program.name)}
                           >
-                            <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                            <CheckCircle className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
                             Complete
                           </Button>
                         )}
@@ -482,29 +564,76 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-8 text-xs font-semibold text-primary hover:bg-primary/10"
-                            onClick={() => handleStatusChange(program.id, 'archived')}
+                            className="h-9 text-xs font-semibold text-primary hover:bg-primary/10"
+                            onClick={() => handleStatusChange(program.id, 'archived', program.name)}
                           >
-                            <Archive className="h-3.5 w-3.5 mr-1" />
+                            <Archive className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
                             Archive
                           </Button>
                         )}
-                        <Button variant="outline" size="sm" className="h-8 text-xs font-medium" onClick={() => {
-                          setScheduleProgram(program)
-                          setScheduleOpen(true)
-                        }}>
-                          <Calendar className="mr-1.5 h-3.5 w-3.5" />
+                        {/* Without a lifecycle step, Schedule is the primary action on phones. */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className={`h-9 text-xs font-medium ${hasLifecycleStep ? 'hidden sm:inline-flex' : ''}`}
+                          onClick={() => openSchedule(program)}
+                        >
+                          <Calendar className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
                           Schedule
                         </Button>
                         {canManagePrograms && (
                           <>
-                            <Button variant="ghost" size="icon" onClick={() => handleEdit(program)} className="h-8 w-8 hover:bg-primary/10" aria-label={`Edit ${program.name}`}>
-                              <Edit className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                            <Button variant="ghost" size="icon" onClick={() => handleEdit(program)} className="hidden h-9 w-9 hover:bg-primary/10 sm:inline-flex" aria-label={`Edit ${program.name}`}>
+                              <Edit className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" aria-hidden="true" />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDelete(program.id)} className="h-8 w-8 hover:bg-destructive/10 text-destructive" aria-label={`Delete ${program.name}`}>
-                              <Trash2 className="h-3.5 w-3.5" />
+                            <Button variant="ghost" size="icon" onClick={() => handleDelete(program.id)} className="hidden h-9 w-9 hover:bg-destructive/10 text-destructive sm:inline-flex" aria-label={`Delete ${program.name}`}>
+                              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                             </Button>
                           </>
+                        )}
+
+                        {/* Phones: the remaining actions live in one menu. */}
+                        {hasOverflowActions && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 sm:hidden" aria-label={`More actions for ${program.name}`}>
+                                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {hasLifecycleStep && (
+                                <DropdownMenuItem onSelect={() => openSchedule(program)}>
+                                  <Calendar className="mr-2 h-4 w-4" aria-hidden="true" />
+                                  Schedule
+                                </DropdownMenuItem>
+                              )}
+                              {showAvailability && (
+                                <>
+                                  <DropdownMenuItem onSelect={() => setAvailabilityDialog({ programId: program.id, kind: 'request' })}>
+                                    <Megaphone className="mr-2 h-4 w-4" aria-hidden="true" />
+                                    Request availability
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onSelect={() => setAvailabilityDialog({ programId: program.id, kind: 'roster' })}>
+                                    <Users className="mr-2 h-4 w-4" aria-hidden="true" />
+                                    Availability roster
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              {canManagePrograms && (
+                                <>
+                                  <DropdownMenuItem onSelect={() => handleEdit(program)}>
+                                    <Edit className="mr-2 h-4 w-4" aria-hidden="true" />
+                                    Edit program
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => handleDelete(program.id)}>
+                                    <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                                    Delete program
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         )}
                       </div>
                     </motion.div>
@@ -605,7 +734,16 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
                   type="date"
                   required
                   value={formData.start_date}
-                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value, end_date: '' })}
+                  onChange={(e) => {
+                    const start = e.target.value
+                    // Keep a valid end date (dates are yyyy-MM-dd, so they compare as strings);
+                    // clear it only when the new start falls after it.
+                    setFormData(prev => ({
+                      ...prev,
+                      start_date: start,
+                      end_date: prev.end_date && start && prev.end_date < start ? '' : prev.end_date,
+                    }))
+                  }}
                 />
               </div>
 
