@@ -1187,19 +1187,19 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
               <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
                 {visibleSelectedOfficers.length > 0 && (
                   <>
-                    <Button variant="ghost" onClick={() => setSelectedOfficers([])} className="text-muted-foreground h-9 px-3">
+                    <Button variant="ghost" onClick={() => setSelectedOfficers([])} className="text-muted-foreground h-9 px-3" aria-label="Cancel Selection">
                       <span className="sm:hidden">Clear</span>
                       <span className="hidden sm:inline">Cancel Selection</span>
                     </Button>
                     <Button variant="outline" onClick={() => {
                       setAssignForm({ officer_ids: visibleSelectedOfficers, program_id: '' })
                       setAssignFromDirectoryOpen(true)
-                    }} className="gap-2 text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-900 dark:hover:bg-blue-950">
+                    }} className="gap-2 text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-900 dark:hover:bg-blue-950" aria-label={`Assign Selected (${visibleSelectedOfficers.length}) to Program`}>
                       <UserCheck className="h-4 w-4" aria-hidden="true" />
                       <span className="sm:hidden">Assign ({visibleSelectedOfficers.length})</span>
                       <span className="hidden sm:inline">Assign Selected ({visibleSelectedOfficers.length}) to Program</span>
                     </Button>
-                    <Button variant="destructive" onClick={handleBulkDelete} className="gap-2">
+                    <Button variant="destructive" onClick={handleBulkDelete} className="gap-2" aria-label={`Delete Selected (${visibleSelectedOfficers.length})`}>
                       <Trash2 className="h-4 w-4" aria-hidden="true" />
                       <span className="sm:hidden">Delete ({visibleSelectedOfficers.length})</span>
                       <span className="hidden sm:inline">Delete Selected ({visibleSelectedOfficers.length})</span>

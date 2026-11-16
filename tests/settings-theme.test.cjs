@@ -91,7 +91,8 @@ test('Settings and the actual profile theme control share a stable, working pref
  await t.test('Follow device reacts to OS changes; an explicit profile choice overrides it', async () => {
   await click('Follow device')
   assert.equal(document.documentElement.classList.contains('dark'), true)
-  assert.equal(document.querySelector('[aria-label="Dark mode"]').getAttribute('aria-pressed'), 'true')
+  // The header has its own Auto choice, so it shows that the device is being followed.
+  assert.equal(document.querySelector('[aria-label="Follow device theme"]').getAttribute('aria-pressed'), 'true')
   darkDevice = false
   await act(async () => mediaListeners.forEach(callback => callback()))
   assert.equal(document.documentElement.classList.contains('dark'), false)
@@ -113,7 +114,8 @@ test('Settings and the actual profile theme control share a stable, working pref
   await act(async () => audio.setMuted(false))
   assert.equal(sound.getAttribute('aria-checked'), 'true')
   assert.equal(notifications, 2)
-  assert.equal(document.querySelectorAll('fieldset[disabled] input:disabled').length, 7)
+  // Controls that cannot work yet are no longer shown at all.
+  assert.equal(document.querySelectorAll('fieldset[disabled] input:disabled').length, 0)
   assert.equal(document.querySelector('a[href="/profile"]').textContent, 'My profile')
   assert.equal(document.querySelector('a[href="/change-password"]').textContent, 'Change password')
  })
