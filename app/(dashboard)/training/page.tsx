@@ -22,7 +22,7 @@ import {
 import { useConfirm } from "@/components/providers/ConfirmProvider"
 import TrainingOperations from "@/components/training/TrainingOperations"
 import {
-  GraduationCap, Plus, Pencil, Trash2, MapPin, Clock, Users, BookOpen, ArrowRight, CalendarDays, FileText, Shield
+  GraduationCap, Plus, Pencil, Trash2, MapPin, Clock, Users, BookOpen, ArrowRight, CalendarDays, FileText, Shield, X
 } from "lucide-react"
 
 import { ErrorState } from "@/components/ui/error-state"
@@ -142,7 +142,7 @@ export default function TrainingPage() {
     },
   })
 
-  const { data: documents = [], isLoading: docsLoading } = useQuery({
+  const { data: documents = [], isLoading: docsLoading, isError: docsFailed, refetch: refetchDocs, isRefetching: docsRetrying } = useQuery({
     queryKey: ["oscar-documents"],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
@@ -155,6 +155,8 @@ export default function TrainingPage() {
     },
     enabled: canEdit, // Only load these on training page if they can edit (admins)
   })
+
+  const [showAllPast, setShowAllPast] = useState(false)
 
   const today = new Date().toISOString().slice(0, 10)
   const upcoming = useMemo(() => sessions.filter(s => s.session_date >= today), [sessions, today])
@@ -186,6 +188,7 @@ export default function TrainingPage() {
       }
     },
     onSuccess: () => {
+      clearDeleteErrors()
       toast.success(editing ? "Session updated" : "Training scheduled")
       setDialogOpen(false)
       setEditing(null)
@@ -200,6 +203,7 @@ export default function TrainingPage() {
       if (error) throw error
     },
     onSuccess: () => {
+      deleteDocMutation.reset()
       toast.success("Session removed")
       queryClient.invalidateQueries({ queryKey: ["training-schedules"] })
     },
@@ -244,6 +248,7 @@ export default function TrainingPage() {
       }
     },
     onSuccess: () => {
+      clearDeleteErrors()
       toast.success(editingDoc ? "Document updated" : "Document created")
       setDocDialogOpen(false)
       queryClient.invalidateQueries({ queryKey: ["oscar-documents"] })
@@ -257,11 +262,19 @@ export default function TrainingPage() {
       if (error) throw error
     },
     onSuccess: () => {
+      deleteMutation.reset()
       toast.success("Document deleted")
       queryClient.invalidateQueries({ queryKey: ["oscar-documents"] })
     },
     onError: (err: any) => notifyError(err, "Failed to delete"),
   })
+
+  // The delete-failure banner clears on dismiss or on the next successful save/delete.
+  function clearDeleteErrors() {
+    deleteMutation.reset()
+    deleteDocMutation.reset()
+  }
+  const deleteFailed = deleteMutation.isError || deleteDocMutation.isError
 
   const openDocCreate = () => {
     setEditingDoc(null)
@@ -322,7 +335,6 @@ export default function TrainingPage() {
 
   return (
     <div className="space-y-6 page-enter">
-      {(deleteMutation.isError || deleteDocMutation.isError) && <p role="alert" className="rounded-lg border border-destructive/30 p-4 text-sm">The record could not be deleted. It has not been removed from this view. Refresh and try again, or contact an administrator.</p>}
       {/* Header */}
       <PageHeader
         icon={GraduationCap}
@@ -334,6 +346,13 @@ export default function TrainingPage() {
           </Button>
         )}
       />
+
+      {deleteFailed && (
+        <div role="alert" className="flex min-w-0 items-start gap-3 rounded-lg border border-destructive/30 p-4 text-sm">
+          <p className="min-w-0 flex-1">The record could not be deleted. It has not been removed from this view. Refresh and try again, or contact an administrator.</p>
+          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label="Dismiss delete error" onClick={clearDeleteErrors}><X className="h-4 w-4" aria-hidden="true" /></Button>
+        </div>
+      )}
 
       <TrainingOperations />
 
@@ -385,27 +404,41 @@ export default function TrainingPage() {
       {past.length > 0 && (
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Past Sessions</p>
-          <div className="grid gap-4 md:grid-cols-2">
-            {past.slice(0, 6).map(s => <SessionCard key={s.id} s={s} muted />)}
+          <div id="training-past-sessions" className="grid gap-4 md:grid-cols-2">
+            {(showAllPast ? past : past.slice(0, 6)).map(s => <SessionCard key={s.id} s={s} muted />)}
           </div>
+          {past.length > 6 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3 w-full sm:w-auto"
+              aria-expanded={showAllPast}
+              aria-controls="training-past-sessions"
+              onClick={() => setShowAllPast(v => !v)}
+            >
+              {showAllPast ? "Show fewer past sessions" : `Show all past sessions (${past.length})`}
+            </Button>
+          )}
         </div>
       )}
 
       {/* Unit Documents (SOPs & Code of Conduct) */}
       {canEdit && (
         <div className="mt-12 space-y-4 border-t pt-8">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
               <h2 className="text-xl font-bold tracking-tight">Unit Documents</h2>
               <p className="text-sm text-muted-foreground mt-1">Manage SOPs and Code of Conduct documents specific to each Oscar.</p>
             </div>
-            <Button onClick={openDocCreate} className="gap-2">
+            <Button onClick={openDocCreate} className="gap-2 self-start shrink-0">
               <Plus className="h-4 w-4" /> Add Document
             </Button>
           </div>
 
           {docsLoading ? (
             <div className="skeleton h-24 rounded-xl" />
+          ) : docsFailed ? (
+            <ErrorState title="Could not load unit documents" className="rounded-xl border" onRetry={() => { void refetchDocs() }} retrying={docsRetrying} />
           ) : documents.length === 0 ? (
             <div className="empty-state rounded-xl border">
               <FileText className="h-8 w-8" />
@@ -415,22 +448,22 @@ export default function TrainingPage() {
             <div className="grid gap-3">
               {documents.map(d => (
                 <Card key={d.id} className="card-hover">
-                  <div className="flex items-center justify-between p-4">
-                    <div className="flex items-center gap-4">
+                  <div className="flex min-w-0 flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 flex-1 items-center gap-4">
                       <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${d.doc_type === 'sop' ? 'bg-blue-500/10 text-blue-500' : 'bg-rose-500/10 text-rose-500'}`}>
                         {d.doc_type === 'sop' ? <BookOpen className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
                       </div>
-                      <div>
-                        <h4 className="font-medium flex gap-2 items-center">
-                          {d.title}
-                          <Badge variant="secondary" className="text-xs capitalize font-medium">{d.doc_type === 'sop' ? 'SOP' : 'Code of Conduct'}</Badge>
-                        </h4>
-                        <p className="text-xs text-muted-foreground mt-1 capitalize">{TARGET_OSCARS.find(o => o.id === d.oscar)?.name || d.oscar}</p>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                          <h4 className="min-w-0 max-w-full truncate font-medium" title={d.title}>{d.title}</h4>
+                          <Badge variant="secondary" className="shrink-0 text-xs capitalize font-medium">{d.doc_type === 'sop' ? 'SOP' : 'Code of Conduct'}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1 capitalize truncate">{TARGET_OSCARS.find(o => o.id === d.oscar)?.name || d.oscar}</p>
                       </div>
                     </div>
-                    <div className="flex flex-col gap-1 sm:flex-row">
-                      <Button variant="ghost" size="sm" onClick={() => openDocEdit(d)}>Edit</Button>
-                      <Button variant="ghost" size="sm" className="text-red-500" onClick={async () => {
+                    <div className="flex shrink-0 gap-1 self-end sm:self-auto">
+                      <Button variant="ghost" size="sm" aria-label={`Edit ${d.title}`} onClick={() => openDocEdit(d)}>Edit</Button>
+                      <Button variant="ghost" size="sm" className="text-red-500" aria-label={`Delete ${d.title}`} onClick={async () => {
                         const ok = await confirm({ title: "Delete document?", message: `"${d.title}" will be permanently removed.` })
                         if (ok) deleteDocMutation.mutate(d.id)
                       }}>Delete</Button>

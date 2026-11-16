@@ -78,8 +78,27 @@ export default function WelfarePage() {
     }
   }
 
+  // One program filter + menu list, shared by both layouts (with and without the directory tab).
+  const menusSection = (
+    <>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+        <Label htmlFor="welfare-menu-program" className="text-sm text-muted-foreground">Menus for program:</Label>
+        <Select value={filterProgram} onValueChange={setFilterProgram}>
+          <SelectTrigger id="welfare-menu-program" className="h-9 w-full sm:w-[220px]"><SelectValue placeholder="All Programs" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Programs</SelectItem>
+            {programs.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      {/* Menus (shared with November (Den)) */}
+      <DenMenus canEdit={canEdit} selectedProgram={filterProgram} currentUserId={currentUser?.id ?? null} />
+    </>
+  )
+
   return (
     <div className="space-y-6 page-enter">
+      {/* Modal only — renders nothing inline until a birthday prompt opens. */}
       <BirthdayReminder />
 
       {/* Header */}
@@ -105,17 +124,7 @@ export default function WelfarePage() {
           </TabsList>
 
           <TabsContent value="menus" className="space-y-4">
-            <div className="flex items-center gap-3">
-              <Label className="text-sm text-muted-foreground">Program:</Label>
-              <Select value={filterProgram} onValueChange={setFilterProgram}>
-                <SelectTrigger className="w-full sm:w-[220px] h-9"><SelectValue placeholder="All Programs" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Programs</SelectItem>
-                  {programs.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <DenMenus canEdit={canEdit} selectedProgram={filterProgram} currentUserId={currentUser?.id ?? null} />
+            {menusSection}
           </TabsContent>
 
           <TabsContent value="directory">
@@ -123,22 +132,7 @@ export default function WelfarePage() {
           </TabsContent>
         </Tabs>
       ) : (
-        <>
-          {/* Program filter */}
-          <div className="flex items-center gap-3">
-            <Label className="text-sm text-muted-foreground">Program:</Label>
-            <Select value={filterProgram} onValueChange={setFilterProgram}>
-              <SelectTrigger className="w-full sm:w-[220px] h-9"><SelectValue placeholder="All Programs" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Programs</SelectItem>
-                {programs.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Menus (shared with November (Den)) */}
-          <DenMenus canEdit={canEdit} selectedProgram={filterProgram} currentUserId={currentUser?.id ?? null} />
-        </>
+        <div className="space-y-4">{menusSection}</div>
       )}
 
       {/* Food alarm dialog */}

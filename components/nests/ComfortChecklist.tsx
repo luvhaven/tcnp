@@ -68,7 +68,7 @@ export default function ComfortChecklist({ nestId, nestName }: { nestId: string;
             if (!user) throw new UserFacingError('Not authenticated')
             const { data: ud } = await supabase.from('users').select('full_name').eq('id', user.id).single()
 
-            await (supabase as any).from('nest_comfort_logs').insert([{
+            const { error: insertError } = await (supabase as any).from('nest_comfort_logs').insert([{
                 nest_id: nestId,
                 checks,
                 all_passed: allChecked,
@@ -76,6 +76,8 @@ export default function ComfortChecklist({ nestId, nestName }: { nestId: string;
                 performed_by_name: ud?.full_name || user.email,
                 performed_at: new Date().toISOString(),
             }])
+            // A rejected insert (RLS, network) must not be reported as logged.
+            if (insertError) throw insertError
 
             setLastLog({ performed_at: new Date().toISOString(), officer_name: ud?.full_name || 'You', all_passed: allChecked })
             toast.success(`Comfort checklist logged for ${nestName}`, { description: allChecked ? 'All 17 checks passed ✓' : `${checkedCount}/17 items checked` })

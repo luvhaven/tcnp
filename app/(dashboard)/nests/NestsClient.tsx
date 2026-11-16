@@ -196,13 +196,15 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       }
       return { previous }
     },
-    onError: (err, newTodo, context) => {
+    onError: (err, _deletedId, context) => {
       queryClient.setQueryData(['nests'], context?.previous)
-      toast.error('Failed to delete')
+      notifyError(err, 'Failed to delete')
+    },
+    onSuccess: () => {
+      toast.success('Location deleted!')
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['nests'] })
-      toast.success('Location deleted!')
     }
   })
 
@@ -366,10 +368,10 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       />
 
       {/* Program Filter */}
-      <motion.div layout className="flex items-center gap-4">
-        <Label>Filter by Program:</Label>
+      <motion.div layout className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+        <Label htmlFor="nests-program-filter">Filter by Program:</Label>
         <Select value={selectedProgram} onValueChange={setSelectedProgram}>
-          <SelectTrigger className="w-[250px]">
+          <SelectTrigger id="nests-program-filter" className="w-full sm:w-[250px]">
             <SelectValue placeholder="All Programs" />
           </SelectTrigger>
           <SelectContent>
@@ -475,9 +477,11 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
                               ) : (
                                 <div className="space-y-2">
                                   {nestOfficers.map(assignment => (
-                                    <div key={assignment.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50 transition-colors hover:bg-muted group">
-                                      <div
-                                        className="flex items-center gap-2 cursor-pointer hover:text-primary transition-colors flex-1"
+                                    <div key={assignment.id} className="flex items-center justify-between gap-2 p-2 rounded-md bg-muted/50 transition-colors hover:bg-muted group">
+                                      <button
+                                        type="button"
+                                        className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left cursor-pointer hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                                        aria-label={`View profile of ${assignment.user?.full_name || 'officer'}`}
                                         onClick={() => {
                                           if (!assignment.user) return
                                           setSelectedOfficer({
@@ -501,25 +505,25 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
                                             {getInitials(assignment.user?.full_name || '')}
                                           </AvatarFallback>
                                         </Avatar>
-                                        <div>
-                                          <p className="text-xs font-medium group-hover:underline">{assignment.user?.full_name}</p>
-                                          <p className="text-xs text-muted-foreground">{assignment.user?.oscar}</p>
+                                        <div className="min-w-0">
+                                          <p className="truncate text-xs font-medium group-hover:underline">{assignment.user?.full_name}</p>
+                                          <p className="truncate text-xs text-muted-foreground">{assignment.user?.oscar}</p>
                                         </div>
-                                      </div>
+                                      </button>
                                       {canManage && (
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex shrink-0 items-center gap-1">
                                           <Switch
                                             checked={assignment.is_active}
                                             onCheckedChange={() => toggleOfficerActive(assignment)}
-                                            className="scale-75"
+                                            aria-label={`${assignment.user?.full_name || 'Officer'} on duty`}
                                           />
-                                          <Button aria-label="Remove assignment"
+                                          <Button aria-label={`Remove ${assignment.user?.full_name || 'officer'} from ${nest.name}`}
                                             variant="ghost"
                                             size="icon"
-                                            className="h-6 w-6"
+                                            className="h-8 w-8"
                                             onClick={() => removeAssignment(assignment.id)}
                                           >
-                                            <Trash2 className="h-3 w-3 text-destructive" />
+                                            <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
                                           </Button>
                                         </div>
                                       )}

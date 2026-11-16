@@ -27,6 +27,8 @@ import {
 } from "lucide-react"
 import { UPLOAD_RULES, validateUploadFiles } from "@/lib/security/upload-validation"
 import { ErrorState } from "@/components/ui/error-state"
+import { EmptyState } from "@/components/ui/empty-state"
+import { useConfirm } from "@/components/providers/ConfirmProvider"
 
 // ─── Singleton client ───
 const supabase = createClient()
@@ -72,9 +74,22 @@ function publicUrl(path: string) {
   return supabase.storage.from("serial-media").getPublicUrl(path).data.publicUrl
 }
 
+/** Only published Instagram links: https on instagram.com (any subdomain) or instagr.am. */
+function isInstagramUrl(value: string) {
+  try {
+    const url = new URL(value)
+    if (url.protocol !== "https:") return false
+    const host = url.hostname.toLowerCase()
+    return host === "instagram.com" || host.endsWith(".instagram.com") || host === "instagr.am" || host.endsWith(".instagr.am")
+  } catch {
+    return false
+  }
+}
+
 export default function SerialPage() {
   const { data: currentUser, isLoading: userLoading } = useCurrentUser()
   const queryClient = useQueryClient()
+  const confirm = useConfirm()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [uploadOpen, setUploadOpen] = useState(false)
@@ -84,6 +99,7 @@ export default function SerialPage() {
   const [filterStatus, setFilterStatus] = useState("all")
   const [igEditing, setIgEditing] = useState<MediaAsset | null>(null)
   const [igUrl, setIgUrl] = useState("")
+  const [igError, setIgError] = useState<string | null>(null)
   const [form, setForm] = useState({
     title: "",
     caption: "",
@@ -125,6 +141,14 @@ export default function SerialPage() {
     if (filterStatus !== "all" && a.status !== filterStatus) return false
     return true
   }), [assets, filterProgram, filterCategory, filterStatus])
+
+  const filtersActive = filterProgram !== "all" || filterCategory !== "all" || filterStatus !== "all"
+  const clearFilters = () => {
+    setFilterProgram("all")
+    setFilterCategory("all")
+    setFilterStatus("all")
+  }
+
 
   const stats = useMemo(() => ({
     total: assets.length,
@@ -206,6 +230,34 @@ export default function SerialPage() {
     onError: (err: any) => notifyError(err, "Delete failed"),
   })
 
+  const openInstagramEditor = (asset: MediaAsset) => {
+    setIgEditing(asset)
+    setIgUrl(asset.instagram_url ?? "")
+    setIgError(null)
+  }
+
+  const saveInstagramLink = () => {
+    if (!igEditing) return
+    const value = igUrl.trim()
+    // An empty field clears the link, as before.
+    if (value && !isInstagramUrl(value)) {
+      setIgError("Paste the full https link to the post on instagram.com (or instagr.am).")
+      return
+    }
+    statusMutation.mutate({ id: igEditing.id, instagram_url: value || null })
+    setIgEditing(null)
+  }
+
+  const confirmDelete = async (asset: MediaAsset) => {
+    const ok = await confirm({
+      title: "Delete this media?",
+      message: `"${asset.title || "Untitled"}" and its file will be permanently removed. This cannot be undone.`,
+      confirmText: "Delete",
+      variant: "destructive",
+    })
+    if (ok) deleteMutation.mutate(asset)
+  }
+
   if (userLoading) {
     return <div className="flex items-center justify-center py-24"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
   }
@@ -276,11 +328,20 @@ export default function SerialPage() {
       ) : listFailed ? (
         <ErrorState onRetry={() => { void refetchList() }} retrying={listRetrying} />
       ) : filtered.length === 0 ? (
-        <div className="empty-state">
-          <ImageIcon className="h-12 w-12" />
-          <p className="font-medium">No media yet</p>
-          <p className="text-sm text-muted-foreground">Upload the first capture from an arrival or theatre session.</p>
-        </div>
+        filtersActive && assets.length > 0 ? (
+          <EmptyState
+            icon={ImageIcon}
+            title="No media matches these filters"
+            description="Try a different program, category or status."
+            action={<Button variant="outline" size="sm" onClick={clearFilters}>Clear filters</Button>}
+          />
+        ) : (
+          <EmptyState
+            icon={ImageIcon}
+            title="No media yet"
+            description="Upload the first capture from an arrival or theatre session."
+          />
+        )
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <AnimatePresence>
@@ -318,9 +379,12 @@ export default function SerialPage() {
                             {CATEGORIES.find(c => c.value === asset.category)?.label}
                             {asset.programs?.name ? ` · ${asset.programs.name}` : ""}
                           </p>
+                          {asset.users?.full_name && (
+                            <p className="truncate text-xs text-muted-foreground">by {asset.users.full_name}</p>
+                          )}
                         </div>
                         {asset.instagram_url && (
-                          <a href={asset.instagram_url} target="_blank" rel="noopener noreferrer" className="text-pink-500 hover:text-pink-400" title="View on Instagram">
+                          <a href={asset.instagram_url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-pink-500 hover:text-pink-400" title="View on Instagram" aria-label="View on Instagram">
                             <Instagram className="h-4 w-4" />
                           </a>
                         )}
@@ -335,11 +399,12 @@ export default function SerialPage() {
                             </SelectContent>
                           </Select>
                           <Button aria-label="Set Instagram link" variant="ghost" size="icon" className="h-8 w-8" title="Set Instagram link"
-                            onClick={() => { setIgEditing(asset); setIgUrl(asset.instagram_url ?? "") }}>
+                            onClick={() => openInstagramEditor(asset)}>
                             <Link2 className="h-4 w-4" />
                           </Button>
                           <Button aria-label="Delete asset" variant="ghost" size="icon" className="ml-auto h-8 w-8 text-red-500 hover:text-red-600" title="Delete"
-                            onClick={() => deleteMutation.mutate(asset)}>
+                            disabled={deleteMutation.isPending}
+                            onClick={() => { void confirmDelete(asset) }}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -422,21 +487,36 @@ export default function SerialPage() {
             <DialogTitle>Instagram Link</DialogTitle>
             <DialogDescription>Paste the published post URL — the asset is marked as Posted.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <Input value={igUrl} onChange={(e) => setIgUrl(e.target.value)} placeholder="https://www.instagram.com/p/…" />
+          <form
+            className="space-y-3"
+            noValidate
+            onSubmit={(e) => { e.preventDefault(); saveInstagramLink() }}
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="serial-instagram-url" className="sr-only">Instagram post link</Label>
+              <Input
+                id="serial-instagram-url"
+                type="url"
+                inputMode="url"
+                value={igUrl}
+                onChange={(e) => { setIgUrl(e.target.value); if (igError) setIgError(null) }}
+                placeholder="https://www.instagram.com/p/…"
+                aria-invalid={igError ? true : undefined}
+                aria-describedby={igError ? "serial-instagram-url-error" : undefined}
+              />
+              {igError ? (
+                <p id="serial-instagram-url-error" role="alert" className="text-xs text-destructive">{igError}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Leave empty to remove the link.</p>
+              )}
+            </div>
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => setIgEditing(null)}>Cancel</Button>
-              <Button
-                className="flex-1"
-                onClick={() => {
-                  if (igEditing) statusMutation.mutate({ id: igEditing.id, instagram_url: igUrl.trim() || null })
-                  setIgEditing(null)
-                }}
-              >
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setIgEditing(null)}>Cancel</Button>
+              <Button type="submit" className="flex-1">
                 Save
               </Button>
             </div>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

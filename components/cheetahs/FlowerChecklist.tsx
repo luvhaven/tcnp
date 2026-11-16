@@ -67,7 +67,7 @@ export default function FlowerChecklist({ cheetahId, cheetahCallSign }: { cheeta
                 .eq('id', user.id)
                 .single()
 
-            await (supabase as any).from('cheetah_flower_logs').insert([{
+            const { error: insertError } = await (supabase as any).from('cheetah_flower_logs').insert([{
                 cheetah_id: cheetahId,
                 checks,
                 all_passed: allChecked,
@@ -75,6 +75,9 @@ export default function FlowerChecklist({ cheetahId, cheetahCallSign }: { cheeta
                 performed_by_name: userData?.full_name || user.email,
                 performed_at: new Date().toISOString(),
             }])
+            // Supabase reports a failed write in `error` rather than throwing,
+            // so without this check a rejected insert still showed success.
+            if (insertError) throw insertError
 
             setLastLog({ performed_at: new Date().toISOString(), officer_name: userData?.full_name || 'You' })
             toast.success(`FLOWER checklist logged for ${cheetahCallSign}`, { description: allChecked ? 'All checks passed ✓' : `${checkedCount}/6 items checked` })

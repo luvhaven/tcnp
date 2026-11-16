@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import { notifyError } from '@/lib/notify'
+import { ErrorState } from "@/components/ui/error-state"
 import {
     Volume2,
     Plus,
@@ -42,13 +43,13 @@ import {
 
 // Equipment types with icons
 const EQUIPMENT_TYPES = [
-    { value: 'sound', label: 'Sound Equipment', icon: Volume2 },
-    { value: 'microphone', label: 'Microphones', icon: Mic },
-    { value: 'presentation', label: 'Presentation', icon: Monitor },
-    { value: 'camera', label: 'Cameras', icon: Camera },
-    { value: 'lighting', label: 'Lighting', icon: Lightbulb },
-    { value: 'cables', label: 'Cables & Accessories', icon: Cable },
-    { value: 'other', label: 'Other', icon: Package },
+    { value: 'sound', label: 'Sound Equipment', short: 'Sound', icon: Volume2 },
+    { value: 'microphone', label: 'Microphones', short: 'Mics', icon: Mic },
+    { value: 'presentation', label: 'Presentation', short: 'Screens', icon: Monitor },
+    { value: 'camera', label: 'Cameras', short: 'Cameras', icon: Camera },
+    { value: 'lighting', label: 'Lighting', short: 'Lights', icon: Lightbulb },
+    { value: 'cables', label: 'Cables & Accessories', short: 'Cables', icon: Cable },
+    { value: 'other', label: 'Other', short: 'Other', icon: Package },
 ]
 
 const STATUS_CONFIG = {
@@ -94,6 +95,8 @@ export default function EchoPage() {
     const [equipment, setEquipment] = useState<Equipment[]>([])
     const [programs, setPrograms] = useState<Program[]>([])
     const [loading, setLoading] = useState(true)
+    const [loadFailed, setLoadFailed] = useState(false)
+    const [retrying, setRetrying] = useState(false)
     const [dialogOpen, setDialogOpen] = useState(false)
     const [saving, setSaving] = useState(false)
     const [editing, setEditing] = useState<Equipment | null>(null)
@@ -167,6 +170,7 @@ export default function EchoPage() {
 
             if (equipmentError) throw equipmentError
             setEquipment(equipmentData || [])
+            setLoadFailed(false)
 
             // Load programs
             const { data: programsData } = await supabase
@@ -177,9 +181,19 @@ export default function EchoPage() {
             setPrograms(programsData || [])
         } catch (error) {
             console.error('Error loading data:', error)
+            setLoadFailed(true)
             toast.error('Failed to load equipment data')
         } finally {
             setLoading(false)
+        }
+    }
+
+    const retryLoad = async () => {
+        setRetrying(true)
+        try {
+            await loadData()
+        } finally {
+            setRetrying(false)
         }
     }
 
@@ -364,17 +378,6 @@ export default function EchoPage() {
 
     return (
         <div className="space-y-6 animate-fade-in">
-            {/* ── Papa AV Briefings + EO Pre-Op Checklist ── shown for Echo Oscar roles */}
-            {userRole && ['echo_oscar', 'head_echo_oscar'].includes(userRole) && (
-                <div className="grid gap-4 md:grid-cols-2">
-                    <PapaBriefingsSection role={userRole} />
-                    <EOChecklist
-                        programId={programs[0]?.id || ''}
-                        programName={programs[0]?.name || 'No program selected'}
-                    />
-                </div>
-            )}
-
             {/* Header */}
             <PageHeader
                 icon={Volume2}
@@ -389,6 +392,26 @@ export default function EchoPage() {
                 )}
             />
 
+            {/* ── Papa AV Briefings + EO Pre-Op Checklist ── shown for Echo Oscar roles */}
+            {userRole && ['echo_oscar', 'head_echo_oscar'].includes(userRole) && (
+                <div className="grid gap-4 md:grid-cols-2">
+                    <div className="min-w-0">
+                        <PapaBriefingsSection role={userRole} />
+                    </div>
+                    <EOChecklist programs={programs} />
+                </div>
+            )}
+
+            {loadFailed && equipment.length === 0 ? (
+                <Card>
+                    <ErrorState
+                        title="Could not load equipment"
+                        onRetry={retryLoad}
+                        retrying={retrying}
+                    />
+                </Card>
+            ) : (
+            <>
             {/* Stats Cards */}
             <StatGrid>
                 <StatCard label="Total Equipment" value={stats.total} />
@@ -430,8 +453,9 @@ export default function EchoPage() {
                 <TabsList className="flex flex-wrap h-auto gap-1">
                     <TabsTrigger value="all">All</TabsTrigger>
                     {EQUIPMENT_TYPES.map((type) => (
-                        <TabsTrigger key={type.value} value={type.value} className="gap-1">
-                            <type.icon className="h-4 w-4" />
+                        <TabsTrigger key={type.value} value={type.value} className="gap-1" aria-label={type.label}>
+                            <type.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            <span className="sm:hidden">{type.short}</span>
                             <span className="hidden sm:inline">{type.label}</span>
                         </TabsTrigger>
                     ))}
@@ -460,20 +484,20 @@ export default function EchoPage() {
                                 return (
                                     <Card key={item.id} className="hover:shadow-lg transition-all hover:-translate-y-0.5">
                                         <CardHeader className="pb-2">
-                                            <div className="flex items-start justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="p-2 rounded-md bg-primary/10">
-                                                        <TypeIcon className="h-5 w-5 text-primary" />
+                                            <div className="flex flex-wrap items-start justify-between gap-2">
+                                                <div className="flex min-w-0 flex-1 items-center gap-2">
+                                                    <div className="shrink-0 p-2 rounded-md bg-primary/10">
+                                                        <TypeIcon className="h-5 w-5 text-primary" aria-hidden="true" />
                                                     </div>
-                                                    <div>
-                                                        <CardTitle className="text-base">{item.name}</CardTitle>
+                                                    <div className="min-w-0">
+                                                        <CardTitle className="text-base break-words">{item.name}</CardTitle>
                                                         {item.subtype && (
-                                                            <CardDescription className="text-xs">{item.subtype}</CardDescription>
+                                                            <CardDescription className="text-xs break-words">{item.subtype}</CardDescription>
                                                         )}
                                                     </div>
                                                 </div>
-                                                <Badge className={`${statusConfig.color} text-white`}>
-                                                    <StatusIcon className="h-3 w-3 mr-1" />
+                                                <Badge className={`${statusConfig.color} text-white shrink-0 whitespace-nowrap`}>
+                                                    <StatusIcon className="h-3 w-3 mr-1" aria-hidden="true" />
                                                     {statusConfig.label}
                                                 </Badge>
                                             </div>
@@ -546,6 +570,8 @@ export default function EchoPage() {
                     )}
                 </TabsContent>
             </Tabs>
+            </>
+            )}
 
             {/* Create/Edit Dialog */}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

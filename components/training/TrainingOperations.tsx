@@ -31,6 +31,7 @@ import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { ErrorState } from "@/components/ui/error-state"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -136,9 +137,9 @@ function extractYouTubeId(value: string) {
   return null
 }
 
-function personName(id: string | null | undefined, officers: Officer[]) {
+function personName(id: string | null | undefined, names: Map<string, string>) {
   if (!id) return "Unassigned"
-  return officers.find((officer) => officer.id === id)?.full_name || "Protocol officer"
+  return names.get(id) || "Protocol officer"
 }
 
 function statusTone(status: string) {
@@ -204,11 +205,15 @@ function TrackedYouTubeLesson({
   const mountedRef = useRef(true)
   const [percent, setPercent] = useState(initialPercent)
   const [playerError, setPlayerError] = useState<string | null>(null)
+  // The YouTube player (and its API script) only mounts once the learner taps play,
+  // so a course with many lessons does not load every embed at once.
+  const [started, setStarted] = useState(false)
 
   useEffect(() => setPercent(initialPercent), [initialPercent])
   useEffect(() => { onWatchRef.current = onWatch }, [onWatch])
 
   useEffect(() => {
+    if (!started) return
     mountedRef.current = true
     let timer: ReturnType<typeof setInterval> | null = null
     let disposed = false
@@ -235,8 +240,12 @@ function TrackedYouTubeLesson({
         playerRef.current = new YT.Player(mountRef.current, {
           host: "https://www.youtube-nocookie.com",
           videoId,
-          playerVars: { rel: 0, modestbranding: 1, origin: window.location.origin },
+          playerVars: { rel: 0, modestbranding: 1, playsinline: 1, origin: window.location.origin },
           events: {
+            // The learner already tapped play on the preview, so start straight away.
+            onReady: (event: { target?: { playVideo?: () => void } }) => {
+              try { event.target?.playVideo?.() } catch { /* Autoplay blocked; the learner can press play in the player. */ }
+            },
             onStateChange: (event: { data: number }) => {
               if (event.data === 1) {
                 lastTickRef.current = performance.now()
@@ -273,12 +282,31 @@ function TrackedYouTubeLesson({
       try { playerRef.current?.destroy?.() } catch { /* Player already removed. */ }
       playerRef.current = null
     }
-  }, [lessonId, videoId])
+  }, [lessonId, videoId, started])
 
   return (
     <div className="space-y-2">
       <div className="aspect-video overflow-hidden rounded-xl bg-black">
-        {playerError ? <div className="grid h-full place-items-center px-6 text-center text-xs text-white/75">{playerError}</div> : <div ref={mountRef} className="h-full w-full" title={`${title} training video`} />}
+        {playerError ? (
+          <div className="grid h-full place-items-center px-6 text-center text-xs text-white/75">{playerError}</div>
+        ) : started ? (
+          <div ref={mountRef} className="h-full w-full" title={`${title} training video`} />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setStarted(true)}
+            className="group relative block h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            aria-label={`Play ${title}`}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- YouTube's own thumbnail; the image optimiser adds nothing here */}
+            <img src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`} alt="" loading="lazy" className="h-full w-full object-cover opacity-80 transition-opacity group-hover:opacity-100" />
+            <span className="absolute inset-0 grid place-items-center">
+              <span className="grid h-14 w-14 place-items-center rounded-full bg-black/70 text-white shadow-lg transition-transform group-hover:scale-105">
+                <PlayCircle className="h-8 w-8" aria-hidden="true" />
+              </span>
+            </span>
+          </button>
+        )}
       </div>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-emerald-500 transition-[width]" style={{ width: `${percent}%` }} /></div>
@@ -296,6 +324,8 @@ export default function TrainingOperations() {
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null)
   const [selectedScheduleId, setSelectedScheduleId] = useState<string>("")
   const [memberSearch, setMemberSearch] = useState("")
+  const [attendanceSearch, setAttendanceSearch] = useState("")
+  const [bulkMarking, setBulkMarking] = useState(false)
   const [courseOpen, setCourseOpen] = useState(false)
   const [lessonOpen, setLessonOpen] = useState(false)
   const [memberOpen, setMemberOpen] = useState(false)
@@ -344,7 +374,7 @@ export default function TrainingOperations() {
 
   const canManage = Boolean(isPlatformAdministrator(currentUser?.role, currentUser?.has_admin_access) || (myMembership && MANAGEMENT_LEVELS.has(myMembership.access_level)))
 
-  const { data: courses = [], isLoading: coursesLoading } = useQuery({
+  const coursesQuery = useQuery({
     queryKey: ["training-courses"],
     queryFn: async () => {
       const { data, error } = await (supabase as any).from("training_courses").select("*").order("created_at", { ascending: false })
@@ -353,7 +383,7 @@ export default function TrainingOperations() {
     },
   })
 
-  const { data: lessons = [] } = useQuery({
+  const lessonsQuery = useQuery({
     queryKey: ["training-lessons"],
     queryFn: async () => {
       const { data, error } = await (supabase as any).from("training_lessons").select("*").order("sort_order")
@@ -361,8 +391,17 @@ export default function TrainingOperations() {
       return (data || []) as TrainingLesson[]
     },
   })
+  const courses = useMemo(() => coursesQuery.data ?? [], [coursesQuery.data])
+  const lessons = useMemo(() => lessonsQuery.data ?? [], [lessonsQuery.data])
+  const coursesLoading = coursesQuery.isLoading || lessonsQuery.isLoading
+  const coursesFailed = coursesQuery.isError || lessonsQuery.isError
+  const coursesRetrying = coursesQuery.isFetching || lessonsQuery.isFetching
+  const retryCourses = () => {
+    if (coursesQuery.isError) void coursesQuery.refetch()
+    if (lessonsQuery.isError) void lessonsQuery.refetch()
+  }
 
-  const { data: progress = [] } = useQuery({
+  const progressQuery = useQuery({
     queryKey: ["training-progress", currentUser?.id, canManage],
     enabled: Boolean(currentUser?.id),
     queryFn: async () => {
@@ -373,8 +412,9 @@ export default function TrainingOperations() {
       return (data || []) as LessonProgress[]
     },
   })
+  const progress = useMemo(() => progressQuery.data ?? [], [progressQuery.data])
 
-  const { data: assignments = [] } = useQuery({
+  const assignmentsQuery = useQuery({
     queryKey: ["training-course-assignments", currentUser?.id, canManage],
     enabled: Boolean(currentUser?.id),
     queryFn: async () => {
@@ -385,8 +425,9 @@ export default function TrainingOperations() {
       return (data || []) as CourseAssignment[]
     },
   })
+  const assignments = useMemo(() => assignmentsQuery.data ?? [], [assignmentsQuery.data])
 
-  const { data: schedules = [] } = useQuery({
+  const schedulesQuery = useQuery({
     queryKey: ["training-schedules"],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
@@ -397,8 +438,9 @@ export default function TrainingOperations() {
       return (data || []) as TrainingSchedule[]
     },
   })
+  const schedules = useMemo(() => schedulesQuery.data ?? [], [schedulesQuery.data])
 
-  const { data: attendance = [] } = useQuery({
+  const attendanceQuery = useQuery({
     queryKey: ["training-attendance", currentUser?.id, canManage],
     enabled: Boolean(currentUser?.id),
     queryFn: async () => {
@@ -409,8 +451,9 @@ export default function TrainingOperations() {
       return (data || []) as Attendance[]
     },
   })
+  const attendance = useMemo(() => attendanceQuery.data ?? [], [attendanceQuery.data])
 
-  const { data: evaluations = [] } = useQuery({
+  const evaluationsQuery = useQuery({
     queryKey: ["training-evaluations", currentUser?.id, canManage],
     enabled: Boolean(currentUser?.id),
     queryFn: async () => {
@@ -422,8 +465,31 @@ export default function TrainingOperations() {
       return (data || []) as Evaluation[]
     },
   })
+  const evaluations = useMemo(() => evaluationsQuery.data ?? [], [evaluationsQuery.data])
 
-  const { data: officers = [] } = useQuery({
+  // Display names for the people on the evaluations this user can see. The full
+  // officer list below stays manager-only (it feeds the pickers); this loads just
+  // id + full_name for the ids already present, so members see real names too.
+  const evaluationPeopleIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const evaluation of evaluations) {
+      if (evaluation.subject_user_id) ids.add(evaluation.subject_user_id)
+      if (evaluation.evaluator_id) ids.add(evaluation.evaluator_id)
+    }
+    return Array.from(ids).sort()
+  }, [evaluations])
+
+  const { data: evaluationPeople = [] } = useQuery({
+    queryKey: ["training-evaluation-people", evaluationPeopleIds.join(",")],
+    enabled: evaluationPeopleIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("users").select("id, full_name").in("id", evaluationPeopleIds)
+      if (error) throw error
+      return (data || []) as Array<{ id: string; full_name: string | null }>
+    },
+  })
+
+  const { data: officers = [], isError: officersFailed, refetch: refetchOfficers, isFetching: officersFetching } = useQuery({
     queryKey: ["training-officers"],
     enabled: Boolean(canManage),
     queryFn: async () => {
@@ -450,6 +516,11 @@ export default function TrainingOperations() {
       return (data || []) as UnitMembership[]
     },
   })
+
+  const nameById = new Map<string, string>()
+  for (const person of evaluationPeople) if (person.full_name) nameById.set(person.id, person.full_name)
+  for (const officer of officers) if (officer.full_name) nameById.set(officer.id, officer.full_name)
+  if (currentUser?.id && currentUser.full_name) nameById.set(currentUser.id, currentUser.full_name)
 
   const selectedCourse = courses.find((course) => course.id === activeCourseId) || courses[0] || null
   const selectedLessons = lessons.filter((lesson) => lesson.course_id === selectedCourse?.id)
@@ -581,6 +652,64 @@ export default function TrainingOperations() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["training-attendance"] }),
     onError: (error: any) => notifyError(error, "Attendance could not be updated"),
   })
+
+  const attendanceSearchText = attendanceSearch.trim().toLowerCase()
+  const attendanceOfficers = attendanceSearchText
+    ? officers.filter((officer) => `${officer.full_name || ""} ${officer.email || ""} ${officer.oscar || ""} ${officer.team || ""}`.toLowerCase().includes(attendanceSearchText))
+    : officers
+  const unmarkedShownOfficers = attendanceOfficers.filter((officer) => !attendance.some((item) => item.training_schedule_id === selectedSchedule && item.user_id === officer.id))
+
+  // Marks only the officers currently shown who have no mark yet. The list on screen
+  // can be out of date (another Training head may have just marked someone), so the
+  // save is a single insert that skips any officer who already has a row for this
+  // session (training_attendance_unique) instead of the per-officer upsert, which
+  // would overwrite that mark. Existing marks are never changed.
+  const markAllShownPresent = async () => {
+    const targets = unmarkedShownOfficers
+    if (!targets.length || bulkMarking || !attendanceQuery.isSuccess) return
+    if (!selectedSchedule || !currentUser?.id) {
+      toast.error("Choose a training session")
+      return
+    }
+    const plural = targets.length === 1 ? "" : "s"
+    const ok = await confirm({
+      title: "Mark everyone shown as present?",
+      message: `${targets.length} officer${plural} with no mark yet for this session will be marked present. Officers who already have a mark are not changed.`,
+      confirmText: `Mark ${targets.length} present`,
+      variant: "default",
+    })
+    if (!ok) return
+    setBulkMarking(true)
+    try {
+      const checkedInAt = new Date().toISOString()
+      const { data, error } = await (supabase as any)
+        .from("training_attendance")
+        .upsert(
+          targets.map((officer) => ({
+            training_schedule_id: selectedSchedule,
+            user_id: officer.id,
+            status: "present",
+            checked_in_at: checkedInAt,
+            checked_in_by: currentUser.id,
+          })),
+          { onConflict: "training_schedule_id,user_id", ignoreDuplicates: true }
+        )
+        .select("user_id")
+      if (error) throw error
+      // Only newly inserted rows come back; the rest already had a mark.
+      const marked = Array.isArray(data) ? data.length : 0
+      const skipped = targets.length - marked
+      toast.success(
+        `Marked ${marked} officer${marked === 1 ? "" : "s"} present` +
+          (skipped > 0 ? `. ${skipped} already had a mark and ${skipped === 1 ? "was" : "were"} left unchanged` : "")
+      )
+    } catch (error: any) {
+      notifyError(error, "Attendance could not be updated")
+    } finally {
+      setBulkMarking(false)
+      queryClient.invalidateQueries({ queryKey: ["training-attendance"] })
+    }
+  }
 
   const broadcastTraining = useMutation({
     mutationFn: async () => {
@@ -775,6 +904,8 @@ export default function TrainingOperations() {
 
           {coursesLoading ? (
             <div className="grid gap-3 lg:grid-cols-[.72fr_1.28fr]"><div className="skeleton h-72 rounded-2xl" /><div className="skeleton h-72 rounded-2xl" /></div>
+          ) : coursesFailed ? (
+            <ErrorState title="Could not load courses" className="rounded-2xl border" onRetry={retryCourses} retrying={coursesRetrying} />
           ) : courses.length === 0 ? (
             <div className="empty-state rounded-2xl border py-12"><GraduationCap className="h-10 w-10" /><p className="font-medium">No courses published</p><p className="text-sm text-muted-foreground">Training leaders can build the first course from here.</p></div>
           ) : (
@@ -833,13 +964,20 @@ export default function TrainingOperations() {
 
         {canManage && <TabsContent value="progress" className="mt-0 space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 className="text-lg font-semibold tracking-tight">Learner progress</h3><p className="text-sm text-muted-foreground">See who has started, what is complete and when each assignment is due.</p></div><Select value={selectedCourse?.id || ""} onValueChange={setActiveCourseId}><SelectTrigger className="w-full sm:w-[20rem]"><SelectValue placeholder="Choose a course" /></SelectTrigger><SelectContent>{courses.map((course) => <SelectItem key={course.id} value={course.id}>{course.title}</SelectItem>)}</SelectContent></Select></div>
-          {!selectedCourse ? <div className="empty-state rounded-2xl border"><BookOpen className="h-9 w-9" /><p className="font-medium">Create a course first</p></div> : assignments.filter((assignment) => assignment.course_id === selectedCourse.id).length === 0 ? <div className="empty-state rounded-2xl border"><UserPlus className="h-9 w-9" /><p className="font-medium">No learners assigned</p><p className="text-sm text-muted-foreground">Assign this course to begin tracking individual completion.</p><Button variant="outline" onClick={() => setAssignmentOpen(true)}>Assign learner</Button></div> : <div className="overflow-hidden rounded-2xl border bg-card/70"><div className="grid grid-cols-[minmax(0,1fr)_auto] border-b bg-muted/35 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:grid-cols-[minmax(0,1fr)_8rem_8rem]"><span>Learner</span><span>Progress</span><span className="hidden sm:block">Due</span></div><div className="divide-y">{assignments.filter((assignment) => assignment.course_id === selectedCourse.id).map((assignment) => { const officer = officers.find((item) => item.id === assignment.user_id); const lessonIds = selectedLessons.map((lesson) => lesson.id); const complete = progress.filter((item) => item.user_id === assignment.user_id && lessonIds.includes(item.lesson_id) && (item.completed_at || item.percent_complete >= 100)).length; const percent = lessonIds.length ? Math.round((complete / lessonIds.length) * 100) : 0; const overdue = Boolean(assignment.due_at && new Date(assignment.due_at) < new Date() && percent < 100); return <div key={assignment.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_8rem_8rem]"><div className="min-w-0"><p className="truncate text-sm font-medium">{officer?.full_name || officer?.email || "Protocol officer"}</p><p className="text-xs text-muted-foreground">{complete} of {lessonIds.length} lessons</p></div><div className="flex items-center gap-2"><div className="h-1.5 w-14 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} /></div><span className="w-8 text-right font-mono text-xs tabular-nums">{percent}%</span></div><div className="hidden sm:block"><Badge className={cn("border-0 text-xs", statusTone(percent === 100 ? "completed" : overdue ? "overdue" : assignment.status))}>{percent === 100 ? "completed" : overdue ? "overdue" : assignment.status.replaceAll("_", " ")}</Badge>{assignment.due_at && <p className="mt-1 text-xs text-muted-foreground">{new Date(assignment.due_at).toLocaleDateString()}</p>}</div></div> })}</div></div>}
+          {assignmentsQuery.isError || progressQuery.isError || coursesFailed ? <ErrorState title="Could not load learner progress" className="rounded-2xl border" onRetry={() => { if (assignmentsQuery.isError) void assignmentsQuery.refetch(); if (progressQuery.isError) void progressQuery.refetch(); retryCourses() }} retrying={assignmentsQuery.isFetching || progressQuery.isFetching || coursesRetrying} /> : !selectedCourse ? <div className="empty-state rounded-2xl border"><BookOpen className="h-9 w-9" /><p className="font-medium">Create a course first</p></div> : assignments.filter((assignment) => assignment.course_id === selectedCourse.id).length === 0 ? <div className="empty-state rounded-2xl border"><UserPlus className="h-9 w-9" /><p className="font-medium">No learners assigned</p><p className="text-sm text-muted-foreground">Assign this course to begin tracking individual completion.</p><Button variant="outline" onClick={() => setAssignmentOpen(true)}>Assign learner</Button></div> : <div className="overflow-hidden rounded-2xl border bg-card/70"><div className="grid grid-cols-[minmax(0,1fr)_auto] border-b bg-muted/35 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:grid-cols-[minmax(0,1fr)_8rem_8rem]"><span>Learner</span><span>Progress</span><span className="hidden sm:block">Due</span></div><div className="divide-y">{assignments.filter((assignment) => assignment.course_id === selectedCourse.id).map((assignment) => { const officer = officers.find((item) => item.id === assignment.user_id); const lessonIds = selectedLessons.map((lesson) => lesson.id); const complete = progress.filter((item) => item.user_id === assignment.user_id && lessonIds.includes(item.lesson_id) && (item.completed_at || item.percent_complete >= 100)).length; const percent = lessonIds.length ? Math.round((complete / lessonIds.length) * 100) : 0; const overdue = Boolean(assignment.due_at && new Date(assignment.due_at) < new Date() && percent < 100); const statusKey = percent === 100 ? "completed" : overdue ? "overdue" : assignment.status; const statusLabel = percent === 100 ? "completed" : overdue ? "overdue" : assignment.status.replaceAll("_", " "); const dueLabel = assignment.due_at ? new Date(assignment.due_at).toLocaleDateString() : null; return <div key={assignment.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_8rem_8rem]"><div className="min-w-0"><p className="truncate text-sm font-medium">{officer?.full_name || officer?.email || "Protocol officer"}</p><p className="text-xs text-muted-foreground">{complete} of {lessonIds.length} lessons</p><div className="mt-1 flex flex-wrap items-center gap-1.5 sm:hidden"><Badge className={cn("border-0 px-1.5 py-0 text-[11px]", statusTone(statusKey))}>{statusLabel}</Badge>{dueLabel && <span className={cn("text-xs", overdue ? "font-medium text-red-700 dark:text-red-300" : "text-muted-foreground")}>Due {dueLabel}</span>}</div></div><div className="flex items-center gap-2"><div className="h-1.5 w-14 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} /></div><span className="w-8 text-right font-mono text-xs tabular-nums">{percent}%</span></div><div className="hidden sm:block"><Badge className={cn("border-0 text-xs", statusTone(statusKey))}>{statusLabel}</Badge>{dueLabel && <p className="mt-1 text-xs text-muted-foreground">{dueLabel}</p>}</div></div> })}</div></div>}
         </TabsContent>}
 
         <TabsContent value="attendance" className="mt-0 space-y-4">
-          <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 className="text-lg font-semibold tracking-tight">Session attendance</h3><p className="text-sm text-muted-foreground">A clear record for every in-person and virtual training event.</p></div><div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row"><Select value={selectedSchedule} onValueChange={setSelectedScheduleId}><SelectTrigger className="w-full sm:w-[20rem]"><SelectValue placeholder="Choose a session" /></SelectTrigger><SelectContent>{schedules.map((schedule) => <SelectItem key={schedule.id} value={schedule.id}>{schedule.session_date} · {schedule.topic}</SelectItem>)}</SelectContent></Select>{canManage && selectedSchedule && <Button variant="outline" className="gap-2" onClick={() => broadcastTraining.mutate()} disabled={broadcastTraining.isPending}>{broadcastTraining.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Megaphone className="h-4 w-4" />}{schedules.find((schedule) => schedule.id === selectedSchedule)?.broadcast_sent_at ? "Broadcast again" : "Broadcast"}</Button>}</div></div>
-          {!selectedSchedule ? <div className="empty-state rounded-2xl border"><CalendarCheck className="h-9 w-9" /><p className="font-medium">Schedule a session first</p></div> : canManage ? (
-            <div className="overflow-hidden rounded-2xl border bg-card/70"><div className="grid grid-cols-[1fr_auto] border-b bg-muted/35 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"><span>Officer</span><span>Status</span></div><div className="divide-y">{officers.map((officer) => { const row = attendance.find((item) => item.training_schedule_id === selectedSchedule && item.user_id === officer.id); return <div key={officer.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"><div><p className="text-sm font-medium">{officer.full_name || officer.email}</p><p className="text-xs text-muted-foreground">{officer.oscar || officer.team || "Protocol member"}</p></div><Select value={row?.status || "unmarked"} onValueChange={(status) => status !== "unmarked" && setAttendance.mutate({ userId: officer.id, status })}><SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unmarked" disabled>Unmarked</SelectItem><SelectItem value="present">Present</SelectItem><SelectItem value="late">Late</SelectItem><SelectItem value="absent">Absent</SelectItem><SelectItem value="excused">Excused</SelectItem></SelectContent></Select></div> })}</div></div>
+          <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 className="text-lg font-semibold tracking-tight">Session attendance</h3><p className="text-sm text-muted-foreground">A clear record for every in-person and virtual training event.</p></div><div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row"><Select value={selectedSchedule} onValueChange={setSelectedScheduleId} disabled={bulkMarking}><SelectTrigger className="w-full sm:w-[20rem]" aria-label="Training session"><SelectValue placeholder="Choose a session" /></SelectTrigger><SelectContent>{schedules.map((schedule) => <SelectItem key={schedule.id} value={schedule.id}>{schedule.session_date} · {schedule.topic}</SelectItem>)}</SelectContent></Select>{canManage && selectedSchedule && <Button variant="outline" className="gap-2" onClick={() => broadcastTraining.mutate()} disabled={broadcastTraining.isPending}>{broadcastTraining.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Megaphone className="h-4 w-4" />}{schedules.find((schedule) => schedule.id === selectedSchedule)?.broadcast_sent_at ? "Broadcast again" : "Broadcast"}</Button>}</div></div>
+          {schedulesQuery.isLoading ? <div className="skeleton h-40 rounded-2xl" /> : schedulesQuery.isError ? <ErrorState title="Could not load training sessions" className="rounded-2xl border" onRetry={() => { void schedulesQuery.refetch() }} retrying={schedulesQuery.isFetching} /> : !selectedSchedule ? <div className="empty-state rounded-2xl border"><CalendarCheck className="h-9 w-9" /><p className="font-medium">Schedule a session first</p></div> : attendanceQuery.isError ? <ErrorState title="Could not load attendance" className="rounded-2xl border" onRetry={() => { void attendanceQuery.refetch() }} retrying={attendanceQuery.isFetching} /> : canManage ? (
+            officersFailed ? <ErrorState title="Could not load officers" className="rounded-2xl border" onRetry={() => { void refetchOfficers() }} retrying={officersFetching} /> :
+            <div className="space-y-3">
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="relative w-full sm:max-w-sm"><Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden="true" /><Input type="search" value={attendanceSearch} onChange={(event) => setAttendanceSearch(event.target.value)} className="pl-9" placeholder="Search officers" aria-label="Search officers by name, unit or team" /></div>
+                <Button variant="outline" className="gap-2" onClick={() => { void markAllShownPresent() }} disabled={bulkMarking || !attendanceQuery.isSuccess || unmarkedShownOfficers.length === 0} title={!attendanceQuery.isSuccess ? "Loading attendance…" : unmarkedShownOfficers.length === 0 ? "Everyone shown already has a mark" : undefined}>{bulkMarking ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="h-4 w-4" aria-hidden="true" />}{bulkMarking ? "Marking…" : `Mark all shown present (${unmarkedShownOfficers.length})`}</Button>
+              </div>
+            <div className="overflow-hidden rounded-2xl border bg-card/70"><div className="grid grid-cols-[1fr_auto] border-b bg-muted/35 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"><span>Officer</span><span>Status</span></div><div className="divide-y">{attendanceOfficers.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">{attendanceSearchText ? "No officers match that search." : "No active officers found."}</p> : attendanceOfficers.map((officer) => { const row = attendance.find((item) => item.training_schedule_id === selectedSchedule && item.user_id === officer.id); return <div key={officer.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{officer.full_name || officer.email}</p><p className="truncate text-xs text-muted-foreground">{officer.oscar || officer.team || "Protocol member"}</p></div><Select value={row?.status || "unmarked"} disabled={bulkMarking} onValueChange={(status) => status !== "unmarked" && setAttendance.mutate({ userId: officer.id, status })}><SelectTrigger className="h-8 w-32" aria-label={`Attendance for ${officer.full_name || officer.email || "officer"}`}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unmarked" disabled>Unmarked</SelectItem><SelectItem value="present">Present</SelectItem><SelectItem value="late">Late</SelectItem><SelectItem value="absent">Absent</SelectItem><SelectItem value="excused">Excused</SelectItem></SelectContent></Select></div> })}</div></div>
+            </div>
           ) : (
             <div className="rounded-2xl border bg-card/70 p-5">{(() => { const row = attendance.find((item) => item.training_schedule_id === selectedSchedule && item.user_id === currentUser?.id); return <div className="flex items-center justify-between gap-4"><div><p className="font-medium">Your attendance</p><p className="text-sm text-muted-foreground">The Training team records the official status.</p></div><Badge className={cn("border-0 capitalize", statusTone(row?.status || "unmarked"))}>{row?.status || "Unmarked"}</Badge></div> })()}</div>
           )}
@@ -847,7 +985,7 @@ export default function TrainingOperations() {
 
         <TabsContent value="evaluations" className="mt-0 space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 className="text-lg font-semibold tracking-tight">Member evaluations</h3><p className="text-sm text-muted-foreground">Structured review for new and existing protocol members.</p></div>{canManage && <Button onClick={() => setEvaluationOpen(true)} className="gap-2"><Plus className="h-4 w-4" />Start evaluation</Button>}</div>
-          {evaluations.length === 0 ? <div className="empty-state rounded-2xl border"><ClipboardCheck className="h-9 w-9" /><p className="font-medium">No evaluations due</p><p className="text-sm text-muted-foreground">New evaluation requests and feedback will appear here.</p></div> : <div className="grid gap-3 md:grid-cols-2">{evaluations.map((evaluation) => <button key={evaluation.id} type="button" onClick={() => openEvaluation(evaluation)} className="rounded-2xl border bg-card/70 p-4 text-left transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{personName(evaluation.subject_user_id, officers)}</p><p className="mt-0.5 text-xs capitalize text-muted-foreground">{evaluation.member_stage} member review</p></div><Badge className={cn("border-0 capitalize", statusTone(evaluation.status))}>{evaluation.status.replace(/_/g, " ")}</Badge></div><div className="mt-4 flex items-center justify-between text-xs text-muted-foreground"><span>{evaluation.due_at ? `Due ${new Date(evaluation.due_at).toLocaleDateString()}` : "No due date"}</span>{evaluation.score != null && <span className="font-mono font-semibold tabular-nums text-foreground">{evaluation.score}/100</span>}</div></button>)}</div>}
+          {evaluationsQuery.isLoading ? <div className="grid gap-3 md:grid-cols-2"><div className="skeleton h-28 rounded-2xl" /><div className="skeleton h-28 rounded-2xl" /></div> : evaluationsQuery.isError ? <ErrorState title="Could not load evaluations" className="rounded-2xl border" onRetry={() => { void evaluationsQuery.refetch() }} retrying={evaluationsQuery.isFetching} /> : evaluations.length === 0 ? <div className="empty-state rounded-2xl border"><ClipboardCheck className="h-9 w-9" /><p className="font-medium">No evaluations due</p><p className="text-sm text-muted-foreground">New evaluation requests and feedback will appear here.</p></div> : <div className="grid gap-3 md:grid-cols-2">{evaluations.map((evaluation) => <button key={evaluation.id} type="button" onClick={() => openEvaluation(evaluation)} className="rounded-2xl border bg-card/70 p-4 text-left transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium">{personName(evaluation.subject_user_id, nameById)}</p><p className="mt-0.5 text-xs capitalize text-muted-foreground">{evaluation.member_stage} member review</p></div><Badge className={cn("border-0 capitalize", statusTone(evaluation.status))}>{evaluation.status.replace(/_/g, " ")}</Badge></div><div className="mt-4 flex items-center justify-between text-xs text-muted-foreground"><span>{evaluation.due_at ? `Due ${new Date(evaluation.due_at).toLocaleDateString()}` : "No due date"}</span>{evaluation.score != null && <span className="font-mono font-semibold tabular-nums text-foreground">{evaluation.score}/100</span>}</div></button>)}</div>}
         </TabsContent>
 
         {canManage && <TabsContent value="members" className="mt-0 space-y-4">
@@ -866,7 +1004,7 @@ export default function TrainingOperations() {
 
       <Dialog open={evaluationOpen} onOpenChange={setEvaluationOpen}><DialogContent className="max-w-lg"><DialogHeader><DialogTitle>Start member evaluation</DialogTitle><DialogDescription>Create a visible review flow with a clear due date.</DialogDescription></DialogHeader><form onSubmit={(event: FormEvent) => { event.preventDefault(); createEvaluation.mutate() }} className="space-y-4"><div className="space-y-2"><Label>Member</Label><Select value={evaluationForm.subject_user_id} onValueChange={(subject_user_id) => setEvaluationForm({ ...evaluationForm, subject_user_id })}><SelectTrigger><SelectValue placeholder="Choose a member" /></SelectTrigger><SelectContent>{officers.map((officer) => <SelectItem key={officer.id} value={officer.id}>{officer.full_name || officer.email}</SelectItem>)}</SelectContent></Select></div><div className="grid grid-cols-2 gap-3"><div className="space-y-2"><Label>Member stage</Label><Select value={evaluationForm.member_stage} onValueChange={(member_stage) => setEvaluationForm({ ...evaluationForm, member_stage })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="new">New member</SelectItem><SelectItem value="existing">Existing member</SelectItem></SelectContent></Select></div><div className="space-y-2"><Label>Due date</Label><Input type="datetime-local" value={evaluationForm.due_at} onChange={(event) => setEvaluationForm({ ...evaluationForm, due_at: event.target.value })} /></div></div><div className="space-y-2"><Label>Training session</Label><Select value={evaluationForm.training_schedule_id || "none"} onValueChange={(value) => setEvaluationForm({ ...evaluationForm, training_schedule_id: value === "none" ? "" : value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">General evaluation</SelectItem>{schedules.map((schedule) => <SelectItem key={schedule.id} value={schedule.id}>{schedule.topic}</SelectItem>)}</SelectContent></Select></div><Button className="w-full" disabled={createEvaluation.isPending}>Open evaluation</Button></form></DialogContent></Dialog>
 
-      <Dialog open={Boolean(editingEvaluation)} onOpenChange={(open) => !open && setEditingEvaluation(null)}><DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto"><DialogHeader><DialogTitle>Member evaluation</DialogTitle><DialogDescription>{editingEvaluation ? (editingEvaluation.subject_user_id === currentUser?.id ? `Your ${editingEvaluation.member_stage} member review` : `${personName(editingEvaluation.subject_user_id, officers)} · ${editingEvaluation.member_stage} member review`) : "Review"}</DialogDescription></DialogHeader><form onSubmit={(event: FormEvent) => { event.preventDefault(); if (canEditEvaluation) saveEvaluation.mutate() }} className="space-y-4"><div className="space-y-2"><div className="flex items-center justify-between gap-3"><Label>Member reflection</Label>{Boolean(editingEvaluation?.responses?.reflection_submitted_at) ? <Badge variant="success" className="text-xs">Submitted</Badge> : null}</div><Textarea rows={4} disabled={!canSubmitReflection} value={evaluationForm.reflection} onChange={(event) => setEvaluationForm({ ...evaluationForm, reflection: event.target.value })} placeholder="What was learned, applied and found challenging?" />{canSubmitReflection && <Button type="button" variant="outline" className="w-full" disabled={saveReflection.isPending || evaluationForm.reflection.trim().length < 10} onClick={() => saveReflection.mutate()}>{saveReflection.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardCheck className="mr-2 h-4 w-4" />}Submit my reflection</Button>}</div>{canEditEvaluation && <><div className="border-t pt-4"><p className="text-sm font-semibold">Evaluator review</p><p className="text-xs text-muted-foreground">Reviewer notes remain private until this evaluation is completed.</p></div><div className="space-y-2"><Label>Score (0–100)</Label><Input type="number" min="0" max="100" value={evaluationForm.score} onChange={(event) => setEvaluationForm({ ...evaluationForm, score: event.target.value })} /></div><div className="grid gap-3 sm:grid-cols-2"><div className="space-y-2"><Label>Strengths</Label><Textarea rows={3} value={evaluationForm.strengths} onChange={(event) => setEvaluationForm({ ...evaluationForm, strengths: event.target.value })} /></div><div className="space-y-2"><Label>Growth areas</Label><Textarea rows={3} value={evaluationForm.growth_areas} onChange={(event) => setEvaluationForm({ ...evaluationForm, growth_areas: event.target.value })} /></div></div><div className="space-y-2"><Label>Reviewer feedback</Label><Textarea rows={4} value={evaluationForm.feedback} onChange={(event) => setEvaluationForm({ ...evaluationForm, feedback: event.target.value })} /></div><Button className="w-full" disabled={saveEvaluation.isPending}>{saveEvaluation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}Complete evaluation</Button></>}{!canEditEvaluation && !canSubmitReflection ? <Button type="button" variant="outline" className="w-full" onClick={() => setEditingEvaluation(null)}>Close review</Button> : null}</form></DialogContent></Dialog>
+      <Dialog open={Boolean(editingEvaluation)} onOpenChange={(open) => !open && setEditingEvaluation(null)}><DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto"><DialogHeader><DialogTitle>Member evaluation</DialogTitle><DialogDescription>{editingEvaluation ? (editingEvaluation.subject_user_id === currentUser?.id ? `Your ${editingEvaluation.member_stage} member review` : `${personName(editingEvaluation.subject_user_id, nameById)} · ${editingEvaluation.member_stage} member review`) : "Review"}</DialogDescription></DialogHeader><form onSubmit={(event: FormEvent) => { event.preventDefault(); if (canEditEvaluation) saveEvaluation.mutate() }} className="space-y-4"><div className="space-y-2"><div className="flex items-center justify-between gap-3"><Label>Member reflection</Label>{Boolean(editingEvaluation?.responses?.reflection_submitted_at) ? <Badge variant="success" className="text-xs">Submitted</Badge> : null}</div><Textarea rows={4} disabled={!canSubmitReflection} value={evaluationForm.reflection} onChange={(event) => setEvaluationForm({ ...evaluationForm, reflection: event.target.value })} placeholder="What was learned, applied and found challenging?" />{canSubmitReflection && <Button type="button" variant="outline" className="w-full" disabled={saveReflection.isPending || evaluationForm.reflection.trim().length < 10} onClick={() => saveReflection.mutate()}>{saveReflection.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardCheck className="mr-2 h-4 w-4" />}Submit my reflection</Button>}</div>{canEditEvaluation && <><div className="border-t pt-4"><p className="text-sm font-semibold">Evaluator review</p><p className="text-xs text-muted-foreground">Reviewer notes remain private until this evaluation is completed.</p></div><div className="space-y-2"><Label>Score (0–100)</Label><Input type="number" min="0" max="100" value={evaluationForm.score} onChange={(event) => setEvaluationForm({ ...evaluationForm, score: event.target.value })} /></div><div className="grid gap-3 sm:grid-cols-2"><div className="space-y-2"><Label>Strengths</Label><Textarea rows={3} value={evaluationForm.strengths} onChange={(event) => setEvaluationForm({ ...evaluationForm, strengths: event.target.value })} /></div><div className="space-y-2"><Label>Growth areas</Label><Textarea rows={3} value={evaluationForm.growth_areas} onChange={(event) => setEvaluationForm({ ...evaluationForm, growth_areas: event.target.value })} /></div></div><div className="space-y-2"><Label>Reviewer feedback</Label><Textarea rows={4} value={evaluationForm.feedback} onChange={(event) => setEvaluationForm({ ...evaluationForm, feedback: event.target.value })} /></div><Button className="w-full" disabled={saveEvaluation.isPending}>{saveEvaluation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}Complete evaluation</Button></>}{!canEditEvaluation && !canSubmitReflection ? <Button type="button" variant="outline" className="w-full" onClick={() => setEditingEvaluation(null)}>Close review</Button> : null}</form></DialogContent></Dialog>
     </section>
   )
 }

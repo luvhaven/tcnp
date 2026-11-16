@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { notifyError, UserFacingError } from '@/lib/notify'
 import {
+  Archive,
   Award,
   CalendarRange,
   Check,
@@ -18,7 +19,6 @@ import {
   Plus,
   Sparkles,
   Target,
-  Trash2,
   UserRound,
   UsersRound,
 } from "lucide-react"
@@ -34,6 +34,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
+import { ErrorState } from "@/components/ui/error-state"
 
 const supabase = createClient()
 
@@ -104,6 +105,12 @@ function formatDate(value: string | null) {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value))
+}
+
+/** Missing table/relation (not yet migrated) rather than a network or permission failure. */
+function isNotProvisioned(error: unknown) {
+  const code = (error as { code?: string } | null)?.code
+  return code === "42P01" || code === "PGRST205" || code === "PGRST200"
 }
 
 function toLocalInput(value: string | null) {
@@ -217,6 +224,29 @@ export default function ComplianceInitiatives() {
   const projects = projectsQuery.data ?? []
   const tasks = tasksQuery.data ?? []
   const officers = officersQuery.data ?? []
+
+  // Owner names for display, for everyone. The full officer list above stays
+  // manager-only (it feeds the assignee picker); this only reads the people
+  // who already own a task.
+  const assigneeIds = useMemo(
+    () => Array.from(new Set((tasksQuery.data ?? []).map((task) => task.assigned_to).filter((id): id is string => Boolean(id)))).sort(),
+    [tasksQuery.data],
+  )
+  const assigneeNamesQuery = useQuery({
+    queryKey: ["compliance-unit-task-owners", assigneeIds.join(",")],
+    enabled: assigneeIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("users").select("id, full_name").in("id", assigneeIds)
+      if (error) throw error
+      return (data ?? []) as { id: string; full_name: string | null }[]
+    },
+  })
+  const ownerName = (userId: string | null) => {
+    if (!userId) return null
+    const officer = officers.find((item) => item.id === userId)
+    if (officer) return officer.full_name || officer.email
+    return assigneeNamesQuery.data?.find((item) => item.id === userId)?.full_name ?? null
+  }
   const filteredProjects = activeType === "all" ? projects : projects.filter((project) => project.project_type === activeType)
   const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null
   const completedTaskCount = tasks.filter((task) => task.status === "done").length
@@ -320,7 +350,8 @@ export default function ComplianceInitiatives() {
       title: "Archive initiative?",
       message: "The initiative will be cancelled while its task history stays available for review.",
       confirmText: "Archive",
-      variant: "destructive",
+      // Archiving cancels; it deletes nothing, so it must not wear the delete styling.
+      variant: "default",
     })
     if (!approved) return
     const { error } = await (supabase as any).from("unit_projects").update({ status: "cancelled" }).eq("id", project.id)
@@ -355,7 +386,25 @@ export default function ComplianceInitiatives() {
     )
   }
 
-  if (unitQuery.isError || projectsQuery.isError || !unitQuery.data) {
+  // A genuine load failure gets a retry. "Being prepared" is only for a unit or
+  // planning tables that have not been provisioned yet.
+  const loadError = unitQuery.isError ? unitQuery.error : projectsQuery.isError ? projectsQuery.error : null
+  if (loadError && !isNotProvisioned(loadError)) {
+    return (
+      <div className="rounded-3xl border border-border/70 bg-card/60">
+        <ErrorState
+          title="Could not load unit initiatives"
+          onRetry={() => {
+            if (unitQuery.isError) void unitQuery.refetch()
+            else void projectsQuery.refetch()
+          }}
+          retrying={unitQuery.isRefetching || projectsQuery.isRefetching}
+        />
+      </div>
+    )
+  }
+
+  if (loadError || !unitQuery.data) {
     return (
       <div className="rounded-3xl border border-amber-500/25 bg-amber-500/5 p-6">
         <p className="font-semibold text-amber-800 dark:text-amber-200">Initiatives workspace is being prepared</p>
@@ -457,17 +506,17 @@ export default function ComplianceInitiatives() {
                           </div>
                           <div className="space-y-2">
                             {projectTasks.length === 0 ? <p className="rounded-2xl border border-dashed p-5 text-center text-sm text-muted-foreground">No tasks have been added.</p> : projectTasks.map((task) => {
-                              const assignee = officers.find((officer) => officer.id === task.assigned_to)
+                              const assigneeName = ownerName(task.assigned_to)
                               const completed = task.status === "done"
                               return (
                                 <div key={task.id} className="flex items-start gap-3 rounded-2xl border border-border/70 bg-background/80 p-3.5">
                                   <button type="button" disabled={!canManage || toggleTaskMutation.isPending} onClick={() => toggleTaskMutation.mutate(task)} className={cn("mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors", completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-border hover:border-primary", !canManage && "cursor-default")} aria-label={completed ? "Mark task pending" : "Mark task complete"}>{completed ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}</button>
-                                  <div className="min-w-0 flex-1"><p className={cn("text-sm font-medium", completed && "text-muted-foreground line-through")}>{task.title}</p>{task.description && <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{task.description}</p>}<div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">{assignee && <span className="inline-flex items-center gap-1"><UserRound className="h-3 w-3" />{assignee.full_name || assignee.email}</span>}{task.due_at && <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />{formatDate(task.due_at)}</span>}</div></div>
+                                  <div className="min-w-0 flex-1"><p className={cn("text-sm font-medium", completed && "text-muted-foreground line-through")}>{task.title}</p>{task.description && <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{task.description}</p>}<div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">{assigneeName && <span className="inline-flex min-w-0 items-center gap-1"><UserRound className="h-3 w-3 shrink-0" aria-hidden="true" /><span className="sr-only">Owner: </span><span className="truncate">{assigneeName}</span></span>}{task.due_at && <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />{formatDate(task.due_at)}</span>}</div></div>
                                 </div>
                               )
                             })}
                           </div>
-                          {canManage && <div className="mt-4 flex justify-end gap-2"><Button size="sm" variant="ghost" className="gap-1.5" onClick={() => openEditProject(project)}><Pencil className="h-3.5 w-3.5" /> Edit</Button><Button size="sm" variant="ghost" className="gap-1.5 text-destructive hover:text-destructive" onClick={() => deleteProject(project)}><Trash2 className="h-3.5 w-3.5" /> Remove</Button></div>}
+                          {canManage && <div className="mt-4 flex justify-end gap-2"><Button size="sm" variant="ghost" className="gap-1.5" onClick={() => openEditProject(project)}><Pencil className="h-3.5 w-3.5" /> Edit</Button><Button size="sm" variant="ghost" className="gap-1.5 text-destructive hover:text-destructive" onClick={() => deleteProject(project)} aria-label={`Archive initiative: ${project.title}`}><Archive className="h-3.5 w-3.5" aria-hidden="true" /> Archive</Button></div>}
                         </div>
                       )}
                     </article>

@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
+  AlertTriangle,
   ArrowRight,
   Building2,
   Car,
@@ -68,6 +69,11 @@ const formatDateTime = (value?: string | null) => {
     minute: "2-digit",
   }).format(date)
 }
+
+/** Cheetah `status` values that cannot take a new journey (see the vehicle form in CheetahsClient). */
+const UNAVAILABLE_VEHICLE_STATUSES = ["maintenance", "retired"]
+/** journey_cheetahs rows in these states no longer hold the vehicle. */
+const RELEASED_ALLOCATION_STATUSES = ["completed", "cancelled"]
 
 const journeyLabel = (journey: any) =>
   journey?.name || [journey?.origin, journey?.destination].filter(Boolean).join(" → ") || "Unnamed journey"
@@ -321,11 +327,26 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
         .eq("id", cheetahId)
       if (error) throw error
     },
+    // The ownership selects are controlled by the cached vehicle, so show the
+    // choice straight away and put it back if the save fails.
+    onMutate: async ({ cheetahId, partnerId, ownershipType }) => {
+      await queryClient.cancelQueries({ queryKey: ["cheetahs"] })
+      const previous = queryClient.getQueryData<any[]>(["cheetahs"])
+      queryClient.setQueryData<any[]>(["cheetahs"], (current) =>
+        current?.map((cheetah) => cheetah.id === cheetahId ? { ...cheetah, partner_id: partnerId, ownership_type: ownershipType } : cheetah)
+      )
+      return { previous }
+    },
     onSuccess: () => {
       toast.success("Fleet ownership updated")
+    },
+    onError: (error: any, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(["cheetahs"], context.previous)
+      notifyError(error, "Vehicle ownership could not be updated")
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["cheetahs"] })
     },
-    onError: (error: any) => notifyError(error, "Vehicle ownership could not be updated"),
   })
 
   const addAllocation = useMutation({
@@ -424,6 +445,23 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
     }
     return names
   }
+
+  // Vehicles under maintenance or retired are not offered for a new journey.
+  // The current choice stays listed so the select never shows a blank value.
+  const allocatableCheetahs = cheetahs.filter((cheetah: any) =>
+    !UNAVAILABLE_VEHICLE_STATUSES.includes(cheetah.status) || cheetah.id === allocationForm.cheetah_id
+  )
+  const hiddenVehicleCount = cheetahs.length - allocatableCheetahs.length
+
+  // Other active journeys already holding the chosen Cheetah (a warning only).
+  const conflictingJourneys = allocationForm.cheetah_id
+    ? activeJourneys.filter((journey: any) =>
+        journey.id !== allocationForm.journey_id &&
+        allocationsForJourney(journey).some((allocation: any) =>
+          allocation.cheetah_id === allocationForm.cheetah_id && !RELEASED_ALLOCATION_STATUSES.includes(allocation.status)
+        )
+      )
+    : []
 
   const flightRows = useMemo(() => {
     const context = flightsQuery.data
@@ -553,8 +591,13 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
                 <Label>Cheetah</Label>
                 <Select value={allocationForm.cheetah_id || "none"} onValueChange={(value) => setAllocationForm((current) => ({ ...current, cheetah_id: value === "none" ? "" : value }))}>
                   <SelectTrigger><SelectValue placeholder="Choose Cheetah" /></SelectTrigger>
-                  <SelectContent><SelectItem value="none">Choose Cheetah</SelectItem>{cheetahs.map((cheetah: any) => <SelectItem key={cheetah.id} value={cheetah.id}>{cheetah.call_sign || cheetah.registration_number}</SelectItem>)}</SelectContent>
+                  <SelectContent><SelectItem value="none">Choose Cheetah</SelectItem>{allocatableCheetahs.map((cheetah: any) => <SelectItem key={cheetah.id} value={cheetah.id}>{cheetah.call_sign || cheetah.registration_number}</SelectItem>)}</SelectContent>
                 </Select>
+                {hiddenVehicleCount > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {hiddenVehicleCount} in maintenance or retired {hiddenVehicleCount === 1 ? "is" : "are"} not listed.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Role</Label>
@@ -566,6 +609,14 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
               <div className="space-y-2"><Label htmlFor="allocation-driver">Driver</Label><Input id="allocation-driver" value={allocationForm.driver_name} onChange={(event) => setAllocationForm((current) => ({ ...current, driver_name: event.target.value }))} placeholder="Driver name" /></div>
               <div className="space-y-2"><Label htmlFor="allocation-phone">Phone</Label><Input id="allocation-phone" type="tel" value={allocationForm.driver_phone} onChange={(event) => setAllocationForm((current) => ({ ...current, driver_phone: event.target.value }))} placeholder="+234…" /></div>
               <Button type="submit" disabled={addAllocation.isPending} className="gap-2">{addAllocation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Assign</Button>
+              {conflictingJourneys.length > 0 && (
+                <p role="status" className="flex min-w-0 items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 text-xs text-amber-800 dark:text-amber-300 lg:col-span-full">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 break-words">
+                    This Cheetah is already allocated to {conflictingJourneys.map((journey: any) => journeyLabel(journey)).join(", ")}. You can still assign it.
+                  </span>
+                </p>
+              )}
             </form>
           )}
           <div className="space-y-3">
@@ -614,8 +665,8 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
                 {cheetahs.map((cheetah: any) => (
                   <div key={cheetah.id} className="grid gap-3 rounded-lg bg-muted/35 p-3 sm:grid-cols-[1fr_.7fr_1fr] sm:items-center">
                     <div className="min-w-0"><p className="truncate text-sm font-medium">{cheetah.call_sign || cheetah.registration_number}</p><p className="truncate text-xs text-muted-foreground">{cheetah.make} {cheetah.model}</p></div>
-                    <Select defaultValue={cheetah.ownership_type || "internal"} onValueChange={(value) => linkVehicle.mutate({ cheetahId: cheetah.id, partnerId: cheetah.partner_id || null, ownershipType: value })}><SelectTrigger className="h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="internal">Internal</SelectItem><SelectItem value="partner">Partner</SelectItem></SelectContent></Select>
-                    <Select defaultValue={cheetah.partner_id || "none"} onValueChange={(value) => linkVehicle.mutate({ cheetahId: cheetah.id, partnerId: value === "none" ? null : value, ownershipType: value === "none" ? "internal" : "partner" })}><SelectTrigger className="h-9"><SelectValue placeholder="Partner" /></SelectTrigger><SelectContent><SelectItem value="none">No partner</SelectItem>{(partnersQuery.data || []).filter((partner: any) => partner.is_active !== false).map((partner: any) => <SelectItem key={partner.id} value={partner.id}>{partner.name}</SelectItem>)}</SelectContent></Select>
+                    <Select value={cheetah.ownership_type || "internal"} onValueChange={(value) => linkVehicle.mutate({ cheetahId: cheetah.id, partnerId: cheetah.partner_id || null, ownershipType: value })}><SelectTrigger className="h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="internal">Internal</SelectItem><SelectItem value="partner">Partner</SelectItem></SelectContent></Select>
+                    <Select value={cheetah.partner_id || "none"} onValueChange={(value) => linkVehicle.mutate({ cheetahId: cheetah.id, partnerId: value === "none" ? null : value, ownershipType: value === "none" ? "internal" : "partner" })}><SelectTrigger className="h-9"><SelectValue placeholder="Partner" /></SelectTrigger><SelectContent><SelectItem value="none">No partner</SelectItem>{(partnersQuery.data || []).filter((partner: any) => partner.is_active !== false || partner.id === cheetah.partner_id).map((partner: any) => <SelectItem key={partner.id} value={partner.id}>{partner.name}</SelectItem>)}</SelectContent></Select>
                   </div>
                 ))}
               </CardContent>

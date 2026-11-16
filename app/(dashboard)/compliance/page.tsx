@@ -29,6 +29,7 @@ import {
 } from "lucide-react"
 import { UPLOAD_RULES, validateUploadFiles } from "@/lib/security/upload-validation"
 import { ErrorState } from "@/components/ui/error-state"
+import { format, isValid, parseISO } from "date-fns"
 
 // ─── Singleton client ───
 const supabase = createClient()
@@ -81,6 +82,17 @@ function publicUrl(path: string) {
   return supabase.storage.from("compliance-media").getPublicUrl(path).data.publicUrl
 }
 
+/** The device's local calendar date, matching how event dates are entered and shown. */
+function localToday() {
+  return format(new Date(), "yyyy-MM-dd")
+}
+
+/** "2026-11-16" → "Mon 16 Nov 2026" (read as a local calendar date, never shifted by UTC). */
+function formatEventDate(value: string) {
+  const date = parseISO(value)
+  return isValid(date) ? format(date, "EEE d MMM yyyy") : value
+}
+
 export default function CompliancePage() {
   const { data: currentUser } = useCurrentUser()
   const queryClient = useQueryClient()
@@ -105,7 +117,7 @@ export default function CompliancePage() {
     title: "",
     body: "",
     program_id: "",
-    event_date: new Date().toISOString().slice(0, 10),
+    event_date: localToday(),
     files: [] as File[],
   })
 
@@ -136,7 +148,7 @@ export default function CompliancePage() {
 
   const outfits = useMemo(() => posts.filter(p => p.post_type !== "grooming"), [posts])
   const groomingPosts = useMemo(() => posts.filter(p => p.post_type === "grooming"), [posts])
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localToday()
   const outfitOfToday = outfits.find(p => p.post_type === "outfit_of_day" && p.event_date === today)
 
   const savePost = async (e: React.FormEvent) => {
@@ -234,24 +246,25 @@ export default function CompliancePage() {
                 <Badge className={cn("border-0 text-xs uppercase tracking-wide", meta.color)}>{meta.label}</Badge>
                 {post.programs?.name && <Badge variant="outline" className="text-xs">{post.programs.name}</Badge>}
               </div>
-              <p className="mt-1.5 font-medium">{post.title}</p>
+              <p className="mt-1.5 break-words font-medium">{post.title}</p>
               {post.event_date && (
                 <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground">
-                  <CalendarDays className="h-3 w-3" /> {post.event_date}
+                  <CalendarDays className="h-3 w-3" aria-hidden="true" />
+                  <time dateTime={post.event_date}>{formatEventDate(post.event_date)}</time>
                 </p>
               )}
             </div>
             {canEdit && (
               <div className="flex shrink-0 gap-1">
-                <Button aria-label="Edit post" variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(post)}><Pencil className="h-3.5 w-3.5" /></Button>
-                <Button aria-label="Delete post"
-                  variant="ghost" size="icon" className="h-7 w-7 text-red-500"
+                <Button aria-label={`Edit post: ${post.title}`} title="Edit post" variant="ghost" size="icon" className="h-9 w-9" onClick={() => openEdit(post)}><Pencil className="h-4 w-4" aria-hidden="true" /></Button>
+                <Button aria-label={`Delete post: ${post.title}`} title="Delete post"
+                  variant="ghost" size="icon" className="h-9 w-9 text-red-500"
                   onClick={async () => {
                     const ok = await confirm({ title: "Delete post?", message: `"${post.title}" will be removed.` })
                     if (ok) deleteMutation.mutate(post)
                   }}
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </div>
             )}
@@ -277,19 +290,19 @@ export default function CompliancePage() {
         )}
       />
 
-      <ComplianceInitiatives />
-
-      {/* Today's outfit hero */}
+      {/* Today's outfit hero — first, since it is what most officers come for */}
       {outfitOfToday && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
           <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-            <Sparkles className="h-4 w-4" /> Today&apos;s Outfit
+            <Sparkles className="h-4 w-4" aria-hidden="true" /> Today&apos;s Outfit
           </p>
           <div className="max-w-xl">
             <PostCard post={outfitOfToday} highlight />
           </div>
         </motion.div>
       )}
+
+      <ComplianceInitiatives />
 
       <Tabs defaultValue="outfits" className="space-y-4">
         <TabsList>

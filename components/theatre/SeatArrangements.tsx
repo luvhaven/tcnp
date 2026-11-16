@@ -13,6 +13,8 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { ErrorState } from "@/components/ui/error-state"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
@@ -164,7 +166,7 @@ export default function SeatArrangements({ canEdit, currentUserId }: Props) {
     },
   })
 
-  const { data: arrangements = [], isLoading } = useQuery({
+  const { data: arrangements = [], isLoading, isLoadingError, refetch } = useQuery({
     queryKey: ["seat-arrangements"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -447,9 +449,11 @@ export default function SeatArrangements({ canEdit, currentUserId }: Props) {
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 2 }).map((_, i) => <div key={i} className="skeleton h-48 rounded-xl" />)}
+        <div className="space-y-3" aria-busy="true" aria-label="Loading seat arrangements">
+          {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-48 rounded-xl" />)}
         </div>
+      ) : isLoadingError ? (
+        <ErrorState title="Could not load seat arrangements" onRetry={() => refetch()} />
       ) : grouped.length === 0 ? (
         <div className="empty-state rounded-xl border">
           <Armchair className="h-10 w-10" />
@@ -490,15 +494,15 @@ export default function SeatArrangements({ canEdit, currentUserId }: Props) {
                             </div>
                             {canEdit && (
                               <div className="flex shrink-0 gap-1">
-                                <Button aria-label="Edit arrangement" variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(a)}><Pencil className="h-3.5 w-3.5" /></Button>
-                                <Button aria-label="Delete arrangement"
-                                  variant="ghost" size="icon" className="h-7 w-7 text-red-500"
+                                <Button aria-label={`Edit ${a.session_name}`} variant="ghost" size="icon" className="h-9 w-9" onClick={() => openEdit(a)}><Pencil className="h-4 w-4" aria-hidden="true" /></Button>
+                                <Button aria-label={`Delete ${a.session_name}`}
+                                  variant="ghost" size="icon" className="h-9 w-9 text-red-500"
                                   onClick={async () => {
                                     const ok = await confirm({ title: "Delete arrangement?", message: `${a.session_name} on ${a.arrangement_date} will be removed.` })
                                     if (ok) deleteMutation.mutate(a.id)
                                   }}
                                 >
-                                  <Trash2 className="h-3.5 w-3.5" />
+                                  <Trash2 className="h-4 w-4" aria-hidden="true" />
                                 </Button>
                               </div>
                             )}
@@ -728,7 +732,7 @@ export default function SeatArrangements({ canEdit, currentUserId }: Props) {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); saveMutation.mutate() }} className="mt-2 space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Program *</Label>
                 <Select value={form.program_id} onValueChange={(v) => setForm({ ...form, program_id: v })}>
@@ -749,8 +753,8 @@ export default function SeatArrangements({ canEdit, currentUserId }: Props) {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-1 space-y-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="space-y-2">
                 <Label>Date *</Label>
                 <Input type="date" value={form.arrangement_date} onChange={(e) => setForm({ ...form, arrangement_date: e.target.value })} required />
               </div>

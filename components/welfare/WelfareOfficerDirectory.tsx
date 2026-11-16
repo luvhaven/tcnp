@@ -212,7 +212,21 @@ export default function WelfareOfficerDirectory() {
 
                 <div className="space-y-1 border-t pt-2 text-xs text-muted-foreground">
                   {o.email && <p className="flex items-center gap-1.5 truncate"><Mail className="h-3 w-3 shrink-0" /> {o.email}</p>}
-                  {o.phone && <p className="flex items-center gap-1.5"><Phone className="h-3 w-3 shrink-0" /> {o.phone}</p>}
+                  {o.phone && (
+                    <p className="flex min-w-0 items-center gap-1.5">
+                      <Phone className="h-3 w-3 shrink-0" aria-hidden="true" />
+                      {/* Tapping the number dials it instead of opening the profile card. */}
+                      <a
+                        href={`tel:${o.phone.replace(/[^\d+]/g, "")}`}
+                        className="truncate rounded-sm underline-offset-2 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        aria-label={`Call ${o.full_name || "officer"} on ${o.phone}`}
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        {o.phone}
+                      </a>
+                    </p>
+                  )}
                   {o.birth_month && o.birth_day && (
                     <p className="flex items-center gap-1.5"><Cake className="h-3 w-3 shrink-0" /> {MONTH_NAMES[o.birth_month - 1]} {o.birth_day}</p>
                   )}

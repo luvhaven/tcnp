@@ -302,9 +302,9 @@ export default function TheatresClient({
 
         <TabsContent value="vip-access">
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold tracking-tight">Senior Ministers&apos; Access</h2>
-              <div className="w-[300px]">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="min-w-0 text-2xl font-bold tracking-tight">Senior Ministers&apos; Access</h2>
+              <div className="w-full sm:w-[300px]">
                 <Select value={selectedTheatreId} onValueChange={setSelectedTheatreId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select Theatre" />

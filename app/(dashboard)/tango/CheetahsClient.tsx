@@ -64,10 +64,27 @@ type CheetahFormState = {
   features: string
   last_maintenance: string
   next_maintenance: string
-  mileage: number
+  /** Kept as text so an unrecorded mileage stays empty instead of saving as 0. */
+  mileage: string
 }
 
 type CheetahUpdatePayload = Database['public']['Tables']['cheetahs']['Update']
+
+const VEHICLE_STATUS_LABELS: Record<string, string> = {
+  available: 'Available',
+  in_use: 'In use',
+  maintenance: 'Maintenance',
+  retired: 'Retired',
+}
+
+/** Readable vehicle status; unknown values fall back to the stored text with underscores spaced. */
+function vehicleStatusLabel(status: string | null | undefined): string {
+  if (!status) return 'Unknown'
+  const known = VEHICLE_STATUS_LABELS[status]
+  if (known) return known
+  const spaced = status.replace(/_/g, ' ')
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1)
+}
 
 export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: any[] }) {
   const supabase = createClient()
@@ -93,7 +110,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
     features: '',
     last_maintenance: '',
     next_maintenance: '',
-    mileage: 0
+    mileage: ''
   })
 
   const tangoAccess = useUnitAccess('tango')
@@ -163,9 +180,12 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
       }
       return { previous }
     },
+    onSuccess: () => {
+      toast.success('Vehicle deleted successfully!')
+    },
     onError: (err, newTodo, context) => {
       queryClient.setQueryData(['cheetahs'], context?.previous)
-      toast.error('Failed to delete vehicle')
+      notifyError(err, 'Failed to delete vehicle')
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['cheetahs'] })
@@ -184,6 +204,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
     const trimmedFeatures = formData.features.trim()
     const trimmedLastMaintenance = formData.last_maintenance.trim()
     const trimmedNextMaintenance = formData.next_maintenance.trim()
+    const parsedMileage = Number.parseInt(formData.mileage.trim(), 10)
 
     const basePayload: CheetahUpdatePayload = {
       reg_no: trimmedRegNo,
@@ -200,7 +221,8 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
       program_id: formData.program_id ? formData.program_id : null,
       features: trimmedFeatures ? trimmedFeatures : null,
       last_maintenance: trimmedLastMaintenance ? trimmedLastMaintenance : null,
-      next_maintenance: trimmedNextMaintenance ? trimmedNextMaintenance : null
+      next_maintenance: trimmedNextMaintenance ? trimmedNextMaintenance : null,
+      mileage: Number.isFinite(parsedMileage) && parsedMileage >= 0 ? parsedMileage : null
     }
 
     if (saveMutation.isPending) return
@@ -224,7 +246,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
       features: cheetah.features || '',
       last_maintenance: cheetah.last_maintenance || '',
       next_maintenance: cheetah.next_maintenance || '',
-      mileage: cheetah.mileage || 0
+      mileage: cheetah.mileage != null ? String(cheetah.mileage) : ''
     })
     setDialogOpen(true)
   }
@@ -232,7 +254,6 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
   const handleDelete = async (id: string) => {
     if (!await confirm({ message: 'Are you sure you want to delete this vehicle?', variant: 'destructive' })) return
     deleteMutation.mutate(id)
-    toast.success('Vehicle deleted successfully!')
   }
 
   const resetForm = () => {
@@ -251,7 +272,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
       features: '',
       last_maintenance: '',
       next_maintenance: '',
-      mileage: 0
+      mileage: ''
     })
   }
 
@@ -303,11 +324,15 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Car className="h-12 w-12 text-muted-foreground/50" />
               <p className="mt-4 text-sm font-medium">No vehicles yet</p>
-              <p className="text-xs text-muted-foreground">Add your first vehicle to get started</p>
-              <Button className="mt-4" onClick={openCreateDialog}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Vehicle
-              </Button>
+              <p className="text-xs text-muted-foreground">
+                {canManage ? 'Add your first vehicle to get started' : 'Vehicles added by the Tango team will appear here'}
+              </p>
+              {canManage && (
+                <Button className="mt-4" onClick={openCreateDialog}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Vehicle
+                </Button>
+              )}
             </div>
           ) : (
             <motion.div layout className="space-y-3">
@@ -352,7 +377,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
                       </div>
                       <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
                         <Badge variant={cheetah.status === 'available' ? 'success' : cheetah.status === 'in_use' ? 'warning' : 'secondary'}>
-                          {cheetah.status}
+                          {vehicleStatusLabel(cheetah.status)}
                         </Badge>
                         {canManage && (
                           <>
@@ -493,8 +518,9 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
                   type="number"
                   min="0"
                   placeholder="e.g., 25000"
+                  inputMode="numeric"
                   value={formData.mileage}
-                  onChange={(e) => setFormData({ ...formData, mileage: parseInt(e.target.value) || 0 })}
+                  onChange={(e) => setFormData({ ...formData, mileage: e.target.value })}
                 />
               </div>
             </div>
