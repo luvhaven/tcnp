@@ -25,6 +25,8 @@ export type DenPlan = {
   status: DenPlanStatus
   expected_guests: number | null
   service_notes: string | null
+  /** Added with attendance and copying; absent on a summary from before that migration. */
+  budget?: number | null
   updated_at: string
 }
 
@@ -46,6 +48,9 @@ export type DenProgrammeSummary = {
   checklist_items_done?: number
   shifts?: number
   shifts_covered?: number
+  shifts_attended?: number
+  /** Vendor spend recorded against the programme, in naira. */
+  spend?: number
   plan: DenPlan | null
 }
 
@@ -214,3 +219,12 @@ export function hasHospitalityProfile(guest: Pick<DenGuest, 'dietary_restriction
 
 export const DEN_PLAN_KEY = ['den', 'plan'] as const
 export const DEN_GUESTS_KEY = ['den', 'guests'] as const
+
+/** Spend against budget, for the plan: under, near (90% or more) or over. */
+export function budgetStatus(budget: number | null | undefined, spend: number | null | undefined): { state: 'none' | 'under' | 'near' | 'over'; used: number | null } {
+  const limit = Number(budget)
+  const spent = Number(spend ?? 0)
+  if (budget == null || !Number.isFinite(limit) || limit <= 0) return { state: 'none', used: null }
+  const used = Math.round((spent / limit) * 100)
+  return { state: spent > limit ? 'over' : used >= 90 ? 'near' : 'under', used }
+}

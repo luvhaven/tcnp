@@ -8,6 +8,7 @@ import {
   LayoutDashboard, MapPin, Store, Users, UtensilsCrossed, type LucideIcon,
 } from "lucide-react"
 import { DenProgrammeProvider } from "@/components/den/ChooseProgramme"
+import DenGuide from "@/components/den/DenGuide"
 import DenLocations, { type DenProgram } from "@/components/den/DenLocations"
 import DenMenus from "@/components/den/DenMenus"
 import DenGuests from "@/components/den/DenGuests"
@@ -202,19 +203,25 @@ export default function DenClient({ initialDens, initialTab, initialProgramme }:
         // The programme is the page's one global control, so it sits with the
         // title: beside it on wide screens, directly under it on a phone.
         actions={
-          <div className="flex w-full items-center gap-2 sm:w-auto">
-            <Label htmlFor="den-program-filter" className="shrink-0 text-sm text-muted-foreground">Programme</Label>
-            <Select value={selectedProgram} onValueChange={selectProgram}>
-              <SelectTrigger id="den-program-filter" className="min-w-0 flex-1 sm:w-[260px] sm:flex-none">
-                <SelectValue placeholder="All programmes" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All programmes</SelectItem>
-                {programs.map(program => (
-                  <SelectItem key={program.id} value={program.id}>{program.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          // On a phone the picker gets the whole row and the guide sits under it.
+          <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <div className="flex w-full items-center gap-2 sm:order-2 sm:w-auto">
+              <Label htmlFor="den-program-filter" className="shrink-0 text-sm text-muted-foreground">Programme</Label>
+              <Select value={selectedProgram} onValueChange={selectProgram}>
+                <SelectTrigger id="den-program-filter" className="min-w-0 flex-1 sm:w-[260px] sm:flex-none">
+                  <SelectValue placeholder="All programmes" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All programmes</SelectItem>
+                  {programs.map(program => (
+                    <SelectItem key={program.id} value={program.id}>{program.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="-ml-3 sm:order-1 sm:ml-0">
+              <DenGuide isLead={denUnit.canCoordinate} />
+            </div>
           </div>
         }
       />

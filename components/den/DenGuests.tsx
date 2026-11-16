@@ -51,6 +51,17 @@ type GuestNote = {
   program: { name: string } | null
 }
 
+type EarlierRecord = {
+  papa_id: string
+  program_name: string | null
+  start_date: string | null
+  note_category: string | null
+  note: string | null
+  note_author: string | null
+  note_created_at: string | null
+  dishes: string[] | null
+}
+
 type GuestVisit = {
   program_id: string
   program_name: string
@@ -256,6 +267,21 @@ function GuestDialog({ guest, programId, currentUserId, canManage, onClose }: {
 
   const visits = history.data ?? []
 
+  const earlier = useQuery({
+    queryKey: [...DEN_GUESTS_KEY, "earlier", guestId],
+    enabled: Boolean(guestId),
+    queryFn: async () => {
+      const { data, error } = await db.rpc("den_guest_earlier_records", { target_papa: guestId })
+      // Before this function exists there is simply nothing earlier to show.
+      if (error) return [] as EarlierRecord[]
+      return (data ?? []) as EarlierRecord[]
+    },
+  })
+  const earlierRows = earlier.data ?? []
+  const earlierNotes = earlierRows.filter(row => row.note)
+  const earlierProgrammes = [...new Set(earlierRows.map(row => row.program_name).filter(Boolean))]
+  const earlierDishes = [...new Set(earlierRows.flatMap(row => row.dishes ?? []))]
+
   return (
     <Dialog open={Boolean(guest)} onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
@@ -294,6 +320,31 @@ function GuestDialog({ guest, programId, currentUserId, canManage, onClose }: {
               </dl>
               <p className="text-xs text-muted-foreground">These details come from the guest&apos;s profile, which leadership maintains. Add what the Den learns as a note below.</p>
             </section>
+
+            {earlierProgrammes.length > 0 && (
+              <section className="mt-4 space-y-2 rounded-xl border border-sky-500/40 bg-sky-500/5 p-3">
+                <h3 className="text-sm font-semibold">Earlier visits under the same name</h3>
+                <p className="text-xs text-muted-foreground">
+                  Recorded for a guest named {guest.full_name} at {earlierProgrammes.join(", ")}. Check it is the same person before relying on it.
+                </p>
+                {earlierDishes.length > 0 && <p className="text-sm">Ordered then: {earlierDishes.join(", ")}</p>}
+                {earlierNotes.length > 0 ? (
+                  <ul className="space-y-2">
+                    {earlierNotes.map((row, index) => (
+                      <li key={`${row.papa_id}-${index}`} className="rounded-lg border bg-background p-2">
+                        <Badge variant={row.note_category === "allergy" ? "destructive" : "secondary"}>
+                          {DEN_GUEST_NOTE_LABEL[row.note_category as DenGuestNoteCategory] ?? row.note_category}
+                        </Badge>
+                        <p className="mt-1 whitespace-pre-line text-sm">{row.note}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {row.note_author ?? "A Den officer"}{row.note_created_at && ` · ${format(new Date(row.note_created_at), "d MMM yyyy")}`}{row.program_name && ` · ${row.program_name}`}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="text-sm text-muted-foreground">No notes were written then.</p>}
+              </section>
+            )}
 
             <section className="mt-4 space-y-3">
               <h3 className="flex items-center gap-2 text-sm font-semibold">

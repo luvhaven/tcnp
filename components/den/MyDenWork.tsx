@@ -10,13 +10,13 @@ import { Button } from "@/components/ui/button"
 import { useUnitAccess } from "@/hooks/useUnitAccess"
 import { DEN_ANALYTICS_KEY, type DenAnalytics } from "@/lib/den-analytics"
 import { DEN_PLAN_KEY } from "@/lib/den-plan"
-import { DEN_MY_WORK_KEY, DEN_WORK_KEY, compareDenTasks, isTaskOverdue, type DenTask } from "@/lib/den-work"
+import { ATTENDANCE_LABEL, DEN_MY_WORK_KEY, DEN_ROSTER_KEY, DEN_WORK_KEY, attendanceState, compareDenTasks, isTaskOverdue, type DenTask } from "@/lib/den-work"
 import { notifyError } from "@/lib/notify"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 
 type MyTask = DenTask & { project: { program_id: string | null; program: { name: string } | null } | null }
-type MyShift = { id: string; shift: { id: string; title: string; starts_at: string; ends_at: string; program: { name: string } | null } | null }
+type MyShift = { id: string; checked_in_at: string | null; checked_out_at: string | null; shift: { id: string; title: string; starts_at: string; ends_at: string; program: { name: string } | null } | null }
 
 /**
  * An officer's own Den work, wherever they are in the app: open tasks and
@@ -55,7 +55,7 @@ export default function MyDenWork({ currentUserId }: { currentUserId: string | n
           .eq("project.project_type", "programme_operation")
           .in("status", ["todo", "in_progress", "blocked"]),
         db.from("den_shift_members")
-          .select("id, shift:den_shifts!inner(id, title, starts_at, ends_at, program:programs(name))")
+          .select("*, shift:den_shifts!inner(id, title, starts_at, ends_at, program:programs(name))")
           .eq("user_id", currentUserId)
           .gte("shift.ends_at", new Date().toISOString()),
       ])
@@ -82,6 +82,20 @@ export default function MyDenWork({ currentUserId }: { currentUserId: string | n
       toast.success(`Done: ${task.title}`)
     },
     onError: (error) => notifyError(error, "Could not complete this task"),
+  })
+
+  const attend = useMutation({
+    mutationFn: async ({ row, action }: { row: MyShift; action: "in" | "out" }) => {
+      const { error } = await db.rpc("den_shift_attendance", { target_member: row.id, action })
+      if (error) throw error
+      return action
+    },
+    onSuccess: (action) => {
+      queryClient.invalidateQueries({ queryKey: DEN_MY_WORK_KEY })
+      queryClient.invalidateQueries({ queryKey: DEN_ROSTER_KEY })
+      toast.success(action === "in" ? "Checked in. Have a good shift." : "Checked out. Thank you.")
+    },
+    onError: (error) => notifyError(error, "Could not update attendance"),
   })
 
   const tasks = data?.tasks ?? []
@@ -152,18 +166,34 @@ export default function MyDenWork({ currentUserId }: { currentUserId: string | n
 
       {shifts.length > 0 && (
         <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-          {shifts.map(row => (
-            <li key={row.id} className="flex items-start gap-2 rounded-xl border p-3">
-              <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{row.shift!.title}</p>
-                <p className="text-xs text-muted-foreground">
-                  {format(new Date(row.shift!.starts_at), "EEE d MMM, HH:mm")} to {format(new Date(row.shift!.ends_at), "HH:mm")}
-                  {row.shift!.program?.name && ` · ${row.shift!.program.name}`}
-                </p>
-              </div>
-            </li>
-          ))}
+          {shifts.map(row => {
+            const state = attendanceState(row.shift!, row)
+            return (
+              <li key={row.id} className="flex items-start gap-2 rounded-xl border p-3">
+                <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{row.shift!.title}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {format(new Date(row.shift!.starts_at), "EEE d MMM, HH:mm")} to {format(new Date(row.shift!.ends_at), "HH:mm")}
+                    {row.shift!.program?.name && ` · ${row.shift!.program.name}`}
+                  </p>
+                  {state !== "upcoming" && <p className={cn("mt-0.5 text-xs", state === "checked_in" && "font-medium text-emerald-600 dark:text-emerald-400")}>{ATTENDANCE_LABEL[state]}</p>}
+                </div>
+                {(state === "open" || state === "checked_in") && (
+                  <Button
+                    size="sm"
+                    variant={state === "open" ? "default" : "outline"}
+                    className="shrink-0"
+                    pending={attend.isPending && attend.variables?.row.id === row.id}
+                    disabled={attend.isPending}
+                    onClick={() => attend.mutate({ row, action: state === "open" ? "in" : "out" })}
+                  >
+                    {state === "open" ? "Check in" : "Check out"}
+                  </Button>
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
     </section>

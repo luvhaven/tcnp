@@ -115,6 +115,27 @@ export default function DenFloorAccess({ selectedProgram, programName, currentUs
   // The head already has full Den access through their role; listing them
   // would only offer controls that change nothing.
   const members = (team?.members ?? []).filter(member => member.level !== "head")
+  const availableMembers = members.filter(member => describeProgrammeStanding(candidates.data?.get(member.id)).state === "available")
+
+  const addAllAvailable = useMutation({
+    mutationFn: async () => {
+      let added = 0
+      for (const member of availableMembers) {
+        const res = await fetch("/api/program-additions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ program_id: selectedProgram, user_id: member.id, unit_slug: DEN_UNIT_SLUG }),
+        })
+        const body = await res.json().catch(() => ({}))
+        if (!res.ok) throw new UserFacingError(`${member.full_name ?? "An officer"}: ${body.error || "could not be added"}`)
+        added += 1
+      }
+      return added
+    },
+    onSuccess: (added) => { refresh(); toast.success(`${added} ${added === 1 ? "officer" : "officers"} added to ${programLabel}`) },
+    // Officers before the failing one were added; refresh so the list shows them.
+    onError: (error) => { refresh(); notifyError(error, "Not everyone could be added") },
+  })
 
   return (
     <Card>
@@ -128,6 +149,14 @@ export default function DenFloorAccess({ selectedProgram, programName, currentUs
           Being in November (Den) does not put an officer on a programme. Add the officers this programme needs,
           then switch on floor access for those who will publish menus and take guests&apos; meal orders.
         </CardDescription>
+        {scoped && availableMembers.length > 1 && (
+          <div>
+            <Button size="sm" variant="outline" pending={addAllAvailable.isPending} disabled={addToProgramme.isPending} onClick={() => addAllAvailable.mutate()}>
+              {!addAllAvailable.isPending && <UserPlus className="mr-1.5 h-4 w-4" aria-hidden="true" />}
+              Add all {availableMembers.length} who are available
+            </Button>
+          </div>
+        )}
       </CardHeader>
       <CardContent>
         {!scoped ? (

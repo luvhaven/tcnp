@@ -24,7 +24,9 @@ import { useDenProgrammeTeam } from "@/hooks/useDenProgrammeTeam"
 import { DEN_PLAN_KEY } from "@/lib/den-plan"
 import {
   DEN_MY_WORK_KEY,
+  ATTENDANCE_LABEL,
   DEN_ROSTER_KEY,
+  attendanceState,
   findShiftClashes,
   fromLocalInputValue,
   shiftGap,
@@ -44,7 +46,7 @@ type Props = {
   currentUserId: string | null
 }
 
-type ShiftMember = { id: string; shift_id: string; user_id: string }
+type ShiftMember = { id: string; shift_id: string; user_id: string; checked_in_at?: string | null; checked_out_at?: string | null }
 type ShiftWithMembers = DenShift & { members: ShiftMember[] }
 
 const NO_LOCATION = "none"
@@ -80,7 +82,7 @@ export default function DenRoster({ selectedProgram, programName, dens, canCoord
     queryFn: async () => {
       const { data, error } = await db
         .from("den_shifts")
-        .select("id, program_id, title, starts_at, ends_at, nest_id, officers_needed, notes, members:den_shift_members(id, shift_id, user_id)")
+        .select("id, program_id, title, starts_at, ends_at, nest_id, officers_needed, notes, members:den_shift_members(*)")
         .eq("program_id", programId)
         .order("starts_at")
       if (error) throw error
@@ -133,6 +135,16 @@ export default function DenRoster({ selectedProgram, programName, dens, canCoord
     },
     onSuccess: (shiftId) => { refresh(); setAdding(current => ({ ...current, [shiftId]: "" })); toast.success("Officer added to the shift") },
     onError: (error) => notifyError(error, "Could not add this officer to the shift"),
+  })
+
+  const attend = useMutation({
+    mutationFn: async ({ memberId, action }: { memberId: string; action: "in" | "out" | "clear" }) => {
+      const { error } = await db.rpc("den_shift_attendance", { target_member: memberId, action })
+      if (error) throw error
+      return action
+    },
+    onSuccess: (action) => { refresh(); toast.success(action === "in" ? "Checked in" : action === "out" ? "Checked out" : "Attendance cleared") },
+    onError: (error) => notifyError(error, "Could not update attendance"),
   })
 
   const removeMember = useMutation({
@@ -249,13 +261,38 @@ export default function DenRoster({ selectedProgram, programName, dens, canCoord
                         const officer = teamById.get(member.user_id)
                         const clash = clashing.has(`${shift.id}:${member.user_id}`)
                         const name = member.user_id === currentUserId ? "You" : officer?.full_name ?? "A Den officer"
+                        const attendance = attendanceState(shift, member)
+                        const self = member.user_id === currentUserId
+                        // Officers check themselves in; a coordinator can record it for anyone.
+                        const canAttend = attendance !== "checked_out" && (self ? attendance === "open" || attendance === "checked_in" : canCoordinate)
                         return (
                           <li key={member.id} className={cn("flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2 text-xs", clash && "border-destructive text-destructive dark:border-red-400 dark:text-red-400")}>
                             <Avatar className="h-6 w-6">
                               {officer?.photo_url && <AvatarImage src={officer.photo_url} alt="" />}
                               <AvatarFallback className="text-[10px]">{initialsOf(officer?.full_name)}</AvatarFallback>
                             </Avatar>
-                            <span>{name}{clash && " · on another shift at this time"}</span>
+                            <span>
+                              {name}{clash && " · on another shift at this time"}
+                              {attendance !== "upcoming" && (
+                                <span className={cn(
+                                  "ml-1",
+                                  attendance === "checked_in" ? "font-medium text-emerald-600 dark:text-emerald-400"
+                                    : attendance === "missed" ? "text-destructive dark:text-red-400" : "text-muted-foreground",
+                                )}>
+                                  · {ATTENDANCE_LABEL[attendance]}
+                                </span>
+                              )}
+                            </span>
+                            {canAttend && (
+                              <button
+                                type="button"
+                                disabled={attend.isPending}
+                                onClick={() => attend.mutate({ memberId: member.id, action: attendance === "checked_in" ? "out" : "in" })}
+                                className="ml-1 rounded-full border px-2 py-1 font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                              >
+                                {attendance === "checked_in" ? "Check out" : self ? "Check in" : "Mark present"}
+                              </button>
+                            )}
                             {canCoordinate && (
                               <button
                                 type="button"

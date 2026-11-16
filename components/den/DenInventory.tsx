@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { AlertTriangle, Boxes, MoreHorizontal, Minus, PackagePlus, Plus } from "lucide-react"
 import { toast } from "sonner"
+import DenBulkStock from "@/components/den/DenBulkStock"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -233,10 +234,13 @@ export default function DenInventory({ selectedProgram, programName, canManage, 
             </CardDescription>
           </div>
           {canManage && (
-            <Button size="sm" className="shrink-0" onClick={() => openItem(null)}>
-              <Plus aria-hidden="true" />
-              Add item
-            </Button>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <DenBulkStock currentUserId={currentUserId} existingNames={(items.data?.items ?? []).map(item => item.name)} />
+              <Button size="sm" className="shrink-0" onClick={() => openItem(null)}>
+                <Plus aria-hidden="true" />
+                Add item
+              </Button>
+            </div>
           )}
         </CardHeader>
         <CardContent>

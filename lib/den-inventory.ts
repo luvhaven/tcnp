@@ -145,3 +145,36 @@ export function compareInventoryItems(a: DenInventoryItem, b: DenInventoryItem):
 
 export const DEN_VENDOR_KEY = ['vendors', 'den-details'] as const
 export const DEN_INVENTORY_KEY = ['den', 'inventory'] as const
+
+export type StockLine = { name: string; unit: string; quantity: number; reorderLevel: number; category: string | null }
+
+/**
+ * Reads pasted stock lines: "name, unit, quantity, reorder level". Only the
+ * name is required; the unit defaults to pcs and the numbers to zero. Lines
+ * that cannot be read are reported, not guessed at, and a name already on the
+ * list (or repeated in the paste) is skipped.
+ */
+export function parseStockLines(text: string, existingNames: readonly string[] = []): { rows: StockLine[]; problems: string[] } {
+  const seen = new Set(existingNames.map(name => name.trim().toLowerCase()))
+  const rows: StockLine[] = []
+  const problems: string[] = []
+  text.split(/\r?\n/).forEach((raw, index) => {
+    const line = raw.trim()
+    if (!line) return
+    // Tabs when pasted from a spreadsheet, commas when typed. Numbers are written
+    // without thousands separators (1200, not 1,200) when commas separate fields.
+    const [name = '', unit = '', quantity = '', reorder = ''] = line.split(line.includes('\t') ? '\t' : ',').map(part => part.trim())
+    const label = `Line ${index + 1}`
+    if (!name) { problems.push(`${label}: no item name.`); return }
+    if (name.length > 120) { problems.push(`${label}: the name is too long.`); return }
+    const qty = quantity ? parseAmount(quantity, { allowZero: true }) : 0
+    const level = reorder ? parseAmount(reorder, { allowZero: true }) : 0
+    if (qty == null) { problems.push(`${label} (${name}): "${quantity}" is not a quantity.`); return }
+    if (level == null) { problems.push(`${label} (${name}): "${reorder}" is not a reorder level.`); return }
+    const key = name.toLowerCase()
+    if (seen.has(key)) { problems.push(`${label} (${name}): already on the list, skipped.`); return }
+    seen.add(key)
+    rows.push({ name, unit: unit.slice(0, 20) || 'pcs', quantity: qty, reorderLevel: level, category: null })
+  })
+  return { rows, problems }
+}

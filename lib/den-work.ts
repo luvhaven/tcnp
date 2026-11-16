@@ -146,3 +146,35 @@ export type DenProgrammeTeamMember = {
   access_level: string
   on_programme: boolean
 }
+
+// ── Attendance ──
+
+export type AttendanceState = 'upcoming' | 'open' | 'checked_in' | 'checked_out' | 'missed'
+
+/** Check-in opens this long before a shift starts (the database applies the same rule). */
+export const CHECK_IN_OPENS_MS = 2 * 60 * 60 * 1000
+
+/**
+ * Where one officer stands on one shift: not yet open, open for check-in,
+ * on duty, done, or missed (the shift ended and they never checked in).
+ */
+export function attendanceState(
+  shift: Pick<DenShift, 'starts_at' | 'ends_at'>,
+  member: { checked_in_at?: string | null; checked_out_at?: string | null },
+  now: Date = new Date(),
+): AttendanceState {
+  if (member.checked_out_at) return 'checked_out'
+  if (member.checked_in_at) return 'checked_in'
+  const time = now.getTime()
+  if (time > new Date(shift.ends_at).getTime()) return 'missed'
+  if (time >= new Date(shift.starts_at).getTime() - CHECK_IN_OPENS_MS) return 'open'
+  return 'upcoming'
+}
+
+export const ATTENDANCE_LABEL: Record<AttendanceState, string> = {
+  upcoming: 'Not started',
+  open: 'Not checked in',
+  checked_in: 'On duty',
+  checked_out: 'Checked out',
+  missed: 'Did not check in',
+}

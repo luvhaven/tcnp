@@ -2,9 +2,11 @@
 
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { ArrowRight, CheckCircle2, CircleDashed, ClipboardCheck, Users } from "lucide-react"
+import { ArrowRight, CheckCircle2, CircleDashed, ClipboardCheck, Download, Users } from "lucide-react"
 import { toast } from "sonner"
 import ChooseProgramme from "@/components/den/ChooseProgramme"
+import DenCopySetup from "@/components/den/DenCopySetup"
+import { formatMoney, parseAmount } from "@/lib/den-inventory"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -20,6 +22,7 @@ import type { DenTab } from "@/lib/den"
 import {
   DEN_PLAN_KEY,
   DEN_PLAN_STATUS_LABEL,
+  budgetStatus,
   denPlanStatusOptions,
   readinessChecks,
   readinessScore,
@@ -98,16 +101,23 @@ export default function DenPlan({ selectedProgram, programName, canCoordinate, c
 
   const plan = summary.data?.plan ?? null
   // Form state follows the saved plan until the user starts typing.
-  const [draft, setDraft] = useState<{ for: string; status: DenPlanStatus; expected: string; notes: string } | null>(null)
+  const [draft, setDraft] = useState<{ for: string; status: DenPlanStatus; expected: string; budget: string; notes: string } | null>(null)
+  const [printing, setPrinting] = useState(false)
   const planStamp = `${selectedProgram}:${plan?.updated_at ?? "none"}`
   const form = draft && draft.for === planStamp
     ? draft
-    : { for: planStamp, status: plan?.status ?? "planning", expected: plan?.expected_guests?.toString() ?? "", notes: plan?.service_notes ?? "" }
+    : { for: planStamp, status: plan?.status ?? "planning", expected: plan?.expected_guests?.toString() ?? "", budget: plan?.budget != null ? String(Number(plan.budget)) : "", notes: plan?.service_notes ?? "" }
 
   const savePlan = useMutation({
     mutationFn: async () => {
       const expected = form.expected.trim() === "" ? null : Math.max(0, parseInt(form.expected, 10) || 0)
-      const values = { status: form.status, expected_guests: expected, service_notes: form.notes.trim() || null, updated_by: currentUserId }
+      const budget = form.budget.trim() === "" ? null : parseAmount(form.budget, { allowZero: true })
+      if (form.budget.trim() !== "" && budget == null) throw new Error("The budget must be an amount in naira, such as 250000.")
+      const values = {
+        status: form.status, expected_guests: expected, service_notes: form.notes.trim() || null, updated_by: currentUserId,
+        // Only sent once the plan has the column, so saving still works on an older database.
+        ...(plan && "budget" in plan ? { budget } : {}),
+      }
       if (plan) {
         const { data, error } = await db.from("den_operations").update(values).eq("id", plan.id).select("id")
         if (error) throw error
@@ -151,6 +161,20 @@ export default function DenPlan({ selectedProgram, programName, canCoordinate, c
   const score = readinessScore(checks)
   const outstanding = checks.filter(check => check.progress < 1).length
   const dirty = Boolean(draft && draft.for === planStamp)
+  const budgetState = budgetStatus(plan?.budget, summary.data.spend)
+  const hasBudgetColumn = Boolean(plan && "budget" in plan)
+
+  const runSheet = async () => {
+    setPrinting(true)
+    try {
+      const { downloadRunSheet } = await import("@/lib/den-run-sheet")
+      await downloadRunSheet(db, selectedProgram, programName ?? "Programme")
+    } catch (error) {
+      notifyError(error, "Could not create the run sheet")
+    } finally {
+      setPrinting(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -219,7 +243,16 @@ export default function DenPlan({ selectedProgram, programName, canCoordinate, c
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">{plan ? "Plan details" : "Open the Den plan"}</CardTitle>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <CardTitle className="text-base">{plan ? "Plan details" : "Open the Den plan"}</CardTitle>
+            <div className="flex flex-wrap gap-2">
+              {canCoordinate && <DenCopySetup targetProgram={selectedProgram} targetName={programName} />}
+              <Button type="button" variant="outline" size="sm" pending={printing} onClick={runSheet}>
+                {!printing && <Download className="mr-1.5 h-4 w-4" aria-hidden="true" />}
+                Run sheet
+              </Button>
+            </div>
+          </div>
           <CardDescription>
             {plan
               ? "Keep the plan's stage and service notes current so the whole team works from the same page."
@@ -268,6 +301,33 @@ export default function DenPlan({ selectedProgram, programName, canCoordinate, c
                   />
                 </div>
               </div>
+              {hasBudgetColumn && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="den-plan-budget">Budget (NGN)</Label>
+                    <Input
+                      id="den-plan-budget"
+                      inputMode="decimal"
+                      placeholder="e.g., 1500000"
+                      value={form.budget}
+                      disabled={!canCoordinate}
+                      onChange={(event) => setDraft({ ...form, budget: event.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Spent with vendors</p>
+                    <p className={cn(
+                      "flex min-h-10 items-center rounded-md border px-3 text-sm tabular-nums",
+                      budgetState.state === "over" && "border-destructive/50 text-destructive dark:text-red-400",
+                      budgetState.state === "near" && "border-amber-500/50 text-amber-700 dark:text-amber-400",
+                    )}>
+                      {formatMoney(summary.data.spend ?? 0)}
+                      {budgetState.used != null && ` · ${budgetState.used}% of budget`}
+                      {budgetState.state === "over" && " · over budget"}
+                    </p>
+                  </div>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="den-plan-notes">Service notes</Label>
                 <Textarea

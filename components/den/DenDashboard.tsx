@@ -55,6 +55,18 @@ export default function DenDashboard({ onNavigate }: Props) {
     },
   })
 
+  // Attendance over shifts that have ended. Optional: absent before its migration.
+  const { data: attendance } = useQuery({
+    queryKey: [...DEN_ANALYTICS_KEY, "attendance"],
+    queryFn: async () => {
+      const { data: rows, error } = await (supabase as any).rpc("den_attendance")
+      if (error) return null
+      return (rows ?? []) as { user_id: string; shifts_past: number; attended: number }[]
+    },
+  })
+  const attendedShifts = (attendance ?? []).reduce((sum, row) => sum + Number(row.attended), 0)
+  const pastShifts = (attendance ?? []).reduce((sum, row) => sum + Number(row.shifts_past), 0)
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -113,8 +125,14 @@ export default function DenDashboard({ onNavigate }: Props) {
       </Section>
 
       <Section icon={Users} title="Team" description="Who is carrying the work. Participation counts officers added to at least one Den programme.">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard label="Officers" value={team.members} icon={Users} />
+          <StatCard
+            label="Attendance"
+            value={attendance ? percentLabel(attendedShifts, pastShifts) : "—"}
+            hint={attendance ? (pastShifts ? `${attendedShifts} of ${pastShifts} past shifts checked in` : "No shifts have ended yet") : "Not available"}
+            tone="success"
+          />
           <StatCard label="Participation" value={percentLabel(team.participating, team.members)} hint={`${team.participating} of ${team.members} on a programme`} tone="info" />
           <StatCard label="Tasks completed" value={percentLabel(operational.tasks_done, operational.tasks_done + operational.open_tasks)} hint={`${operational.tasks_done} of ${operational.tasks_done + operational.open_tasks}`} icon={CheckCircle2} tone="success" />
         </div>
