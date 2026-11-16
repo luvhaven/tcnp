@@ -392,7 +392,10 @@ export function useMyOperations() {
       if (isCurrent()) setLoadFailed(true)
       if (isInitial && isCurrent()) toast.error('Failed to load operations')
     } finally {
-      if (isInitial && isCurrent()) setLoading(false)
+      // Whichever load is newest ends the spinner. A background reload that
+      // starts while the first load is still running supersedes it; if only
+      // the first load could clear the spinner, it would spin forever.
+      if (isCurrent()) setLoading(false)
     }
   }, [supabase])
 
@@ -483,6 +486,8 @@ export function useMyOperations() {
     userRole,
     isAdminUser,
     liveState,
+    /** The latest load failed. Distinct from "stale", which also covers a dropped live connection. */
+    loadFailed,
     reload,
     patchJourney,
     patchOwnDutyOfficer,

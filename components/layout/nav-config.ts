@@ -3,7 +3,8 @@
  * both always agree on which destinations a role can see.
  */
 import type { ComponentType } from "react"
-import { canAccessCommandCentre, canApproveSignups, oscarToRole } from "@/lib/utils"
+import { canAccessCommandCentre, canApproveSignups, isPlatformAdministrator, oscarToRole } from "@/lib/utils"
+import { canApproveProgramAdditions } from "@/lib/program-additions"
 import {
   LayoutDashboard,
   Users,
@@ -27,6 +28,8 @@ import {
   UtensilsCrossed,
   Banknote,
   GraduationCap,
+  Route,
+  ScrollText,
   Radar,
   UserCheck,
 } from "lucide-react"
@@ -49,6 +52,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { name: "Programs", href: "/programs", icon: Calendar },
       { name: "Papas", href: "/papas", icon: Users },
+      { name: "Journeys", href: "/journeys", icon: Route },
     ],
   },
   {
@@ -76,13 +80,14 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "People",
     items: [
       { name: "Officers", href: "/officers", icon: UserCircle },
-      { name: "Signup Approvals", href: "/approvals", icon: UserCheck },
+      { name: "Approvals", href: "/approvals", icon: UserCheck },
     ],
   },
   {
     label: "Knowledge",
     items: [
       { name: "Guide", href: "/guide", icon: BookOpen },
+      { name: "SOP Manual", href: "/sop", icon: ScrollText },
     ],
   },
   {
@@ -107,7 +112,7 @@ export const ALL_NAV = NAV_SECTIONS.flatMap(s => s.items)
 
 /** Pages every authenticated user always sees */
 const BASE_HREFS = [
-  "/dashboard", "/my-operations", "/outbox", "/chat", "/programs", "/guide",
+  "/dashboard", "/my-operations", "/outbox", "/chat", "/programs", "/guide", "/sop",
   "/training", "/compliance", "/welfare",
   "/profile", "/change-password",
 ]
@@ -153,6 +158,8 @@ const UNIT_HREFS: Record<string, string[]> = {
   command: ["/command"],
   compliance: ["/compliance"],
   november_nest: ["/nests"],
+  november_den: ["/den"],
+  serial: ["/serial"],
   tango: ["/tango"],
   training: ["/training"],
   victor: ["/victor"],
@@ -195,8 +202,15 @@ export function getVisibleNav(role: string | null, oscar?: string | null, unitSl
     visibleList = visibleList.filter(n => n.href !== "/command")
   }
 
-  // Signup approvals: admins see everyone, unit heads see their own unit
-  visibleList = canApproveSignups(role, oscar, hasAdminAccess)
+  // The Officers page admits platform administrators only; Command and the
+  // heads of operations would be sent straight back to the dashboard.
+  if (!isPlatformAdministrator(role, hasAdminAccess)) {
+    visibleList = visibleList.filter(n => n.href !== "/officers")
+  }
+
+  // Approvals: admins see everyone, unit heads see their own unit's signups,
+  // and the Head of Command approves programme additions.
+  visibleList = canApproveSignups(role, oscar, hasAdminAccess) || canApproveProgramAdditions(role, hasAdminAccess)
     ? (visibleList.some(n => n.href === "/approvals") ? visibleList : [...visibleList, ...ALL_NAV.filter(n => n.href === "/approvals")])
     : visibleList.filter(n => n.href !== "/approvals")
 

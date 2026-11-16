@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { format, formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
 import {
-  Loader2, Radio, Car, Clock, Crown, Shield, MessageSquare, Navigation, Sparkles,
+  Radio, Car, Clock, Crown, Shield, MessageSquare, Navigation, Sparkles,
   ChevronDown, ClipboardCheck, Images, CheckCircle2,
 } from 'lucide-react'
 import DOHelpPanel from '@/components/operations/DOHelpPanel'
@@ -23,9 +23,12 @@ import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/ui/page-header'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CallSignChip } from '@/components/ui/call-sign-chip'
+import { ErrorState } from '@/components/ui/error-state'
+import { Skeleton } from '@/components/ui/skeleton'
 import { notificationService } from '@/lib/services/notificationService'
 import { useMyOperations, isOwnAssignment, type ActiveProgram, type OpsJourney } from '@/hooks/useMyOperations'
-import { cn } from '@/lib/utils'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { canViewLiveTracking, cn } from '@/lib/utils'
 
 const TERMINAL = ['completed', 'cancelled']
 
@@ -39,10 +42,14 @@ export default function MyOperationsPage() {
   const {
     loading, journeys, activePrograms, completedAssignments, submittedReportIds,
     userId, userRole, isAdminUser, liveState,
-    reload, patchJourney, patchOwnDutyOfficer, markReportSubmitted,
+    loadFailed, reload, patchJourney, patchOwnDutyOfficer, markReportSubmitted,
   } = useMyOperations()
+  const { data: currentUser } = useCurrentUser()
+  // Same check /tracking/live applies, so the link never leads to "Access Restricted".
+  const canOpenLiveMap = Boolean(currentUser && canViewLiveTracking(currentUser.role, currentUser.oscar, currentUser.has_admin_access))
   const [selectedJourneyId, setSelectedJourneyId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<string | null>(null)
+  const [retrying, setRetrying] = useState(false)
 
   const myAssigned = useMemo(() => journeys.filter(j => isOwnAssignment(j, userId)), [journeys, userId])
   const programFeed = useMemo(() => journeys.filter(j => !myAssigned.some(a => a.id === j.id)), [journeys, myAssigned])
@@ -102,10 +109,34 @@ export default function MyOperationsPage() {
     return () => clearInterval(interval)
   }, [myAssigned, userId])
 
-  if (loading) {
+  if (loading) return <MyOperationsSkeleton />
+
+  // The hook only sets userId after a successful load, and reports a failed one
+  // through liveState ('stale' online, 'offline' without a network). Together
+  // they mean "nothing has ever loaded" — which must not read as "no mission".
+  const neverLoaded = !userId && (loadFailed || liveState === 'offline')
+  if (neverLoaded) {
     return (
-      <div className="flex items-center justify-center py-20" role="status" aria-label="Loading operations">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="space-y-5">
+        <PageHeader
+          icon={Navigation}
+          title="My Operations"
+          description="Your assignments, updates and journey reminders"
+          actions={<ConnectionStatusPill state={liveState} />}
+        />
+        <Card>
+          <CardContent className="p-0">
+            <ErrorState
+              title="We couldn't load your operations"
+              description="Your assignments did not load, so we can't tell whether you have an active mission. Check your connection and try again."
+              retrying={retrying}
+              onRetry={() => {
+                setRetrying(true)
+                void reload().finally(() => setRetrying(false))
+              }}
+            />
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -206,7 +237,7 @@ export default function MyOperationsPage() {
 
       {activePrograms.length > 0 && (
         <div className="space-y-2">
-          {activePrograms.map(prog => <ProgramSummary key={prog.id} program={prog} />)}
+          {activePrograms.map(prog => <ProgramSummary key={prog.id} program={prog} canOpenLiveMap={canOpenLiveMap} />)}
         </div>
       )}
 
@@ -303,7 +334,7 @@ function Section({ title, icon: Icon, children }: {
 
 // ─── Program summary (one line, expands for details) ──────────────────────────
 
-function ProgramSummary({ program }: { program: ActiveProgram }) {
+function ProgramSummary({ program, canOpenLiveMap }: { program: ActiveProgram; canOpenLiveMap: boolean }) {
   return (
     <details className="group rounded-xl border border-primary/20 bg-card">
       <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 rounded-xl px-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
@@ -331,14 +362,51 @@ function ProgramSummary({ program }: { program: ActiveProgram }) {
               <MessageSquare className="h-4 w-4" aria-hidden />Program Chat
             </Link>
           </Button>
-          <Button variant="outline" asChild className="min-h-11 gap-1.5">
-            <Link href="/tracking/live">
-              <Navigation className="h-4 w-4" aria-hidden />Live Map
-            </Link>
-          </Button>
+          {canOpenLiveMap && (
+            <Button variant="outline" asChild className="min-h-11 gap-1.5">
+              <Link href="/tracking/live">
+                <Navigation className="h-4 w-4" aria-hidden />Live Map
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
     </details>
+  )
+}
+
+// ─── Loading skeleton (mirrors the page: header, mission card, sections) ──────
+
+function MyOperationsSkeleton() {
+  return (
+    <div className="space-y-5" role="status" aria-label="Loading operations">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <Skeleton className="h-10 w-10 shrink-0 rounded-xl" />
+          <div className="min-w-0 space-y-2">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-4 w-64 max-w-full" />
+          </div>
+        </div>
+        <Skeleton className="h-7 w-20 rounded-full" />
+      </div>
+      <div className="space-y-4 rounded-xl border bg-card p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Skeleton className="h-5 w-48 max-w-full" />
+          <Skeleton className="h-6 w-24 rounded-full" />
+        </div>
+        <Skeleton className="h-4 w-56 max-w-full" />
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Skeleton className="h-16 rounded-lg" />
+          <Skeleton className="h-16 rounded-lg" />
+          <Skeleton className="h-16 rounded-lg" />
+        </div>
+        <Skeleton className="h-12 w-full rounded-lg" />
+      </div>
+      <Skeleton className="h-12 w-full rounded-xl" />
+      <Skeleton className="h-12 w-full rounded-xl" />
+      <span className="sr-only">Loading your operations…</span>
+    </div>
   )
 }
 

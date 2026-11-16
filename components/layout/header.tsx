@@ -6,6 +6,7 @@ import {
   LogOut,
   Sun,
   Moon,
+  MonitorSmartphone,
   Palette,
   UserCircle,
   Settings,
@@ -22,11 +23,12 @@ import { createClient } from "@/lib/supabase/client"
 import { useTheme, type AppTheme } from "@/components/theme/ThemeProvider"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useSyncExternalStore } from "react"
 import InstallButton from "@/components/pwa/InstallButton"
 import NotificationCenter from "@/components/notifications/NotificationCenter"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
+import { officerRoleLabel } from "@/lib/officer-directory"
 import { useLocationSharing } from '@/hooks/useLocationSharing'
 import { Switch } from '@/components/ui/switch'
 
@@ -61,30 +63,33 @@ function HamburgerIcon({ isOpen }: { isOpen: boolean }) {
 const THEME_OPTIONS: { value: AppTheme; icon: typeof Sun; label: string }[] = [
   { value: "light", icon: Sun, label: "Light" },
   { value: "dark", icon: Moon, label: "Dark" },
+  { value: "auto", icon: MonitorSmartphone, label: "Auto" },
 ]
 
 function ThemeSegmented() {
-  const { resolvedTheme: currentTheme, setTheme } = useTheme()
+  // The chosen setting, not the colour it resolves to, so "Auto" can show as selected.
+  const { theme: currentTheme, setTheme } = useTheme()
 
   return (
-    <div className="flex items-center justify-between px-1 py-1.5">
+    // Label sits above the control so three labelled options fit the 270px menu.
+    <div className="flex flex-col gap-1.5 px-1 py-1.5">
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
         <Palette className="h-4 w-4 text-primary" aria-hidden="true" />
         <span>Theme</span>
       </div>
-      <div className="flex items-center gap-1 rounded-lg bg-muted/80 p-0.5 border border-border/50">
+      <div className="flex w-full items-center gap-1 rounded-lg bg-muted/80 p-0.5 border border-border/50">
         {THEME_OPTIONS.map(({ value, icon: Icon, label }) => {
           const isSelected = currentTheme === value
           return (
             <button
               key={value}
               type="button"
-              aria-label={`${label} mode`}
+              aria-label={value === "auto" ? "Follow device theme" : `${label} mode`}
               aria-pressed={isSelected}
-              title={`${label} mode`}
+              title={value === "auto" ? "Follow device theme" : `${label} mode`}
               onClick={() => setTheme(value)}
               className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-[background-color,color,box-shadow] duration-fast ease-out",
+                "flex flex-1 min-w-0 items-center justify-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-[background-color,color,box-shadow] duration-fast ease-out",
                 isSelected
                   ? "bg-background text-foreground shadow-xs font-semibold"
                   : "text-muted-foreground hover:text-foreground hover:bg-background/40"
@@ -116,10 +121,9 @@ function getInitials(name?: string | null, email?: string | null) {
   return (email || "??").substring(0, 2).toUpperCase()
 }
 
+/** The same friendly role names the Officers and Profile pages use ("Head, November (Den)"). */
 function formatRole(role: string) {
-  return role
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase())
+  return officerRoleLabel(role)
 }
 
 function formatHeaderDate(date: Date) {
@@ -185,6 +189,15 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
   const user = currentUser ? { email: currentUser.email } : null
   const profile = currentUser
   const [menuOpen, setMenuOpen] = useState(false)
+  const online = useSyncExternalStore(
+    (notify) => {
+      window.addEventListener("online", notify)
+      window.addEventListener("offline", notify)
+      return () => { window.removeEventListener("online", notify); window.removeEventListener("offline", notify) }
+    },
+    () => navigator.onLine,
+    () => true,
+  )
   const [now] = useState(() => new Date())
   const dateReady = useIsClient()
   const headerDate = dateReady ? formatHeaderDate(now) : ""
@@ -267,7 +280,11 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
                   fullName={profile?.full_name}
                   email={user?.email}
                 />
-                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-background" />
+                {/* Reflects this device's connection, not a fixed decoration. */}
+                <span
+                  className={cn("absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-background", online ? "bg-emerald-500" : "bg-muted-foreground")}
+                  aria-hidden="true"
+                />
               </div>
 
               {/* While the profile loads, hold the space with bars rather than
@@ -331,7 +348,7 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
               <Link
                 href="/profile"
                 onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex min-h-11 items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <UserCircle className="h-4 w-4 text-primary" />
                 <span>My Profile</span>
@@ -339,7 +356,7 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
               <Link
                 href="/settings"
                 onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex min-h-11 items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <Settings className="h-4 w-4" />
                 <span>Settings</span>
@@ -347,7 +364,7 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
               <Link
                 href="/change-password"
                 onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex min-h-11 items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <KeyRound className="h-4 w-4" />
                 <span>Change Password</span>
