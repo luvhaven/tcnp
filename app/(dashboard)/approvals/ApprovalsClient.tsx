@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
+import ProgramAdditionApprovals from "@/components/programs/ProgramAdditionApprovals"
 
 type PendingSignup = {
   id: string
@@ -85,6 +86,8 @@ export default function ApprovalsClient() {
           ? "People who signed up into your unit and are waiting for access. Approving lets them sign in."
           : "People who signed up and are waiting for access. Unit heads can approve their own unit; you can approve everyone."}
       />
+
+      <ProgramAdditionApprovals />
 
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

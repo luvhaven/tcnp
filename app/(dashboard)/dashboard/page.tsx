@@ -23,6 +23,7 @@ import { toast } from "sonner"
 import { usePWAInstall } from "@/hooks/usePWAInstall"
 import { PWAInstallModal } from "@/components/pwa/PWAInstallModal"
 import { MissionRequestPrompt } from "@/components/missions/MissionAvailability"
+import MyDenWork from "@/components/den/MyDenWork"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { CountUp } from "@/components/ui/count-up"
@@ -488,6 +489,9 @@ export default function DashboardPage() {
 
       {/* ── Mission prompt ────────────────────────────────────────────────── */}
       <MissionRequestPrompt currentUserId={currentUser?.id ?? null} />
+
+      {/* ── The officer's own unit tasks and shifts (renders nothing if none) ── */}
+      <MyDenWork currentUserId={currentUser?.id ?? null} />
 
       {/* ── My active assignment banner ──────────────────────────────────── */}
       {myAssignment && (

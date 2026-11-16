@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/dialog"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Store, Plus, Pencil, Trash2, Phone, Mail, User, AlertCircle } from "lucide-react"
+import VendorDetails, { Stars } from "@/components/den/VendorDetails"
+import { VENDOR_SERVICE_CATEGORIES, ratingLabel, timesUsed, type VendorSummary } from "@/lib/den-inventory"
 
 // ─── Singleton client ───
 const supabase = createClient()
@@ -31,11 +33,18 @@ export type Vendor = {
   cuisine_note: string | null
   is_active: boolean
   created_by: string | null
+  /** Added by the vendors-and-inventory migration; absent before it is applied. */
+  service_categories?: string[] | null
+  sla_notes?: string | null
 }
 
 type Props = {
   canEdit: boolean
   currentUserId?: string | null
+  /** May add a rating: a Den member or a vendor editor. */
+  canRate?: boolean
+  programs?: { id: string; name: string }[]
+  selectedProgram?: string
 }
 
 const emptyForm = {
@@ -45,15 +54,18 @@ const emptyForm = {
   email: "",
   cuisine_note: "",
   is_active: true,
+  service_categories: [] as string[],
+  sla_notes: "",
 }
 
-export default function VendorDirectory({ canEdit, currentUserId }: Props) {
+export default function VendorDirectory({ canEdit, currentUserId, canRate = false, programs = [], selectedProgram = "all" }: Props) {
   const queryClient = useQueryClient()
   const confirm = useConfirm()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Vendor | null>(null)
   const [showRetired, setShowRetired] = useState(false)
   const [form, setForm] = useState(emptyForm)
+  const [detailsOf, setDetailsOf] = useState<Vendor | null>(null)
 
   const { data: vendors = [], isLoading, isError, error } = useQuery({
     queryKey: ["vendors"],
@@ -62,12 +74,25 @@ export default function VendorDirectory({ canEdit, currentUserId }: Props) {
       // from the Sept 2026 migrations — same cast as training/page.tsx:136.
       const { data, error } = await (supabase as any)
         .from("vendors")
-        .select("id, name, contact_name, phone, email, cuisine_note, is_active, created_by")
+        .select("*")
         .order("name")
       if (error) throw error
       return (data ?? []) as Vendor[]
     },
   })
+
+  // Ratings and usage per vendor. A failure here (or the function not existing
+  // yet) must never take the directory down with it, so it resolves to empty.
+  const { data: summaries } = useQuery({
+    queryKey: ["vendors", "summaries"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("vendor_summaries")
+      if (error) return new Map<string, VendorSummary>()
+      return new Map<string, VendorSummary>(((data ?? []) as VendorSummary[]).map(row => [row.vendor_id, row]))
+    },
+  })
+  // Only send the newer columns once the table is known to have them.
+  const hasExtendedColumns = vendors.length === 0 || vendors.some(vendor => "service_categories" in vendor)
 
   const visible = useMemo(
     () => vendors.filter(v => showRetired || v.is_active),
@@ -87,6 +112,7 @@ export default function VendorDirectory({ canEdit, currentUserId }: Props) {
         cuisine_note: form.cuisine_note.trim() || null,
         is_active: form.is_active,
         updated_at: new Date().toISOString(),
+        ...(hasExtendedColumns ? { service_categories: form.service_categories, sla_notes: form.sla_notes.trim() || null } : {}),
       }
       if (editing) {
         const { error } = await (supabase as any).from("vendors").update(payload).eq("id", editing.id)
@@ -145,6 +171,8 @@ export default function VendorDirectory({ canEdit, currentUserId }: Props) {
       email: vendor.email ?? "",
       cuisine_note: vendor.cuisine_note ?? "",
       is_active: vendor.is_active,
+      service_categories: vendor.service_categories ?? [],
+      sla_notes: vendor.sla_notes ?? "",
     })
     setDialogOpen(true)
   }
@@ -260,6 +288,23 @@ export default function VendorDirectory({ canEdit, currentUserId }: Props) {
                     {!vendor.contact_name && !vendor.phone && !vendor.email && (
                       <p className="text-muted-foreground">No contact details recorded.</p>
                     )}
+                    {(vendor.service_categories ?? []).length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {(vendor.service_categories ?? []).map(category => <Badge key={category} variant="secondary" className="font-normal">{category}</Badge>)}
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between gap-2 pt-2">
+                      <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                        <Stars value={summaries?.get(vendor.id)?.average_rating ?? 0} size="h-3.5 w-3.5" />
+                        <span className="truncate">
+                          {ratingLabel(summaries?.get(vendor.id))}
+                          {timesUsed(summaries?.get(vendor.id)) > 0 && ` · used ${timesUsed(summaries?.get(vendor.id))}×`}
+                        </span>
+                      </span>
+                      <Button variant="outline" size="sm" className="h-7 shrink-0 text-xs" onClick={() => setDetailsOf(vendor)}>
+                        Prices, SLA & ratings
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               </motion.div>
@@ -318,6 +363,33 @@ export default function VendorDirectory({ canEdit, currentUserId }: Props) {
                 placeholder="Continental, small chops, drinks…"
               />
             </div>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">Service categories</legend>
+              <div className="flex flex-wrap gap-1.5">
+                {VENDOR_SERVICE_CATEGORIES.map(category => {
+                  const selected = form.service_categories.includes(category)
+                  return (
+                    <button
+                      key={category}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setForm({ ...form, service_categories: selected ? form.service_categories.filter(value => value !== category) : [...form.service_categories, category] })}
+                      className={`rounded-full border px-2.5 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      {category}
+                    </button>
+                  )
+                })}
+              </div>
+            </fieldset>
+            <div className="space-y-2">
+              <Label htmlFor="vendor-sla">Service level agreed</Label>
+              <Textarea
+                id="vendor-sla" rows={3} value={form.sla_notes}
+                onChange={(e) => setForm({ ...form, sla_notes: e.target.value })}
+                placeholder="Delivery time, minimum notice, what happens if an order is late…"
+              />
+            </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
                 <p className="text-sm font-medium">Active</p>
@@ -334,6 +406,17 @@ export default function VendorDirectory({ canEdit, currentUserId }: Props) {
           </form>
         </DialogContent>
       </Dialog>
+
+      <VendorDetails
+        vendor={detailsOf}
+        summary={detailsOf ? summaries?.get(detailsOf.id) ?? null : null}
+        canEdit={canEdit}
+        canRate={canRate || canEdit}
+        currentUserId={currentUserId ?? null}
+        programs={programs}
+        selectedProgram={selectedProgram}
+        onClose={() => setDetailsOf(null)}
+      />
     </div>
   )
 }

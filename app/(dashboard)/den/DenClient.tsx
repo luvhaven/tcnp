@@ -1,334 +1,156 @@
 "use client"
 
 import { useState } from "react"
-import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
-import { createClient } from "@/lib/supabase/client"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { PageHeader } from "@/components/ui/page-header"
-import { useConfirm } from "@/components/providers/ConfirmProvider"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Switch } from "@/components/ui/switch"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Home, Plus, Edit, Trash2, Users, UserPlus, UserCheck } from "lucide-react"
-import { toast } from "sonner"
-import { notifyError } from '@/lib/notify'
-import { canManageNoscarDen, canManageWelfare, isAdmin, effectiveOscarRole } from "@/lib/utils"
-import { motion, AnimatePresence } from "framer-motion"
+import dynamic from "next/dynamic"
+import { useQuery } from "@tanstack/react-query"
+import { Home, Plus } from "lucide-react"
+import DenLocations, { type DenProgram } from "@/components/den/DenLocations"
 import DenMenus from "@/components/den/DenMenus"
-import VendorDirectory from "@/components/den/VendorDirectory"
+import DenGuests from "@/components/den/DenGuests"
+import DenInventory from "@/components/den/DenInventory"
+import DenOverview from "@/components/den/DenOverview"
+import DenPlan from "@/components/den/DenPlan"
+import DenReports from "@/components/den/DenReports"
+import DenRepository from "@/components/den/DenRepository"
+import DenRoster from "@/components/den/DenRoster"
+import DenWork from "@/components/den/DenWork"
 import PapaMealOrders from "@/components/den/PapaMealOrders"
-import { useCurrentUser } from "@/hooks/useCurrentUser"
+import VendorDirectory from "@/components/den/VendorDirectory"
 import { OfficerProfileDialog, type OfficerProfileData } from "@/components/officers/OfficerProfileDialog"
+import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
+import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { PageHeader } from "@/components/ui/page-header"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
+import type { DenTeamMember } from "@/hooks/useDenTeam"
+import { useUnitAccess } from "@/hooks/useUnitAccess"
+import { DEN_FLOOR_GRANTS_KEY, DEN_TABS, hasFloorAccessFor, resolveDenTab, type DenTab } from "@/lib/den"
+import { createClient } from "@/lib/supabase/client"
+import { canManageNoscarDen, canManageWelfare, isAdmin } from "@/lib/utils"
 
-type Program = {
-  id: string
-  name: string
-  status: string
+// The dashboard is the only tab that draws charts, so its chart library is
+// loaded when that tab is first opened rather than with the page.
+const DenDashboard = dynamic(() => import("@/components/den/DenDashboard"), {
+  ssr: false,
+  loading: () => <Skeleton className="h-64 rounded-2xl" />,
+})
+
+const TAB_LABEL: Record<DenTab, string> = {
+  overview: "Overview",
+  dashboard: "Dashboard",
+  plan: "Programme plan",
+  work: "Tasks & Checklists",
+  roster: "Roster",
+  guests: "Guests",
+  service: "Menus & Orders",
+  vendors: "Vendors",
+  inventory: "Inventory",
+  locations: "Locations",
+  repository: "Repository",
+  reports: "Reports",
 }
 
-type Officer = {
-  id: string
-  full_name: string
-  email: string
-  role: string
-  oscar: string | null
+const BRIEFING_ROLES = ["noscar_nest", "head_noscar_nest", "noscar_den", "head_noscar_den", "november_oscar"]
+
+function toProfile(member: DenTeamMember): OfficerProfileData {
+  return {
+    id: member.id,
+    email: member.email ?? "",
+    full_name: member.full_name,
+    phone: member.phone,
+    oscar: member.oscar,
+    role: member.role,
+    unit: member.unit,
+    current_title_id: member.current_title_id,
+    is_active: member.is_active,
+    activation_status: member.activation_status,
+    photo_url: member.photo_url,
+    created_at: member.created_at,
+  }
 }
 
-type NoscarAssignment = {
-  id: string
-  user_id: string
-  nest_id: string | null
-  assignment_type: 'theatre' | 'nest'
-  program_id: string
-  is_active: boolean
-  assigned_date: string
-  user?: Officer
-}
-
-export default function DenClient({ initialDens }: { initialDens: any[] }) {
+export default function DenClient({ initialDens, initialTab }: { initialDens: any[]; initialTab: string | null }) {
   const supabase = createClient()
-  const confirm = useConfirm()
-  const queryClient = useQueryClient()
+  const { data: currentUser } = useCurrentUser()
+  const denUnit = useUnitAccess("november_den")
 
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [officerDialogOpen, setOfficerDialogOpen] = useState(false)
-  const [selectedOfficer, setSelectedOfficer] = useState<OfficerProfileData | null>(null)
-  const [editing, setEditing] = useState<any>(null)
-  const [selectedDen, setSelectedDen] = useState<any>(null)
-  const [selectedProgram, setSelectedProgram] = useState<string>('all')
-  const [formData, setFormData] = useState({
-    name: '',
-    address: '',
-    city: '',
-    phone: '',
-    email: '',
-    rating: 5,
-    amenities: '',
-    type: 'den',
-    program_id: ''
-  })
-  const [officerFormData, setOfficerFormData] = useState({
-    user_id: '',
-  })
+  const [selectedProgram, setSelectedProgram] = useState("all")
+  const [profile, setProfile] = useState<OfficerProfileData | null>(null)
+  const [addRequest, setAddRequest] = useState(0)
 
-  const { data: userRole } = useQuery({
-    queryKey: ['userRole'],
+  const role = currentUser?.role ?? null
+  const oscar = currentUser?.oscar ?? null
+  const hasAdminAccess = currentUser?.has_admin_access ?? false
+
+  // Admins and command keep everything they already had. The unit check only
+  // ever adds the Den head on top; it never takes access away from anyone.
+  const canManage = canManageNoscarDen(role, oscar, hasAdminAccess)
+  const canManageVendors = canManageWelfare(role, oscar, hasAdminAccess)
+  // Floor work (publishing menus, taking a Papa's order) reaches other Den
+  // officers one programme at a time: they must be active for the programme
+  // and the Den head must have switched them on for it (DenFloorAccess).
+  const { data: floorPrograms = [] } = useQuery({
+    queryKey: [...DEN_FLOOR_GRANTS_KEY, "mine", currentUser?.id],
+    enabled: Boolean(currentUser?.id) && denUnit.isMember,
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return null
-      const { data } = await supabase.from('users').select('role, has_admin_access').eq('id', user.id).single()
-      return data?.has_admin_access ? 'admin' : data?.role || null
-    }
+      const { data, error } = await (supabase as any)
+        .from("den_floor_grants")
+        .select("program_id")
+        .eq("user_id", currentUser!.id)
+      // Before the grants table exists there is simply nothing granted.
+      if (error) return [] as string[]
+      return (data ?? []).map((row: { program_id: string }) => row.program_id) as string[]
+    },
   })
+  const hasFloorAccess = hasFloorAccessFor(floorPrograms, selectedProgram)
+  const canEditMenus = canManageVendors || hasFloorAccess
+  const canTakeOrders = canManage || hasFloorAccess
+  const canManageTeam = denUnit.canManage
+  const showBriefings = Boolean(role && BRIEFING_ROLES.includes(role))
+
+  const tabs = DEN_TABS
+  const [requestedTab, setRequestedTab] = useState<string | null>(initialTab)
+  const tab = resolveDenTab(requestedTab, tabs)
+
+  const selectTab = (next: string) => {
+    setRequestedTab(next)
+    // Keep the tab in the address bar so a link or a refresh lands on it,
+    // without a navigation (and without re-running the server component).
+    const url = new URL(window.location.href)
+    if (next === "overview") url.searchParams.delete("tab")
+    else url.searchParams.set("tab", next)
+    window.history.replaceState(null, "", url)
+  }
 
   const { data: dens = [] } = useQuery({
-    queryKey: ['nests'],
+    queryKey: ["nests"],
     queryFn: async () => {
-      const { data, error } = await supabase.from('nests').select(`*, programs(name)`).order('name')
+      const { data, error } = await supabase.from("nests").select("*, programs(name)").order("name")
       if (error) throw error
-      return data
+      return data as any[]
     },
-    initialData: initialDens
+    initialData: initialDens,
   })
 
   const { data: programs = [] } = useQuery({
     // Same shape (id, name, status) as OfficersClient's programs query, so
     // it's safe to share this key — see ProgramsClient.tsx for why pages
     // with DIFFERENT select() shapes must not share the bare ['programs'] key.
-    queryKey: ['programs', 'lite-status'],
+    queryKey: ["programs", "lite-status"],
     queryFn: async () => {
-      const { data, error } = await supabase.from('programs').select('id, name, status').order('name')
+      const { data, error } = await supabase.from("programs").select("id, name, status").order("name")
       if (error) throw error
-      return data as Program[]
-    }
+      return data as DenProgram[]
+    },
   })
 
-  const { data: officers = [] } = useQuery({
-    queryKey: ['officers', 'admin-roles'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, full_name, email, role, oscar')
-        .in('role', ['november_oscar', 'noscar_den', 'head_noscar_den', 'head_of_operations', 'admin', 'super_admin'])
-        .eq('is_active', true)
-        .order('full_name')
-      if (error) throw error
-      return data as Officer[]
-    }
-  })
-
-  const { data: assignments = [] } = useQuery({
-    queryKey: ['noscar_assignments'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('noscar_assignments')
-        .select(`*, user:users!noscar_assignments_user_id_fkey(id, full_name, email, role, oscar)`)
-        .eq('assignment_type', 'theatre')
-        .order('assigned_date', { ascending: false })
-      if (error) throw error
-      return data as any as NoscarAssignment[]
-    }
-  })
-
-  const canManage = userRole ? canManageNoscarDen(userRole) : false
-  const { data: currentUser } = useCurrentUser()
-  const canEditMenus = canManageWelfare(currentUser?.role, currentUser?.oscar, currentUser?.has_admin_access)
-  // Taking a Papa's order is Nest floor work, not menu curation: the Welfare
-  // Oscars who publish menus do not stand in front of a Papa to order for them.
-  const canTakeOrders = canManageNoscarDen(currentUser?.role, currentUser?.oscar, currentUser?.has_admin_access)
-
-  const saveDenMutation = useMutation({
-    mutationFn: async (payload: { isEdit: boolean, data: any }) => {
-      if (payload.isEdit) {
-        const { error } = await supabase.from('nests').update(payload.data).eq('id', editing.id)
-        if (error) throw error
-      } else {
-        const { error } = await supabase.from('nests').insert([payload.data])
-        if (error) throw error
-      }
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['nests'] })
-      toast.success(variables.isEdit ? 'Den location updated!' : 'Den location added!')
-      setDialogOpen(false)
-      setEditing(null)
-      resetForm()
-    },
-    onError: (error: any) => {
-      notifyError(error, 'Failed to save')
-    }
-  })
-
-  const deleteDenMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('nests').delete().eq('id', id)
-      if (error) throw error
-      return id
-    },
-    onMutate: async (deletedId) => {
-      await queryClient.cancelQueries({ queryKey: ['nests'] })
-      const previous = queryClient.getQueryData<any[]>(['nests'])
-      if (previous) {
-        queryClient.setQueryData<any[]>(['nests'], old => old?.filter(n => n.id !== deletedId))
-      }
-      return { previous }
-    },
-    onError: (err, newTodo, context) => {
-      queryClient.setQueryData(['nests'], context?.previous)
-      toast.error('Failed to delete')
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['nests'] })
-      toast.success('Location deleted!')
-    }
-  })
-
-  const assignOfficerMutation = useMutation({
-    mutationFn: async (payload: any) => {
-      const { error } = await supabase.from('noscar_assignments').insert([payload])
-      if (error) throw error
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['noscar_assignments'] })
-      toast.success('Officer assigned!')
-      setOfficerDialogOpen(false)
-      setOfficerFormData({ user_id: '' })
-    },
-    onError: (error: any) => {
-      notifyError(error, 'Failed to assign officer')
-    }
-  })
-
-  const toggleOfficerMutation = useMutation({
-    mutationFn: async (assignment: NoscarAssignment) => {
-      const { error } = await supabase.from('noscar_assignments').update({ is_active: !assignment.is_active }).eq('id', assignment.id)
-      if (error) throw error
-      return !assignment.is_active
-    },
-    onSuccess: (isActive) => {
-      queryClient.invalidateQueries({ queryKey: ['noscar_assignments'] })
-      toast.success(isActive ? 'Officer marked active' : 'Officer marked inactive')
-    },
-    onError: (error: any) => {
-      notifyError(error, 'Failed to update status')
-    }
-  })
-
-  const removeAssignmentMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('noscar_assignments').delete().eq('id', id)
-      if (error) throw error
-      return id
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['noscar_assignments'] })
-      toast.success('Officer removed from location')
-    },
-    onError: (error: any) => {
-      notifyError(error, 'Failed to remove')
-    }
-  })
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!canManage) {
-      toast.error('You are not authorized to manage Den locations')
-      return
-    }
-    const submitData = {
-      ...formData,
-      type: 'den',
-      program_id: formData.program_id || null
-    }
-    if (saveDenMutation.isPending) return
-    saveDenMutation.mutate({ isEdit: !!editing, data: submitData })
-  }
-
-  const handleEdit = (item: any) => {
-    setEditing(item)
-    setFormData({
-      name: item.name,
-      address: item.address,
-      city: item.city,
-      phone: item.phone || '',
-      email: item.email || '',
-      rating: item.rating || 5,
-      amenities: item.amenities || '',
-      type: 'den',
-      program_id: item.program_id || ''
-    })
-    setDialogOpen(true)
-  }
-
-  const handleDelete = async (id: string) => {
-    if (!canManage) {
-      toast.error('You are not authorized to manage locations')
-      return
-    }
-    if (!await confirm({ message: 'Delete this location?', variant: 'destructive' })) return
-    deleteDenMutation.mutate(id)
-  }
-
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      address: '',
-      city: '',
-      phone: '',
-      email: '',
-      rating: 5,
-      amenities: '',
-      type: 'den',
-      program_id: ''
-    })
-  }
-
-  const handleAssignOfficer = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!officerFormData.user_id || !selectedDen) {
-      toast.error('Please select an officer')
-      return
-    }
-    if (assignOfficerMutation.isPending) return
-    assignOfficerMutation.mutate({
-      user_id: officerFormData.user_id,
-      nest_id: selectedDen.id,
-      assignment_type: 'theatre',
-      program_id: selectedDen.program_id,
-      is_active: true,
-      assigned_date: new Date().toISOString().split('T')[0]
-    })
-  }
-
-  const toggleOfficerActive = async (assignment: NoscarAssignment) => {
-    toggleOfficerMutation.mutate(assignment)
-  }
-
-  const removeAssignment = async (assignmentId: string) => {
-    if (!await confirm({ message: 'Remove this officer from the location?', variant: 'destructive' })) return
-    removeAssignmentMutation.mutate(assignmentId)
-  }
-
-  const getOfficersForDen = (denId: string) => {
-    return assignments.filter(a => a.nest_id === denId)
-  }
-
-  const getInitials = (name: string) => {
-    if (!name) return '??'
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)
-  }
-
-  const denLocations = dens.filter((n: any) => n.type === 'den')
-  const filteredDens = selectedProgram === 'all'
-    ? denLocations
-    : denLocations.filter((n: any) => n.program_id === selectedProgram)
+  const programName = selectedProgram === "all"
+    ? null
+    : programs.find(program => program.id === selectedProgram)?.name ?? null
+  const openProfile = (member: DenTeamMember) => setProfile(toProfile(member))
 
   return (
     <div className="space-y-6 page-enter">
@@ -336,358 +158,169 @@ export default function DenClient({ initialDens }: { initialDens: any[] }) {
         icon={Home}
         title="November (Den)"
         badge="VIP Lounge & Den"
-        description="Private Den lounges, VIP refreshments, menu of the day, and assigned officers."
+        description="Guest hospitality in one place: the team, today's menus and orders, vendors and Den locations."
         actions={canManage && (
-          <Button onClick={() => {
-            setEditing(null)
-            resetForm()
-            setDialogOpen(true)
-          }}>
+          <Button onClick={() => { selectTab("locations"); setAddRequest(count => count + 1) }}>
             <Plus aria-hidden="true" />
             Add Den
           </Button>
         )}
       />
 
-      {/* Program Filter */}
-      <motion.div layout className="flex items-center gap-4">
-        <Label>Filter by Program:</Label>
-        <Select value={selectedProgram} onValueChange={setSelectedProgram}>
-          <SelectTrigger className="w-[250px]">
-            <SelectValue placeholder="All Programs" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Programs</SelectItem>
-            {programs.map(program => (
-              <SelectItem key={program.id} value={program.id}>
-                {program.name}
-              </SelectItem>
+      <Tabs value={tab} onValueChange={selectTab} className="space-y-4">
+        {/* The tabs need the full width: the filter sits on its own line above
+            them, and the tabs wrap instead of hiding behind a scrollbar. */}
+        <div className="flex flex-col gap-3">
+          {/* Phones get one swipeable row; four wrapped rows would push the content off the first screen. */}
+          <TabsList className="order-2 w-full justify-start sm:h-auto sm:flex-wrap">
+            {tabs.map(value => (
+              <TabsTrigger key={value} value={value}>{TAB_LABEL[value]}</TabsTrigger>
             ))}
-          </SelectContent>
-        </Select>
-      </motion.div>
-
-      {/* ── Papa Briefings for NOScar roles ── */}
-      {userRole && ['noscar_nest', 'head_noscar_nest', 'noscar_den', 'head_noscar_den', 'november_oscar'].includes(userRole) && (
-        <div className="border rounded-xl p-4 bg-muted/30">
-          <PapaBriefingsSection role={userRole} />
+          </TabsList>
+          <div className="order-1 flex items-center gap-2">
+            <Label htmlFor="den-program-filter" className="shrink-0 text-sm text-muted-foreground">Programme</Label>
+            <Select value={selectedProgram} onValueChange={setSelectedProgram}>
+              <SelectTrigger id="den-program-filter" className="w-full sm:w-[280px]">
+                <SelectValue placeholder="All programmes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All programmes</SelectItem>
+                {programs.map(program => (
+                  <SelectItem key={program.id} value={program.id}>{program.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-      )}
 
-      <VendorDirectory canEdit={canEditMenus} currentUserId={currentUser?.id ?? null} />
+        <TabsContent value="overview">
+          <DenOverview
+            dens={dens}
+            selectedProgram={selectedProgram}
+            programName={programName}
+            canManageTeam={canManageTeam}
+            onNavigate={selectTab}
+            onOpenProfile={openProfile}
+            currentUserId={currentUser?.id ?? null}
+          />
+        </TabsContent>
 
-      <DenMenus canEdit={canEditMenus} selectedProgram={selectedProgram} currentUserId={currentUser?.id ?? null} />
+        <TabsContent value="service">
+          <div className="space-y-6">
+            <DenMenus canEdit={canEditMenus} selectedProgram={selectedProgram} currentUserId={currentUser?.id ?? null} />
+            <PapaMealOrders canOrder={canTakeOrders} selectedProgram={selectedProgram} currentUserId={currentUser?.id ?? null} />
+          </div>
+        </TabsContent>
 
-      <PapaMealOrders canOrder={canTakeOrders} selectedProgram={selectedProgram} currentUserId={currentUser?.id ?? null} />
+        <TabsContent value="vendors">
+          <VendorDirectory
+            canEdit={canManageVendors || denUnit.canManage}
+            canRate={denUnit.isMember}
+            currentUserId={currentUser?.id ?? null}
+            programs={programs}
+            selectedProgram={selectedProgram}
+          />
+        </TabsContent>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Home className="h-5 w-5" />
-            <span>Den Locations</span>
-          </CardTitle>
-          <CardDescription>The Den and secure lounge locations</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {filteredDens.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Home className="h-12 w-12 text-muted-foreground/50" />
-              <p className="mt-4 text-sm font-medium">No Dens found</p>
-            </div>
-          ) : (
-            <motion.div layout className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <AnimatePresence>
-                {filteredDens.map((den: any) => {
-                  const denOfficers = getOfficersForDen(den.id)
-                  const programName = programs.find(p => p.id === den.program_id)?.name
+        <TabsContent value="inventory">
+          <DenInventory
+            selectedProgram={selectedProgram}
+            programName={programName}
+            canManage={denUnit.canManage}
+            canCoordinate={denUnit.canCoordinate}
+            isMember={denUnit.isMember}
+            currentUserId={currentUser?.id ?? null}
+          />
+        </TabsContent>
 
-                  return (
-                    <motion.div
-                      layout
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ duration: 0.2 }}
-                      key={den.id}
-                    >
-                      <Card className="overflow-hidden hover:shadow-lg transition-shadow h-full flex flex-col">
-                        <CardHeader className="pb-2">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <CardTitle className="text-lg">{den.name}</CardTitle>
-                              {programName && (
-                                <Badge variant="outline" className="mt-1">{programName}</Badge>
-                              )}
-                            </div>
-                            {canManage && (
-                              <div className="flex gap-1 shrink-0">
-                                <Button aria-label="Assign officer" variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={() => {
-                                  setSelectedDen(den)
-                                  setOfficerFormData({ user_id: '' })
-                                  setOfficerDialogOpen(true)
-                                }}>
-                                  <UserPlus className="h-4 w-4" />
-                                </Button>
-                                <Button aria-label="Edit Den" variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={() => handleEdit(den)}>
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button aria-label="Delete Den" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(den.id)}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                          <CardDescription>{den.city}</CardDescription>
-                        </CardHeader>
-                        <CardContent className="flex-1 flex flex-col">
-                          <div className="space-y-3 text-sm flex-1">
-                            <p className="text-muted-foreground">{den.address}</p>
-                            {den.phone && <p>📞 {den.phone}</p>}
+        <TabsContent value="locations">
+          <DenLocations
+            dens={dens}
+            programs={programs}
+            selectedProgram={selectedProgram}
+            canManage={canManage}
+            addRequest={addRequest}
+            onOpenProfile={openProfile}
+          />
+        </TabsContent>
 
-                            {/* Officers Section */}
-                            <div className="border-t pt-3 mt-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Users className="h-4 w-4 text-muted-foreground" />
-                                <span className="font-medium text-xs">Assigned Officers ({denOfficers.length})</span>
-                              </div>
-                              {denOfficers.length === 0 ? (
-                                <p className="text-xs text-muted-foreground">No officers assigned</p>
-                              ) : (
-                                <div className="space-y-2">
-                                  {denOfficers.map(assignment => (
-                                    <div key={assignment.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50 transition-colors hover:bg-muted group">
-                                      <div
-                                        className="flex items-center gap-2 cursor-pointer hover:text-primary transition-colors flex-1"
-                                        onClick={() => {
-                                          if (!assignment.user) return
-                                          setSelectedOfficer({
-                                            id: assignment.user.id,
-                                            email: assignment.user.email || '',
-                                            full_name: assignment.user.full_name || null,
-                                            phone: null,
-                                            oscar: assignment.user.oscar || null,
-                                            role: assignment.user.role || 'officer',
-                                            unit: null,
-                                            current_title_id: null,
-                                            is_active: assignment.is_active,
-                                            activation_status: assignment.is_active ? 'active' : 'inactive',
-                                            created_at: new Date().toISOString()
-                                          })
-                                        }}
-                                        title="View Full Profile"
-                                      >
-                                        <Avatar className="h-6 w-6 group-hover:ring-1 group-hover:ring-primary/40 transition">
-                                          <AvatarFallback className="text-xs">
-                                            {getInitials(assignment.user?.full_name || '')}
-                                          </AvatarFallback>
-                                        </Avatar>
-                                        <div>
-                                          <p className="text-xs font-medium group-hover:underline">{assignment.user?.full_name}</p>
-                                          <p className="text-xs text-muted-foreground">{assignment.user?.oscar}</p>
-                                        </div>
-                                      </div>
-                                      {canManage && (
-                                        <div className="flex items-center gap-2">
-                                          <Switch
-                                            checked={assignment.is_active}
-                                            onCheckedChange={() => toggleOfficerActive(assignment)}
-                                            className="scale-75"
-                                          />
-                                          <Button aria-label="Remove assignment"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6"
-                                            onClick={() => removeAssignment(assignment.id)}
-                                          >
-                                            <Trash2 className="h-3 w-3 text-destructive" />
-                                          </Button>
-                                        </div>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  )
-                })}
-              </AnimatePresence>
-            </motion.div>
-          )}
-        </CardContent>
-      </Card>
+        <TabsContent value="dashboard">
+          <DenDashboard onNavigate={selectTab} />
+        </TabsContent>
 
-      {/* Add/Edit Location Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Den Location' : 'Add Den Location'}</DialogTitle>
-            <DialogDescription>
-              {editing ? 'Update location information' : 'Add a new private Den/lounge location'}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name *</Label>
-                <Input
-                  id="name"
-                  required
-                  placeholder="e.g., Main Church Den"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                />
+        <TabsContent value="plan">
+          <DenPlan
+            selectedProgram={selectedProgram}
+            programName={programName}
+            canCoordinate={denUnit.canCoordinate}
+            canArchive={denUnit.canManage}
+            currentUserId={currentUser?.id ?? null}
+            onNavigate={selectTab}
+          />
+        </TabsContent>
+
+        <TabsContent value="repository">
+          <DenRepository
+            canManage={denUnit.canManage}
+            currentUserId={currentUser?.id ?? null}
+            selectedProgram={selectedProgram}
+            programName={programName}
+          />
+        </TabsContent>
+
+        <TabsContent value="reports">
+          <DenReports
+            selectedProgram={selectedProgram}
+            programName={programName}
+            programs={programs}
+            canCoordinate={denUnit.canCoordinate}
+            canManage={denUnit.canManage}
+            isMember={denUnit.isMember}
+            currentUserId={currentUser?.id ?? null}
+          />
+        </TabsContent>
+
+        <TabsContent value="work">
+          <DenWork
+            selectedProgram={selectedProgram}
+            programName={programName}
+            canCoordinate={denUnit.canCoordinate}
+            canManage={denUnit.canManage}
+            currentUserId={currentUser?.id ?? null}
+          />
+        </TabsContent>
+
+        <TabsContent value="roster">
+          <DenRoster
+            selectedProgram={selectedProgram}
+            programName={programName}
+            dens={dens}
+            canCoordinate={denUnit.canCoordinate}
+            currentUserId={currentUser?.id ?? null}
+          />
+        </TabsContent>
+
+        <TabsContent value="guests">
+          <div className="space-y-6">
+            <DenGuests
+              selectedProgram={selectedProgram}
+              programName={programName}
+              currentUserId={currentUser?.id ?? null}
+              canManage={denUnit.canManage}
+            />
+            {showBriefings && role && (
+              <div className="rounded-xl border bg-muted/30 p-4">
+                <PapaBriefingsSection role={role} />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="program_id">Program</Label>
-                <Select
-                  value={formData.program_id || 'unassigned'}
-                  onValueChange={(value) => setFormData({ ...formData, program_id: value === 'unassigned' ? '' : value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a program (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">No Program</SelectItem>
-                    {programs.map(program => (
-                      <SelectItem key={program.id} value={program.id}>{program.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="address">Address *</Label>
-                <Input
-                  id="address"
-                  required
-                  placeholder="e.g., 1 Aguiyi Ironsi Street"
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="city">City *</Label>
-                <Input
-                  id="city"
-                  required
-                  placeholder="e.g., Abuja"
-                  value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  placeholder="+234 xxx xxx xxxx"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="info@den.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="rating">Rating</Label>
-                <Input
-                  id="rating"
-                  type="number"
-                  min="1"
-                  max="5"
-                  value={formData.rating}
-                  onChange={(e) => setFormData({ ...formData, rating: parseInt(e.target.value) })}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="amenities">Amenities (comma separated)</Label>
-              <Textarea
-                id="amenities"
-                placeholder="e.g., Sound system, Seating, Refreshments..."
-                value={formData.amenities}
-                onChange={(e) => setFormData({ ...formData, amenities: e.target.value })}
-              />
-            </div>
-
-            <div className="flex justify-end space-x-2">
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" pending={saveDenMutation.isPending}>
-                {editing ? 'Update' : 'Add'} Den
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Assign Officer Dialog */}
-      <Dialog open={officerDialogOpen} onOpenChange={setOfficerDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Assign Officer to {selectedDen?.name}</DialogTitle>
-            <DialogDescription>
-              Select an officer to assign to this Den
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleAssignOfficer} className="space-y-4 mt-4">
-            <div className="space-y-2">
-              <Label>Select Officer</Label>
-              <Select value={officerFormData.user_id} onValueChange={(value) => setOfficerFormData({ user_id: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose an officer" />
-                </SelectTrigger>
-                <SelectContent>
-                  {officers.map(officer => (
-                    <SelectItem key={officer.id} value={officer.id}>
-                      <div className="flex items-center gap-2">
-                        <span>{officer.full_name}</span>
-                        {officer.oscar && <span className="text-muted-foreground text-xs">({officer.oscar})</span>}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex justify-end space-x-2">
-              <Button type="button" variant="outline" onClick={() => setOfficerDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" pending={assignOfficerMutation.isPending}>
-                {!assignOfficerMutation.isPending && <UserCheck className="mr-2 h-4 w-4" />}
-                Assign Officer
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Full Officer Profile Dialog */}
       <OfficerProfileDialog
-        officer={selectedOfficer}
-        open={!!selectedOfficer}
-        onOpenChange={(open) => {
-          if (!open) setSelectedOfficer(null)
-        }}
+        officer={profile}
+        open={Boolean(profile)}
+        onOpenChange={(open) => { if (!open) setProfile(null) }}
         canManage={Boolean(currentUser && (isAdmin(currentUser.role, currentUser.has_admin_access) || isAdmin(currentUser.oscar)))}
       />
     </div>

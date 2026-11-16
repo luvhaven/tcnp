@@ -8,6 +8,7 @@ export type UnitSlug =
   | 'command'
   | 'compliance'
   | 'november_nest'
+  | 'november_den'
   | 'tango'
   | 'training'
   | 'victor'
@@ -39,7 +40,7 @@ export function useUnitAccess(unit: UnitSlug) {
       if (error) return { authorityAvailable: false, membership: null }
       return {
         authorityAvailable: true,
-        membership: data as { access_level: 'member' | 'head'; status: 'active' } | null,
+        membership: data as { access_level: 'member' | 'sub_lead' | 'head'; status: 'active' } | null,
       }
     },
     enabled: Boolean(currentUser?.id),
@@ -53,13 +54,18 @@ export function useUnitAccess(unit: UnitSlug) {
   const membership = membershipQuery.data?.membership ?? null
   const isHead = authorityAvailable ? membership?.access_level === 'head' : legacyHead
   const isMember = authorityAvailable ? Boolean(membership) : isHead
+  // Sub-Team Lead: coordinates day-to-day work under the head. Only units that
+  // opt in (public.can_coordinate_unit) give this level anything extra.
+  const isSubLead = authorityAvailable && membership?.access_level === 'sub_lead'
 
   return {
     currentUser,
     isPlatformAdmin,
     isHead,
     isMember,
+    isSubLead,
     canManage: isPlatformAdmin || isHead,
+    canCoordinate: isPlatformAdmin || isHead || isSubLead,
     isLoading: userLoading || membershipQuery.isLoading,
   }
 }

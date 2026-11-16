@@ -176,7 +176,7 @@ export function privilegedAccessLabel(role: string | null | undefined, hasAdminA
 }
 
 export function isUnitHeadRole(
-  unit: 'alpha' | 'command' | 'compliance' | 'november_nest' | 'tango' | 'training' | 'victor' | 'welfare',
+  unit: 'alpha' | 'command' | 'compliance' | 'november_nest' | 'november_den' | 'tango' | 'training' | 'victor' | 'welfare',
   role: string | null | undefined,
   oscar?: string | null,
 ): boolean {
@@ -187,6 +187,7 @@ export function isUnitHeadRole(
     command: ['head_of_command'],
     compliance: ['head_compliance_oscar'],
     november_nest: ['head_noscar_nest'],
+    november_den: ['head_noscar_den'],
     tango: ['head_tango_oscar'],
     training: ['head_training_oscar'],
     victor: ['head_victor_oscar'],

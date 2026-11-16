@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { isPlatformAdministrator } from '@/lib/utils'
+import { isPlatformAdministrator, oscarToRole } from '@/lib/utils'
 
 export async function POST(request: Request) {
     try {
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
         // Load selected users
         const { data: usersData, error: usersError } = await (adminClient as any)
             .from('users')
-            .select('id, current_title_id, role, is_active, activation_status')
+            .select('id, current_title_id, role, oscar, is_active, activation_status')
             .in('id', pendingOfficerIds)
         if (usersError) {
             console.error('Failed to load selected officers:', usersError)
@@ -139,7 +139,9 @@ export async function POST(request: Request) {
                 if (existing) titleCode = existing.code;
             }
             if (!titleCode) {
-                const mappedCode = roleToTitleMap[u.role]
+                // Most officers keep the signup default role and are identified by
+                // the Oscar they registered under, so fall back to that unit's title.
+                const mappedCode = roleToTitleMap[u.role] ?? roleToTitleMap[oscarToRole(u.oscar) ?? '']
                 if (mappedCode && titles && titles.some((t: any) => t.code === mappedCode)) {
                     titleCode = mappedCode
                 }

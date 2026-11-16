@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useRef } from 'react'
+import MyDenWork from '@/components/den/MyDenWork'
 import Link from 'next/link'
 import { format, formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
@@ -140,6 +141,8 @@ export default function MyOperationsPage() {
       />
 
       {/* ── Current mission — always first ─────────────────────────────── */}
+      <MyDenWork currentUserId={userId ?? null} />
+
       {myAssigned.length > 1 && (
         <MissionStrip journeys={myAssigned} selectedId={selected?.id ?? null} onSelect={setSelectedJourneyId} />
       )}

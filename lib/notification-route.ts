@@ -40,6 +40,11 @@ export function resolveNotificationRoute(n: AppNotification): string | null {
   const kind = n.metadata?.kind
   if (kind === 'password_reset_request') return '/officers?tab=resets'
   if (kind === 'food_ready') return '/welfare'
+  if (kind === 'program_addition_request') return '/approvals'
+  if (kind === 'den_task_assigned' || kind === 'den_task_reminder') return '/den?tab=work'
+  if (kind === 'den_shift_assigned') return '/den?tab=roster'
+  if (kind === 'den_low_stock') return '/den?tab=inventory'
+  if (kind === 'program_addition_decided') return n.metadata?.unit_slug === 'november_den' ? '/den' : '/my-operations'
   if (kind === 'birthday_0700' || n.type === 'birthday_reminder') return '/welfare'
   if (kind === 'mission_request') return '/dashboard'
   if (kind === 'mention') return '/chat'
