@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { notifyError, UserFacingError } from '@/lib/notify'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { isCommandAuthority } from '@/lib/unit-access'
 
 type ProgramExportProps = {
   programId: string
@@ -13,14 +15,44 @@ type ProgramExportProps = {
   status: string
 }
 
-export default function ProgramExport({ programId, programName, status }: ProgramExportProps) {
+/**
+ * A programme export bypasses RLS (it holds every journey, incident and chat
+ * message), so export_program_data only runs for is_admin(): platform admins
+ * and Command. Everyone else never sees the button. Papa rows in the export
+ * carry no phone, email or passport.
+ */
+export function canExportProgram(user: { role?: string | null; has_admin_access?: boolean | null } | null | undefined): boolean {
+  return Boolean(user) && isCommandAuthority(user?.role, user?.has_admin_access)
+}
+
+/** A plain negative or positive decimal, e.g. a longitude like -73.77. */
+const PLAIN_NUMBER = /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/
+
+/**
+ * Quotes a CSV cell and defuses spreadsheet formulas: a text value that
+ * starts (after any spaces) with =, +, -, @, or that starts with a tab or
+ * carriage return, gets a leading apostrophe. Numbers, and text that is a
+ * plain number such as a negative coordinate, stay numbers.
+ */
+export function csvCell(value: unknown): string {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'number' || typeof value === 'bigint') return `"${String(value)}"`
+  let text = typeof value === 'object' ? JSON.stringify(value) : String(value)
+  const risky = /^[\t\r]/.test(text) || /^\s*[=+\-@]/.test(text)
+  if (risky && !PLAIN_NUMBER.test(text)) text = `'${text}`
+  return `"${text.replace(/"/g, '""')}"`
+}
+
+export default function ProgramExport({ programId, programName }: ProgramExportProps) {
   const supabase = createClient()
+  const { data: currentUser } = useCurrentUser()
   const [exporting, setExporting] = useState(false)
 
-  const canExport = true // Allow exporting in any status
+  const canExport = canExportProgram(currentUser)
+  if (!canExport) return null
 
   const handleExport = async () => {
-
+    if (exporting) return
     setExporting(true)
     
     try {
@@ -112,14 +144,7 @@ export default function ProgramExport({ programId, programName, status }: Progra
 
     // Add data rows
     for (const row of data) {
-      const values = headers.map(header => {
-        const value = row[header]
-        // Handle special characters and commas
-        if (value === null || value === undefined) return ''
-        const stringValue = typeof value === 'object' ? JSON.stringify(value) : String(value)
-        return `"${stringValue.replace(/"/g, '""')}"`
-      })
-      csvRows.push(values.join(','))
+      csvRows.push(headers.map(header => csvCell(row[header])).join(','))
     }
 
     return csvRows.join('\n')
@@ -140,10 +165,11 @@ export default function ProgramExport({ programId, programName, status }: Progra
   return (
     <Button
       onClick={handleExport}
-      disabled={!canExport || exporting}
-      variant={canExport ? 'default' : 'secondary'}
+      disabled={exporting}
+      variant="default"
       size="sm"
-      className="shrink-0"
+      className="min-h-11 shrink-0 sm:min-h-9"
+      aria-label={`Export ${programName}`}
     >
       {exporting ? (
         <>

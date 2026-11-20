@@ -14,6 +14,8 @@ import { Edit2, Save, X, CheckCircle, User, Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { type RoleBriefingConfig, type PapaField } from '@/lib/constants/papaBriefingFields'
+import { PapaPassportPanel, type PapaPassportState } from '@/components/papas/PapaDetailsView'
+import type { PapaPrivateDetails } from '@/lib/papa-privacy'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +33,13 @@ interface PapaBriefingCardProps {
   papa: PapaBriefingPapa
   config: RoleBriefingConfig
   canEdit: boolean // true if the viewing user is a team lead
+  /**
+   * Restricted passport details (papa_private_details). Passed only when the
+   * viewer may see them (can_view_papa_passport) and the config shows them.
+   */
+  passport?: PapaPassportState
+  canEditPassport?: boolean
+  onPassportSaved?: (details: PapaPrivateDetails) => void
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -158,7 +167,10 @@ function EditableField({
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function PapaBriefingCard({ papa, config, canEdit }: PapaBriefingCardProps) {
+export default function PapaBriefingCard({ papa: papaProp, config, canEdit, passport, canEditPassport = false, onPassportSaved }: PapaBriefingCardProps) {
+  // Saved edits overlay the row we were given (props are never mutated).
+  const [savedValues, setSavedValues] = useState<Record<string, any>>({})
+  const papa: PapaBriefingPapa = { ...papaProp, ...savedValues }
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState<Record<string, any>>({})
@@ -197,9 +209,7 @@ export default function PapaBriefingCard({ papa, config, canEdit }: PapaBriefing
 
       toast.success(`Briefing updated — ${json.updated?.length ?? 0} field(s) saved`)
       // Update local view without full reload
-      for (const [k, v] of Object.entries(draft)) {
-        papa[k] = v
-      }
+      setSavedValues((prev) => ({ ...prev, ...draft }))
       setEditing(false)
       setDraft({})
     } catch (err: any) {
@@ -255,16 +265,16 @@ export default function PapaBriefingCard({ papa, config, canEdit }: PapaBriefing
               </Badge>
             )}
             {canEdit && !editing && (
-              <Button size="sm" variant="outline" onClick={startEdit} className="h-7 gap-1 text-xs">
-                <Edit2 className="h-3 w-3" /> Edit
+              <Button size="sm" variant="outline" onClick={startEdit} className="min-h-11 gap-1 text-xs sm:min-h-8" aria-label={`Edit briefing for ${papa.full_name}`}>
+                <Edit2 className="h-3 w-3" aria-hidden="true" /> Edit
               </Button>
             )}
             {editing && (
               <>
-                <Button size="sm" variant="outline" onClick={cancelEdit} className="h-7 gap-1 text-xs" disabled={saving}>
-                  <X className="h-3 w-3" /> Cancel
+                <Button size="sm" variant="outline" onClick={cancelEdit} className="min-h-11 gap-1 text-xs sm:min-h-8" disabled={saving}>
+                  <X className="h-3 w-3" aria-hidden="true" /> Cancel
                 </Button>
-                <Button size="sm" onClick={handleSave} className="h-7 gap-1 text-xs" disabled={saving}>
+                <Button size="sm" onClick={handleSave} className="min-h-11 gap-1 text-xs sm:min-h-8" disabled={saving}>
                   {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
                   Save
                 </Button>
@@ -303,6 +313,16 @@ export default function PapaBriefingCard({ papa, config, canEdit }: PapaBriefing
             )
           })}
         </div>
+        {passport && (
+          <PapaPassportPanel
+            papaId={papa.id}
+            papaName={papa.full_name}
+            state={passport}
+            canEdit={canEditPassport}
+            onSaved={onPassportSaved}
+            className="rounded-lg border border-amber-500/30 bg-amber-500/[0.03] p-3"
+          />
+        )}
       </CardContent>
     </Card>
   )

@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ErrorState } from "@/components/ui/error-state"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Users,
   Plus,
@@ -37,7 +38,19 @@ import { notifyError, UserFacingError } from '@/lib/notify'
 import PapaFormTabs from "@/components/papas/PapaFormTabs"
 import PapaPhotoStep from "@/components/papas/PapaPhotoStep"
 import PapaDetailsView from "@/components/papas/PapaDetailsView"
-import { canManagePapas, effectiveOscarRole } from "@/lib/utils"
+import { useUnitAccess } from "@/hooks/useUnitAccess"
+import {
+  PAPA_DIRECTORY_COLUMNS,
+  canEditPapaPassport,
+  canViewPapaPassport,
+  fetchPapaPrivateDetails,
+  papaPrivateKey,
+  papaPrivateSiblingFilter,
+  shouldWritePapaPrivate,
+  splitPapaPrivate,
+  upsertPapaPrivateDetails,
+  type PapaPrivateDetails,
+} from "@/lib/papa-privacy"
 import { motion, AnimatePresence } from "framer-motion"
 
 type Papa = {
@@ -46,7 +59,6 @@ type Papa = {
   program_id?: string
   full_name: string
   title: string
-  passport_number?: string
   email?: string
   phone: string
   flight_number?: string
@@ -106,16 +118,16 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
   // After a Papa is created (or from the details view) we walk through photo → details.
   const [viewer, setViewer] = useState<{ papaId: string; step: 'photo' | 'details'; fromCreate?: boolean } | null>(null)
 
-  const { data: userRole } = useQuery({
-    queryKey: ['userRole'],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return null
-      const { data } = await supabase.from('users').select('role, has_admin_access, oscar').eq('id', user.id).single()
-      const eff = effectiveOscarRole(data?.role, data?.oscar)
-      return data?.has_admin_access ? 'admin' : eff || data?.role || null
-    }
-  })
+  // The one rule: Command authority comes from the role / has_admin_access
+  // (SQL is_admin()), unit power from membership rows. The Oscar label grants
+  // nothing. Alpha's level only matters for passports.
+  const alpha = useUnitAccess('alpha')
+  // Creating, editing and deleting Papas: SQL is_admin() ("Admins have full
+  // access to papas"), i.e. platform admins and Command.
+  const canManage = alpha.isCommand
+  // Passports: is_admin() OR an Alpha head / sub-lead (can_view_papa_passport).
+  const canViewPassport = canViewPapaPassport(alpha)
+  const canEditPassport = canEditPapaPassport(alpha)
 
   const {
     data: papas = [],
@@ -128,7 +140,7 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
       // Read every Papa (PostgREST caps a single response), never a silent first page.
       const rows: Papa[] = []
       for (let offset = 0; ; offset += 1000) {
-        const { data, error } = await supabase.from('papas').select('*').order('full_name').order('id').range(offset, offset + 999)
+        const { data, error } = await supabase.from('papas').select(PAPA_DIRECTORY_COLUMNS).order('full_name').order('id').range(offset, offset + 999)
         if (error) throw error
         rows.push(...((data || []) as unknown as Papa[]))
         if (!data || data.length < 1000) return rows
@@ -152,8 +164,6 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
     return map
   }, [programs])
 
-  const canManage = userRole ? canManagePapas(userRole) : false
-
   const filteredPapas = useMemo(() => {
     const q = search.trim().toLowerCase()
     const now = new Date().getTime()
@@ -176,9 +186,46 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
     if (arrivingSoon) toggleArrivingSoon()
   }
 
+  // Passport details are read on demand, one Papa at a time, and only for
+  // people can_view_papa_passport admits. The viewer and the edit dialog
+  // share this cache entry.
+  const privatePapaId = dialogOpen && editingPapa
+    ? editingPapa.id
+    : viewer?.step === 'details' ? viewer.papaId : null
+  const privateDetails = useQuery({
+    queryKey: papaPrivateKey(privatePapaId),
+    queryFn: () => fetchPapaPrivateDetails(supabase as any, privatePapaId!),
+    enabled: canViewPassport && Boolean(privatePapaId),
+    staleTime: 60_000,
+    // A background refetch must not move the open edit form.
+    refetchOnWindowFocus: !dialogOpen,
+  })
+  // The edit form starts from the first passport that loads for this
+  // dialog, and keeps that as its baseline. A later refetch (or a failed
+  // one, which in React Query v5 flips status to 'error' but keeps data)
+  // never remounts the form or changes what "unchanged" means on save.
+  const [editPrivateBaseline, setEditPrivateBaseline] = useState<{ id: string; data: PapaPrivateDetails | null } | null>(null)
+  if (dialogOpen && editingPapa && privatePapaId === editingPapa.id && privateDetails.data !== undefined
+    && editPrivateBaseline?.id !== editingPapa.id) {
+    setEditPrivateBaseline({ id: editingPapa.id, data: privateDetails.data })
+  } else if (!dialogOpen && editPrivateBaseline) {
+    setEditPrivateBaseline(null)
+  }
+  const editPrivateLoaded = !editingPapa || editPrivateBaseline?.id === editingPapa.id
+  const editPrivateData = editingPapa && editPrivateBaseline?.id === editingPapa.id ? editPrivateBaseline.data : null
+  const setPrivateCache = (papaId: string, details: PapaPrivateDetails | null) => {
+    const key = papaPrivateKey(papaId)
+    queryClient.setQueryData(key, details)
+    // The Alpha briefing batch holds its own copy of this row.
+    void queryClient.invalidateQueries(papaPrivateSiblingFilter(key))
+  }
+
   const saveMutation = useMutation({
     mutationFn: async (data: any) => {
-      const { event_id, speaking_schedule, personal_assistants, ...rest } = data
+      // Passport fields never go into papas; they are written separately
+      // below, and only when allowed and actually changed.
+      const { papa: formPapa, privateDetails: nextPrivate } = splitPapaPrivate(data)
+      const { event_id, speaking_schedule, personal_assistants, ...rest } = formPapa as any
       const papaData = {
         ...rest,
         program_id: event_id || null,
@@ -187,16 +234,39 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
         speaking_schedule: speaking_schedule || [],
         personal_assistants: personal_assistants || []
       }
+      const writePrivate = shouldWritePapaPrivate({
+        allowed: canEditPassport,
+        loaded: editPrivateLoaded,
+        previous: editPrivateData,
+        next: nextPrivate,
+      })
 
+      let isEdit = false
+      let result: Papa[] | null = null
       if (editingPapa) {
-        const { data: result, error } = await supabase.from('papas').update(papaData).eq('id', editingPapa.id).select()
+        const { data: updated, error } = await supabase.from('papas').update(papaData).eq('id', editingPapa.id).select(PAPA_DIRECTORY_COLUMNS)
         if (error) throw error
-        return { isEdit: true, result }
+        isEdit = true
+        result = updated as unknown as Papa[]
       } else {
-        const { data: result, error } = await supabase.from('papas').insert([papaData]).select()
+        const { data: inserted, error } = await supabase.from('papas').insert([papaData]).select(PAPA_DIRECTORY_COLUMNS)
         if (error) throw error
-        return { isEdit: false, result }
+        result = inserted as unknown as Papa[]
       }
+
+      // The Papa is saved by now. A passport failure is reported on its own
+      // so a retry never creates the Papa twice.
+      const savedId = result?.[0]?.id
+      let savedPrivate: PapaPrivateDetails | null = null
+      let privateError: unknown = null
+      if (writePrivate && savedId) {
+        try {
+          savedPrivate = await upsertPapaPrivateDetails(supabase as any, savedId, nextPrivate)
+        } catch (error) {
+          privateError = error
+        }
+      }
+      return { isEdit, result, savedPrivate, privateError }
     },
     onSuccess: (data) => {
       const saved = data.result?.[0] as Papa | undefined
@@ -205,9 +275,13 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
           const rest = (old || []).filter(p => p.id !== saved.id)
           return [...rest, saved].sort((a, b) => a.full_name.localeCompare(b.full_name))
         })
+        if (data.savedPrivate) setPrivateCache(saved.id, data.savedPrivate)
       }
       queryClient.invalidateQueries({ queryKey: ['papas'] })
       toast.success(data.isEdit ? 'Papa updated successfully!' : 'Papa added successfully!')
+      if (data.privateError) {
+        notifyError(data.privateError, 'The Papa was saved, but the passport details were not. Open the Papa to try again.')
+      }
       setDialogOpen(false)
       setEditingPapa(null)
       if (saved) setViewer({ papaId: saved.id, step: data.isEdit ? 'details' : 'photo', fromCreate: !data.isEdit })
@@ -237,7 +311,9 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
       )
       return { previousPapas }
     },
-    onSuccess: () => {
+    onSuccess: (id) => {
+      // The passport row went with the Papa (ON DELETE CASCADE).
+      queryClient.removeQueries({ queryKey: papaPrivateKey(id) })
       toast.success('Papa deleted successfully!')
     },
     onError: (err, _id, context) => {
@@ -557,17 +633,41 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
           <DialogHeader>
             <DialogTitle className="text-xl font-bold">{editingPapa ? 'Edit Papa Dossier' : 'Add New Guest Minister'}</DialogTitle>
           </DialogHeader>
-          <PapaFormTabs
-            initialData={editingPapa ? { ...editingPapa, event_id: editingPapa.event_id || editingPapa.program_id || '' } as any : undefined}
-            events={programs}
-            onSubmit={handleSubmit}
-            onCancel={() => {
-              setDialogOpen(false)
-              setEditingPapa(null)
-            }}
-            isEditing={!!editingPapa}
-            pending={saveMutation.isPending}
-          />
+          {editingPapa && canViewPassport && !editPrivateLoaded && privateDetails.isLoading ? (
+            <div className="space-y-3" aria-busy="true" aria-label="Loading Papa details">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+          ) : (
+            <PapaFormTabs
+              // Remounts only on the first move from not-loaded to loaded
+              // (the baseline is frozen after that), so typing is never lost.
+              key={`${editingPapa?.id ?? 'new'}:${editPrivateLoaded ? 'private' : 'basic'}`}
+              initialData={editingPapa ? {
+                ...editingPapa,
+                ...(editPrivateData ?? {}),
+                event_id: editingPapa.event_id || editingPapa.program_id || '',
+              } as any : undefined}
+              events={programs}
+              onSubmit={handleSubmit}
+              onCancel={() => {
+                setDialogOpen(false)
+                setEditingPapa(null)
+              }}
+              isEditing={!!editingPapa}
+              pending={saveMutation.isPending}
+              showPassport={canEditPassport && editPrivateLoaded}
+              passportNotice={canEditPassport && !editPrivateLoaded ? (
+                <span className="flex flex-wrap items-center justify-between gap-2">
+                  <span>Passport details couldn&apos;t load, so they are hidden and won&apos;t be changed by this save. Reloading them resets this form.</span>
+                  <Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={() => { void privateDetails.refetch() }} pending={privateDetails.isFetching}>
+                    Reload passport
+                  </Button>
+                </span>
+              ) : null}
+            />
+          )}
         </DialogContent>
       </Dialog>
 
@@ -592,13 +692,27 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
               papa={viewerPapa}
               programName={viewerPapa.program_id ? programMap.get(viewerPapa.program_id) : null}
               canManage={canManage}
-              canViewPassport={canManage}
+              canViewPassport={canViewPassport}
+              canEditPassport={canEditPassport}
+              passport={canViewPassport ? {
+                details: privateDetails.data,
+                isLoading: privateDetails.isLoading,
+                isError: privateDetails.isError && privateDetails.data === undefined,
+                onRetry: () => { void privateDetails.refetch() },
+                retrying: privateDetails.isFetching,
+              } : undefined}
+              onPassportSaved={(details) => setPrivateCache(viewerPapa.id, details)}
               onChangePhoto={() => setViewer({ papaId: viewerPapa.id, step: 'photo' })}
               onEdit={() => {
                 setViewer(null)
                 handleEdit(viewerPapa)
               }}
             />
+          )}
+          {viewerPapa && viewer?.step === 'details' && alpha.loadFailed && !canViewPassport && (
+            <p className="text-xs text-muted-foreground" role="status">
+              We couldn&apos;t check your unit access, so any passport details stay hidden. Reload the page to try again.
+            </p>
           )}
         </DialogContent>
       </Dialog>

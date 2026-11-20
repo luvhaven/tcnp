@@ -20,6 +20,12 @@ export type RoleBriefingConfig = {
   viewFields: PapaField[]
   /** Fields this role's TEAM LEAD can also edit (subset of viewFields) */
   editableFields: string[] // list of field keys
+  /**
+   * Show the restricted passport block (papa_private_details) on each card.
+   * It is still only fetched and shown for people can_view_papa_passport
+   * admits (Command / Alpha head or sub-lead); the config alone grants nothing.
+   */
+  showsPassport?: boolean
 }
 
 // ── Field definitions ────────────────────────────────────────────────────────
@@ -72,6 +78,8 @@ const VICTOR_FIELDS: PapaField[] = [
   { key: 'special_requirements',label: 'Special Requirements',      type: 'textarea' },
 ]
 
+// Passports are not a papas column: they live in papa_private_details and
+// are read separately, only for allowed viewers (see showsPassport).
 const ALPHA_FIELDS: PapaField[] = [
   { key: 'flight_number',         label: 'Flight Number',    type: 'text' },
   { key: 'airline',               label: 'Airline',          type: 'text' },
@@ -82,7 +90,6 @@ const ALPHA_FIELDS: PapaField[] = [
   { key: 'arrival_city',          label: 'Arrival City',     type: 'text' },
   { key: 'arrival_date',          label: 'Arrival Date',     type: 'text' },
   { key: 'departure_date',        label: 'Departure Date',   type: 'text' },
-  { key: 'passport_number',       label: 'Passport Number',  type: 'text' },
   { key: 'entourage_size',        label: 'Entourage Size',   type: 'number' },
   { key: 'special_requirements',  label: 'Special Requirements', type: 'textarea' },
 ]
@@ -167,12 +174,14 @@ export const ROLE_BRIEFING_CONFIG: Record<string, RoleBriefingConfig> = {
     description: 'Flight details and airport logistics for each Papa',
     viewFields: ALPHA_FIELDS,
     editableFields: [],
+    showsPassport: true,
   },
   head_alpha_oscar: {
     sectionTitle: 'Papa Arrival Briefings',
     description: 'Flight details and airport logistics for each Papa',
     viewFields: ALPHA_FIELDS,
     editableFields: ['flight_number', 'airline', 'flight_provider', 'flight_arrival_time', 'flight_departure_time'],
+    showsPassport: true,
   },
 
   // Delta Oscar — Transport

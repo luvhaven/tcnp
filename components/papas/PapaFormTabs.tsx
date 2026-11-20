@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -8,15 +8,20 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Plus, X } from 'lucide-react'
+import { Lock, Plus, X } from 'lucide-react'
 import { MIC_PREF_OPTIONS } from '@/lib/constants/papaBriefingFields'
+import { PASSPORT_COUNTRY_MAX, PASSPORT_NUMBER_MAX } from '@/lib/papa-privacy'
 
 type PapaFormData = {
   // Basic Info
   event_id: string
   title: string
   full_name: string
+  // Restricted (papa_private_details). Only shown, and only saved, for
+  // people can_view_papa_passport admits; the parent writes them separately.
   passport_number: string
+  passport_country: string
+  passport_expiry: string
   email: string
   phone: string
   flight_number: string
@@ -70,6 +75,13 @@ type PapaFormTabsProps = {
   isEditing?: boolean
   /** The parent's save is in flight (e.g. mutation.isPending). */
   pending?: boolean
+  /**
+   * Show the passport fields. Only for Command / Alpha leads, and only once
+   * the stored passport has loaded (so an unloaded value is never saved).
+   */
+  showPassport?: boolean
+  /** Shown in place of the passport fields (e.g. they could not be loaded). */
+  passportNotice?: ReactNode
 }
 
 export default function PapaFormTabs({
@@ -79,6 +91,8 @@ export default function PapaFormTabs({
   onCancel,
   isEditing = false,
   pending = false,
+  showPassport = false,
+  passportNotice,
 }: PapaFormTabsProps) {
   const [activeTab, setActiveTab] = useState('basic')
   const [submitting, setSubmitting] = useState(false)
@@ -88,6 +102,8 @@ export default function PapaFormTabs({
     title: initialData?.title || '',
     full_name: initialData?.full_name || '',
     passport_number: initialData?.passport_number || '',
+    passport_country: initialData?.passport_country || '',
+    passport_expiry: initialData?.passport_expiry || '',
     email: initialData?.email || '',
     phone: initialData?.phone || '',
     flight_number: initialData?.flight_number || '',
@@ -236,27 +252,60 @@ export default function PapaFormTabs({
                 />
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="passport_number">Passport Number</Label>
-                  <Input
-                    id="passport_number"
-                    placeholder="Passport number"
-                    value={formData.passport_number}
-                    onChange={(e) => setFormData({ ...formData, passport_number: e.target.value })}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="nationality">Nationality</Label>
-                  <Input
-                    id="nationality"
-                    placeholder="e.g., Nigerian, American"
-                    value={formData.nationality}
-                    onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="nationality">Nationality</Label>
+                <Input
+                  id="nationality"
+                  placeholder="e.g., Nigerian, American"
+                  value={formData.nationality}
+                  onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
+                />
               </div>
+
+              {showPassport ? (
+                <fieldset className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/[0.03] p-3">
+                  <legend className="flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+                    Passport (restricted)
+                  </legend>
+                  <p className="text-xs text-muted-foreground">Only Command and Alpha leads can see or change these.</p>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="passport_number">Passport Number</Label>
+                      <Input
+                        id="passport_number"
+                        placeholder="Passport number"
+                        autoComplete="off"
+                        maxLength={PASSPORT_NUMBER_MAX}
+                        value={formData.passport_number}
+                        onChange={(e) => setFormData({ ...formData, passport_number: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="passport_country">Issuing Country</Label>
+                      <Input
+                        id="passport_country"
+                        placeholder="e.g., Nigeria"
+                        autoComplete="off"
+                        maxLength={PASSPORT_COUNTRY_MAX}
+                        value={formData.passport_country}
+                        onChange={(e) => setFormData({ ...formData, passport_country: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="passport_expiry">Passport Expiry</Label>
+                      <Input
+                        id="passport_expiry"
+                        type="date"
+                        value={formData.passport_expiry}
+                        onChange={(e) => setFormData({ ...formData, passport_expiry: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </fieldset>
+              ) : passportNotice ? (
+                <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">{passportNotice}</div>
+              ) : null}
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">

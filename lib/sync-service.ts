@@ -3,6 +3,7 @@
 
 import { createClient } from '@/lib/supabase/client'
 import { offlineQueue, type QueuedSubmission } from './offline-queue'
+import { stripPapaPrivateFields } from '@/lib/papa-privacy'
 import { toast } from 'sonner'
 
 class SyncService {
@@ -124,7 +125,9 @@ class SyncService {
                 break
 
             case 'papa':
-                await checked(supabase.from('papas').upsert([submission.data], { onConflict: 'id', ignoreDuplicates: true }))
+                // Passports live in papa_private_details (restricted); an
+                // offline Papa payload never writes them into papas.
+                await checked(supabase.from('papas').upsert([stripPapaPrivateFields(submission.data)], { onConflict: 'id', ignoreDuplicates: true }))
                 break
 
             case 'program':

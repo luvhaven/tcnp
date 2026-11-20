@@ -1,12 +1,21 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent } from '@/components/ui/card'
 import { Loader2, BookOpen, RotateCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import PapaBriefingCard, { type PapaBriefingPapa } from './PapaBriefingCard'
 import { getBriefingConfig, canEditBriefing } from '@/lib/constants/papaBriefingFields'
+import { useUnitAccess } from '@/hooks/useUnitAccess'
+import {
+  canEditPapaPassport,
+  canViewPapaPassport,
+  fetchPapaPrivateDetailsBatch,
+  papaPrivateBatchKey,
+  papaPrivateSiblingFilter,
+  type PapaPrivateDetails,
+} from '@/lib/papa-privacy'
 
 interface PapaBriefingsSectionProps {
   /** The viewing user's role — determines which fields to show */
@@ -16,6 +25,7 @@ interface PapaBriefingsSectionProps {
 
 export default function PapaBriefingsSection({ role, userId: providedUserId }: PapaBriefingsSectionProps) {
   const supabase = createClient()
+  const queryClient = useQueryClient()
 
   const config = getBriefingConfig(role)
   const canEdit = canEditBriefing(role)
@@ -54,6 +64,27 @@ export default function PapaBriefingsSection({ role, userId: providedUserId }: P
     staleTime: 60_000,
     retry: 1,
   })
+
+  // Passports never come with the briefing read. For a config that shows
+  // them, Command and Alpha leads get one extra batch read of
+  // papa_private_details; everyone else never requests it.
+  const alpha = useUnitAccess('alpha')
+  const passportAllowed = Boolean(config?.showsPassport) && canViewPapaPassport(alpha)
+  const passportEditable = passportAllowed && canEditPapaPassport(alpha)
+  const papaIds = papas.map((papa) => papa.id)
+  const passportKey = papaPrivateBatchKey(papaIds)
+  const passports = useQuery({
+    queryKey: passportKey,
+    queryFn: () => fetchPapaPrivateDetailsBatch(supabase as any, papaIds),
+    enabled: passportAllowed && papaIds.length > 0,
+    staleTime: 60_000,
+  })
+  const savePassport = (papaId: string, details: PapaPrivateDetails) => {
+    queryClient.setQueryData(passportKey, (old: Record<string, PapaPrivateDetails> | undefined) => ({ ...(old ?? {}), [papaId]: details }))
+    // /papas keeps its own single-Papa copy; mark it (and any other batch)
+    // stale so it never shows, or saves over, the older passport.
+    void queryClient.invalidateQueries(papaPrivateSiblingFilter(passportKey))
+  }
 
   if (!config) return null // role has no briefing config
 
@@ -109,6 +140,15 @@ export default function PapaBriefingsSection({ role, userId: providedUserId }: P
               papa={papa}
               config={config}
               canEdit={canEdit}
+              passport={passportAllowed ? {
+                details: passports.data?.[papa.id] ?? (passports.isSuccess ? null : undefined),
+                isLoading: passports.isLoading,
+                isError: passports.isError && passports.data === undefined,
+                onRetry: () => { void passports.refetch() },
+                retrying: passports.isFetching,
+              } : undefined}
+              canEditPassport={passportEditable}
+              onPassportSaved={(details) => savePassport(papa.id, details)}
             />
           ))}
         </div>

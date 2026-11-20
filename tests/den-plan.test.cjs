@@ -80,7 +80,7 @@ test('the migration never writes to programmes or Papas, which leadership owns',
 
 test('guest data leaves the Papa record only through the hospitality fields', () => {
   const profiles = migration.match(/FUNCTION public\.den_guest_profiles[\s\S]*?\$\$;/)[0]
-  for (const field of ['passport_number', 'phone', 'email', 'flight_number', 'accommodation', 'short_bio', 'nationality']) {
+  for (const field of ['passport', 'phone', 'email', 'flight_number', 'accommodation', 'short_bio', 'nationality']) {
     assert.doesNotMatch(profiles, new RegExp(field), `${field} must not be exposed to the Den`)
   }
   assert.match(profiles, /can_view_den_program\(target_program\)/)

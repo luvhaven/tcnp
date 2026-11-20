@@ -1,9 +1,27 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Camera, Edit, Globe, Mail, Mic, Phone, Users } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
+import { ErrorState } from '@/components/ui/error-state'
+import { Camera, Edit, Globe, Lock, Mail, Mic, Phone, Users } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import { notifyError } from '@/lib/notify'
+import {
+  EMPTY_PAPA_PRIVATE_DETAILS,
+  PASSPORT_COUNTRY_MAX,
+  PASSPORT_NUMBER_MAX,
+  formatPassportExpiry,
+  hasPapaPrivateDetails,
+  normalisePapaPrivateDetails,
+  passportExpiryStatus,
+  upsertPapaPrivateDetails,
+  type PapaPrivateDetails,
+} from '@/lib/papa-privacy'
 
 type PapaDetails = {
   id: string
@@ -13,7 +31,6 @@ type PapaDetails = {
   nationality?: string | null
   phone?: string | null
   email?: string | null
-  passport_number?: string | null
   flight_number?: string | null
   airline?: string | null
   flight_arrival_time?: string | null
@@ -40,12 +57,30 @@ type PapaDetails = {
   personal_assistants?: any
 }
 
+/** The private-details read, owned by the caller (fetched only when allowed). */
+export type PapaPassportState = {
+  details: PapaPrivateDetails | null | undefined
+  isLoading: boolean
+  isError: boolean
+  onRetry?: () => void
+  retrying?: boolean
+}
+
 type PapaDetailsViewProps = {
   papa: PapaDetails
   programName?: string | null
   canManage?: boolean
-  /** Passport numbers are for the people who manage Papas only. Hidden unless set. */
+  /**
+   * can_view_papa_passport: Command / platform admins and Alpha head or
+   * sub-leads. Everyone else never sees the passport block, and the caller
+   * never fetches it for them.
+   */
   canViewPassport?: boolean
+  /** Passport read state; required with canViewPassport. */
+  passport?: PapaPassportState
+  /** Passport edits follow the same rule as reads. */
+  canEditPassport?: boolean
+  onPassportSaved?: (details: PapaPrivateDetails) => void
   onEdit?: () => void
   onChangePhoto?: () => void
 }
@@ -75,8 +110,166 @@ function Field({ label, value, wide }: { label: string; value?: ReactNode; wide?
   )
 }
 
+const EXPIRY_BADGE: Record<string, { label: string; className: string } | undefined> = {
+  expired: { label: 'Expired', className: 'border-destructive/40 bg-destructive/10 text-destructive' },
+  expiring: { label: 'Under 6 months left', className: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400' },
+}
+
+/**
+ * Restricted passport block (papa_private_details). Shown only to people
+ * can_view_papa_passport admits; saves go straight to that table, never to
+ * papas, so the number is never copied into the shared Papa record.
+ */
+export function PapaPassportPanel({
+  papaId,
+  papaName,
+  state,
+  canEdit = false,
+  onSaved,
+  className,
+}: {
+  papaId: string
+  papaName: string
+  state: PapaPassportState
+  canEdit?: boolean
+  onSaved?: (details: PapaPrivateDetails) => void
+  className?: string
+}) {
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [draft, setDraft] = useState<PapaPrivateDetails>(EMPTY_PAPA_PRIVATE_DETAILS)
+  const details = state.details ?? null
+  const badge = EXPIRY_BADGE[passportExpiryStatus(details?.passport_expiry)]
+  const fieldId = (name: string) => `papa-${papaId}-${name}`
+
+  const startEdit = () => {
+    setDraft({ ...EMPTY_PAPA_PRIVATE_DETAILS, ...(details ?? {}) })
+    setEditing(true)
+  }
+
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (saving) return
+    setSaving(true)
+    try {
+      const saved = await upsertPapaPrivateDetails(createClient() as any, papaId, normalisePapaPrivateDetails(draft))
+      onSaved?.(saved)
+      setEditing(false)
+      toast.success('Passport details saved')
+    } catch (error) {
+      notifyError(error, 'Failed to save passport details')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className={className ?? 'rounded-xl border border-amber-500/30 bg-amber-500/[0.03] p-4'} aria-label={`Passport details for ${papaName}`}>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+          Passport
+          <span className="sr-only">(restricted to Command and Alpha leads)</span>
+        </h4>
+        {canEdit && !editing && !state.isLoading && !state.isError && (
+          <Button type="button" size="sm" variant="outline" className="min-h-11 gap-1.5 sm:min-h-9" onClick={startEdit} aria-label={`Edit passport details for ${papaName}`}>
+            <Edit className="h-3.5 w-3.5" aria-hidden="true" />
+            {hasPapaPrivateDetails(details) ? 'Edit' : 'Add passport'}
+          </Button>
+        )}
+      </div>
+
+      {state.isLoading ? (
+        <div className="space-y-2" aria-busy="true" aria-label="Loading passport details">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-4 w-28" />
+        </div>
+      ) : state.isError ? (
+        <ErrorState
+          className="py-4"
+          title="Couldn't load passport details"
+          description="They stay hidden until they load."
+          onRetry={state.onRetry}
+          retrying={state.retrying}
+        />
+      ) : editing ? (
+        <form onSubmit={save} className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label htmlFor={fieldId('passport-number')}>Passport number</Label>
+              <Input
+                id={fieldId('passport-number')}
+                autoComplete="off"
+                maxLength={PASSPORT_NUMBER_MAX}
+                className="h-11 sm:h-10"
+                value={draft.passport_number ?? ''}
+                onChange={(e) => setDraft({ ...draft, passport_number: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor={fieldId('passport-country')}>Issuing country</Label>
+              <Input
+                id={fieldId('passport-country')}
+                autoComplete="off"
+                maxLength={PASSPORT_COUNTRY_MAX}
+                className="h-11 sm:h-10"
+                value={draft.passport_country ?? ''}
+                onChange={(e) => setDraft({ ...draft, passport_country: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor={fieldId('passport-expiry')}>Expiry date</Label>
+              <Input
+                id={fieldId('passport-expiry')}
+                type="date"
+                className="h-11 sm:h-10"
+                value={draft.passport_expiry ?? ''}
+                onChange={(e) => setDraft({ ...draft, passport_expiry: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="outline" className="min-h-11 sm:min-h-9" onClick={() => setEditing(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="submit" className="min-h-11 sm:min-h-9" pending={saving}>
+              Save passport
+            </Button>
+          </div>
+        </form>
+      ) : hasPapaPrivateDetails(details) ? (
+        <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-3">
+          <Field label="Number" value={details?.passport_number} />
+          <Field label="Issuing country" value={details?.passport_country} />
+          <Field
+            label="Expires"
+            value={details?.passport_expiry ? (
+              <span className="inline-flex flex-wrap items-center gap-1.5">
+                {formatPassportExpiry(details.passport_expiry)}
+                {badge && <Badge variant="outline" className={badge.className}>{badge.label}</Badge>}
+              </span>
+            ) : null}
+          />
+        </dl>
+      ) : (
+        <p className="text-sm text-muted-foreground">No passport details on file.</p>
+      )}
+    </section>
+  )
+}
+
 /** Read-only dossier for a single Papa: photo, contact, flight, stage and entourage details. */
-export default function PapaDetailsView({ papa, programName, canManage, canViewPassport = false, onEdit, onChangePhoto }: PapaDetailsViewProps) {
+export default function PapaDetailsView({
+  papa,
+  programName,
+  canManage,
+  canViewPassport = false,
+  passport,
+  canEditPassport = false,
+  onPassportSaved,
+  onEdit,
+  onChangePhoto,
+}: PapaDetailsViewProps) {
   const initials = papa.full_name.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
   const schedule = Array.isArray(papa.speaking_schedule) ? papa.speaking_schedule : []
   const assistants = Array.isArray(papa.personal_assistants) ? papa.personal_assistants : []
@@ -147,13 +340,23 @@ export default function PapaDetailsView({ papa, programName, canManage, canViewP
         </section>
       )}
 
+      {/* Passport sits outside Travel: a Papa without a flight still has one. */}
+      {canViewPassport && passport && (
+        <PapaPassportPanel
+          papaId={papa.id}
+          papaName={papa.full_name}
+          state={passport}
+          canEdit={canEditPassport}
+          onSaved={onPassportSaved}
+        />
+      )}
+
       {(papa.flight_number || papa.airline || papa.flight_arrival_time || papa.arrival_city) && (
         <Section title="Travel">
           <Field label="Flight" value={[papa.airline, papa.flight_number].filter(Boolean).join(' ') || null} />
           <Field label="Arrives" value={formatDateTime(papa.flight_arrival_time)} />
           <Field label="Departs" value={formatDateTime(papa.flight_departure_time)} />
           <Field label="Arrival city" value={[papa.arrival_city, papa.arrival_country].filter(Boolean).join(', ') || null} />
-          {canViewPassport && <Field label="Passport" value={papa.passport_number} />}
         </Section>
       )}
 
