@@ -79,7 +79,6 @@ export interface Papa {
   full_name: string;
   short_bio: string | null;
   nationality: string | null;
-  passport_number: string | null;
   phone: string | null;
   email: string | null;
   organization: string | null;
@@ -452,7 +451,6 @@ export interface CreatePapaInput {
   full_name: string;
   short_bio?: string;
   nationality?: string;
-  passport_number?: string;
   phone?: string;
   email?: string;
   arrival_country?: string;
