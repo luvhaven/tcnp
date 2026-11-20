@@ -31,6 +31,14 @@ import { useSearchParams } from "next/navigation"
 import { PasswordResetRequestsTab } from "@/components/officers/PasswordResetRequestsTab"
 import { OFFICER_ROLE_OPTIONS, OFFICER_CATEGORIES, officerRoleLabel, canonicalOfficerRole, officerAccountStatus, leadershipSummary, filterDirectoryOfficers, toggleVisibleOfficerSelection, officerCSVCell, officerCategoryId, adminNeedsOscar, ADMIN_NEEDS_OSCAR_MESSAGE, ADMIN_WITHOUT_OSCAR } from '@/lib/officer-directory'
 
+/** The server refused to activate a declined signup without overrideDecline. */
+class DeclinedSignupError extends UserFacingError {
+  constructor(message: string, readonly reason: string | null) {
+    super(message)
+    this.name = 'DeclinedSignupError'
+  }
+}
+
 type Officer = {
   id: string
   email: string
@@ -398,13 +406,20 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
   })
 
   const toggleActivationMutation = useMutation({
-    mutationFn: async (officer: Officer) => {
+    mutationFn: async (officer: Officer & { overrideDecline?: boolean }) => {
       const response = await fetch('/api/officers/toggle-activation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ officerId: officer.id, active: officerAccountStatus(officer) !== 'Active' }),
+        body: JSON.stringify({
+          officerId: officer.id,
+          active: officerAccountStatus(officer) !== 'Active',
+          ...(officer.overrideDecline ? { overrideDecline: true } : {}),
+        }),
       })
-      const result = await response.json()
+      const result = await response.json().catch(() => ({}))
+      if (response.status === 409 && result.code === 'signup_declined') {
+        throw new DeclinedSignupError(result.error || 'This sign-up was declined.', typeof result.reason === 'string' ? result.reason : null)
+      }
       if (!response.ok) throw new UserFacingError(result.error || 'Failed to update officer status')
       return { is_active: result.is_active, activation_status: result.activation_status }
     },
@@ -429,14 +444,21 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ['officers'] })
       }, 500)
+      // Activating a pending or declined account records a signup decision,
+      // so the Approvals lists must not show it as still waiting.
+      queryClient.invalidateQueries({ queryKey: ['signup-approvals'] })
 
       toast.success(`Officer ${updatedData.is_active ? 'activated' : 'deactivated'}!`)
     },
-    onError: (error: any) => notifyError(error, 'Failed to update officer status')
+    // A declined signup is handled by toggleActivation, which asks first.
+    onError: (error: any) => { if (!(error instanceof DeclinedSignupError)) notifyError(error, 'Failed to update officer status') }
   })
 
-  // Deactivating signs the officer out of TCNP, so it is confirmed first;
-  // activating and approving go straight through as before.
+  // Deactivating signs the officer out of TCNP, so it is confirmed first.
+  // Activating a declined signup overrides a unit decision: the server refuses
+  // it (409 with the decline reason, nothing written) until we confirm and
+  // resend with overrideDecline. Activating and approving otherwise go
+  // straight through.
   const toggleActivation = async (officer: Officer) => {
     if (toggleActivationMutation.isPending) return
     if (officerAccountStatus(officer) === 'Active') {
@@ -447,7 +469,20 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
       })
       if (!ok) return
     }
-    toggleActivationMutation.mutate(officer)
+    try {
+      await toggleActivationMutation.mutateAsync(officer)
+    } catch (error) {
+      if (!(error instanceof DeclinedSignupError)) return
+      const name = officer.full_name || officer.email
+      const ok = await confirm({
+        title: 'Activate a declined sign-up?',
+        message: `The sign-up for ${name} was declined${error.reason ? ` (reason: ${error.reason})` : ''}. Activating now overrides that decision and is recorded as an approval. To review it with the unit instead, reopen it on the Approvals page.`,
+        confirmText: 'Activate anyway',
+        cancelText: 'Keep declined',
+      })
+      if (!ok) return
+      toggleActivationMutation.mutate({ ...officer, overrideDecline: true })
+    }
   }
   const isToggling = (officer: Officer) => toggleActivationMutation.isPending && toggleActivationMutation.variables?.id === officer.id
 
@@ -507,6 +542,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['officers'] })
       queryClient.invalidateQueries({ queryKey: ['currentUserProfile'] })
+      queryClient.invalidateQueries({ queryKey: ['signup-approvals'] })
       if (variables?.rpcData?.p_user_id) {
         queryClient.invalidateQueries({ queryKey: ['officer-details', variables.rpcData.p_user_id] })
       }
@@ -924,6 +960,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                     <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="declined">Declined</SelectItem>
                 <SelectItem value="online">
                   <span className="flex items-center gap-1.5">
                     <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" />
@@ -1092,7 +1129,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                                   </div>
                                   {officerAccountStatus(officer) !== 'Active' && (
                                     <Badge variant="outline" className="text-xs bg-destructive/10 text-destructive border-destructive/30">
-                                      Inactive
+                                      {officerAccountStatus(officer)}
                                     </Badge>
                                   )}
                                 </div>
@@ -1269,6 +1306,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                             <Badge variant="outline" className="bg-[hsl(var(--success)/0.1)] text-[hsl(var(--success))] border-[hsl(var(--success)/0.3)]">Active</Badge>
                           ) : officerAccountStatus(officer) === 'Pending' ? (
                             <Badge variant="outline" className="bg-[hsl(var(--warning)/0.1)] text-[hsl(var(--warning))] border-[hsl(var(--warning)/0.3)]">Pending</Badge>
+                          ) : officerAccountStatus(officer) === 'Declined' ? (
+                            <Badge variant="outline" className="bg-muted text-muted-foreground border-destructive/40" title="Sign-up declined">Declined</Badge>
                           ) : (
                             <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30">Inactive</Badge>
                           )}
@@ -1358,6 +1397,10 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                             ) : officerAccountStatus(officer) === 'Pending' ? (
                               <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
                                 Pending
+                              </Badge>
+                            ) : officerAccountStatus(officer) === 'Declined' ? (
+                              <Badge variant="outline" className="bg-muted text-muted-foreground border-destructive/40" title="Sign-up declined">
+                                Declined
                               </Badge>
                             ) : (
                               <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">

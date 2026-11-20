@@ -82,8 +82,23 @@ export function officerCategoryId(officer: Pick<DirectoryOfficer, 'role' | 'osca
 export const adminNeedsOscar = (role: string, hasAdminAccess: boolean) => hasAdminAccess && canonicalOfficerRole(role) === 'viewer'
 export const ADMIN_NEEDS_OSCAR_MESSAGE = 'Every admin must belong to an Oscar. Choose the officer’s Oscar before granting Admin access.'
 
-export function officerAccountStatus(officer: Pick<DirectoryOfficer, 'is_active' | 'activation_status'>): 'Active' | 'Pending' | 'Inactive' {
-  return officer.activation_status === 'pending' ? 'Pending' : officer.is_active && officer.activation_status === 'active' ? 'Active' : 'Inactive'
+export type OfficerAccountStatus = 'Active' | 'Pending' | 'Declined' | 'Inactive'
+
+/** Declined = a signup an approver turned down (the account is kept for the record). */
+export function officerAccountStatus(officer: Pick<DirectoryOfficer, 'is_active' | 'activation_status'>): OfficerAccountStatus {
+  if (officer.activation_status === 'pending') return 'Pending'
+  if (officer.activation_status === 'declined') return 'Declined'
+  return officer.is_active && officer.activation_status === 'active' ? 'Active' : 'Inactive'
+}
+/**
+ * Status filter match. 'inactive' also takes Declined: a declined account
+ * cannot sign in, and a directory without a Declined option must not hide it.
+ * 'declined' narrows to declined signups only.
+ */
+export function accountStatusMatches(status: OfficerAccountStatus, filter: string): boolean {
+  const wanted = filter.toLowerCase()
+  if (wanted === 'inactive') return status === 'Inactive' || status === 'Declined'
+  return status.toLowerCase() === wanted
 }
 export function leadershipSummary(officers: Pick<DirectoryOfficer, 'role'>[]) {
   const captains = officers.filter(officer => officer.role === 'captain').length
@@ -94,7 +109,7 @@ export function filterDirectoryOfficers<T extends DirectoryOfficer>(officers: T[
   const query = filters.search.trim().toLowerCase().replace(/[_\s]+/g, ' ')
   return officers.filter(officer => {
     if (filters.status === 'online' && !officer.is_online) return false
-    if (['active','pending','inactive'].includes(filters.status) && officerAccountStatus(officer).toLowerCase() !== filters.status) return false
+    if (['active','pending','declined','inactive'].includes(filters.status) && !accountStatusMatches(officerAccountStatus(officer), filters.status)) return false
     if (filters.role !== 'all' && canonicalOfficerRole(officer.role) !== canonicalOfficerRole(filters.role)) return false
     if (filters.team !== 'all' && officer.team !== filters.team) return false
     return !query || [officer.full_name, officer.email, officer.oscar, officer.phone, officer.team, officer.role, officerRoleLabel(officer.role)].some(value => (value || '').toLowerCase().replace(/[_\s]+/g, ' ').includes(query))

@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/supabase'
 import { NextResponse } from 'next/server'
 import { checkRateLimit } from '@/lib/security/rate-limit'
-import { SIGNUP_OSCAR_OPTIONS } from '@/lib/utils'
+import { SIGNUP_DECLINED_MESSAGE, SIGNUP_OSCAR_OPTIONS } from '@/lib/utils'
 
 export async function POST(request: Request) {
     try {
@@ -49,9 +49,24 @@ export async function POST(request: Request) {
             }
         })
 
+        // A declined signup keeps its account (the decision stays on record and
+        // an admin can reopen it), so the email is taken. Say why instead of a
+        // bare "already exists", and never create a second account.
+        const duplicateEmailResponse = async () => {
+            const { data: existing } = await db
+                .from('users')
+                .select('activation_status')
+                .eq('email', email)
+                .maybeSingle()
+            if (existing?.activation_status === 'declined') {
+                return NextResponse.json({ error: SIGNUP_DECLINED_MESSAGE }, { status: 403 })
+            }
+            return NextResponse.json({ error: 'An account already uses this email address.' }, { status: 409 })
+        }
+
         if (authError) {
             if (authError.code === 'email_exists' || authError.code === 'user_already_exists') {
-                return NextResponse.json({ error: 'An account already uses this email address.' }, { status: 409 })
+                return duplicateEmailResponse()
             }
             console.error('Auth error:', authError)
             return NextResponse.json({ error: authError.message }, { status: 400 })
@@ -61,15 +76,11 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Failed to create user' }, { status: 500 })
         }
 
-        // Generate OSCAR fallback if not provided manually
-        const generateOscar = (fullName: string, userRole: string) => {
-            if (!fullName) return null
-            const initials = fullName.split(' ').map(n => n[0]).join('').toUpperCase()
-            const roleCode = userRole.toUpperCase().replace('_', '-')
-            return `OSCAR-${initials}-${roleCode}`
-        }
-
-        const oscar = submittedOscar || generateOscar(full_name, role)
+        // No unit picked means no Oscar. A generated 'OSCAR-<initials>-VIEWER'
+        // code could spell a unit (initials T-A-N-G-O, E-C-H-O, N-E-S-T), and the
+        // membership sync reads unit names out of the Oscar, so a no-unit signup
+        // would land in that unit's pending list and join it on approval.
+        const oscar = submittedOscar || null
 
         const insertData: any = {
             id: authData.user.id,
@@ -92,7 +103,7 @@ export async function POST(request: Request) {
             console.error('User table error:', userError)
             await adminClient.auth.admin.deleteUser(authData.user.id)
             if (userError.code === '23505') {
-                return NextResponse.json({ error: 'An account already uses this email address.' }, { status: 409 })
+                return duplicateEmailResponse()
             }
             return NextResponse.json({ error: userError.message }, { status: 500 })
         }

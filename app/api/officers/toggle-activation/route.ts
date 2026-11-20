@@ -46,7 +46,9 @@ export async function POST(request: Request) {
     const body = await request.json()
     // `active` is the desired state (idempotent). `isActive` is the legacy
     // "current state, please flip it" field, kept for older clients.
-    const { officerId, active, isActive } = body as { officerId?: string; active?: boolean; isActive?: boolean }
+    const { officerId, active, isActive, overrideDecline } = body as {
+      officerId?: string; active?: boolean; isActive?: boolean; overrideDecline?: boolean
+    }
     const desired = typeof active === 'boolean' ? active : typeof isActive === 'boolean' ? !isActive : null
 
     if (!officerId || desired === null) {
@@ -60,7 +62,7 @@ export async function POST(request: Request) {
     const adminClient = buildAdminClient()
     const { data: target } = await adminClient
       .from('users')
-      .select('role, has_admin_access, email, is_directory_hidden')
+      .select('role, has_admin_access, email, is_directory_hidden, activation_status')
       .eq('id', officerId)
       .single()
 
@@ -75,7 +77,49 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Only Super Admin can change an administrator account' }, { status: 403 })
     }
     const newIsActive = desired
-    const newStatus = newIsActive ? 'active' : 'inactive'
+    // users_activation_status_check allows pending | active | deactivated | declined;
+    // the old 'inactive' value violated it, so every deactivation failed with a 500.
+    const newStatus = newIsActive ? 'active' : 'deactivated'
+    const previousStatus = target.activation_status
+
+    // Every way out of the signup flow leaves a signup_decisions row, so the
+    // deactivate toggle does not touch signups that were never approved:
+    // - a declined account is already inactive; overwriting it with
+    //   'deactivated' would drop it from the Declined list and break Reopen;
+    // - a pending signup must be declined (with a reason) on Approvals.
+    if (!newIsActive && previousStatus === 'declined') {
+      return NextResponse.json({ success: true, is_active: false, activation_status: 'declined' })
+    }
+    if (!newIsActive && previousStatus === 'pending') {
+      return NextResponse.json(
+        { error: 'This signup is still pending. Decline it on the Approvals page so the reason is recorded.' },
+        { status: 409 },
+      )
+    }
+
+    // A declined signup was turned down on purpose, with a reason. One tap on
+    // Activate must not silently override that: send the admin to Approvals
+    // (Reopen, then decide), unless the client confirmed it with the reason
+    // in front of the admin and says so with overrideDecline: true.
+    if (newIsActive && previousStatus === 'declined' && overrideDecline !== true) {
+      const { data: lastDecline } = await (adminClient as any)
+        .from('signup_decisions')
+        .select('reason')
+        .eq('user_id', officerId)
+        .eq('decision', 'declined')
+        .order('decided_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      const reason = typeof lastDecline?.reason === 'string' ? lastDecline.reason : null
+      return NextResponse.json(
+        {
+          error: `This sign-up was declined${reason ? ` (reason: ${reason})` : ''}. Reopen it on the Approvals page and decide it there.`,
+          code: 'signup_declined',
+          reason,
+        },
+        { status: 409 },
+      )
+    }
 
     const { data: updated, error: updateError } = await adminClient
       .from('users')
@@ -86,34 +130,22 @@ export async function POST(request: Request) {
 
     if (updateError) {
       console.error('[toggle-activation] DB update error:', updateError)
-      // If the column does not accept 'inactive', fall back to a status-only update
-      if (updateError.message?.includes('invalid input value') || updateError.code === '22P02') {
-        // Try without activation_status update
-        const { data: fallback, error: fallbackError } = await adminClient
-          .from('users')
-          .update({ is_active: newIsActive })
-          .eq('id', officerId)
-          .select('id, is_active, activation_status')
-          .single()
+      return NextResponse.json({ error: 'Could not update this officer’s status' }, { status: 500 })
+    }
 
-        if (fallbackError) {
-          console.error('[toggle-activation] Fallback update error:', fallbackError)
-          return NextResponse.json({ error: fallbackError.message }, { status: 500 })
-        }
-
-        return NextResponse.json({
-          success: true,
-          is_active: fallback.is_active,
-          activation_status: fallback.activation_status ?? (newIsActive ? 'active' : 'pending'),
-        })
-      }
-
-      return NextResponse.json({ error: updateError.message }, { status: 500 })
+    // Activating a pending or declined signup from the Officers page is an
+    // approval: record it in the signup audit like the Approvals page does.
+    if (newIsActive && (previousStatus === 'pending' || previousStatus === 'declined')) {
+      const { error: auditError } = await (adminClient as any)
+        .from('signup_decisions')
+        .insert({ user_id: officerId, decision: 'approved', decided_by: user.id })
+      if (auditError) console.warn('[toggle-activation] Could not record the signup approval:', auditError.message)
     }
 
     // A deactivated officer must not keep using a session issued before.
+    // (auth.admin.signOut() takes the user's own JWT, not a user id.)
     if (!newIsActive) {
-      const { error: signOutError } = await adminClient.auth.admin.signOut(officerId, 'global')
+      const { error: signOutError } = await (adminClient as any).rpc('revoke_user_sessions', { target_user: officerId })
       if (signOutError) console.warn('[toggle-activation] Could not revoke sessions:', signOutError.message)
     }
 

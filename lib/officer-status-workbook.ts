@@ -34,7 +34,10 @@ const UNIT_BY_ROLE: Record<string, string> = {
 }
 
 const UNASSIGNED = 'Unassigned'
-const STATUS = ['Active', 'Pending approval', 'Deactivated', 'Other / unset'] as const
+const STATUS = ['Active', 'Pending approval', 'Declined', 'Deactivated', 'Other / unset'] as const
+type Status = (typeof STATUS)[number]
+/** Overview column of "Avg. profile": after the group name, the count and one column per status. */
+const AVG_PROFILE_COLUMN = 2 + STATUS.length
 const DATE = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit' })
 const TIMESTAMP = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Lagos', dateStyle: 'medium', timeStyle: 'short' })
 
@@ -63,12 +66,14 @@ function placement(officer: ReportOfficer) {
   return { unit, note }
 }
 
-function statusFor(officer: ReportOfficer) {
-  if (officer.activation_status === 'deactivated') return STATUS[2]
-  if (officer.activation_status === 'pending') return STATUS[1]
-  if (officer.is_active === false) return STATUS[2]
-  if (officer.activation_status === 'active') return STATUS[0]
-  return STATUS[3]
+export function statusFor(officer: Pick<ReportOfficer, 'activation_status' | 'is_active'>): Status {
+  if (officer.activation_status === 'deactivated') return 'Deactivated'
+  if (officer.activation_status === 'pending') return 'Pending approval'
+  // A signup an approver turned down; the account is kept for the record.
+  if (officer.activation_status === 'declined') return 'Declined'
+  if (officer.is_active === false) return 'Deactivated'
+  if (officer.activation_status === 'active') return 'Active'
+  return 'Other / unset'
 }
 
 function joinDate(value: string | null) {
@@ -168,7 +173,7 @@ export function createOfficerStatusWorkbook(officers: ReportOfficer[], generated
       members.filter(member => member.completion.isComplete).length,
       members.filter(member => member.note).length]
     const styles = cells.map(() => total ? STYLE.total : label === UNASSIGNED ? STYLE.review : STYLE.band)
-    styles[6] = total ? STYLE.totalPercent : STYLE.percent
+    styles[AVG_PROFILE_COLUMN] = total ? STYLE.totalPercent : STYLE.percent
     return { cells, styles, height: 23 }
   }
 
@@ -187,7 +192,7 @@ export function createOfficerStatusWorkbook(officers: ReportOfficer[], generated
   ]
   const sheets = [{
     name: 'Overview',
-    content: sheet(overview, [24, 11, 10, 17, 14, 14, 15, 15, 22, 18], 4, 4 + groups.length, 'FF17324D'),
+    content: sheet(overview, [24, 11, 10, 17, 11, 14, 14, 15, 15, 22, 18], 4, 4 + groups.length, 'FF17324D'),
   }]
   for (const group of groups) {
     const members = grouped.get(group)!
@@ -202,7 +207,7 @@ export function createOfficerStatusWorkbook(officers: ReportOfficer[], generated
         const styles = cells.map(() => index % 2 ? STYLE.band : STYLE.body)
         styles[2] = STYLE.date
         styles[3] = STYLE.percent
-        styles[4] = status === 'Active' ? STYLE.active : status === 'Deactivated' ? STYLE.inactive : STYLE.review
+        styles[4] = status === 'Active' ? STYLE.active : status === 'Deactivated' || status === 'Declined' ? STYLE.inactive : STYLE.review
         if (cells[7]) styles[7] = STYLE.review
         if (note) styles[9] = STYLE.review
         return { cells, styles, height: 46 }

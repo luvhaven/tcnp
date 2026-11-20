@@ -6,6 +6,7 @@ import { checkRateLimit } from '@/lib/security/rate-limit'
 import { isPermanentOwnerEmail } from '@/lib/platform-owner'
 import * as Sentry from '@sentry/nextjs'
 import { supabaseErrorCodeTag } from '@/lib/monitoring/sentry-shared'
+import { SIGNUP_DECLINED_MESSAGE } from '@/lib/utils'
 
 const loginSchema = z.object({
   email: z.string().trim().email().transform((value) => value.toLowerCase()),
@@ -98,11 +99,13 @@ export async function POST(request: Request) {
     )
     if (!profile || !isActive) {
       await supabase.auth.signOut()
-      const pending = profile?.activation_status === 'pending'
-      return NextResponse.json(
-        { error: pending ? 'Your account is awaiting admin approval.' : 'Security clearance denied: account is inactive or restricted.' },
-        { status: 403 }
-      )
+      const status = profile?.activation_status
+      const message = status === 'pending'
+        ? 'Your account is awaiting admin approval.'
+        : status === 'declined'
+          ? SIGNUP_DECLINED_MESSAGE
+          : 'Security clearance denied: account is inactive or restricted.'
+      return NextResponse.json({ error: message }, { status: 403 })
     }
 
     return NextResponse.json({ ok: true })

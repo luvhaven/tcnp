@@ -5,6 +5,7 @@ function compile(file, imports = {}, globals = {}) {
  return mod.exports
 }
 const directory = compile('lib/officer-directory.ts', { '@/lib/utils': compile('lib/utils.ts') })
+const eq = (actual, expected) => assert.deepEqual(JSON.parse(JSON.stringify(actual)), expected)
 const base = { email: 'officer@example.test', is_active: true, activation_status: 'active', team: null, oscar: null, created_at: '2026-10-01', phone: null, unit: null, current_title_id: null }
 const officers = [
  { ...base, id: 'captain', full_name: 'Captain One', role: 'captain', current_title_id: 'captain-title' },
@@ -13,6 +14,7 @@ const officers = [
  { ...base, id: 'pending', full_name: 'Pending Officer', role: 'viewer', activation_status: 'pending', is_active: false },
  { ...base, id: 'legacy', full_name: 'Legacy Nest', role: 'hospitality_oscar', is_active: false, activation_status: 'inactive' },
  { ...base, id: 'owner', full_name: 'Owner', role: 'super_admin' },
+ { ...base, id: 'declined', full_name: 'Declined Applicant', role: 'viewer', activation_status: 'declined', is_active: false },
 ]
 test('leadership counts people by role, including the untitled second Vice Captain', () => {
  assert.equal(directory.leadershipSummary(officers), '1 Captain · 2 Vice Captains')
@@ -35,7 +37,12 @@ test('pending, active and inactive are disjoint even when stored flags disagree'
  assert.equal(directory.officerAccountStatus({ is_active: true, activation_status: 'pending' }), 'Pending')
  assert.equal(directory.officerAccountStatus({ is_active: true, activation_status: 'inactive' }), 'Inactive')
  assert.equal(directory.officerAccountStatus({ is_active: false, activation_status: 'active' }), 'Inactive')
- assert.equal(directory.filterDirectoryOfficers(officers, { status: 'inactive', role: 'all', team: 'all', search: '' }).length, 1)
+ // 'inactive' keeps declined signups visible; 'declined' narrows to them alone.
+ const ids = status => directory.filterDirectoryOfficers(officers, { status, role: 'all', team: 'all', search: '' }).map(officer => officer.id)
+ assert.deepEqual(ids('inactive'), ['legacy', 'declined'])
+ assert.deepEqual(ids('declined'), ['declined'])
+ assert.equal(directory.officerAccountStatus({ is_active: false, activation_status: 'declined' }), 'Declined')
+ assert.ok(!ids('pending').includes('declined') && !ids('active').includes('declined'))
 })
 test('select all only changes visible IDs, preserves hidden selections and never duplicates an officer', () => {
  assert.deepEqual(Array.from(directory.toggleVisibleOfficerSelection(['hidden','one'], ['one','two'], true)), ['hidden','one','two'])
@@ -107,20 +114,28 @@ test('actual Officers page shows both Vice Captains, filters correctly and keeps
  }
  const clientUser = { id: 'owner', role: 'super_admin', email: 'owner@example.test' }
  const params = new URLSearchParams()
- const globals = { window: dom.window, document, navigator, localStorage: dom.window.localStorage, Event: dom.window.Event, fetch: async (url, options) => { network.push({ url, options }); return { ok: true, json: async () => ({ success: true, assigned_count: 1 }) } } }
+ const confirms = []; let confirmAnswer = false
+ const globals = { window: dom.window, document, navigator, localStorage: dom.window.localStorage, Event: dom.window.Event, URL, setTimeout, clearTimeout, fetch: async (url, options) => {
+  network.push({ url, options })
+  const body = options?.body ? JSON.parse(options.body) : {}
+  // The server refuses to activate a declined signup unless overrideDecline is sent.
+  if (url === '/api/officers/toggle-activation' && body.officerId === 'declined' && !body.overrideDecline) return { ok: false, status: 409, json: async () => ({ code: 'signup_declined', reason: 'Not known to the unit', error: 'This sign-up was declined (reason: Not known to the unit). Reopen it on the Approvals page and decide it there.' }) }
+  if (url === '/api/officers/toggle-activation') return { ok: true, status: 200, json: async () => ({ success: true, is_active: body.active, activation_status: body.active ? 'active' : 'deactivated' }) }
+  return { ok: true, status: 200, json: async () => ({ success: true, assigned_count: 1 }) }
+ } }
  const imports = new Proxy({}, { get(_, name) {
   if (name === '@/lib/supabase/client') return { createClient: () => supabase }
   if (name === 'next/navigation') return { useSearchParams: () => params }
   if (name === '@/lib/notify') return { notifyError: (_, message) => messages.push(message), UserFacingError: Error }
   if (name === 'sonner') return { toast: { success: message => messages.push(message), info: message => messages.push(message), warning: message => messages.push(message), error: message => messages.push(message) } }
-  if (name === '@/components/providers/ConfirmProvider') return { useConfirm: () => async () => false }
+  if (name === '@/components/providers/ConfirmProvider') return { useConfirm: () => async options => { confirms.push(options); return confirmAnswer } }
   if (name === '@/components/officers/OfficerProfileDialog') return { OfficerProfileDialog: () => null }
   if (name === '@/components/officers/PasswordResetRequestsTab') return { PasswordResetRequestsTab: () => null }
   if (name === '@/components/ui/select') return selectAPI
   if (name === 'framer-motion') return { motion, AnimatePresence: ({ children }) => children }
   if (name === '@tanstack/react-query') return { useQueryClient: () => queryClient,
    useQuery: options => ({ data: options.queryKey[0] === 'currentUserProfile' ? clientUser : options.queryKey[0] === 'officers' ? queryResult.officers : options.queryKey[0] === 'titles' ? queryResult.titles : options.queryKey[0] === 'programs' ? queryResult.programs : [], isPending: false, isError: false, isRefetching: false, refetch() {} }),
-   useMutation: options => { const ref = React.useRef(options); ref.current = options; React.useState(() => { mutationOptions.push(ref); return true }); return { isPending: false, mutate: async value => { try { const result = await ref.current.mutationFn(value); ref.current.onSuccess?.(result, value) } catch (error) { ref.current.onError?.(error) } } } },
+   useMutation: options => { const ref = React.useRef(options); ref.current = options; React.useState(() => { mutationOptions.push(ref); return true }); const mutateAsync = async value => { try { const result = await ref.current.mutationFn(value); ref.current.onSuccess?.(result, value); return result } catch (error) { ref.current.onError?.(error); throw error } }; return { isPending: false, mutateAsync, mutate: value => mutateAsync(value).catch(() => {}) } },
   }
   if (name.startsWith('@/')) return load(`${name.slice(2)}${name.startsWith('@/components/') ? '.tsx' : '.ts'}`)
  } })
@@ -189,6 +204,45 @@ test('actual Officers page shows both Vice Captains, filters correctly and keeps
   await change(document.getElementById('assign_program'), 'program')
   await act(async () => button('Assign to Program').click())
   assert.deepEqual(JSON.parse(network.at(-1).options.body).officer_ids, ['captain'])
+ })
+ await t.test('declined signups have their own badge and filter, and activating one confirms the decline reason first', async () => {
+  const invalidated = []
+  const originalInvalidate = queryClient.invalidateQueries.bind(queryClient)
+  queryClient.invalidateQueries = filters => { invalidated.push(JSON.stringify(filters?.queryKey)); return originalInvalidate(filters) }
+  try {
+   await change(select('Filter by role'), 'all')
+   assert.ok(select('Filter by account status').textContent.includes('Declined'))
+   await change(select('Filter by account status'), 'declined')
+   await act(async () => button('Manage').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+   assert.ok(document.body.textContent.includes('Declined Applicant'))
+   assert.ok(!document.body.textContent.includes('Vice Two'), 'the Declined filter narrows to declined signups')
+   assert.ok([...document.querySelectorAll('span,div')].some(node => node.textContent.trim() === 'Declined' && node.children.length === 0), 'a Declined badge, not Inactive')
+
+   // Declining the confirmation sends nothing more and shows no error toast.
+   network.length = 0; confirms.length = 0; messages.length = 0; confirmAnswer = false
+   await act(async () => button('Activate Declined Applicant').click())
+   await act(async () => {})
+   assert.equal(network.length, 1)
+   assert.equal('overrideDecline' in JSON.parse(network[0].options.body), false)
+   assert.equal(confirms.length, 1)
+   assert.match(confirms[0].message, /Not known to the unit/)
+   assert.match(confirms[0].message, /Approvals page/)
+   eq(messages, [])
+
+   // Confirming resends with overrideDecline and refreshes the Approvals lists.
+   network.length = 0; confirms.length = 0; confirmAnswer = true
+   await act(async () => button('Activate Declined Applicant').click())
+   await act(async () => {})
+   assert.equal(network.length, 2)
+   assert.equal(JSON.parse(network[1].options.body).overrideDecline, true)
+   assert.equal(JSON.parse(network[1].options.body).active, true)
+   assert.ok(invalidated.includes('["signup-approvals"]'), JSON.stringify({ invalidated, messages, network: network.map(n => n.options.body) }))
+   assert.ok(messages.includes('Officer activated!'))
+  } finally {
+   queryClient.invalidateQueries = originalInvalidate
+   confirmAnswer = false
+   await change(select('Filter by account status'), 'all')
+  }
  })
  await t.test('blocked browser storage cannot break switching to table view', async () => {
   const original = dom.window.Storage.prototype.setItem
