@@ -155,7 +155,7 @@ export const firstCallSignFor = (origin: string | null | undefined, destination:
     const dest = (destination ?? '').toLowerCase()
     const from = (origin ?? '').toLowerCase()
     // Theatre / venue bound → First Course
-    if (dest.includes('theatre') || dest.includes('venue') || dest.includes('church') || dest.includes('covenant')) return 'first_course'
+    if (dest.includes('theatre') || dest.includes('theater') || dest.includes('venue') || dest.includes('church')) return 'first_course'
     // Returning to the Nest / hotel → Dessert
     if (dest.includes('nest') || dest.includes('hotel')) return 'dessert'
     // Leaving the Nest for anywhere else → First Course
