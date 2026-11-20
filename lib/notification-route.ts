@@ -30,6 +30,60 @@ export interface AppNotification {
 }
 
 /**
+ * Each unit's own page. November (Den) work lives on the Den's Work tab.
+ */
+export const UNIT_PAGE_ROUTES: Readonly<Record<string, string>> = {
+  alpha: '/alpha',
+  tango: '/tango',
+  victor: '/victor',
+  november_nest: '/nests',
+  november_den: '/den?tab=work',
+  compliance: '/compliance',
+  welfare: '/welfare',
+  training: '/training',
+  serial: '/serial',
+  command: '/command',
+  echo: '/echo',
+}
+
+/** The unit's page for a unit slug, or null for an unknown or missing slug. */
+export function unitPageRoute(slug: unknown): string | null {
+  if (typeof slug !== 'string') return null
+  return Object.prototype.hasOwnProperty.call(UNIT_PAGE_ROUTES, slug) ? UNIT_PAGE_ROUTES[slug] : null
+}
+
+/** The tab on a unit page that holds its tasks ('tasks') or its programme team ('team'). */
+export type UnitWorkTab = 'tasks' | 'team'
+
+/**
+ * Units whose page has no Tasks or Programme team tab of its own. The Den
+ * keeps its own Work tab (tasks) and Floor access on its overview (team);
+ * Command opens its page.
+ */
+const UNIT_WORK_TAB_OVERRIDES: Readonly<Record<string, Readonly<Record<UnitWorkTab, string>>>> = {
+  november_den: { tasks: '/den?tab=work', team: '/den' },
+  command: { tasks: '/command', team: '/command' },
+}
+
+/** The unit page's Tasks or Programme team tab for a unit slug, or null for an unknown or missing slug. */
+export function unitWorkRoute(slug: unknown, tab: UnitWorkTab): string | null {
+  const page = unitPageRoute(slug)
+  if (!page) return null
+  const override = Object.prototype.hasOwnProperty.call(UNIT_WORK_TAB_OVERRIDES, slug as string) ? UNIT_WORK_TAB_OVERRIDES[slug as string] : null
+  return override ? override[tab] : `${page}?tab=${tab}`
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** A metadata id that is safe to put in a route's query string. */
+function isUuid(value: unknown): value is string {
+  return typeof value === 'string' && UUID_PATTERN.test(value)
+}
+
+/** Unit task and programme-team notifications, which carry metadata.unit_slug. */
+const UNIT_TASK_KINDS = new Set(['unit_task_assigned', 'unit_task_status', 'unit_task_reminder'])
+
+/**
  * Where clicking a notification should take the user. Kept alongside
  * resolveChimeKey since both classify a notification by kind/type — the
  * single source of truth for "what is this notification about".
@@ -38,6 +92,27 @@ export function resolveNotificationRoute(n: AppNotification): string | null {
   const url = n.metadata?.url
   if (typeof url === 'string' && url.startsWith('/chat?') && !/[\\\r\n]/.test(url)) return url
   const kind = n.metadata?.kind
+  // An unknown unit still lands somewhere useful rather than nowhere.
+  if (typeof kind === 'string' && UNIT_TASK_KINDS.has(kind)) return unitWorkRoute(n.metadata?.unit_slug, 'tasks') ?? '/my-operations'
+  if (kind === 'unit_programme_grant') {
+    const team = unitWorkRoute(n.metadata?.unit_slug, 'team')
+    if (!team) return '/my-operations'
+    // Open the programme they were added to (UnitProgrammeTeam reads ?programme=).
+    const programme = n.metadata?.program_id
+    return isUuid(programme) ? `${team}${team.includes('?') ? '&' : '?'}programme=${programme}` : team
+  }
+  if (kind === 'compliance_inspection') return '/compliance?tab=inspections'
+  if (kind === 'compliance_recognition') return '/compliance?tab=recognition'
+  // A declined applicant has no account to open; nothing to route to.
+  if (kind === 'signup_declined') return null
+  if (kind === 'tango_licence_expiring') return '/tango?tab=drivers'
+  if (kind === 'alpha_timeline_overdue') {
+    // Open that Papa's timeline on the right programme (alpha/page reads ?programme=&papa=).
+    const { program_id: programme, papa_id: papa } = n.metadata ?? {}
+    return isUuid(programme) && isUuid(papa)
+      ? `/alpha?tab=timeline&programme=${programme}&papa=${papa}`
+      : '/alpha?tab=timeline'
+  }
   if (kind === 'password_reset_request') return '/officers?tab=resets'
   if (kind === 'food_ready') return '/welfare'
   if (kind === 'program_addition_request') return '/approvals'
@@ -82,6 +157,14 @@ export function describeNotificationForDevice(
   if (kind === 'mention') return { title: 'You were mentioned in chat', body: 'Someone needs your attention. Open the conversation to read and reply.' }
   if (kind === 'password_reset_request') return { title: 'Password reset awaiting approval', body: 'An officer has asked to reset their password. Review the request and approve or reject it.' }
   if (kind === 'birthday_0700' || n.type === 'birthday_reminder') return { title: 'Birthday today', body: 'An officer is celebrating today. Open Welfare to see who and send your wishes.' }
+  if (kind === 'den_task_assigned' || kind === 'unit_task_assigned') return { title: 'New task for you', body: 'Your unit has given you a task. Open TCNP to see what it is and when it is due.' }
+  if (kind === 'den_task_reminder' || kind === 'unit_task_reminder') return { title: 'Task due', body: 'One of your tasks is due soon or overdue. Open TCNP to finish it or update its status.' }
+  if (kind === 'unit_task_status') return { title: 'Task update', body: 'A task you set has been marked done or blocked. Open TCNP to review it.' }
+  if (kind === 'unit_programme_grant') return { title: 'Added to a programme team', body: 'Your unit head has added you to a programme team. Open TCNP to see the programme.' }
+  if (kind === 'compliance_inspection') return { title: 'Compliance inspection', body: 'You have a new compliance inspection result. Open Compliance to read and acknowledge it.' }
+  if (kind === 'compliance_recognition') return { title: 'You have been recognised', body: 'Compliance has recognised you. Open Compliance to see it.' }
+  if (kind === 'tango_licence_expiring') return { title: 'Driver licence expiring', body: 'A driver licence is about to expire. Open Tango to review the driver list.' }
+  if (kind === 'alpha_timeline_overdue') return { title: 'Arrival step overdue', body: 'An arrival timeline step is overdue. Open Alpha to check the timeline.' }
   if (kind === 'announcement' || n.type === 'announcement') {
     const category = String(n.metadata?.category || '').toLowerCase()
     if (category === 'training' || category === 'recruitment') return { title: 'Training announcement', body: 'There is a new training notice. Open Training to read the details and what is required of you.' }
@@ -107,6 +190,7 @@ export function pushUrgency(n: Pick<AppNotification, 'type' | 'metadata'>): 'hig
   const kind = n.metadata?.kind
   if (kind === 'birthday_0700' || n.type === 'birthday_reminder') return 'normal'
   if (kind === 'announcement' || n.type === 'announcement') return 'normal'
+  if (kind === 'compliance_recognition' || kind === 'unit_programme_grant') return 'normal'
   if (n.type === 'info' && !kind && !n.metadata?.url) return 'normal'
   return 'high'
 }

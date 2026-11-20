@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react'
 import MyDenWork from '@/components/den/MyDenWork'
+import MyUnitTasksCard from '@/components/units/MyUnitTasksCard'
 import Link from 'next/link'
 import { format, formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
@@ -46,7 +47,8 @@ export default function MyOperationsPage() {
   } = useMyOperations()
   const { data: currentUser } = useCurrentUser()
   // Same check /tracking/live applies, so the link never leads to "Access Restricted".
-  const canOpenLiveMap = Boolean(currentUser && canViewLiveTracking(currentUser.role, currentUser.oscar, currentUser.has_admin_access))
+  // The Oscar is a display label, never leadership (passed as null).
+  const canOpenLiveMap = Boolean(currentUser && canViewLiveTracking(currentUser.role, null, currentUser.has_admin_access))
   const [selectedJourneyId, setSelectedJourneyId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<string | null>(null)
   const [retrying, setRetrying] = useState(false)
@@ -173,6 +175,8 @@ export default function MyOperationsPage() {
 
       {/* ── Current mission — always first ─────────────────────────────── */}
       <MyDenWork currentUserId={userId ?? null} />
+      {/* My tasks in every other unit (the Den's are in MyDenWork above); renders nothing when there are none. */}
+      <MyUnitTasksCard currentUserId={userId ?? null} excludeUnits={['november_den']} />
 
       {myAssigned.length > 1 && (
         <MissionStrip journeys={myAssigned} selectedId={selected?.id ?? null} onSelect={setSelectedJourneyId} />

@@ -1,11 +1,17 @@
 "use client"
 
 import { useReloadOnDeletion } from "@/hooks/useDashboardDeletions"
-import { useEffect, useState, useCallback } from "react"
-import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
+import { Suspense, useEffect, useState, useCallback } from "react"
+import EchoBriefings from "@/components/echo/EchoBriefings"
 import EOChecklist from "@/components/echo/EOChecklist"
+import { useEchoProgrammeWork } from "@/components/echo/useEchoProgrammeWork"
+import UnitTasks from "@/components/units/UnitTasks"
+import UnitProgrammeTeam from "@/components/units/UnitProgrammeTeam"
+import { canSeeUnitWork, useAddressTab } from "@/components/units/unit-work-tabs"
+import { useQueryClient } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase/client"
 import { isPlatformAdministrator } from "@/lib/utils"
+import { useUnitAccess } from "@/hooks/useUnitAccess"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/ui/page-header"
@@ -19,7 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
-import { notifyError } from '@/lib/notify'
+import { notifyError, UserFacingError } from '@/lib/notify'
 import { ErrorState } from "@/components/ui/error-state"
 import {
     Volume2,
@@ -38,7 +44,9 @@ import {
     XCircle,
     RefreshCw,
     Search,
-    Filter
+    Filter,
+    ClipboardList,
+    UsersRound
 } from "lucide-react"
 
 // Equipment types with icons
@@ -84,12 +92,33 @@ type Program = {
     status: string
 }
 
+const NOT_YOURS = 'You cannot change this item. It may belong to a programme you do not work on for Echo.'
+
+// Non-unit roles in equipment_manage_authorized. Echo officers come in through
+// Echo membership (can_coordinate_unit('echo')), never through a role or Oscar.
 const ALLOWED_ROLES = [
     'super_admin', 'dev_admin', 'admin', 'captain', 'head_of_operations', 'head_of_command',
-    'echo_oscar', 'head_echo_oscar'
 ]
 
 export default function EchoPage() {
+    // useSearchParams (?tab=) needs a Suspense boundary so the page can still prerender.
+    return (
+        <Suspense fallback={<EchoLoading />}>
+            <EchoPageContent />
+        </Suspense>
+    )
+}
+
+function EchoLoading() {
+    return (
+        <div className="space-y-6" aria-busy="true" aria-label="Loading Echo">
+            <div className="h-8 w-48 rounded-md skeleton" />
+            <div className="h-96 rounded-lg skeleton" />
+        </div>
+    )
+}
+
+function EchoPageContent() {
     const supabase = createClient()
     const confirm = useConfirm()
     const [equipment, setEquipment] = useState<Equipment[]>([])
@@ -100,8 +129,30 @@ export default function EchoPage() {
     const [dialogOpen, setDialogOpen] = useState(false)
     const [saving, setSaving] = useState(false)
     const [editing, setEditing] = useState<Equipment | null>(null)
-    const [canManage, setCanManage] = useState(false)
-    const [userRole, setUserRole] = useState('')
+    const [roleCanManage, setRoleCanManage] = useState(false)
+    const queryClient = useQueryClient()
+    const echoUnit = useUnitAccess('echo')
+    // Equipment writes on every row (equipment_manage_authorized): the policy's
+    // non-unit roles, or an Echo head/sub-lead. Admin and Command are never reduced.
+    const canManage = roleCanManage || echoUnit.canCoordinate
+    // Echo programme work (the ONE RULE, level 3): a member active on the
+    // programme with a head-issued grant may work that programme's equipment
+    // rows and AV briefings. The database decides (can_work_unit_programme).
+    const echoWork = useEchoProgrammeWork({
+        userId: echoUnit.currentUser?.id,
+        isMember: echoUnit.isMember,
+        canCoordinate: echoUnit.canCoordinate,
+    })
+    const canEditItem = (item: Pick<Equipment, 'program_id'>) => canManage || echoWork.canWork(item.program_id)
+    // Programmes a programme worker may file equipment under (managers may use any, or none).
+    const workablePrograms = programs.filter(program => echoWork.workable.has(program.id))
+    const canAddEquipment = canManage || workablePrograms.length > 0
+    // eo_logs_echo_insert: own row, Echo member or admin/Command (is_admin()).
+    const canLogEoCheck = echoUnit.isMember || echoUnit.isCommand || echoUnit.isPlatformAdmin
+    // Tasks and Programme team: Echo members and Command (the components decide
+    // who adds, assigns or grants). The Echo head gives programme work here.
+    const canSeeWork = canSeeUnitWork(echoUnit)
+    const [pageTab, selectPageTab] = useAddressTab(canSeeWork ? ["equipment", "tasks", "team"] : ["equipment"])
     const [searchQuery, setSearchQuery] = useState('')
     const [filterType, setFilterType] = useState('all')
     const [filterStatus, setFilterStatus] = useState('all')
@@ -148,9 +199,8 @@ export default function EchoPage() {
                 .single()
 
             if (data && (isPlatformAdministrator(data.role, data.has_admin_access) || ALLOWED_ROLES.includes(data.role))) {
-                setCanManage(true)
+                setRoleCanManage(true)
             }
-            if (data) setUserRole(data.role)
         } catch (error) {
             console.error('Error checking permissions:', error)
         }
@@ -207,6 +257,10 @@ export default function EchoPage() {
         try {
             const { data: { user } } = await supabase.auth.getUser()
 
+            if (!canManage && !(formData.program_id && echoWork.canWork(formData.program_id))) {
+                throw new UserFacingError('Choose a programme you work on for Echo.')
+            }
+
             const payload = {
                 name: formData.name,
                 type: formData.type,
@@ -221,12 +275,15 @@ export default function EchoPage() {
             }
 
             if (editing) {
-                const { error } = await (supabase as any)
+                const { data: updated, error } = await (supabase as any)
                     .from('equipment')
                     .update(payload)
                     .eq('id', editing.id)
+                    .select('id')
 
                 if (error) throw error
+                // RLS hides rows the officer may not change, so an update can match nothing.
+                if (!updated?.length) throw new UserFacingError(NOT_YOURS)
                 toast.success('Equipment updated successfully')
             } else {
                 const { error } = await (supabase as any)
@@ -268,12 +325,14 @@ export default function EchoPage() {
         if (!await confirm({ message: 'Are you sure you want to delete this equipment?', variant: 'destructive' })) return
 
         try {
-            const { error } = await (supabase as any)
+            const { data: deleted, error } = await (supabase as any)
                 .from('equipment')
                 .delete()
                 .eq('id', id)
+                .select('id')
 
             if (error) throw error
+            if (!deleted?.length) throw new UserFacingError(NOT_YOURS)
             toast.success('Equipment deleted')
             loadData()
         } catch (error: any) {
@@ -285,7 +344,7 @@ export default function EchoPage() {
         try {
             const { data: { user } } = await supabase.auth.getUser()
 
-            const { error } = await (supabase as any)
+            const { data: updated, error } = await (supabase as any)
                 .from('equipment')
                 .update({
                     status: newStatus,
@@ -294,8 +353,10 @@ export default function EchoPage() {
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', id)
+                .select('id')
 
             if (error) throw error
+            if (!updated?.length) throw new UserFacingError(NOT_YOURS)
 
             // Log the action
             await (supabase as any).from('equipment_logs').insert([{
@@ -329,6 +390,10 @@ export default function EchoPage() {
 
     const openCreateDialog = () => {
         resetForm()
+        // A programme worker files equipment under a programme they work on.
+        if (!canManage && workablePrograms.length > 0) {
+            setFormData(prev => ({ ...prev, program_id: workablePrograms[0].id }))
+        }
         setDialogOpen(true)
     }
 
@@ -384,7 +449,7 @@ export default function EchoPage() {
                 title="Echo"
                 badge="Equipment Management"
                 description="Manage multimedia and sound equipment for programs."
-                actions={canManage && (
+                actions={canAddEquipment && (
                     <Button onClick={openCreateDialog}>
                         <Plus aria-hidden="true" />
                         Add Equipment
@@ -392,14 +457,46 @@ export default function EchoPage() {
                 )}
             />
 
-            {/* ── Papa AV Briefings + EO Pre-Op Checklist ── shown for Echo Oscar roles */}
-            {userRole && ['echo_oscar', 'head_echo_oscar'].includes(userRole) && (
-                <div className="grid gap-4 md:grid-cols-2">
-                    <div className="min-w-0">
-                        <PapaBriefingsSection role={userRole} />
-                    </div>
+            {echoUnit.loadFailed && (
+                <Card>
+                    <ErrorState
+                        title="Could not check your Echo access"
+                        description="Echo controls stay hidden until your unit access loads."
+                        onRetry={() => { void queryClient.invalidateQueries({ queryKey: ['unit-access'] }) }}
+                    />
+                </Card>
+            )}
+
+            <Tabs value={pageTab} onValueChange={selectPageTab} className="space-y-6">
+            {canSeeWork && (
+                <TabsList className="grid h-auto w-full max-w-xl grid-cols-3 gap-1 p-1" aria-label="Echo sections">
+                    <TabsTrigger value="equipment" className="min-h-11 min-w-0 gap-1.5 whitespace-normal text-xs sm:text-sm"><Volume2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />Equipment</TabsTrigger>
+                    <TabsTrigger value="tasks" className="min-h-11 min-w-0 gap-1.5 whitespace-normal text-xs sm:text-sm"><ClipboardList className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />Tasks</TabsTrigger>
+                    <TabsTrigger value="team" className="min-h-11 min-w-0 gap-1.5 whitespace-normal text-xs sm:text-sm"><UsersRound className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />Programme team</TabsTrigger>
+                </TabsList>
+            )}
+
+            <TabsContent value="equipment" className="space-y-6">
+            {/* ── Papa AV Briefings (Echo members) + EO Pre-Op Checklist (Echo members, Command, admins) ── */}
+            {canLogEoCheck && (
+                <div className={echoUnit.isMember ? "grid gap-4 md:grid-cols-2" : "grid gap-4"}>
+                    {echoUnit.isMember && (
+                        <div className="min-w-0">
+                            <EchoBriefings
+                                userId={echoUnit.currentUser?.id}
+                                canCoordinate={echoUnit.canCoordinate}
+                                work={echoWork}
+                            />
+                        </div>
+                    )}
                     <EOChecklist programs={programs} />
                 </div>
+            )}
+
+            {echoUnit.isMember && !canManage && !echoWork.isLoading && workablePrograms.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                    Equipment is read only for you. To update it, you need to be active on a programme and added to its Echo team by your Echo head.
+                </p>
             )}
 
             {loadFailed && equipment.length === 0 ? (
@@ -529,13 +626,13 @@ export default function EchoPage() {
                                                 )}
                                             </div>
 
-                                            {canManage && (
+                                            {canEditItem(item) && (
                                                 <div className="flex gap-2 pt-2 border-t">
                                                     <Select
                                                         value={item.status}
                                                         onValueChange={(value) => handleStatusChange(item.id, value)}
                                                     >
-                                                        <SelectTrigger className="flex-1 h-8 text-xs">
+                                                        <SelectTrigger className="flex-1 h-11 sm:h-8 text-xs" aria-label={`Status of ${item.name}`}>
                                                             <SelectValue />
                                                         </SelectTrigger>
                                                         <SelectContent>
@@ -544,18 +641,18 @@ export default function EchoPage() {
                                                             ))}
                                                         </SelectContent>
                                                     </Select>
-                                                    <Button aria-label="Edit equipment"
+                                                    <Button aria-label={`Edit ${item.name}`}
                                                         variant="outline"
                                                         size="icon"
-                                                        className="h-8 w-8"
+                                                        className="h-11 w-11 sm:h-8 sm:w-8"
                                                         onClick={() => handleEdit(item)}
                                                     >
                                                         <Edit className="h-3 w-3" />
                                                     </Button>
-                                                    <Button aria-label="Delete equipment"
+                                                    <Button aria-label={`Delete ${item.name}`}
                                                         variant="outline"
                                                         size="icon"
-                                                        className="h-8 w-8 text-destructive hover:text-destructive"
+                                                        className="h-11 w-11 sm:h-8 sm:w-8 text-destructive hover:text-destructive"
                                                         onClick={() => handleDelete(item.id)}
                                                     >
                                                         <Trash2 className="h-3 w-3" />
@@ -572,6 +669,19 @@ export default function EchoPage() {
             </Tabs>
             </>
             )}
+            </TabsContent>
+
+            {canSeeWork && (
+                <>
+                    <TabsContent value="tasks" className="space-y-6">
+                        <UnitTasks unitSlug="echo" />
+                    </TabsContent>
+                    <TabsContent value="team" className="space-y-6">
+                        <UnitProgrammeTeam unitSlug="echo" />
+                    </TabsContent>
+                </>
+            )}
+            </Tabs>
 
             {/* Create/Edit Dialog */}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -653,15 +763,15 @@ export default function EchoPage() {
                             <div className="space-y-2">
                                 <Label htmlFor="program_id">Assigned Program</Label>
                                 <Select
-                                    value={formData.program_id || 'unassigned'}
+                                    value={formData.program_id || (canManage ? 'unassigned' : '')}
                                     onValueChange={(value) => setFormData({ ...formData, program_id: value === 'unassigned' ? '' : value })}
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select a program" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="unassigned">No Program</SelectItem>
-                                        {programs.map((program) => (
+                                        {canManage && <SelectItem value="unassigned">No Program</SelectItem>}
+                                        {(canManage ? programs : workablePrograms).map((program) => (
                                             <SelectItem key={program.id} value={program.id}>{program.name}</SelectItem>
                                         ))}
                                     </SelectContent>

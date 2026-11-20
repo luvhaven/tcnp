@@ -158,6 +158,8 @@ function ChecklistBody({
             const { data: ud } = await supabase.from('users').select('full_name').eq('id', user.id).single()
 
             const performedAt = new Date().toISOString()
+            // eo_logs_echo_insert: the row must be the signed-in officer's own
+            // (performed_by = auth.uid()) and the officer an Echo member or admin/Command.
             const { error } = await (supabase as any).from('eo_checklist_logs').insert([{
                 program_id: programId || null,
                 checks,
@@ -166,6 +168,9 @@ function ChecklistBody({
                 performed_by_name: ud?.full_name || user.email,
                 performed_at: performedAt,
             }])
+            if (error?.code === '42501') {
+                throw new UserFacingError('Only Echo members, Command and admins can log the EO check.')
+            }
             if (error) throw error
 
             setLastLog({ performed_at: performedAt, officer_name: ud?.full_name || 'You' })
@@ -222,7 +227,7 @@ function ChecklistBody({
                             aria-checked={checked}
                             onClick={() => handleToggle(idx)}
                             className={cn(
-                                'w-full flex items-start gap-2.5 rounded-lg border p-2.5 text-left text-xs transition-all',
+                                'w-full min-h-11 flex items-start gap-2.5 rounded-lg border p-2.5 text-left text-xs transition-all',
                                 checked
                                     ? 'bg-green-500/5 border-green-500/20'
                                     : 'bg-muted/20 border-border/30 hover:bg-muted/50'
@@ -254,7 +259,7 @@ function ChecklistBody({
                     size="sm"
                     onClick={handleSubmit}
                     disabled={saving || checkedCount === 0 || needsProgramme}
-                    className={cn('w-full gap-1 text-xs', allChecked ? 'bg-green-600 hover:bg-green-700' : '')}
+                    className={cn('w-full min-h-11 gap-1 text-xs sm:min-h-9', allChecked ? 'bg-green-600 hover:bg-green-700' : '')}
                 >
                     <ClipboardCheck className="h-3 w-3" aria-hidden="true" />
                     {saving ? 'Saving...' : `Log Equipment Check (${checkedCount}/${EO_ITEMS.length})`}
