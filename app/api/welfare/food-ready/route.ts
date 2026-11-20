@@ -2,13 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { checkRateLimit } from '@/lib/security/rate-limit'
+import { fetchActiveUnitMemberships, isCommandAuthority, unitAccess } from '@/lib/unit-access'
 
-const ALLOWED_ROLES = [
-    'super_admin', 'dev_admin', 'admin', 'captain', 'vice_captain',
-    'command', 'head_of_command', 'head_of_operations',
-    'welfare_oscar', 'head_welfare_oscar',
-    'november_oscar', 'noscar_den', 'head_noscar_den',
-]
+/**
+ * Who may sound the alarm: Command and administrators (SQL is_admin()), the
+ * head or a sub-lead of Welfare or November (Den), or a Welfare / Den member the
+ * database says may work this programme (can_work_unit_programme, e.g. a Den
+ * floor grant). Unit access comes from memberships, not users.role.
+ */
+const ALARM_UNITS = ['welfare', 'november_den'] as const
 
 /**
  * Welfare "Food is Ready" alarm.
@@ -35,11 +37,24 @@ export async function POST(req: NextRequest) {
         if (!profile || profile.activation_status !== 'active' || profile.is_active === false) {
             return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
         }
-        if (profile.has_admin_access !== true && !ALLOWED_ROLES.includes(profile.role)) {
+        const { program_id, note } = await req.json().catch(() => ({} as any))
+
+        let allowed = isCommandAuthority(profile.role, profile.has_admin_access)
+        if (!allowed) {
+            const viewer = { role: profile.role, hasAdminAccess: profile.has_admin_access }
+            const { memberships } = await fetchActiveUnitMemberships(supabase as any, user.id)
+            allowed = ALARM_UNITS.some(slug => unitAccess(memberships, slug, viewer).canCoordinate)
+            if (!allowed && program_id) {
+                for (const slug of ALARM_UNITS) {
+                    if (!unitAccess(memberships, slug, viewer).isMember) continue
+                    const { data: canWork } = await (supabase as any).rpc('can_work_unit_programme', { unit_slug: slug, target_program: program_id })
+                    if (canWork === true) { allowed = true; break }
+                }
+            }
+        }
+        if (!allowed) {
             return NextResponse.json({ error: 'Forbidden: Welfare or leadership access required' }, { status: 403 })
         }
-
-        const { program_id, note } = await req.json().catch(() => ({} as any))
 
         // Resolve recipients: program participants first, all active officers as fallback
         let recipientIds: string[] = []

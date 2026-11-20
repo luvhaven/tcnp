@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { canAccessCommandCentre, canManageEagles } from '@/lib/utils'
+import { canAccessCommandCentre, isAdmin } from '@/lib/utils'
+import { fetchActiveUnitMemberships, unitAccess } from '@/lib/unit-access'
 import { checkRateLimit } from '@/lib/security/rate-limit'
 
 export const dynamic = 'force-dynamic'
@@ -23,13 +24,23 @@ export async function GET(request: Request) {
     }
     const { data: profile, error: profileError } = await supabase
         .from('users')
-        .select('role, has_admin_access, oscar, activation_status, is_active')
+        .select('role, has_admin_access, activation_status, is_active')
         .eq('id', user.id)
         .maybeSingle()
     if (profileError || !profile || profile.activation_status !== 'active' || profile.is_active === false) {
         return NextResponse.json({ error: 'Active account required' }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } })
     }
-    if (!canAccessCommandCentre(profile.role, profile.oscar, profile.has_admin_access) && !canManageEagles(profile.role, profile.oscar, profile.has_admin_access)) {
+    // Command and administrators, Delta Oscars on duty, and members of Alpha
+    // (flight search is a read). Alpha membership comes from unit_memberships;
+    // the Oscar label is not read (it grants nothing).
+    let allowed = canAccessCommandCentre(profile.role, null, profile.has_admin_access)
+        || isAdmin(profile.role, profile.has_admin_access)
+        || profile.role === 'delta_oscar'
+    if (!allowed) {
+        const { memberships } = await fetchActiveUnitMemberships(supabase as any, user.id)
+        allowed = unitAccess(memberships, 'alpha', { role: profile.role, hasAdminAccess: profile.has_admin_access }).isMember
+    }
+    if (!allowed) {
         return NextResponse.json({ error: 'Alpha, Command, or administrator access required' }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } })
     }
 

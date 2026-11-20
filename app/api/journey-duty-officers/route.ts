@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { isAdmin, effectiveOscarRole } from '@/lib/utils'
+import { isAdmin } from '@/lib/utils'
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,15 +12,15 @@ export async function POST(req: NextRequest) {
     // Only admins/captains/command can assign DOs
     const { data: currentUser } = await supabase
       .from('users')
-      .select('role, has_admin_access, oscar, activation_status, is_active')
+      .select('role, has_admin_access, activation_status, is_active')
       .eq('id', user.id)
       .single()
 
     if (!currentUser || currentUser.activation_status !== 'active' || currentUser.is_active === false) {
       return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
     }
-    const effectiveRole = effectiveOscarRole(currentUser.role, currentUser.oscar) || currentUser.role
-    if (!isAdmin(effectiveRole, currentUser.has_admin_access)) {
+    // Authority comes from users.role; the oscar label grants nothing.
+    if (!isAdmin(currentUser.role, currentUser.has_admin_access)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -68,14 +68,13 @@ export async function GET(req: NextRequest) {
 
     const { data: currentUser } = await supabase
       .from('users')
-      .select('role, has_admin_access, oscar, activation_status, is_active')
+      .select('role, has_admin_access, activation_status, is_active')
       .eq('id', user.id)
       .single()
     if (!currentUser || currentUser.activation_status !== 'active' || currentUser.is_active === false) {
       return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
     }
-    const effectiveRole = effectiveOscarRole(currentUser.role, currentUser.oscar) || currentUser.role
-    const canManage = !!currentUser && isAdmin(effectiveRole, currentUser.has_admin_access)
+    const canManage = isAdmin(currentUser.role, currentUser.has_admin_access)
     if (!canManage) {
       const { data: ownAssignment, error: assignmentError } = await (supabase as any)
         .from('journey_duty_officers')

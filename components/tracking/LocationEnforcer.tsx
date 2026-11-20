@@ -19,13 +19,29 @@ import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { createLocationSharingGuard } from '@/lib/location-sharing'
 import { publishLocation } from '@/lib/location-upload'
+import { memberUnitSlugs } from '@/lib/unit-access'
+import { useMyUnitMemberships } from '@/hooks/useUnitAccess'
 
-// Roles that can always dismiss the prompt
+// Roles that can always dismiss the prompt. Tango (transport) officers can
+// too, but that comes from Tango membership, not a role or Oscar.
 const SKIPPABLE_ROLES = [
   'dev_admin', 'super_admin', 'admin', 'command', 'head_of_command',
   'captain', 'vice_captain', 'viewer', 'hod', 'hop',
-  'head_of_operations', 'tango_oscar', 'head_tango_oscar',
+  'head_of_operations',
 ]
+
+/**
+ * Who may dismiss the location prompt for good. Tango membership counts; a
+ * profile or membership read that has not succeeded keeps it dismissible.
+ */
+export function locationPromptSkippable(
+  role: string | null,
+  unitSlugs: readonly string[],
+  state: { isLoading: boolean; loadFailed: boolean },
+): boolean {
+  if (!role || state.isLoading || state.loadFailed) return true
+  return SKIPPABLE_ROLES.includes(role) || unitSlugs.includes('tango')
+}
 
 function detectIOS(): boolean {
   if (typeof navigator === 'undefined') return false
@@ -35,7 +51,12 @@ function detectIOS(): boolean {
 
 export function LocationEnforcer() {
   const [show, setShow] = useState(false)
-  const [role, setRole] = useState<string | null>(null)
+  // Role and memberships come from the shared cached queries (with the
+  // provider's retry policy; a failed refetch keeps the last good rows).
+  // Until both load, or if the membership read never succeeds, the prompt
+  // stays dismissible: this is UX only and must never block on a flaky read.
+  const { currentUser, memberships, loadFailed, isLoading } = useMyUnitMemberships()
+  const canSkip = locationPromptSkippable(currentUser?.role ?? null, memberUnitSlugs(memberships), { isLoading, loadFailed })
   const [requesting, setRequesting] = useState(false)
   const [locationMode, setLocationMode] = useState<'gps' | 'ip' | 'unavailable' | 'denied' | null>(null)
   const isIOS = typeof navigator !== 'undefined' && detectIOS()
@@ -58,15 +79,7 @@ export function LocationEnforcer() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
-        const { data } = await supabase
-          .from('users')
-          .select('role')
-          .eq('id', user.id)
-          .single()
-
-        const userRole = (data as any)?.role ?? null
         if (!isActive()) return
-        setRole(userRole)
 
         // Check permission via Permissions API where available
         const nav = navigator as any
@@ -191,9 +204,7 @@ export function LocationEnforcer() {
     // ── Step 3: Both failed — handle gracefully by role ───────────────────
     if (!canShare()) return
     setLocationMode('unavailable')
-    const isSkippable = role ? SKIPPABLE_ROLES.includes(role) : true
-
-    if (isSkippable) {
+    if (canSkip) {
       // Admin/command: silently dismiss — don't block operational work
       toast.info('Location unavailable on this device. You can enable it later in browser settings.', {
         duration: 5000
@@ -206,10 +217,7 @@ export function LocationEnforcer() {
       })
     }
     setRequesting(false)
-  }, [role])
-
-  // Skippable roles can always dismiss
-  const canSkip = role ? SKIPPABLE_ROLES.includes(role) : true
+  }, [canSkip])
 
   if (!show) return null
 

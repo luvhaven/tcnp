@@ -25,6 +25,7 @@ import ProgramSchedule from "@/components/programs/ProgramSchedule"
 import { RequestAvailabilityButton, AvailabilityRosterButton } from "@/components/missions/MissionAvailability"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { isAdmin, isPlatformAdministrator } from "@/lib/utils"
+import { isCommandAuthority } from "@/lib/unit-access"
 
 type Program = {
   id: string
@@ -38,13 +39,6 @@ type Program = {
   theatres: { name: string } | null
 }
 
-// Mirrors the role rule in app/api/missions/request-availability/route.ts.
-// It is deliberately not isAdmin(): that also admits `hod` and `hop`, whom the
-// API refuses, so they would see a button that can only fail.
-const MISSION_REQUEST_ROLES = new Set([
-  'super_admin', 'dev_admin', 'admin', 'captain', 'vice_captain',
-  'command', 'head_of_command', 'head_of_operations',
-])
 
 /** Programme dates are stored as calendar dates; parse them as local days. */
 function parseProgramDate(value: string | null | undefined): Date | null {
@@ -86,7 +80,10 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
   // choice we get to leave to the database.
   const { data: currentUser } = useCurrentUser()
   const canManagePrograms = isAdmin(currentUser?.role, currentUser?.has_admin_access)
-  const canRequestAvailability = !!currentUser && (currentUser.has_admin_access === true || MISSION_REQUEST_ROLES.has(currentUser.role ?? ''))
+  // The same check app/api/missions/request-availability/route.ts applies
+  // (isCommandAuthority mirrors SQL is_admin()). It is deliberately not
+  // isAdmin(): that also admits `hod` and `hop`, whom the API refuses.
+  const canRequestAvailability = !!currentUser && isCommandAuthority(currentUser.role, currentUser.has_admin_access)
   // One availability dialog per programme row; the phone overflow menu opens
   // the same dialog the desktop button does.
   const [availabilityDialog, setAvailabilityDialog] = useState<{ programId: string; kind: 'request' | 'roster' } | null>(null)

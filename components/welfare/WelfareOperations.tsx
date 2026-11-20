@@ -26,7 +26,9 @@ import {
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
-import { cn, isPlatformAdministrator } from "@/lib/utils"
+import { useUnitAccess } from "@/hooks/useUnitAccess"
+import { canManageWelfareOperations } from "@/lib/site-unit-permissions"
+import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -39,8 +41,6 @@ import { Textarea } from "@/components/ui/textarea"
 
 const supabase = createClient()
 
-type Unit = { id: string; slug: string }
-type UnitMembership = { unit_id: string; user_id: string; access_level: string; status: string }
 type Officer = { id: string; full_name: string | null; email: string | null; oscar: string | null }
 type Program = { id: string; name: string }
 type Schedule = { id: string; topic: string; session_date: string }
@@ -95,7 +95,6 @@ type WelfareCelebration = {
   created_by: string | null
 }
 
-const MANAGER_ACCESS = new Set(["head", "head_of_unit", "manager", "admin"])
 const CASE_TYPES = {
   visit: { label: "Visit", icon: HeartHandshake, tone: "bg-sky-500/10 text-sky-700 dark:text-sky-300" },
   charity: { label: "Charity", icon: HandHeart, tone: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
@@ -154,26 +153,9 @@ export default function WelfareOperations() {
     return () => window.removeEventListener("welfare-open-celebrations", openCelebrations)
   }, [])
 
-  const unitQuery = useQuery({
-    queryKey: ["unit-by-slug", "welfare"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).from("units").select("id, slug").eq("slug", "welfare").maybeSingle()
-      if (error) throw error
-      return data as Unit | null
-    },
-  })
-
-  const membershipQuery = useQuery({
-    queryKey: ["unit-membership", unitQuery.data?.id, currentUser?.id],
-    enabled: Boolean(unitQuery.data?.id && currentUser?.id),
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).from("unit_memberships").select("unit_id, user_id, access_level, status").eq("unit_id", unitQuery.data!.id).eq("user_id", currentUser!.id).eq("status", "active").maybeSingle()
-      if (error) throw error
-      return data as UnitMembership | null
-    },
-  })
-
-  const canManage = Boolean(isPlatformAdministrator(currentUser?.role, currentUser?.has_admin_access) || (membershipQuery.data?.status === "active" && MANAGER_ACCESS.has(membershipQuery.data.access_level)))
+  // Prayer campaigns, care items and celebrations are written by
+  // can_manage_unit('welfare'): the Welfare head and platform admins.
+  const canManage = canManageWelfareOperations(useUnitAccess("welfare"))
 
   const campaignsQuery = useQuery({
     queryKey: ["welfare-prayer-campaigns"],

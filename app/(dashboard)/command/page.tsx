@@ -72,7 +72,7 @@ const MODULES = [
   },
 ]
 
-import { canAccessCommandCentre, isPlatformAdministrator } from "@/lib/utils"
+import { canAccessCommandCentre, canViewLiveTracking, isPlatformAdministrator } from "@/lib/utils"
 import { OFFICER_ONLINE_WINDOW_MS, OFFICER_PRESENCE_REFRESH_MS } from "@/lib/presence"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { ErrorState } from "@/components/ui/error-state"
@@ -101,8 +101,11 @@ function OfficersOnlineTile({ value }: { value: number | null }) {
 
 export default function CommandPage() {
   const { data: currentUser, isLoading: userLoading, isError: clearanceUnknown, refetch: refetchCurrentUser, isFetching: refetchingUser } = useCurrentUser()
-  const hasAccess = Boolean(currentUser && canAccessCommandCentre(currentUser.role, currentUser.oscar, currentUser.has_admin_access))
+  const hasAccess = Boolean(currentUser && canAccessCommandCentre(currentUser.role, null, currentUser.has_admin_access))
   const canOpenOfficers = isPlatformAdministrator(currentUser?.role, currentUser?.has_admin_access)
+  // Same check /tracking/live applies, so no tile or button here bounces.
+  const canOpenLiveMap = Boolean(currentUser && canViewLiveTracking(currentUser.role, null, currentUser.has_admin_access))
+  const modules = MODULES.filter((mod) => mod.href !== "/tracking/live" || canOpenLiveMap)
   // null = not loaded yet; a failed refresh keeps the last good numbers and flags them.
   const [stats, setStats] = useState<CommandStats | null>(null)
   const [statsStale, setStatsStale] = useState(false)
@@ -200,9 +203,11 @@ export default function CommandPage() {
               <Button asChild>
                 <Link href="/journeys"><Plus aria-hidden="true" />Plan Journey</Link>
               </Button>
-              <Button asChild variant="outline">
-                <Link href="/tracking/live"><Radio className="text-emerald-500" aria-hidden="true" />Live Map</Link>
-              </Button>
+              {canOpenLiveMap && (
+                <Button asChild variant="outline">
+                  <Link href="/tracking/live"><Radio className="text-emerald-500" aria-hidden="true" />Live Map</Link>
+                </Button>
+              )}
               <Button asChild variant="outline">
                 <Link href="/incidents"><AlertTriangle aria-hidden="true" />Incidents</Link>
               </Button>
@@ -276,7 +281,7 @@ export default function CommandPage() {
 
       {/* Module grid */}
       <div className="grid gap-4 sm:grid-cols-2">
-        {MODULES.map((mod, i) => (
+        {modules.map((mod, i) => (
           <motion.div
             key={mod.href}
             initial={{ opacity: 0, y: 10 }}

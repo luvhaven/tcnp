@@ -70,14 +70,15 @@ export async function GET(request: Request) {
 
     const { data: caller, error: callerError } = await supabase
       .from('users')
-      .select('role, has_admin_access, oscar, activation_status, is_active')
+      .select('role, has_admin_access, activation_status, is_active')
       .eq('id', user.id)
       .maybeSingle()
 
     if (callerError || !caller || caller.activation_status !== 'active' || caller.is_active === false) {
       return NextResponse.json({ error: 'Active account required' }, { status: 403 })
     }
-    if (!canAccessCommandCentre(caller.role, caller.oscar, caller.has_admin_access)) {
+    // Role only: an Oscar reading "Command" grants nothing.
+    if (!canAccessCommandCentre(caller.role, null, caller.has_admin_access)) {
       return NextResponse.json({ error: 'Command or administrator access required' }, { status: 403 })
     }
 

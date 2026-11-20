@@ -3,8 +3,9 @@
  * both always agree on which destinations a role can see.
  */
 import type { ComponentType } from "react"
-import { canAccessCommandCentre, canApproveSignups, isPlatformAdministrator, oscarToRole } from "@/lib/utils"
+import { canAccessCommandCentre, canApproveSignups, isPlatformAdministrator, type SignupApproverMembership } from "@/lib/utils"
 import { canApproveProgramAdditions } from "@/lib/program-additions"
+import { isCommandAuthority } from "@/lib/unit-access"
 import {
   LayoutDashboard,
   Users,
@@ -17,6 +18,7 @@ import {
   FileText,
   UserCircle,
   Calendar,
+  Volume2,
   Navigation,
   MessageCircle,
   Landmark,
@@ -64,6 +66,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { name: "November (Nest)", href: "/nests", icon: Hotel },
       { name: "November (Den)", href: "/den", icon: Home },
       { name: "Serial", href: "/serial", icon: Camera },
+      { name: "Echo", href: "/echo", icon: Volume2 },
       { name: "Compliance", href: "/compliance", icon: Shirt },
       { name: "Welfare", href: "/welfare", icon: UtensilsCrossed },
       { name: "Training", href: "/training", icon: GraduationCap },
@@ -117,46 +120,23 @@ const BASE_HREFS = [
   "/profile", "/change-password",
 ]
 
-/**
- * Role-scoped extra pages (beyond BASE_HREFS).
- * Admins/captain/command see everything — handled by a fallback.
- */
-const ROLE_EXTRA: Record<string, string[]> = {
-  delta_oscar: [],
-  alpha_oscar: ["/alpha"],
-  head_alpha_oscar: ["/alpha"],
-  tango_oscar: ["/tango"],
-  head_tango_oscar: ["/tango"],
-  victor_oscar: ["/victor"],
-  head_victor_oscar: ["/victor"],
-  november_oscar: ["/nests", "/den"],
-  head_noscar_den: ["/den"],
-  noscar_den: ["/den"],
-  head_noscar_nest: ["/nests"],
-  noscar_nest: ["/nests"],
-  serial_oscar: ["/serial"],
-  head_serial_oscar: ["/serial"],
-  compliance_oscar: ["/compliance"],
-  head_compliance_oscar: ["/compliance"],
-  welfare_oscar: ["/welfare"],
-  head_welfare_oscar: ["/welfare"],
-  training_oscar: ["/training"],
-  head_training_oscar: ["/training"],
-  // Echo is no longer a standalone unit — legacy echo officers keep base access only
-  echo_oscar: [],
-  head_echo_oscar: [],
-}
-
+/** Platform administrators and Command see every destination. */
 const ADMIN_ROLES = new Set([
   "super_admin", "dev_admin", "admin",
   "captain", "vice_captain", "head_of_command", "head_of_operations", "command",
   "hod", "hop",
 ])
 
+/**
+ * Unit pages, shown from active unit membership only (lib/unit-access.ts).
+ * users.role unit roles and the users.oscar label add nothing here: the legacy
+ * sync trigger already turns them into membership rows. /command is never
+ * opened by membership: it follows the Command page's own gate below.
+ */
 const UNIT_HREFS: Record<string, string[]> = {
   alpha: ["/alpha"],
-  command: ["/command"],
   compliance: ["/compliance"],
+  echo: ["/echo"],
   november_nest: ["/nests"],
   november_den: ["/den"],
   serial: ["/serial"],
@@ -166,14 +146,25 @@ const UNIT_HREFS: Record<string, string[]> = {
   welfare: ["/welfare"],
 }
 
-export function getVisibleNav(role: string | null, oscar?: string | null, unitSlugs: string[] = [], hasAdminAccess?: boolean): typeof ALL_NAV {
-  const oscarRole = oscarToRole(oscar)
-  const effectiveRole = role === 'delta_oscar' ? (oscarRole || role) : (role || oscarRole)
+/**
+ * Destinations a user can see. `unitSlugs` are the user's active unit
+ * memberships (useMyUnitMemberships). `_oscar` is ignored: users.oscar is a
+ * display label and opens no page (it stays in the signature for callers).
+ * `unitMemberships` (the same rows with their access level) makes Approvals
+ * follow approvals/page.tsx: a platform admin, Command (isCommandAuthority), or
+ * the head of a unit by membership. Without it (still loading, or the read
+ * failed), headship falls back to the head role, as that page does.
+ */
+export function getVisibleNav(
+  role: string | null,
+  _oscar?: string | null,
+  unitSlugs: string[] = [],
+  hasAdminAccess?: boolean,
+  unitMemberships?: readonly SignupApproverMembership[] | null,
+): typeof ALL_NAV {
   const membershipHrefs = unitSlugs.flatMap(slug => UNIT_HREFS[slug] ?? [])
-  const canAccessCommand = Boolean(
-    canAccessCommandCentre(role, oscar, hasAdminAccess)
-    || unitSlugs.includes('command')
-  )
+  // The same check command/page.tsx uses, so the link never bounces anyone.
+  const canAccessCommand = canAccessCommandCentre(role, null, hasAdminAccess)
 
   if (!role) {
     const allowed = new Set([...BASE_HREFS, ...membershipHrefs])
@@ -183,21 +174,14 @@ export function getVisibleNav(role: string | null, oscar?: string | null, unitSl
 
   let visibleList: typeof ALL_NAV
 
-  if (hasAdminAccess || ADMIN_ROLES.has(role) || (effectiveRole && ADMIN_ROLES.has(effectiveRole))) {
+  if (hasAdminAccess || ADMIN_ROLES.has(role)) {
     visibleList = ALL_NAV
   } else {
-    // Resolve extra pages from the assigned role (may be delta_oscar)
-    const roleExtra = ROLE_EXTRA[role] ?? []
-
-    // Resolve extra pages from the permanent Oscar unit (even when role=delta_oscar)
-    const oscarExtra = oscarRole && oscarRole !== role ? (ROLE_EXTRA[oscarRole] ?? []) : []
-
-    // Union both sets so base Oscar pages are always visible
-    const allowed = new Set([...BASE_HREFS, ...roleExtra, ...oscarExtra, ...membershipHrefs])
-    visibleList = ALL_NAV.filter(n => allowed.has(n.href))
+    const allowed = new Set([...BASE_HREFS, ...membershipHrefs])
+    visibleList = ALL_NAV.filter(n => allowed.has(n.href) || (n.href === "/command" && canAccessCommand))
   }
 
-  // Command Centre includes platform administrators and Command members.
+  // Command Centre: platform administrators and Command roles only.
   if (!canAccessCommand) {
     visibleList = visibleList.filter(n => n.href !== "/command")
   }
@@ -208,9 +192,14 @@ export function getVisibleNav(role: string | null, oscar?: string | null, unitSl
     visibleList = visibleList.filter(n => n.href !== "/officers")
   }
 
-  // Approvals: admins see everyone, unit heads see their own unit's signups,
-  // and the Head of Command approves programme additions.
-  visibleList = canApproveSignups(role, oscar, hasAdminAccess) || canApproveProgramAdditions(role, hasAdminAccess)
+  // Approvals: admins see everyone, unit heads (by head membership) see their
+  // own unit's signups, Command reopens declined signups, and the Head of
+  // Command approves programme additions. This is approvals/page.tsx's gate,
+  // so the link never bounces.
+  const canOpenApprovals = canApproveSignups(role, null, hasAdminAccess, unitMemberships)
+    || isCommandAuthority(role, hasAdminAccess)
+    || canApproveProgramAdditions(role, hasAdminAccess)
+  visibleList = canOpenApprovals
     ? (visibleList.some(n => n.href === "/approvals") ? visibleList : [...visibleList, ...ALL_NAV.filter(n => n.href === "/approvals")])
     : visibleList.filter(n => n.href !== "/approvals")
 

@@ -7,7 +7,7 @@ const moduleUnderTest = { exports: {} }
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/utils.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText, { exports: moduleUnderTest.exports, module: moduleUnderTest, require })
-const { isPlatformAdministrator, platformAuthorityRank, isUnitHeadRole, canApproveSignups, canApproveSignupFor, canAccessCommandCentre, PLATFORM_ADMIN_ROLES } = moduleUnderTest.exports
+const { isPlatformAdministrator, platformAuthorityRank, isUnitHeadRole, canApproveSignups, canApproveSignupFor, canAccessCommandCentre, canViewLiveTracking, PLATFORM_ADMIN_ROLES } = moduleUnderTest.exports
 test('only platform administrator roles have platform administration', () => {
   for (const role of PLATFORM_ADMIN_ROLES) assert.equal(isPlatformAdministrator(role), true, role)
   for (const role of [null, undefined, '', 'delta_oscar', 'head_victor_oscar', 'head_of_operations', 'command']) assert.equal(isPlatformAdministrator(role), false, role)
@@ -34,7 +34,11 @@ test('admins approve any signup; unit heads approve only their own unit', () => 
   assert.equal(canApproveSignupFor('super_admin', null, null), true)
   assert.equal(canApproveSignupFor('head_tango_oscar', null, 'Tango Oscar'), true)
   assert.equal(canApproveSignupFor('head_tango_oscar', null, 'Victor Oscar'), false)
-  assert.equal(canApproveSignupFor('delta_oscar', 'Head Tango Oscar', 'Tango Oscar'), true)
+  // Headship comes from the head role only: a "Head ..." Oscar left on a Delta
+  // Oscar or a demoted viewer approves nothing.
+  assert.equal(canApproveSignupFor('delta_oscar', 'Head Tango Oscar', 'Tango Oscar'), false)
+  assert.equal(canApproveSignupFor('viewer', 'head_alpha_oscar', 'Alpha Oscar'), false)
+  assert.equal(canApproveSignups('viewer', 'head_alpha_oscar'), false)
   assert.equal(canApproveSignupFor('head_noscar_nest', null, 'November (Nest)'), true)
   assert.equal(canApproveSignupFor('head_noscar_nest', null, 'November (Den)'), false)
   assert.equal(canApproveSignupFor('head_of_command', null, 'Command'), true)
@@ -44,4 +48,21 @@ test('admins approve any signup; unit heads approve only their own unit', () => 
 test('only admins and unit heads can open signup approvals', () => {
   for (const role of ['admin', 'head_welfare_oscar', 'head_serial_oscar', 'captain', 'vice_captain', 'head_of_command']) assert.equal(canApproveSignups(role, null), true)
   for (const role of ['viewer', 'tango_oscar', 'command', null]) assert.equal(canApproveSignups(role, null), false)
+})
+
+test('an Oscar label never grants Command Centre or Live Tracking', () => {
+  assert.equal(canAccessCommandCentre('delta_oscar', 'Command', false), false)
+  assert.equal(canAccessCommandCentre('viewer', 'Head of Command', false), false)
+  assert.equal(canAccessCommandCentre('viewer', 'admin', false), false)
+  assert.equal(canViewLiveTracking('delta_oscar', 'Command', false), false)
+  assert.equal(canViewLiveTracking('viewer', 'Head of Operations', false), false)
+  // Admin and Command are unchanged.
+  for (const role of ['super_admin', 'dev_admin', 'admin', 'command', 'head_of_command', 'captain', 'vice_captain']) {
+    assert.equal(canAccessCommandCentre(role, null, false), true, role)
+  }
+  for (const role of ['super_admin', 'admin', 'command', 'head_of_command', 'head_of_operations', 'captain']) {
+    assert.equal(canViewLiveTracking(role, null, false), true, role)
+  }
+  assert.equal(canAccessCommandCentre('delta_oscar', null, true), true)
+  assert.equal(canViewLiveTracking('delta_oscar', null, true), true)
 })

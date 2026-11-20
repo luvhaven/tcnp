@@ -54,12 +54,15 @@ const MEAL_TYPES = [
 ]
 
 type Props = {
+  /** May add and edit menus (program_menus insert/update). */
   canEdit: boolean
+  /** May delete menus: Command or a unit head only. Defaults to canEdit. */
+  canDelete?: boolean
   selectedProgram: string // 'all' or program id
   currentUserId?: string | null
 }
 
-export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Props) {
+export default function DenMenus({ canEdit, canDelete = canEdit, selectedProgram, currentUserId }: Props) {
   const queryClient = useQueryClient()
   const confirm = useConfirm()
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -257,18 +260,22 @@ export default function DenMenus({ canEdit, selectedProgram, currentUserId }: Pr
               </span>
             </CardDescription>
           </div>
-          {canEdit && (
+          {(canEdit || canDelete) && (
             <div className="flex shrink-0 gap-1">
-              <Button aria-label="Edit menu" variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(menu)}><Pencil className="h-3.5 w-3.5" /></Button>
-              <Button aria-label="Delete menu"
-                variant="ghost" size="icon" className="h-7 w-7 text-red-500"
-                onClick={async () => {
-                  const ok = await confirm({ title: "Delete menu?", message: `"${menu.title}" will be removed for everyone.` })
-                  if (ok) deleteMutation.mutate(menu.id)
-                }}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+              {canEdit && (
+                <Button aria-label={`Edit menu ${menu.title}`} variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => openEdit(menu)}><Pencil className="h-3.5 w-3.5" /></Button>
+              )}
+              {canDelete && (
+                <Button aria-label={`Delete menu ${menu.title}`}
+                  variant="ghost" size="icon" className="h-11 w-11 text-red-500 sm:h-8 sm:w-8"
+                  onClick={async () => {
+                    const ok = await confirm({ title: "Delete menu?", message: `"${menu.title}" will be removed for everyone.` })
+                    if (ok) deleteMutation.mutate(menu.id)
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
             </div>
           )}
         </div>

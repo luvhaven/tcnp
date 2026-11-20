@@ -102,8 +102,16 @@ test('Command flight watch is active-account and Command/Admin gated', () => {
   const source = fs.readFileSync('app/api/flights/watch/route.ts', 'utf8')
   assert.match(source, /supabase\.auth\.getUser\(\)/)
   assert.match(source, /caller\.activation_status !== 'active'/)
-  assert.match(source, /canAccessCommandCentre\(caller\.role, caller\.oscar, caller\.has_admin_access\)/)
+  // Role only: the Oscar label is neither read nor passed.
+  assert.match(source, /canAccessCommandCentre\(caller\.role, null, caller\.has_admin_access\)/)
+  assert.doesNotMatch(source, /\.select\('[^']*oscar/)
   assert.match(source, /Cache-Control': 'private, no-store'/)
+})
+
+test('flight search does not read the Oscar label for Command access', () => {
+  const source = fs.readFileSync('app/api/flights/route.ts', 'utf8')
+  assert.match(source, /canAccessCommandCentre\(profile\.role, null, profile\.has_admin_access\)/)
+  assert.doesNotMatch(source, /profile\.oscar|\.select\('[^']*oscar/)
 })
 
 test('OpenSky polling defaults to its anonymous free quota and supports OAuth refresh', () => {
@@ -116,7 +124,7 @@ test('OpenSky polling defaults to its anonymous free quota and supports OAuth re
 
 test('dashboard global-sensitive view is limited to Command/Admin and rejected missions are excluded', () => {
   const source = fs.readFileSync('app/(dashboard)/dashboard/page.tsx', 'utf8')
-  assert.match(source, /canViewGlobalDashboard = useMemo[\s\S]*?canAccessCommandCentre\(currentUser\.role, currentUser\.oscar, currentUser\.has_admin_access\)/)
+  assert.match(source, /canViewGlobalDashboard = useMemo[\s\S]*?canAccessCommandCentre\(currentUser\.role, null, currentUser\.has_admin_access\)/)
   assert.doesNotMatch(source, /import \{[^}]*\bisAdmin\b/)
   assert.match(source, /if \(canViewGlobalDashboard\) \{[\s\S]*?setStats\(/)
   assert.match(source, /canViewGlobalDashboard && \(\s*<ErrorBoundary>/)
@@ -157,4 +165,14 @@ test('Victor page briefings only request role-visible Papa fields and do not ref
   assert.match(source, /queryKey: \['papa-briefings', providedUserId \|\| 'session-user', role\]/)
   assert.doesNotMatch(source, /passport_number/)
   assert.match(source, /if \(!userId\) \{/)
+})
+
+test('Alpha briefings never select a passport column; passports come from papa_private_details for allowed viewers only', () => {
+  const fields = fs.readFileSync('lib/constants/papaBriefingFields.ts', 'utf8')
+  assert.doesNotMatch(fields, /key: 'passport_number'/)
+  const section = fs.readFileSync('components/papas/PapaBriefingsSection.tsx', 'utf8')
+  assert.match(section, /fetchPapaPrivateDetailsBatch/)
+  assert.match(section, /Boolean\(config\?\.showsPassport\) && canViewPapaPassport\(alpha\)/)
+  const card = fs.readFileSync('components/papas/PapaBriefingCard.tsx', 'utf8')
+  assert.doesNotMatch(card, /papa\[k\] = v/, 'saved edits overlay local state instead of mutating props')
 })

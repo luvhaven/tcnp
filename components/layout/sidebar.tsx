@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import packageInfo from '@/package.json'
 import { filterNavigation } from '@/lib/navigation-search'
 import { Input } from '@/components/ui/input'
@@ -10,10 +10,11 @@ import { motion } from "framer-motion"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
-import { createClient } from "@/lib/supabase/client"
 import { useUnreadChatCount } from '@/hooks/useUnreadChatCount'
 import { useUnreadAssignments } from '@/hooks/useUnreadAssignments'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { useMyUnitMemberships } from '@/hooks/useUnitAccess'
+import { memberUnitSlugs } from '@/lib/unit-access'
 import {
   ChevronLeft,
   Search,
@@ -31,9 +32,6 @@ type SidebarProps = {
   onClose?: () => void
 }
 
-// ─── Singleton client ───
-const supabase = createClient()
-
 export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   const pathname = usePathname()
   const [collapsed, setCollapsedState] = useState(() => {
@@ -50,38 +48,21 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   }
   const { count: unreadChat } = useUnreadChatCount()
   const { count: unreadAssignments } = useUnreadAssignments()
-  const { data: currentUser, isLoading: isLoadingCurrentUser } = useCurrentUser()
-  const [unitSlugs, setUnitSlugs] = useState<string[]>([])
-
-  useEffect(() => {
-    const loadMemberships = async () => {
-      if (!currentUser?.id) {
-        if (!isLoadingCurrentUser) setUnitSlugs([])
-        return
-      }
-
-      try {
-        const { data: memberships, error } = await (supabase as any)
-          .from('unit_memberships')
-          .select('units!inner(slug)')
-          .eq('user_id', currentUser.id)
-          .eq('status', 'active')
-        if (error) throw error
-        setUnitSlugs((memberships || []).map((row: any) => row.units?.slug).filter(Boolean))
-      } catch (err) {
-        console.warn('Sidebar membership load failed:', err)
-        setUnitSlugs([])
-      }
-    }
-    void loadMemberships()
-  }, [currentUser?.id, isLoadingCurrentUser])
+  // Shared with BottomNav and every unit page: one cached memberships query.
+  const { data: currentUser } = useCurrentUser()
+  const { memberships, isLoading: membershipsLoading, loadFailed: membershipsFailed } = useMyUnitMemberships()
+  const unitSlugs = useMemo(() => memberUnitSlugs(memberships), [memberships])
+  // Approvals follows head MEMBERSHIP (approvals/page.tsx). Until the rows are
+  // read (or if the read failed) pass none, so headship falls back to the
+  // head role exactly as that page does, instead of hiding the link.
+  const navMemberships = membershipsLoading || membershipsFailed ? undefined : memberships
 
   const visibleSections = useMemo(() => {
-    const allowed = new Set(getVisibleNav(currentUser?.role ?? null, currentUser?.oscar ?? null, unitSlugs, currentUser?.has_admin_access).map(i => i.href))
+    const allowed = new Set(getVisibleNav(currentUser?.role ?? null, null, unitSlugs, currentUser?.has_admin_access ?? undefined, navMemberships).map(i => i.href))
     return NAV_SECTIONS
       .map(section => ({ ...section, items: section.items.filter(i => allowed.has(i.href)) }))
       .filter(section => section.items.length > 0)
-  }, [currentUser?.role, currentUser?.oscar, currentUser?.has_admin_access, unitSlugs])
+  }, [currentUser?.role, currentUser?.has_admin_access, unitSlugs, navMemberships])
   const filteredSections = filterNavigation(visibleSections, collapsed && !isMobile ? '' : search)
   const resultCount = filteredSections.reduce((count, section) => count + section.items.length, 0)
 

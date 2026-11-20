@@ -26,7 +26,9 @@ import {
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
-import { cn, isPlatformAdministrator } from "@/lib/utils"
+import { cn } from "@/lib/utils"
+import { useUnitAccess } from "@/hooks/useUnitAccess"
+import { canManageTraining } from "@/lib/site-unit-permissions"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -115,7 +117,6 @@ type Evaluation = {
   responses: Record<string, unknown> | null
 }
 
-const MANAGEMENT_LEVELS = new Set(["head", "manager", "admin"])
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/
 
 function extractYouTubeId(value: string) {
@@ -356,23 +357,9 @@ export default function TrainingOperations() {
     },
   })
 
-  const { data: myMembership } = useQuery({
-    queryKey: ["unit-membership", "training", currentUser?.id, trainingUnit?.id],
-    enabled: Boolean(currentUser?.id && trainingUnit?.id),
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("unit_memberships")
-        .select("unit_id, user_id, access_level, status")
-        .eq("unit_id", trainingUnit!.id)
-        .eq("user_id", currentUser!.id)
-        .eq("status", "active")
-        .maybeSingle()
-      if (error) throw error
-      return data as UnitMembership | null
-    },
-  })
-
-  const canManage = Boolean(isPlatformAdministrator(currentUser?.role, currentUser?.has_admin_access) || (myMembership && MANAGEMENT_LEVELS.has(myMembership.access_level)))
+  // Training writes are can_manage_unit('training'): the Training head and
+  // platform admins. Membership is the only source of unit access.
+  const canManage = canManageTraining(useUnitAccess("training"))
 
   const coursesQuery = useQuery({
     queryKey: ["training-courses"],
@@ -741,6 +728,7 @@ export default function TrainingOperations() {
       setMemberOpen(false)
       setMemberForm({ user_id: "", access_level: "member" })
       queryClient.invalidateQueries({ queryKey: ["unit-members"] })
+      queryClient.invalidateQueries({ queryKey: ["unit-access"] })
     },
     onError: (error: any) => notifyError(error, "Member could not be added"),
   })
@@ -754,7 +742,10 @@ export default function TrainingOperations() {
         .eq("user_id", userId)
       if (error) throw error
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["unit-members"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["unit-members"] })
+      queryClient.invalidateQueries({ queryKey: ["unit-access"] })
+    },
     onError: (error: any) => notifyError(error, "Access level could not be updated"),
   })
 
@@ -770,6 +761,7 @@ export default function TrainingOperations() {
     onSuccess: () => {
       toast.success("Training access removed")
       queryClient.invalidateQueries({ queryKey: ["unit-members"] })
+      queryClient.invalidateQueries({ queryKey: ["unit-access"] })
     },
     onError: (error: any) => notifyError(error, "Member could not be removed"),
   })

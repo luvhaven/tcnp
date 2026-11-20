@@ -102,7 +102,7 @@ test('ordinary roles, suspended leaders and forged metadata cannot reach the ser
 })
 
 test('leadership navigation exposes every Admin destination, including Command and Approvals', () => {
-  const { getVisibleNav } = load('components/layout/nav-config.ts', { '@/lib/utils': utils, '@/lib/program-additions': load('lib/program-additions.ts') })
+  const { getVisibleNav } = load('components/layout/nav-config.ts', { '@/lib/utils': utils, '@/lib/program-additions': load('lib/program-additions.ts'), '@/lib/unit-access': load('lib/unit-access.ts') })
   const expected = Array.from(getVisibleNav('admin'), entry => entry.href).sort()
   for (const role of ['captain', 'vice_captain']) {
     assert.deepEqual(Array.from(getVisibleNav(role), entry => entry.href).sort(), expected, role)

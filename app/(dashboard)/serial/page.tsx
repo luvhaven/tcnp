@@ -1,13 +1,18 @@
 "use client"
 
-import { useMemo, useRef, useState } from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { Suspense, useMemo, useRef, useState } from "react"
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
 import { notifyError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
-import { canAccessSierra, canManageSierra, cn } from "@/lib/utils"
+import { useUnitAccess } from "@/hooks/useUnitAccess"
+import {
+  SERIAL_SIGNED_URL_BATCH, SERIAL_SIGNED_URL_REFRESH_MS, SERIAL_SIGNED_URL_SECONDS, chunk, serialPermissions,
+  serialStoragePaths, signedUrlMap,
+} from "@/lib/site-unit-permissions"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatCard, StatGrid } from "@/components/ui/stat-card"
@@ -23,8 +28,12 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import {
-  Camera, Upload, Instagram, Trash2, Film, ImageIcon, Lock, Loader2, Link2,
+  Camera, Upload, Instagram, Trash2, Film, ImageIcon, Lock, Loader2, Link2, ClipboardList, UsersRound,
 } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import UnitTasks from "@/components/units/UnitTasks"
+import UnitProgrammeTeam from "@/components/units/UnitProgrammeTeam"
+import { canSeeUnitWork, useAddressTab } from "@/components/units/unit-work-tabs"
 import { UPLOAD_RULES, validateUploadFiles } from "@/lib/security/upload-validation"
 import { ErrorState } from "@/components/ui/error-state"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -70,8 +79,19 @@ function statusMeta(status: string) {
   return STATUSES.find(s => s.value === status) ?? STATUSES[0]
 }
 
-function publicUrl(path: string) {
-  return supabase.storage.from("serial-media").getPublicUrl(path).data.publicUrl
+/**
+ * 'serial-media' is a private bucket (raw, unapproved capture), so files are
+ * shown through short-lived signed URLs, signed in batches and refreshed
+ * before they expire. The storage SELECT policy admits the same people as
+ * media_assets: Serial members, Command and admins.
+ */
+async function signSerialPaths(paths: string[]): Promise<Record<string, string>> {
+  const batches = await Promise.all(chunk(paths, SERIAL_SIGNED_URL_BATCH).map(async (batch) => {
+    const { data, error } = await supabase.storage.from("serial-media").createSignedUrls(batch, SERIAL_SIGNED_URL_SECONDS)
+    if (error) throw error
+    return signedUrlMap(data as any)
+  }))
+  return Object.assign({}, ...batches)
 }
 
 /** Only published Instagram links: https on instagram.com (any subdomain) or instagr.am. */
@@ -87,6 +107,19 @@ function isInstagramUrl(value: string) {
 }
 
 export default function SerialPage() {
+  // useSearchParams (?tab=) needs a Suspense boundary so the page can still prerender.
+  return (
+    <Suspense fallback={<SerialLoading />}>
+      <SerialContent />
+    </Suspense>
+  )
+}
+
+function SerialLoading() {
+  return <div className="flex items-center justify-center py-24" role="status" aria-busy="true" aria-label="Loading Serial"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden="true" /></div>
+}
+
+function SerialContent() {
   const { data: currentUser, isLoading: userLoading } = useCurrentUser()
   const queryClient = useQueryClient()
   const confirm = useConfirm()
@@ -108,8 +141,14 @@ export default function SerialPage() {
     files: [] as File[],
   })
 
-  const allowed = canAccessSierra(currentUser?.role, currentUser?.oscar, currentUser?.has_admin_access)
-  const canManage = canManageSierra(currentUser?.role, currentUser?.oscar, currentUser?.has_admin_access)
+  // One rule: Serial access comes from membership only (plus Command and
+  // admins). Each flag mirrors the media_assets / serial-media policies.
+  const serial = useUnitAccess("serial")
+  const permissions = serialPermissions(serial, currentUser?.id)
+  const allowed = permissions.canView
+  // Tasks and Programme team: Serial members and Command (the components decide who edits).
+  const canSeeWork = canSeeUnitWork(serial)
+  const [pageTab, selectPageTab] = useAddressTab(canSeeWork ? ["media", "tasks", "team"] : ["media"])
 
   const { data: programs = [] } = useQuery({
     queryKey: ["programs-lite"],
@@ -134,6 +173,20 @@ export default function SerialPage() {
     },
     enabled: allowed,
   })
+
+  const storagePaths = useMemo(() => serialStoragePaths(assets), [assets])
+  const signedUrls = useQuery({
+    // Outside the ["serial-media"] prefix, so editing an asset does not re-sign
+    // (and reload) every file; only a new path set or the refresh does.
+    queryKey: ["serial-media-urls", storagePaths],
+    queryFn: () => signSerialPaths(storagePaths),
+    enabled: allowed && storagePaths.length > 0,
+    staleTime: SERIAL_SIGNED_URL_REFRESH_MS,
+    refetchInterval: SERIAL_SIGNED_URL_REFRESH_MS,
+    // Keep showing the last URLs while new ones are signed.
+    placeholderData: keepPreviousData,
+  })
+  const mediaUrl = (path: string) => signedUrls.data?.[path] ?? null
 
   const filtered = useMemo(() => assets.filter(a => {
     if (filterProgram !== "all" && a.program_id !== filterProgram) return false
@@ -258,8 +311,18 @@ export default function SerialPage() {
     if (ok) deleteMutation.mutate(asset)
   }
 
-  if (userLoading) {
-    return <div className="flex items-center justify-center py-24"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+  if (userLoading || serial.isLoading) {
+    return <div className="flex items-center justify-center py-24" aria-busy="true" aria-label="Loading Serial"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+  }
+
+  if (!allowed && serial.loadFailed) {
+    return (
+      <ErrorState
+        title="Could not check your unit access"
+        description="Serial opens once your membership loads."
+        onRetry={() => { void queryClient.invalidateQueries({ queryKey: ["unit-access"] }) }}
+      />
+    )
   }
 
   if (!allowed) {
@@ -282,13 +345,23 @@ export default function SerialPage() {
         title="Serial"
         badge="Social Media Unit"
         description="Capture, curate and publish Papa arrivals, pickups and theatre moments — from lens to Instagram."
-        actions={
-          <Button onClick={() => setUploadOpen(true)}>
+        actions={permissions.canUpload && (
+          <Button className="min-h-11 sm:min-h-9" onClick={() => setUploadOpen(true)}>
             <Upload aria-hidden="true" /> Upload Media
           </Button>
-        }
+        )}
       />
 
+      <Tabs value={pageTab} onValueChange={selectPageTab} className="space-y-6">
+        {canSeeWork && (
+          <TabsList className="grid h-auto w-full max-w-xl grid-cols-3 gap-1 p-1">
+            <TabsTrigger value="media" className="min-h-11 min-w-0 gap-1.5 whitespace-normal text-xs sm:text-sm"><Camera className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />Media</TabsTrigger>
+            <TabsTrigger value="tasks" className="min-h-11 min-w-0 gap-1.5 whitespace-normal text-xs sm:text-sm"><ClipboardList className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />Tasks</TabsTrigger>
+            <TabsTrigger value="team" className="min-h-11 min-w-0 gap-1.5 whitespace-normal text-xs sm:text-sm"><UsersRound className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />Programme team</TabsTrigger>
+          </TabsList>
+        )}
+
+        <TabsContent value="media" className="space-y-6">
       <StatGrid columns={3}>
         <StatCard label="Assets" value={stats.total} />
         <StatCard label="In Pipeline" value={stats.inFlight} tone="info" />
@@ -347,6 +420,8 @@ export default function SerialPage() {
           <AnimatePresence>
             {filtered.map((asset, i) => {
               const meta = statusMeta(asset.status)
+              const src = mediaUrl(asset.storage_path)
+              const canEdit = permissions.canEditAsset(asset)
               return (
                 <motion.div
                   key={asset.id}
@@ -358,11 +433,27 @@ export default function SerialPage() {
                 >
                   <Card className="card-hover group overflow-hidden">
                     <div className="relative aspect-video bg-muted">
-                      {asset.media_type === "video" ? (
-                        <video src={publicUrl(asset.storage_path)} className="h-full w-full object-cover" controls preload="metadata" />
+                      {!src ? (
+                        signedUrls.isError ? (
+                          <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center text-xs text-muted-foreground" role="status">
+                            <ImageIcon className="h-6 w-6" aria-hidden="true" />
+                            Preview could not load.
+                            <Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-8" onClick={() => { void signedUrls.refetch() }}>
+                              Try again
+                            </Button>
+                          </div>
+                        ) : signedUrls.isFetching ? (
+                          <div className="skeleton h-full w-full" aria-hidden="true" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground" role="status">
+                            <ImageIcon className="mr-1.5 h-4 w-4" aria-hidden="true" /> File not found
+                          </div>
+                        )
+                      ) : asset.media_type === "video" ? (
+                        <video src={src} className="h-full w-full object-cover" controls preload="metadata" aria-label={asset.title ?? "Serial video"} />
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={publicUrl(asset.storage_path)} alt={asset.title ?? "Serial media"} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" loading="lazy" />
+                        <img src={src} alt={asset.title ?? "Serial media"} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" loading="lazy" />
                       )}
                       <div className="absolute left-2 top-2 flex gap-1">
                         <Badge className={cn("border-0 text-xs uppercase tracking-wide", meta.color)}>{meta.label}</Badge>
@@ -390,23 +481,29 @@ export default function SerialPage() {
                         )}
                       </div>
                       {asset.caption && <p className="line-clamp-2 text-xs text-muted-foreground">{asset.caption}</p>}
-                      {canManage && (
+                      {(canEdit || permissions.canDelete) && (
                         <div className="flex items-center gap-1 pt-1">
-                          <Select value={asset.status} onValueChange={(v) => statusMutation.mutate({ id: asset.id, status: v })}>
-                            <SelectTrigger className="h-8 w-[110px] text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              {STATUSES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                          <Button aria-label="Set Instagram link" variant="ghost" size="icon" className="h-8 w-8" title="Set Instagram link"
-                            onClick={() => openInstagramEditor(asset)}>
-                            <Link2 className="h-4 w-4" />
-                          </Button>
-                          <Button aria-label="Delete asset" variant="ghost" size="icon" className="ml-auto h-8 w-8 text-red-500 hover:text-red-600" title="Delete"
-                            disabled={deleteMutation.isPending}
-                            onClick={() => { void confirmDelete(asset) }}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {canEdit && (
+                            <>
+                              <Select value={asset.status} onValueChange={(v) => statusMutation.mutate({ id: asset.id, status: v })}>
+                                <SelectTrigger className="h-11 w-[120px] text-xs sm:h-8" aria-label={`Status of ${asset.title || "this asset"}`}><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {STATUSES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                              <Button aria-label={`Set Instagram link for ${asset.title || "this asset"}`} variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" title="Set Instagram link"
+                                onClick={() => openInstagramEditor(asset)}>
+                                <Link2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                          {permissions.canDelete && (
+                            <Button aria-label={`Delete ${asset.title || "asset"}`} variant="ghost" size="icon" className="ml-auto h-11 w-11 text-red-500 hover:text-red-600 sm:h-8 sm:w-8" title="Delete"
+                              disabled={deleteMutation.isPending}
+                              onClick={() => { void confirmDelete(asset) }}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       )}
                     </CardContent>
@@ -417,6 +514,19 @@ export default function SerialPage() {
           </AnimatePresence>
         </div>
       )}
+        </TabsContent>
+
+        {canSeeWork && (
+          <>
+            <TabsContent value="tasks" className="space-y-6">
+              <UnitTasks unitSlug="serial" />
+            </TabsContent>
+            <TabsContent value="team" className="space-y-6">
+              <UnitProgrammeTeam unitSlug="serial" />
+            </TabsContent>
+          </>
+        )}
+      </Tabs>
 
       {/* Upload dialog */}
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>

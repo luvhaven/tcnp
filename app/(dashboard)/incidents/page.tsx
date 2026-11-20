@@ -26,7 +26,7 @@ import {
   User,
   Download
 } from 'lucide-react'
-import { isAdmin, effectiveOscarRole, cn } from '@/lib/utils'
+import { isAdmin, cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { notifyError, UserFacingError } from '@/lib/notify'
 import { format } from 'date-fns'
@@ -232,7 +232,8 @@ function IncidentsContent() {
       if (seq !== loadSeq.current) return // a newer load is in flight
 
       setCurrentUser(userData)
-      setCanManage(Boolean(userData && (isAdmin(userData.role, userData.has_admin_access) || isAdmin(effectiveOscarRole(userData.role, userData.oscar)))))
+      // Leadership comes from the role (or the admin grant) only; the Oscar is a label.
+      setCanManage(Boolean(userData && isAdmin(userData.role, userData.has_admin_access)))
       setIncidents((incidentsData || []) as unknown as Incident[])
       setJourneys(journeysData || [])
       setLoadError(false)

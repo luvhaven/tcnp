@@ -3,11 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { checkRateLimit } from '@/lib/security/rate-limit'
 import { isMissionAudience } from '@/lib/mission-audiences'
-
-const ALLOWED_ROLES = [
-    'super_admin', 'dev_admin', 'admin', 'captain', 'vice_captain',
-    'command', 'head_of_command', 'head_of_operations',
-]
+import { isCommandAuthority } from '@/lib/unit-access'
 
 /**
  * Creates a mission availability request for a program and broadcasts a
@@ -32,7 +28,8 @@ export async function POST(req: NextRequest) {
         if (!profile || profile.activation_status !== 'active' || profile.is_active === false) {
             return NextResponse.json({ error: 'Account is inactive or unavailable' }, { status: 403 })
         }
-        if (profile.has_admin_access !== true && !ALLOWED_ROLES.includes(profile.role)) {
+        // Command and administrators only (mirrors SQL is_admin()); no unit role grants this.
+        if (!isCommandAuthority(profile.role, profile.has_admin_access)) {
             return NextResponse.json({ error: 'Forbidden: Command or Admin access required' }, { status: 403 })
         }
 

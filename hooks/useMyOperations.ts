@@ -5,7 +5,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { notificationService } from '@/lib/services/notificationService'
-import { isAdmin, effectiveOscarRole, oscarToRole } from '@/lib/utils'
+import { isAdmin } from '@/lib/utils'
+import { fetchActiveUnitMemberships, memberUnitSlugs } from '@/lib/unit-access'
 import { useOnlineStatus } from '@/hooks/useBrowserSnapshot'
 import type { DOCompletionReason, DOReturnDestination } from '@/lib/duty-workflow'
 
@@ -94,45 +95,40 @@ export function isOwnAssignment(journey: Pick<OpsJourney, 'duty_officers' | 'ass
     : journey.assigned_duty_officer_id === userId
 }
 
-function journeyMatchesRole(journey: OpsJourney, role: string, userId: string, oscar?: string | null): boolean {
-  if (isAdmin(role) || isAdmin(effectiveOscarRole(role, oscar))) return true
+type ScopedJourney = Pick<OpsJourney,
+  'duty_officers' | 'assigned_duty_officer_id' | 'program_id' | 'origin' | 'destination'
+  | 'assigned_eagle_square_id' | 'assigned_theatre_id' | 'assigned_nest_id'>
 
-  // Resolve the effective permanent Oscar even when the user is assigned as DO
-  const effectiveRole = (role !== 'delta_oscar' ? role : null) ?? oscarToRole(oscar) ?? role
+const mentions = (journey: ScopedJourney, word: string) =>
+  Boolean(journey.origin?.toLowerCase().includes(word) || journey.destination?.toLowerCase().includes(word))
 
-  // Anyone assigned as DO to this specific journey always sees it
+/** Units whose members see only their own stage of each journey. */
+const STAGE_SCOPES: Record<string, (journey: ScopedJourney) => boolean> = {
+  alpha: j => Boolean(j.assigned_eagle_square_id) || mentions(j, 'eagle'),
+  tango: () => true, // Transport oversees every active journey
+  victor: j => Boolean(j.assigned_theatre_id) || mentions(j, 'theatre'),
+  november_den: j => Boolean(j.assigned_nest_id || j.assigned_theatre_id) || mentions(j, 'nest') || mentions(j, 'theatre'),
+  november_nest: j => Boolean(j.assigned_nest_id || j.assigned_theatre_id) || mentions(j, 'nest') || mentions(j, 'theatre'),
+}
+
+/**
+ * Whether a non-leadership officer's My Operations feed shows this journey.
+ * The unit scope comes from the officer's active unit memberships (one rule:
+ * membership, never role or Oscar text). A Delta Oscar keeps their unit
+ * membership, so their own unit scope still applies, and every officer always
+ * sees journeys they are assigned to as DO.
+ *
+ * - A member of Alpha, Tango, Victor or November sees the journeys in any of
+ *   their units' stages (the union when they belong to several).
+ * - An officer in none of those units sees every journey of the programmes
+ *   already loaded for them (the Program Feed).
+ * Leadership (admin / Command) is handled by the caller and sees everything.
+ */
+export function journeyInUnitScope(journey: ScopedJourney, unitSlugs: readonly string[], userId: string): boolean {
   if (isOwnAssignment(journey, userId)) return true
-
-  // Base Oscar access — governs which journey types are in scope
-  if (effectiveRole === 'alpha_oscar' || effectiveRole === 'head_alpha_oscar') {
-    return !!(journey.assigned_eagle_square_id ||
-      journey.origin?.toLowerCase().includes('eagle') ||
-      journey.destination?.toLowerCase().includes('eagle'))
-  }
-  if (effectiveRole === 'tango_oscar' || effectiveRole === 'head_tango_oscar') {
-    return true // Transport overseer sees all active journeys
-  }
-  if (effectiveRole === 'victor_oscar' || effectiveRole === 'head_victor_oscar') {
-    return !!(journey.assigned_theatre_id ||
-      journey.destination?.toLowerCase().includes('theatre') ||
-      journey.origin?.toLowerCase().includes('theatre'))
-  }
-  if (['november_oscar', 'head_noscar_den', 'head_noscar_nest', 'noscar_den', 'noscar_nest'].includes(effectiveRole)) {
-    return !!(
-      journey.assigned_nest_id ||
-      journey.assigned_theatre_id ||
-      journey.destination?.toLowerCase().includes('nest') ||
-      journey.origin?.toLowerCase().includes('nest') ||
-      journey.destination?.toLowerCase().includes('theatre') ||
-      journey.origin?.toLowerCase().includes('theatre')
-    )
-  }
-
-  // Anyone assigned to a program can see journeys for that program in the Program Feed
-  if (journey.program_id) return true
-
-  // Default: only journeys directly assigned
-  return false
+  const scopes = unitSlugs.map(slug => STAGE_SCOPES[slug]).filter(Boolean)
+  if (scopes.length > 0) return scopes.some(inScope => inScope(journey))
+  return Boolean(journey.program_id)
 }
 
 function toActiveProgram(p: any, extra: Pick<ActiveProgram, 'assigned_title' | 'assigned_unit' | 'assigned_at'>): ActiveProgram {
@@ -170,13 +166,13 @@ export function useMyOperations() {
   const [userId, setUserId] = useState<string | null>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
   const [adminGranted, setAdminGranted] = useState(false)
-  const [userOscar, setUserOscar] = useState<string | null>(null)
   const [channelStatus, setChannelStatus] = useState<'live' | 'reconnecting'>('reconnecting')
   const online = useOnlineStatus()
 
   const loadSeq = useRef(0)
   const knownOwnIds = useRef<Set<string> | null>(null)
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastUnitSlugs = useRef<string[] | null>(null)
 
   // A failed background reload must not leave the pill saying "Live".
   const [loadFailed, setLoadFailed] = useState(false)
@@ -188,15 +184,27 @@ export function useMyOperations() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user || !isCurrent()) return
 
-      const { data: userData } = await supabase
-        .from('users')
-        .select('id, role, has_admin_access, oscar')
-        .eq('id', user.id)
-        .single()
+      const [{ data: userData }, membershipRes] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, role, has_admin_access')
+          .eq('id', user.id)
+          .single(),
+        // The officer's own session client: RLS lets them read their own rows.
+        fetchActiveUnitMemberships(supabase as any, user.id),
+      ])
 
       const role = (userData as any)?.role ?? null
-      const oscar = (userData as any)?.oscar ?? null
-      const isAdminUser = isAdmin(role, userData?.has_admin_access) || isAdmin(effectiveOscarRole(role, oscar))
+      // Leadership comes from the role or the admin grant only; the Oscar is a label.
+      const isAdminUser = isAdmin(role, userData?.has_admin_access)
+      if (membershipRes.error) {
+        // Keep the last good unit scope on a flaky connection; with none yet the
+        // officer gets the programme feed (RLS already limits what they read).
+        console.error('unit_memberships read failed:', membershipRes.error)
+      } else {
+        lastUnitSlugs.current = memberUnitSlugs(membershipRes.memberships)
+      }
+      const unitSlugs = lastUnitSlugs.current ?? []
 
       // ── Program assignments (direct title assignments + view fallback) ─────
       // Both reads are independent, so run them together.
@@ -353,7 +361,7 @@ export function useMyOperations() {
       }
       const enrich = (j: any): OpsJourney => ({ ...j, duty_officers: doMap[j.id] || [], driver: driverMap[j.id] ?? null })
 
-      const active = rawActive.map(enrich).filter(j => isAdminUser || journeyMatchesRole(j, role, user.id, oscar))
+      const active = rawActive.map(enrich).filter(j => isAdminUser || journeyInUnitScope(j, unitSlugs, user.id))
       const completed = rawCompleted.map(enrich).filter(j => isOwnAssignment(j, user.id))
 
       if (!isCurrent()) return // a newer load started while this one was in flight
@@ -380,7 +388,6 @@ export function useMyOperations() {
 
       setUserId(user.id)
       setUserRole(role)
-      setUserOscar(oscar)
       setAdminGranted(userData?.has_admin_access === true)
       setActivePrograms(programs)
       setJourneys(active)
@@ -473,7 +480,7 @@ export function useMyOperations() {
     setSubmittedReportIds(prev => new Set(prev).add(journeyId))
   }, [])
 
-  const isAdminUser = Boolean(userRole && (isAdmin(userRole, adminGranted) || isAdmin(effectiveOscarRole(userRole, userOscar))))
+  const isAdminUser = Boolean(userRole && isAdmin(userRole, adminGranted))
   const liveState: LiveState = !online ? 'offline' : loadFailed ? 'stale' : channelStatus
 
   return {

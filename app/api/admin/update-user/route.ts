@@ -1,9 +1,22 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
-import { isExecutiveRole, isPlatformAdministrator, OFFICER_TEAMS, platformAuthorityRank } from '@/lib/utils'
+import { isExecutiveRole, isPlatformAdministrator, OFFICER_TEAMS, oscarToRole, platformAuthorityRank } from '@/lib/utils'
+import { plainUnitOscar, unitOscarLabelForRole } from '@/lib/unit-access'
 import { OFFICER_ROLE_OPTIONS, adminNeedsOscar, ADMIN_NEEDS_OSCAR_MESSAGE } from '@/lib/officer-directory'
 import { isPermanentOwnerEmail } from '@/lib/platform-owner'
+
+/** Roles that carry no unit of their own: the officer's unit Oscar is kept, without any head marker. */
+const OSCAR_KEEPING_ROLES = new Set(['viewer', 'delta_oscar'])
+
+/** A trimmed Oscar label, null to clear it, or undefined when invalid. */
+function normalizeRequestedOscar(value: unknown): string | null | undefined {
+    if (value === null) return null
+    if (typeof value !== 'string') return undefined
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    return trimmed.length <= 80 ? trimmed : undefined
+}
 
 export async function POST(request: Request) {
     try {
@@ -42,7 +55,7 @@ export async function POST(request: Request) {
 
         const { data: targetUser } = await db
             .from('users')
-            .select('role, email, is_directory_hidden, has_admin_access')
+            .select('role, oscar, email, is_directory_hidden, has_admin_access')
             .eq('id', id)
             .single()
 
@@ -97,6 +110,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Invalid team' }, { status: 400 })
         }
 
+        // An explicit Oscar wins; otherwise the officer's Oscar is left as it is.
+        const oscarGiven = Object.prototype.hasOwnProperty.call(body, 'oscar')
+        const requestedOscar = oscarGiven ? normalizeRequestedOscar(body.oscar) : null
+        if (oscarGiven && requestedOscar === undefined) {
+            return NextResponse.json({ error: 'Choose a valid Oscar' }, { status: 400 })
+        }
+
         // Only write fields the caller actually sent: a role-only change must not
         // wipe the officer's phone or rewrite their login metadata.
         const has = (key: string) => Object.prototype.hasOwnProperty.call(body, key)
@@ -140,8 +160,21 @@ export async function POST(request: Request) {
         if (has('phone')) userUpdates.phone = phone || null
         if (desiredRole !== targetRole) {
             userUpdates.role = desiredRole
-            userUpdates.oscar = isExecutiveRole(desiredRole) ? 'Executive' : desiredRole === 'viewer' ? null : desiredRole
+            // The Oscar names the officer's unit (the legacy sync trigger turns
+            // it into a MEMBER row; headship comes only from a head role). A
+            // viewer or Delta Oscar keeps their unit, but never a head marker,
+            // so a demoted head keeps the unit and loses head power. Unit roles
+            // get their plain unit label, Executive its label; other roles
+            // keep the old behaviour.
+            if (OSCAR_KEEPING_ROLES.has(desiredRole)) {
+                const keptOscar = plainUnitOscar((targetUser as { oscar?: string | null }).oscar, oscarToRole)
+                if (keptOscar !== ((targetUser as { oscar?: string | null }).oscar ?? null)) userUpdates.oscar = keptOscar
+            } else {
+                userUpdates.oscar = isExecutiveRole(desiredRole) ? 'Executive' : (unitOscarLabelForRole(desiredRole) ?? desiredRole)
+            }
         }
+        // An explicit Oscar is a unit label too: any head marker is dropped.
+        if (oscarGiven) userUpdates.oscar = plainUnitOscar(requestedOscar, oscarToRole)
         if ((has_admin_access !== undefined || desiredRole !== targetRole) && desiredAdminAccess !== targetUser.has_admin_access) {
             userUpdates.has_admin_access = desiredAdminAccess
         }

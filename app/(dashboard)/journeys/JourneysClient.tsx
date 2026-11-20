@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { cn, canManageJourney, isAdmin, effectiveOscarRole } from "@/lib/utils"
+import { cn, canManageJourney, isAdmin } from "@/lib/utils"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import {
   MapPin,
@@ -45,10 +45,22 @@ import { notifyError } from '@/lib/notify'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorState } from '@/components/ui/error-state'
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/lib/constants/tncpCallSigns"
+import { CALL_SIGN_KEY_TO_DB_ENUM, type CallSignKey } from "@/lib/constants/call-signs"
 import { DateTimePicker } from "@/components/ui/date-time-picker"
 import { usePagination } from "@/hooks/usePagination"
 import OperationalReadiness from "@/components/journeys/OperationalReadiness"
 import { DutyJourneyActions } from '@/components/operations/DutyJourneyActions'
+
+/**
+ * The role journey permissions are checked against: 'admin' for an admin
+ * grant, otherwise the officer's own role. The Oscar never counts (it is a
+ * display label), so a Delta Oscar whose Oscar reads "Command" is not
+ * leadership here, matching SQL is_admin() and update_journey_call_sign.
+ */
+function journeyAuthorityRole(role: string | null | undefined, hasAdminAccess: boolean | null | undefined): string | null {
+  if (hasAdminAccess === true) return 'admin'
+  return role ?? null
+}
 
 const FALLBACK_STATUS_LABELS: Record<string, string> = {
   planned: "Planned",
@@ -195,12 +207,13 @@ export default function JourneysClient({
   const [currentRole, setCurrentRole] = useState<string | null>(null)
   const { data: currentUser } = useCurrentUser()
 
-  // Derive role/id from the shared cached hook — no async race condition
+  // Derive role/id from the shared cached hook — no async race condition.
+  // Leadership comes from the role or the admin grant only; the Oscar is a
+  // display label and never makes anyone leadership. A Delta Oscar keeps their
+  // own journey powers through the assigned-DO check below.
   const resolvedRole = useMemo(() => {
     if (!currentUser) return currentRole
-    if (currentUser.has_admin_access) return 'admin'
-    const eff = effectiveOscarRole(currentUser.role, currentUser.oscar)
-    return eff || currentUser.role
+    return journeyAuthorityRole(currentUser.role, currentUser.has_admin_access)
   }, [currentUser, currentRole])
 
   const resolvedUserId = currentUser?.id ?? currentUserId
@@ -368,13 +381,10 @@ export default function JourneysClient({
           // Also set currentRole as fallback in case useCurrentUser hasn't resolved yet
           const { data: userRow } = await supabase
             .from('users')
-            .select('role, has_admin_access, oscar')
+            .select('role, has_admin_access')
             .eq('id', user.id)
             .single<any>()
-          if (userRow?.role) {
-            const eff = effectiveOscarRole(userRow.role, userRow.oscar)
-            setCurrentRole(userRow.has_admin_access ? 'admin' : eff || userRow.role)
-          }
+          if (userRow?.role) setCurrentRole(journeyAuthorityRole(userRow.role, userRow.has_admin_access))
         }
       } catch (error) {
         console.error('Error loading current user for JourneysPage:', error)
@@ -754,23 +764,40 @@ export default function JourneysClient({
         return
       }
 
-      const { data, error } = await (supabase as any).rpc('update_journey_call_sign', {
-        journey_uuid: journey.id,
-        new_status: newStatus
-      })
+      // Direct update, governed by RLS journeys_update_role_scoped (the same
+      // write Ops Monitor and My Operations make). The update_journey_call_sign
+      // RPC is not used: it writes text into the call_sign enum column
+      // (error 42804) and never set journeys.status, which this page reads.
+      const { data: { user } } = await supabase.auth.getUser()
+      const now = new Date().toISOString()
+      const { data: updated, error } = await (supabase as any)
+        .from('journeys')
+        .update({ status: newStatus, current_status: newStatus, status_updated_at: now, updated_at: now })
+        .eq('id', journey.id)
+        .select('id')
 
       if (error) {
         throw error
       }
+      // RLS filters a refused update to zero rows rather than raising.
+      if (!updated || updated.length === 0) {
+        toast.error('You are not authorized to update this journey')
+        return
+      }
 
-      await (supabase as any).from('journey_events').insert([
-        {
+      // journey_events.event_type is the Title-case call_sign enum; statuses
+      // with no call sign (completed, cancelled) log no event.
+      const eventType = CALL_SIGN_KEY_TO_DB_ENUM[newStatus as CallSignKey]
+      if (eventType) {
+        const { error: eventError } = await (supabase as any).from('journey_events').insert({
           journey_id: journey.id,
-          event_type: newStatus,
+          event_type: eventType,
           description: `Journey status updated to ${newStatus}`,
-          triggered_at: new Date().toISOString(),
-        }
-      ])
+          triggered_by: user?.id ?? null,
+          triggered_at: now,
+        })
+        if (eventError) console.warn('Journey event not logged:', eventError)
+      }
 
       toast.success(`Call-sign ${newStatus.toUpperCase()} executed!`)
       // Close the dialog too: clearing the journey alone left an empty dialog open.

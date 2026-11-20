@@ -1,71 +1,93 @@
 import { useQuery } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
-import { isPlatformAdministrator, isUnitHeadRole } from '@/lib/utils'
+import { fetchActiveUnitMemberships, unitAccess, type UnitMembership, type UnitSlug } from '@/lib/unit-access'
 
-export type UnitSlug =
-  | 'alpha'
-  | 'command'
-  | 'compliance'
-  | 'november_nest'
-  | 'november_den'
-  | 'tango'
-  | 'training'
-  | 'victor'
-  | 'welfare'
+export type { UnitSlug, UnitMembership } from '@/lib/unit-access'
+
+const supabase = createClient()
+const NO_MEMBERSHIPS: UnitMembership[] = []
 
 /**
- * Mirrors the membership-backed SQL capability checks used by new unit pages.
- * The legacy-role fallback keeps the UI usable during the additive migration;
- * RLS remains the final authority for every write.
+ * One cached query for all of the signed-in officer's active memberships, so
+ * the sidebar, the bottom bar and every unit page share a single request.
+ * The key starts with 'unit-access' so the existing invalidations
+ * (DenTeam, useDashboardDeletions) refresh it too.
  */
-export function useUnitAccess(unit: UnitSlug) {
+export const myUnitMembershipsKey = (userId: string | null | undefined) =>
+  ['unit-access', 'my-memberships', userId ?? null] as const
+
+export function useMyUnitMemberships() {
   const { data: currentUser, isLoading: userLoading } = useCurrentUser()
-  const supabase = createClient()
 
-  const membershipQuery = useQuery({
-    queryKey: ['unit-access', unit, currentUser?.id],
-    queryFn: async () => {
-      if (!currentUser?.id) return { authorityAvailable: true, membership: null }
-      const { data, error } = await (supabase as any)
-        .from('unit_memberships')
-        .select('access_level, status, units!inner(slug)')
-        .eq('user_id', currentUser.id)
-        .eq('units.slug', unit)
-        .eq('status', 'active')
-        .maybeSingle()
-
-      // A missing table during a staged deploy should not crash an existing
-      // unit page; legacy head-role checks cover the short transition window.
-      if (error) return { authorityAvailable: false, membership: null }
-      return {
-        authorityAvailable: true,
-        membership: data as { access_level: 'member' | 'sub_lead' | 'head'; status: 'active' } | null,
-      }
+  const query = useQuery({
+    queryKey: myUnitMembershipsKey(currentUser?.id),
+    queryFn: async (): Promise<UnitMembership[]> => {
+      const { memberships, error } = await fetchActiveUnitMemberships(supabase as any, currentUser!.id)
+      if (error) throw error
+      return memberships
     },
     enabled: Boolean(currentUser?.id),
     staleTime: 5 * 60 * 1000,
-    retry: false,
+    // No retry override: the provider's retryTransientReads policy applies.
   })
-
-  const isPlatformAdmin = isPlatformAdministrator(currentUser?.role, currentUser?.has_admin_access)
-  const legacyHead = isUnitHeadRole(unit, currentUser?.role, currentUser?.oscar)
-  const authorityAvailable = membershipQuery.data?.authorityAvailable === true
-  const membership = membershipQuery.data?.membership ?? null
-  const isHead = authorityAvailable ? membership?.access_level === 'head' : legacyHead
-  const isMember = authorityAvailable ? Boolean(membership) : isHead
-  // Sub-Team Lead: coordinates day-to-day work under the head. Only units that
-  // opt in (public.can_coordinate_unit) give this level anything extra.
-  const isSubLead = authorityAvailable && membership?.access_level === 'sub_lead'
 
   return {
     currentUser,
-    isPlatformAdmin,
-    isHead,
-    isMember,
-    isSubLead,
-    canManage: isPlatformAdmin || isHead,
-    canCoordinate: isPlatformAdmin || isHead || isSubLead,
-    isLoading: userLoading || membershipQuery.isLoading,
+    // A failed background refetch keeps the last good rows (React Query keeps
+    // data on error), so a flaky connection does not strip the nav. Only a read
+    // that never succeeded grants no unit access (platform / Command still apply).
+    memberships: query.data ?? NO_MEMBERSHIPS,
+    loadFailed: query.isError && query.data === undefined,
+    isLoading: userLoading || query.isLoading,
+  }
+}
+
+/**
+ * Unit permissions for the signed-in officer, from membership only. There is
+ * no role or Oscar fallback: if the membership read fails, the officer gets
+ * nothing beyond platform admin / Command and `loadFailed` is true so the page
+ * can say so. RLS remains the final authority for every write.
+ */
+export function useUnitAccess(unit: UnitSlug) {
+  const { currentUser, memberships, loadFailed, isLoading } = useMyUnitMemberships()
+  const access = unitAccess(memberships, unit, {
+    role: currentUser?.role,
+    hasAdminAccess: currentUser?.has_admin_access,
+  })
+
+  return {
+    currentUser,
+    ...access,
+    loadFailed,
+    isLoading,
+  }
+}
+
+/**
+ * Programme work in a unit for one programme, asked of the database
+ * (can_work_unit_programme): member AND active on the programme AND
+ * (head/sub_lead OR a head-issued grant such as a Den floor grant).
+ */
+export function useCanWorkUnitProgramme(unit: UnitSlug, programId: string | null | undefined) {
+  const { data: currentUser, isLoading: userLoading } = useCurrentUser()
+  const query = useQuery({
+    queryKey: ['unit-access', 'programme-work', currentUser?.id ?? null, unit, programId ?? null] as const,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('can_work_unit_programme', {
+        unit_slug: unit,
+        target_program: programId,
+      })
+      if (error) throw error
+      return data === true
+    },
+    enabled: Boolean(currentUser?.id && programId),
+    staleTime: 60 * 1000,
+  })
+
+  return {
+    canWork: query.data === true,
+    loadFailed: query.isError && query.data === undefined,
+    isLoading: userLoading || query.isLoading,
   }
 }

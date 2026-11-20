@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 const PAGE = 200
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
-import { isAdmin, effectiveOscarRole } from "@/lib/utils"
+import { isAdmin } from "@/lib/utils"
 
 export default function AuditLogsPage() {
   const supabase = createClient()
@@ -45,11 +45,12 @@ export default function AuditLogsPage() {
 
       const { data: userData } = await supabase
         .from('users')
-        .select('role, has_admin_access, oscar')
+        .select('role, has_admin_access')
         .eq('id', user.id)
         .single()
 
-      if (!userData || !(isAdmin(userData.role, userData.has_admin_access) || isAdmin(effectiveOscarRole((userData as any).role, (userData as any).oscar)))) {
+      // Leadership comes from the role (or the admin grant) only; the Oscar is a label.
+      if (!userData || !isAdmin(userData.role, userData.has_admin_access)) {
         setAuthorized(false)
         toast.error('Access denied. Leadership privileges required to view audit logs.')
         return

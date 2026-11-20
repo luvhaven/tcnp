@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { Suspense, useState } from "react"
 import ComfortChecklist from "@/components/nests/ComfortChecklist"
 import { useNestETAReminder } from "@/hooks/useNestETAReminder"
 import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
@@ -18,17 +18,28 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Hotel, Plus, Edit, Trash2, Building, Users, UserPlus, UserCheck, ChevronDown } from "lucide-react"
+import { Hotel, Plus, Edit, Trash2, Building, Users, UserPlus, UserCheck, ChevronDown, ClipboardList, UsersRound } from "lucide-react"
 import { toast } from "sonner"
 import { notifyError } from '@/lib/notify'
-import { effectiveOscarRole, isPlatformAdministrator } from "@/lib/utils"
+import { isPlatformAdministrator } from "@/lib/utils"
+import {
+  briefingConfigKey, canDeleteAccommodations, canEditAccommodations, canLogComfortCheck, canManageHotels,
+  canManagePostings, programmeWorkNotice,
+} from "@/lib/site-unit-permissions"
+import { useProgrammeStanding } from "@/hooks/useProgrammeStanding"
+import { ErrorState } from "@/components/ui/error-state"
 import { motion, AnimatePresence } from "framer-motion"
 import PapaAccommodations from "@/components/nests/PapaAccommodations"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
-import { useUnitAccess } from "@/hooks/useUnitAccess"
+import { useCanWorkUnitProgramme, useUnitAccess } from "@/hooks/useUnitAccess"
 import { OfficerProfileDialog, type OfficerProfileData } from "@/components/officers/OfficerProfileDialog"
 import RoomOperations from "@/components/nests/RoomOperations"
 import GuestExperiences from "@/components/nests/GuestExperiences"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Skeleton } from "@/components/ui/skeleton"
+import UnitTasks from "@/components/units/UnitTasks"
+import UnitProgrammeTeam from "@/components/units/UnitProgrammeTeam"
+import { canSeeUnitWork, useAddressTab } from "@/components/units/unit-work-tabs"
 
 type Program = {
   id: string
@@ -56,6 +67,25 @@ type NoscarAssignment = {
 }
 
 export default function NestsClient({ initialNests }: { initialNests: any[] }) {
+  // useSearchParams (?tab=) needs a Suspense boundary so the page can still prerender.
+  return (
+    <Suspense fallback={<NestsSkeleton />}>
+      <NestsContent initialNests={initialNests} />
+    </Suspense>
+  )
+}
+
+function NestsSkeleton() {
+  return (
+    <div className="space-y-6" role="status" aria-label="Loading November (Nest)">
+      <Skeleton className="h-8 w-56 max-w-full" />
+      <Skeleton className="h-11 w-full max-w-md" />
+      <Skeleton className="h-40 w-full" />
+    </div>
+  )
+}
+
+function NestsContent({ initialNests }: { initialNests: any[] }) {
   const supabase = createClient()
   const confirm = useConfirm()
   const queryClient = useQueryClient()
@@ -84,6 +114,9 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
   })
 
   const nestAccess = useUnitAccess('november_nest')
+  // Tasks and Programme team: Nest members and Command (the components decide who edits).
+  const canSeeWork = canSeeUnitWork(nestAccess)
+  const [pageTab, selectPageTab] = useAddressTab(canSeeWork ? ['nests', 'tasks', 'team'] as const : ['nests'] as const)
 
   // Fetch this NO's assigned nest so the ETA reminder knows which nest to watch
   const { data: myNestId } = useQuery({
@@ -156,9 +189,34 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
   })
 
   const { data: currentUser } = useCurrentUser()
-  const resolvedRole = effectiveOscarRole(currentUser?.role, currentUser?.oscar)
-  const canManage = nestAccess.canManage
-  const canEditAccommodations = canManage
+  // One rule: unit access comes from membership only, and each flag mirrors
+  // the RLS policy that judges the write. Admin and Command keep everything
+  // those policies give them.
+  const programmeId = selectedProgram === 'all' ? null : selectedProgram
+  const nestWork = useCanWorkUnitProgramme('november_nest', nestAccess.isMember ? programmeId : null)
+  const work = { nest: nestWork.canWork }
+  const { activeOnProgramme } = useProgrammeStanding(programmeId, nestAccess.isMember && !nestAccess.canCoordinate && !nestAccess.isCommand)
+  const canManage = canManageHotels(nestAccess)
+  const canEditAccommodation = canEditAccommodations(nestAccess, work)
+  const canRemoveAccommodation = canDeleteAccommodations(nestAccess)
+  const canLogComfort = canLogComfortCheck(nestAccess)
+  // Postings are stored with the hotel's programme, so programme work only
+  // counts for hotels of the programme chosen in the filter. Hotels are
+  // staffed by Nest coordinators and Nest programme workers only; Den access
+  // never reaches them.
+  const canPostOfficersFor = (programId: string | null) =>
+    canManagePostings(currentUser?.role, nestAccess, Boolean(programId) && programId === programmeId && work.nest)
+  const briefingKey = briefingConfigKey('november_nest', nestAccess)
+  const programmeNotice = programmeWorkNotice({
+    access: nestAccess,
+    programmeSelected: Boolean(programmeId),
+    activeOnProgramme,
+    workLoading: nestWork.isLoading,
+    workFailed: nestWork.loadFailed,
+    canWork: work.nest,
+    work: 'assign accommodation or post officers',
+    granter: 'the Nest head',
+  })
 
   const saveNestMutation = useMutation({
     mutationFn: async (payload: { isEdit: boolean, data: any }) => {
@@ -314,6 +372,10 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
       toast.error('Please select an officer')
       return
     }
+    if (!canPostOfficersFor(selectedNest.program_id ?? null)) {
+      toast.error('You cannot post officers to this hotel')
+      return
+    }
     if (assignOfficerMutation.isPending) return
     assignOfficerMutation.mutate({
       user_id: officerFormData.user_id,
@@ -367,6 +429,16 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
         )}
       />
 
+      <Tabs value={pageTab} onValueChange={selectPageTab} className="space-y-6">
+        {canSeeWork && (
+          <TabsList className="grid h-auto w-full max-w-xl grid-cols-3 gap-1 p-1">
+            <TabsTrigger value="nests" className="min-h-11 min-w-0 gap-1.5 whitespace-normal text-xs sm:text-sm"><Hotel className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />Nests</TabsTrigger>
+            <TabsTrigger value="tasks" className="min-h-11 min-w-0 gap-1.5 whitespace-normal text-xs sm:text-sm"><ClipboardList className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />Tasks</TabsTrigger>
+            <TabsTrigger value="team" className="min-h-11 min-w-0 gap-1.5 whitespace-normal text-xs sm:text-sm"><UsersRound className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />Programme team</TabsTrigger>
+          </TabsList>
+        )}
+
+        <TabsContent value="nests" className="space-y-6">
       {/* Program Filter */}
       <motion.div layout className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
         <Label htmlFor="nests-program-filter">Filter by Program:</Label>
@@ -385,20 +457,40 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
         </Select>
       </motion.div>
 
-      {/* ── Papa Briefings for NOScar roles ── */}
-      {(nestAccess.isMember || nestAccess.isPlatformAdmin) && (
+      {nestAccess.loadFailed && (
+        <ErrorState
+          title="Could not check your unit access"
+          description="Nest controls stay hidden until your membership loads."
+          onRetry={() => { void queryClient.invalidateQueries({ queryKey: ['unit-access'] }) }}
+          className="rounded-2xl border"
+        />
+      )}
+
+      {programmeNotice && (
+        <p role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-800 dark:text-amber-300">
+          {programmeNotice}
+        </p>
+      )}
+
+      {/* ── Papa Briefings, by level in the Nest (coordinators may edit) ── */}
+      {briefingKey && (
         <div className="border rounded-xl p-4 bg-muted/30">
-          <PapaBriefingsSection role={resolvedRole || 'noscar_nest'} />
+          <PapaBriefingsSection role={briefingKey} />
         </div>
       )}
 
       <RoomOperations
         nests={filteredNests}
         selectedProgram={selectedProgram}
-        legacyCanManage={canManage}
+        legacyCanManage={nestAccess.canManage}
       />
 
-      <PapaAccommodations canEdit={canEditAccommodations} selectedProgram={selectedProgram} currentUserId={currentUser?.id ?? null} />
+      <PapaAccommodations
+        canEdit={canEditAccommodation}
+        canDelete={canRemoveAccommodation}
+        selectedProgram={selectedProgram}
+        currentUserId={currentUser?.id ?? null}
+      />
 
       <GuestExperiences />
 
@@ -441,21 +533,27 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
                                 <Badge variant="outline" className="mt-1">{programName}</Badge>
                               )}
                             </div>
-                            {canManage && (
+                            {(canManage || canPostOfficersFor(nest.program_id ?? null)) && (
                               <div className="flex gap-1 shrink-0">
-                                <Button aria-label="Assign officer" variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={() => {
-                                  setSelectedNest(nest)
-                                  setOfficerFormData({ ...officerFormData, assignment_type: 'nest' })
-                                  setOfficerDialogOpen(true)
-                                }}>
-                                  <UserPlus className="h-4 w-4" />
-                                </Button>
-                                <Button aria-label="Edit Nest" variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={() => handleEdit(nest)}>
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button aria-label="Delete Nest" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(nest.id)}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                {canPostOfficersFor(nest.program_id ?? null) && (
+                                  <Button aria-label={`Assign an officer to ${nest.name}`} variant="ghost" size="icon" className="h-11 w-11 hover:bg-primary/10 sm:h-8 sm:w-8" onClick={() => {
+                                    setSelectedNest(nest)
+                                    setOfficerFormData({ ...officerFormData, assignment_type: 'nest' })
+                                    setOfficerDialogOpen(true)
+                                  }}>
+                                    <UserPlus className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                {canManage && (
+                                  <>
+                                    <Button aria-label={`Edit ${nest.name}`} variant="ghost" size="icon" className="h-11 w-11 hover:bg-primary/10 sm:h-8 sm:w-8" onClick={() => handleEdit(nest)}>
+                                      <Edit className="h-4 w-4" />
+                                    </Button>
+                                    <Button aria-label={`Delete ${nest.name}`} variant="ghost" size="icon" className="h-11 w-11 text-destructive hover:bg-destructive/10 sm:h-8 sm:w-8" onClick={() => handleDelete(nest.id)}>
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </>
+                                )}
                               </div>
                             )}
                           </div>
@@ -510,7 +608,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
                                           <p className="truncate text-xs text-muted-foreground">{assignment.user?.oscar}</p>
                                         </div>
                                       </button>
-                                      {canManage && (
+                                      {canPostOfficersFor(assignment.program_id ?? null) && (
                                         <div className="flex shrink-0 items-center gap-1">
                                           <Switch
                                             checked={assignment.is_active}
@@ -549,7 +647,7 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
                           </button>
                           {expandedComfort === nest.id && (
                             <div className="mt-2">
-                              <ComfortChecklist nestId={nest.id} nestName={nest.name} />
+                              <ComfortChecklist nestId={nest.id} nestName={nest.name} canLog={canLogComfort} />
                             </div>
                           )}
                         </div>
@@ -562,6 +660,19 @@ export default function NestsClient({ initialNests }: { initialNests: any[] }) {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        {canSeeWork && (
+          <>
+            <TabsContent value="tasks" className="space-y-6">
+              <UnitTasks unitSlug="november_nest" />
+            </TabsContent>
+            <TabsContent value="team" className="space-y-6">
+              <UnitProgrammeTeam unitSlug="november_nest" />
+            </TabsContent>
+          </>
+        )}
+      </Tabs>
 
       {/* Add/Edit Location Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

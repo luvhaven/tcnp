@@ -10,7 +10,9 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { cn, canAccessCommandCentre, oscarToRole } from "@/lib/utils"
+import { cn, canAccessCommandCentre } from "@/lib/utils"
+import { memberUnitSlugs } from "@/lib/unit-access"
+import { useMyUnitMemberships } from "@/hooks/useUnitAccess"
 import { canDownloadOfficerStatusReport } from "@/lib/officer-status-access"
 import { getCallSignLabel, resolveCallSignKey, TNCP_CALL_SIGN_COLORS } from "@/lib/constants/tncpCallSigns"
 import {
@@ -113,36 +115,28 @@ function formatEtd(etd: string | null | undefined): string | null {
   return format(date, isThisYear(date) ? "EEE d MMM HH:mm" : "EEE d MMM yyyy HH:mm")
 }
 
-function getUnitActionForRole(role?: string | null, oscar?: string | null) {
-  const r = (oscarToRole(oscar) || oscarToRole(role) || oscar || role || "").toLowerCase()
-  if (r.includes("alpha")) {
-    return { href: "/alpha", label: "Alpha Aviation Hub", sub: "Eagle Squares & Flights", Icon: Plane, color: "text-primary", bg: "bg-primary/10" }
-  }
-  if (r.includes("tango")) {
-    return { href: "/tango", label: "Tango Fleet", sub: "Cheetah vehicle management", Icon: Car, color: "text-emerald-500", bg: "bg-emerald-500/10" }
-  }
-  if (r.includes("victor")) {
-    return { href: "/victor", label: "Victor Venues", sub: "Theatres & seat layouts", Icon: Landmark, color: "text-amber-500", bg: "bg-amber-500/10" }
-  }
-  if (r.includes("nest")) {
-    return { href: "/nests", label: "November Nest", sub: "Hotel accommodations & rooms", Icon: Hotel, color: "text-primary", bg: "bg-primary/10" }
-  }
-  if (r.includes("den") || r.includes("theatre")) {
-    return { href: "/den", label: "November Den", sub: "VIP Lounges & Menus", Icon: Home, color: "text-primary", bg: "bg-primary/10" }
-  }
-  if (r.includes("serial") || r.includes("sierra")) {
-    return { href: "/serial", label: "Serial Media", sub: "Social media & press coverage", Icon: Camera, color: "text-pink-500", bg: "bg-pink-500/10" }
-  }
-  if (r.includes("training")) {
-    return { href: "/training", label: "Training Hub", sub: "Courses, resources & attendance", Icon: BookOpen, color: "text-blue-500", bg: "bg-blue-500/10" }
-  }
-  if (r.includes("compliance")) {
-    return { href: "/compliance", label: "Compliance", sub: "Dress code & team standards", Icon: Shield, color: "text-primary", bg: "bg-primary/10" }
-  }
-  if (r.includes("welfare")) {
-    return { href: "/welfare", label: "Welfare Portal", sub: "Officer welfare & meals", Icon: UtensilsCrossed, color: "text-emerald-500", bg: "bg-emerald-500/10" }
-  }
-  return null
+/**
+ * Unit quick actions, in the order the dashboard prefers when an officer
+ * belongs to several units. Keyed by unit slug: the shortcut comes from active
+ * unit membership (the same rule as the nav), never from role or Oscar text.
+ */
+const UNIT_QUICK_ACTIONS = [
+  { slug: "alpha", href: "/alpha", label: "Alpha Aviation Hub", sub: "Eagle Squares & Flights", Icon: Plane, color: "text-primary", bg: "bg-primary/10" },
+  { slug: "tango", href: "/tango", label: "Tango Fleet", sub: "Cheetah vehicle management", Icon: Car, color: "text-emerald-500", bg: "bg-emerald-500/10" },
+  { slug: "victor", href: "/victor", label: "Victor Venues", sub: "Theatres & seat layouts", Icon: Landmark, color: "text-amber-500", bg: "bg-amber-500/10" },
+  { slug: "november_nest", href: "/nests", label: "November Nest", sub: "Hotel accommodations & rooms", Icon: Hotel, color: "text-primary", bg: "bg-primary/10" },
+  { slug: "november_den", href: "/den", label: "November Den", sub: "VIP Lounges & Menus", Icon: Home, color: "text-primary", bg: "bg-primary/10" },
+  { slug: "serial", href: "/serial", label: "Serial Media", sub: "Social media & press coverage", Icon: Camera, color: "text-pink-500", bg: "bg-pink-500/10" },
+  { slug: "training", href: "/training", label: "Training Hub", sub: "Courses, resources & attendance", Icon: BookOpen, color: "text-blue-500", bg: "bg-blue-500/10" },
+  { slug: "compliance", href: "/compliance", label: "Compliance", sub: "Dress code & team standards", Icon: Shield, color: "text-primary", bg: "bg-primary/10" },
+  { slug: "welfare", href: "/welfare", label: "Welfare Portal", sub: "Officer welfare & meals", Icon: UtensilsCrossed, color: "text-emerald-500", bg: "bg-emerald-500/10" },
+] as const
+
+function getUnitActionForUnits(unitSlugs: readonly string[]) {
+  const match = UNIT_QUICK_ACTIONS.find(action => unitSlugs.includes(action.slug))
+  if (!match) return null
+  const { slug: _slug, ...action } = match
+  return action
 }
 
 /** Compact on phones (where it used to be hidden, leaving only a colour dot). */
@@ -217,12 +211,13 @@ export default function DashboardPage() {
     return () => window.clearInterval(id)
   }, [])
   const { data: currentUser, isLoading: userLoading, refetch: refetchCurrentUser } = useCurrentUser()
+  const { memberships: unitMemberships } = useMyUnitMemberships()
 
   // Global operational summaries contain sensitive journey, Papa, fleet and
   // incident information. Keep them strictly within Command/Admin scope.
   const canViewGlobalDashboard = useMemo(() => {
     if (!currentUser) return false
-    return canAccessCommandCentre(currentUser.role, currentUser.oscar, currentUser.has_admin_access)
+    return canAccessCommandCentre(currentUser.role, null, currentUser.has_admin_access)
   }, [currentUser])
 
   const handleInstallClick = async () => {
@@ -443,7 +438,7 @@ export default function DashboardPage() {
 
   // ── Leadership quick actions — must be a useMemo BEFORE any early return ──
   const leadershipQuickActions = useMemo(() => {
-    const canCmd = Boolean(currentUser && canAccessCommandCentre(currentUser.role, currentUser.oscar, currentUser.has_admin_access))
+    const canCmd = Boolean(currentUser && canAccessCommandCentre(currentUser.role, null, currentUser.has_admin_access))
     const actions: Array<{ href: string; label: string; sub: string; Icon: any; color: string; bg: string }> = [
       { href: "/journeys", label: "Create Journey", sub: "Plan a new Papa movement", Icon: MapPin, color: "text-primary", bg: "bg-primary/10" },
       { href: "/papas", label: "Add Papa", sub: "Register a new guest", Icon: Users, color: "text-emerald-500", bg: "bg-emerald-500/10" },
@@ -474,7 +469,7 @@ export default function DashboardPage() {
   const officerTeam = currentUser?.team ? `Team ${toTitleCase(currentUser.team)}` : "Unassigned Team"
 
   // Dynamic quick actions for officers (plain const — no hooks needed)
-  const officerUnitAction = getUnitActionForRole(currentUser?.role, currentUser?.oscar)
+  const officerUnitAction = getUnitActionForUnits(memberUnitSlugs(unitMemberships))
   const officerQuickActions = [
     { href: "/my-operations", label: "My Operations", sub: "Your assignments & call-sign", Icon: Zap, color: "text-orange-500", bg: "bg-orange-500/10" },
     { href: "/chat", label: "Chat", sub: "Program rooms & team channel", Icon: MessageSquare, color: "text-sky-500", bg: "bg-sky-500/10" },

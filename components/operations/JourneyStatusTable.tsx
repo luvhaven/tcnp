@@ -31,7 +31,7 @@ import { ErrorState } from '@/components/ui/error-state'
 import { CALL_SIGNS, getCallSignLabel, SITREP_CODES, CALL_SIGN_KEY_TO_DB_ENUM, type CallSignKey } from '@/lib/constants/call-signs'
 import { CallSignChip } from '@/components/ui/call-sign-chip'
 import { toast } from 'sonner'
-import { cn, isAdmin, effectiveOscarRole } from '@/lib/utils'
+import { cn, isAdmin } from '@/lib/utils'
 import { OfficerProfileDialog, type OfficerProfileData } from '@/components/officers/OfficerProfileDialog'
 import { isOwnAssignment } from '@/hooks/useMyOperations'
 
@@ -300,10 +300,10 @@ export default function JourneyStatusTable() {
             currentUserLoadedRef.current = true
             setCurrentUser(userData)
 
-            // Check if user can update call signs (DO or admin)
+            // Check if user can update call signs (DO or admin). Leadership comes
+            // from the role or the admin grant only; the Oscar is a display label.
             const userRole = (userData as any)?.role as string | undefined
-            const userOscar = (userData as any)?.oscar as string | undefined
-            const canUpdate = userRole && (isAdmin(userRole) || isAdmin(effectiveOscarRole(userRole, userOscar)) || userRole === 'delta_oscar')
+            const canUpdate = userRole && (isAdmin(userRole, (userData as any)?.has_admin_access) || userRole === 'delta_oscar')
             setCanUpdateCallSigns(Boolean(canUpdate))
         } catch (error) {
             console.error('Error loading current user:', error)
@@ -513,7 +513,7 @@ export default function JourneyStatusTable() {
     // with the other surfaces (Cocktail was amber here, green on My Operations)
     // and have been removed rather than re-synced, so there is only one source.
 
-    const isLeadership = Boolean(currentUser?.role && (isAdmin(currentUser.role, currentUser.has_admin_access) || isAdmin(effectiveOscarRole(currentUser.role, currentUser.oscar))))
+    const isLeadership = Boolean(currentUser && isAdmin(currentUser.role, currentUser.has_admin_access))
 
     // Mirrors journeys_update_role_scoped (supabase/migrations/20260927120000):
     // leadership roles, or a DO on this journey whose assignment wasn't rejected.

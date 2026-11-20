@@ -39,7 +39,10 @@ export type Vendor = {
 }
 
 type Props = {
+  /** May add and edit vendors (can_edit_vendors()). */
   canEdit: boolean
+  /** May delete a vendor: Command or the Den, Nest or Welfare head. Defaults to canEdit. */
+  canDelete?: boolean
   currentUserId?: string | null
   /** May add a rating: a Den member or a vendor editor. */
   canRate?: boolean
@@ -58,7 +61,7 @@ const emptyForm = {
   sla_notes: "",
 }
 
-export default function VendorDirectory({ canEdit, currentUserId, canRate = false, programs = [], selectedProgram = "all" }: Props) {
+export default function VendorDirectory({ canEdit, canDelete = canEdit, currentUserId, canRate = false, programs = [], selectedProgram = "all" }: Props) {
   const queryClient = useQueryClient()
   const confirm = useConfirm()
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -246,23 +249,27 @@ export default function VendorDirectory({ canEdit, currentUserId, canRate = fals
                           )}
                         </CardDescription>
                       </div>
-                      {canEdit && (
+                      {(canEdit || canDelete) && (
                         <div className="flex shrink-0 gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Edit ${vendor.name}`} onClick={() => openEdit(vendor)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost" size="icon" className="h-7 w-7 text-red-500" aria-label={`Delete ${vendor.name}`}
-                            onClick={async () => {
-                              const ok = await confirm({
-                                title: "Delete vendor?",
-                                message: `"${vendor.name}" will be removed. Menus that used it stay, with no vendor set. Retire it instead if you may order from them again.`,
-                              })
-                              if (ok) deleteMutation.mutate(vendor.id)
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          {canEdit && (
+                            <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" aria-label={`Edit ${vendor.name}`} onClick={() => openEdit(vendor)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button
+                              variant="ghost" size="icon" className="h-11 w-11 text-red-500 sm:h-8 sm:w-8" aria-label={`Delete ${vendor.name}`}
+                              onClick={async () => {
+                                const ok = await confirm({
+                                  title: "Delete vendor?",
+                                  message: `"${vendor.name}" will be removed. Menus that used it stay, with no vendor set. Retire it instead if you may order from them again.`,
+                                })
+                                if (ok) deleteMutation.mutate(vendor.id)
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </div>
                       )}
                     </div>

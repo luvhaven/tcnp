@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/supabase'
 import { NextResponse } from 'next/server'
-import { isPlatformAdministrator, platformAuthorityRank, isExecutiveRole, OFFICER_TEAMS } from '@/lib/utils'
+import { isPlatformAdministrator, platformAuthorityRank, isExecutiveRole, OFFICER_TEAMS, oscarToRole } from '@/lib/utils'
+import { plainUnitOscar, unitOscarLabelForRole } from '@/lib/unit-access'
 import { OFFICER_ROLE_OPTIONS, adminNeedsOscar, ADMIN_NEEDS_OSCAR_MESSAGE } from '@/lib/officer-directory'
 
 export async function POST(request: Request) {
@@ -82,7 +83,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to create user' }, { status: 500 })
     }
 
-    const oscar = isExecutiveRole(role) ? 'Executive' : role === 'viewer' ? null : role
+    // The Oscar names the officer's unit (the legacy sync trigger turns it into
+    // a MEMBER row; headship comes only from a head role), so an Oscar sent
+    // with the request is kept as a plain unit label, with any head marker
+    // dropped. Without one, unit roles get their plain unit label ('Alpha
+    // Oscar', never the raw 'head_alpha_oscar') and Executive its label.
+    const requestedOscar = typeof body.oscar === 'string' ? body.oscar.trim() : ''
+    if (requestedOscar.length > 80) {
+      return NextResponse.json({ error: 'Choose a valid Oscar' }, { status: 400 })
+    }
+    const oscar = requestedOscar
+      ? plainUnitOscar(requestedOscar, oscarToRole)
+      : isExecutiveRole(role) ? 'Executive' : role === 'viewer' ? null : (unitOscarLabelForRole(role) ?? role)
 
     // Insert into users table using the admin client (bypasses RLS, but route is already admin-guarded)
     const insertData: any = {

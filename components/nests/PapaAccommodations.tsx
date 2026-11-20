@@ -43,12 +43,15 @@ type Accommodation = {
 }
 
 type Props = {
+  /** May add and edit accommodation (insert/update). */
   canEdit: boolean
+  /** May remove accommodation: Command or the Nest head. Defaults to canEdit. */
+  canDelete?: boolean
   selectedProgram: string
   currentUserId?: string | null
 }
 
-export default function PapaAccommodations({ canEdit, selectedProgram, currentUserId }: Props) {
+export default function PapaAccommodations({ canEdit, canDelete = canEdit, selectedProgram, currentUserId }: Props) {
   const queryClient = useQueryClient()
   const confirm = useConfirm()
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -231,18 +234,22 @@ export default function PapaAccommodations({ canEdit, selectedProgram, currentUs
                           {acc.nests?.name && <Badge variant="outline" className="text-xs">Nest: {acc.nests.name}</Badge>}
                         </CardDescription>
                       </div>
-                      {canEdit && (
+                      {(canEdit || canDelete) && (
                         <div className="flex shrink-0 gap-1">
-                          <Button aria-label="Edit accommodation" variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(acc)}><Pencil className="h-3.5 w-3.5" /></Button>
-                          <Button aria-label="Remove accommodation"
-                            variant="ghost" size="icon" className="h-7 w-7 text-red-500"
-                            onClick={async () => {
-                              const ok = await confirm({ title: "Remove accommodation?", message: `${acc.hotel_name} for ${acc.papas?.full_name ?? "this Papa"}.` })
-                              if (ok) deleteMutation.mutate(acc.id)
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          {canEdit && (
+                            <Button aria-label={`Edit accommodation at ${acc.hotel_name}`} variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => openEdit(acc)}><Pencil className="h-3.5 w-3.5" /></Button>
+                          )}
+                          {canDelete && (
+                            <Button aria-label={`Remove accommodation at ${acc.hotel_name}`}
+                              variant="ghost" size="icon" className="h-11 w-11 text-red-500 sm:h-8 sm:w-8"
+                              onClick={async () => {
+                                const ok = await confirm({ title: "Remove accommodation?", message: `${acc.hotel_name} for ${acc.papas?.full_name ?? "this Papa"}.` })
+                                if (ok) deleteMutation.mutate(acc.id)
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </div>
                       )}
                     </div>

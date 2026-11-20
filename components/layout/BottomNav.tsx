@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation"
 import { Menu } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
+import { useMyUnitMemberships } from "@/hooks/useUnitAccess"
+import { memberUnitSlugs } from "@/lib/unit-access"
 import { useUnreadChatCount } from "@/hooks/useUnreadChatCount"
 import { useUnreadAssignments } from "@/hooks/useUnreadAssignments"
 import { ALL_NAV, getVisibleNav } from "@/components/layout/nav-config"
@@ -32,26 +34,33 @@ function isActive(pathname: string, href: string) {
 
 /**
  * Phone-only tab bar (hidden from the `nav` breakpoint up, where the sidebar
- * is always visible). Tabs are filtered with the sidebar's own getVisibleNav,
- * so a role never sees a tab here that its sidebar hides.
+ * is always visible). Tabs are filtered with the sidebar's own getVisibleNav and
+ * the same memberships, so a user never sees a tab here that their sidebar hides.
  *
  * Its height is `--bottom-nav-h` (globals.css), which main's bottom padding
  * and the FloatingStack offset both read, so nothing hides behind it.
  */
 export function BottomNav({ onOpenMore, moreOpen }: BottomNavProps) {
   const pathname = usePathname() ?? ""
+  // The sidebar's own memberships query (shared cache), so both navs agree.
   const { data: currentUser } = useCurrentUser()
+  const { memberships, isLoading: membershipsLoading, loadFailed: membershipsFailed } = useMyUnitMemberships()
+  const unitSlugs = useMemo(() => memberUnitSlugs(memberships), [memberships])
+  // Approvals follows head MEMBERSHIP (approvals/page.tsx). Until the rows are
+  // read (or if the read failed) pass none, so headship falls back to the
+  // head role exactly as that page does, instead of hiding the link.
+  const navMemberships = membershipsLoading || membershipsFailed ? undefined : memberships
   const { count: unreadChat } = useUnreadChatCount()
   const { count: unreadAssignments } = useUnreadAssignments()
 
   const tabs = useMemo(() => {
     const allowed = new Set(
-      getVisibleNav(currentUser?.role ?? null, currentUser?.oscar ?? null, [], currentUser?.has_admin_access).map((item) => item.href)
+      getVisibleNav(currentUser?.role ?? null, null, unitSlugs, currentUser?.has_admin_access ?? undefined, navMemberships).map((item) => item.href)
     )
     return TAB_HREFS.filter((href) => allowed.has(href))
       .map((href) => ALL_NAV.find((item) => item.href === href))
       .filter((item): item is (typeof ALL_NAV)[number] => Boolean(item))
-  }, [currentUser?.role, currentUser?.oscar, currentUser?.has_admin_access])
+  }, [currentUser?.role, currentUser?.has_admin_access, unitSlugs, navMemberships])
 
   const badgeFor = (href: string) => {
     if (href === "/chat" && unreadChat > 0) return unreadChat > 99 ? "99+" : String(unreadChat)

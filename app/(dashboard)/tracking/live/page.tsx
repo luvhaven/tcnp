@@ -8,7 +8,9 @@ import { ErrorState } from '@/components/ui/error-state'
 
 export default function LiveTrackingPage() {
   const { data: currentUser, isLoading: loading, isError: clearanceUnknown, refetch, isFetching } = useCurrentUser()
-  const hasAccess = Boolean(currentUser && canViewLiveTracking(currentUser.role, currentUser.oscar, currentUser.has_admin_access))
+  // Leadership comes from the role or the admin grant only; the Oscar is a
+  // display label (null here so a "Command" Oscar never opens the map).
+  const hasAccess = Boolean(currentUser && canViewLiveTracking(currentUser.role, null, currentUser.has_admin_access))
 
   // Loading skeleton
   if (loading) {

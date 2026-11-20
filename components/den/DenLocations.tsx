@@ -38,14 +38,24 @@ type Props = {
   dens: any[]
   programs: DenProgram[]
   selectedProgram: string // 'all' or a program id
+  /** May add, edit and delete Den locations (nests of type 'den'). */
   canManage: boolean
+  /**
+   * May post officers to a Den for this programme (noscar_assignments). Its
+   * policy differs from the locations one, so it is asked per programme.
+   * Defaults to canManage.
+   */
+  canPostOfficersFor?: (programId: string | null) => boolean
   onOpenProfile: (member: DenTeamMember) => void
 }
 
 const EMPTY_FORM = { name: "", address: "", city: "", phone: "", email: "", rating: 5, amenities: "", program_id: "" }
 
 /** Den lounges and the officers posted to each one. */
-export default function DenLocations({ dens, programs, selectedProgram, canManage, onOpenProfile }: Props) {
+export default function DenLocations({ dens, programs, selectedProgram, canManage, canPostOfficersFor, onOpenProfile }: Props) {
+  const postingAllowed = (programId: string | null | undefined) =>
+    canPostOfficersFor ? canPostOfficersFor(programId ?? null) : canManage
+  const canPost = (den: { program_id?: string | null }) => postingAllowed(den.program_id)
   const supabase = createClient()
   const confirm = useConfirm()
   const queryClient = useQueryClient()
@@ -249,25 +259,29 @@ export default function DenLocations({ dens, programs, selectedProgram, canManag
                               <CardTitle className="truncate text-lg">{den.name}</CardTitle>
                               {programName && <Badge variant="outline" className="mt-1">{programName}</Badge>}
                             </div>
-                            {canManage && (
+                            {(canManage || canPost(den)) && (
                               <div className="flex shrink-0 gap-1">
-                                <Button aria-label={`Assign an officer to ${den.name}`} variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setAssignTo(den); setOfficerId("") }}>
-                                  <UserPlus className="h-4 w-4" />
-                                </Button>
-                                <Button aria-label={`Edit ${den.name}`} variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(den)}>
+                                {canPost(den) && (
+                                  <Button aria-label={`Assign an officer to ${den.name}`} variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => { setAssignTo(den); setOfficerId("") }}>
+                                    <UserPlus className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                {canManage && (<>
+                                <Button aria-label={`Edit ${den.name}`} variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => openEdit(den)}>
                                   <Edit className="h-4 w-4" />
                                 </Button>
                                 <Button
                                   aria-label={`Delete ${den.name}`}
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                  className="h-11 w-11 sm:h-8 sm:w-8 text-destructive hover:bg-destructive/10"
                                   onClick={async () => {
                                     if (await confirm({ message: `Delete ${den.name}?`, variant: "destructive" })) deleteDen.mutate(den.id)
                                   }}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
+                                </>)}
                               </div>
                             )}
                           </div>
@@ -313,7 +327,7 @@ export default function DenLocations({ dens, programs, selectedProgram, canManag
                                           </span>
                                         </span>
                                       </button>
-                                      {canManage && (
+                                      {postingAllowed(assignment.program_id) && (
                                         <div className="flex shrink-0 items-center gap-1">
                                           <Switch
                                             aria-label={`${member?.full_name ?? "Officer"} on duty`}

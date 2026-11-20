@@ -30,7 +30,11 @@ const COMFORT_ITEMS = [
     'Does the room/hotel speak excellence (stains, smells, ambiance, reputation)?',
 ]
 
-export default function ComfortChecklist({ nestId, nestName }: { nestId: string; nestName: string }) {
+/**
+ * `canLog`: may log a check (nest_comfort_logs insert: own row AND (Command OR
+ * a November (Nest) member)). Everyone else sees the last check read-only.
+ */
+export default function ComfortChecklist({ nestId, nestName, canLog = true }: { nestId: string; nestName: string; canLog?: boolean }) {
     const supabase = createClient()
     const [checks, setChecks] = useState<boolean[]>(Array(COMFORT_ITEMS.length).fill(false))
     const [saving, setSaving] = useState(false)
@@ -126,7 +130,10 @@ export default function ComfortChecklist({ nestId, nestName }: { nestId: string;
                                 key={idx}
                                 type="button"
                                 onClick={() => handleToggle(idx)}
+                                disabled={!canLog}
+                                aria-pressed={Boolean(checked)}
                                 className={cn(
+                                    'disabled:cursor-default',
                                     'w-full flex items-start gap-2.5 rounded-lg border p-2.5 text-left text-xs transition-all',
                                     checked
                                         ? 'bg-green-500/5 border-green-500/20 text-foreground'
@@ -153,15 +160,19 @@ export default function ComfortChecklist({ nestId, nestName }: { nestId: string;
                     </div>
                 </div>
 
-                <Button
-                    size="sm"
-                    onClick={handleSubmit}
-                    disabled={saving || checkedCount === 0}
-                    className={cn('w-full gap-1 text-xs mt-1', allChecked ? 'bg-green-600 hover:bg-green-700' : '')}
-                >
-                    <ClipboardCheck className="h-3 w-3" />
-                    {saving ? 'Saving...' : `Log Comfort Check (${checkedCount}/${COMFORT_ITEMS.length})`}
-                </Button>
+                {canLog ? (
+                    <Button
+                        size="sm"
+                        onClick={handleSubmit}
+                        disabled={saving || checkedCount === 0}
+                        className={cn('w-full gap-1 text-xs mt-1 min-h-11 sm:min-h-9', allChecked ? 'bg-green-600 hover:bg-green-700' : '')}
+                    >
+                        <ClipboardCheck className="h-3 w-3" />
+                        {saving ? 'Saving...' : `Log Comfort Check (${checkedCount}/${COMFORT_ITEMS.length})`}
+                    </Button>
+                ) : (
+                    <p className="mt-1 text-xs text-muted-foreground">Only November (Nest) officers log comfort checks.</p>
+                )}
             </CardContent>
         </Card>
     )

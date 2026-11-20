@@ -6,8 +6,9 @@ import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
 import { notifyError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
-import { useCurrentUser } from "@/hooks/useCurrentUser"
-import { canManageNoscarNest, cn } from "@/lib/utils"
+import { useUnitAccess } from "@/hooks/useUnitAccess"
+import { canEditGuestExperiences } from "@/lib/site-unit-permissions"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -57,10 +58,16 @@ function publicUrl(path: string) {
 }
 
 export default function GuestExperiences() {
-  const { data: currentUser } = useCurrentUser()
   const queryClient = useQueryClient()
   const confirm = useConfirm()
-  const canEdit = canManageNoscarNest(currentUser?.role, currentUser?.oscar, currentUser?.has_admin_access)
+  // hospitality_places and the hospitality-media bucket accept writes from
+  // can_manage_unit('november_nest') only: the Nest head and platform admins.
+  const nest = useUnitAccess("november_nest")
+  const currentUser = nest.currentUser
+  // When the access read fails (nest.loadFailed), the parent Nest page shows
+  // the "Could not check your unit access" error with a retry; it reads this
+  // same query, so this section does not repeat it.
+  const canEdit = canEditGuestExperiences(nest)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Place | null>(null)
@@ -268,9 +275,9 @@ export default function GuestExperiences() {
                         </div>
                         {canEdit && (
                           <div className="flex shrink-0 gap-1">
-                            <Button aria-label="Edit place" variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(place)}><Pencil className="h-3.5 w-3.5" /></Button>
-                            <Button aria-label="Remove place"
-                              variant="ghost" size="icon" className="h-7 w-7 text-red-500"
+                            <Button aria-label={`Edit ${place.name}`} variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => openEdit(place)}><Pencil className="h-3.5 w-3.5" /></Button>
+                            <Button aria-label={`Remove ${place.name}`}
+                              variant="ghost" size="icon" className="h-11 w-11 text-red-500 sm:h-8 sm:w-8"
                               onClick={async () => {
                                 const ok = await confirm({ title: "Remove place?", message: `"${place.name}" will be removed from the guide.` })
                                 if (ok) deleteMutation.mutate(place)

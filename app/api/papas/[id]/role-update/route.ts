@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { ROLE_BRIEFING_CONFIG } from '@/lib/constants/papaBriefingFields'
-import { effectiveOscarRole, isAdmin } from '@/lib/utils'
+import { ROLE_BRIEFING_CONFIG, type RoleBriefingConfig } from '@/lib/constants/papaBriefingFields'
+import { fetchActiveUnitMemberships, isPlatformAdminAuthority, unitAccess } from '@/lib/unit-access'
 
-const ROLE_UNIT: Record<string, string> = {
-  head_alpha_oscar: 'alpha',
-  head_tango_oscar: 'tango',
-  head_victor_oscar: 'victor',
-  head_noscar_nest: 'november_nest',
+/**
+ * Which unit owns which briefing section. Editing a section is programme work
+ * in that unit: head or sub-lead of the unit (can_coordinate_unit), or a member
+ * the database says may work the Papa's programme (can_work_unit_programme,
+ * e.g. a Den floor grant). Platform administrators may edit every section.
+ */
+const BRIEFING_UNITS: Record<string, string> = {
+  alpha: 'head_alpha_oscar',
+  victor: 'head_victor_oscar',
+  november_nest: 'head_noscar_nest',
+  november_den: 'head_noscar_den',
+  echo: 'head_echo_oscar',
 }
 
 export async function PATCH(
@@ -36,12 +43,18 @@ export async function PATCH(
     }
 
     const role = userData.role as string
-    const effectiveRole = effectiveOscarRole(role, userData.oscar) ?? role
-    const config = ROLE_BRIEFING_CONFIG[effectiveRole]
+    const viewer = { role, hasAdminAccess: userData.has_admin_access }
+    const isPlatformAdmin = isPlatformAdminAuthority(role, userData.has_admin_access)
 
-    if (!config || config.editableFields.length === 0) {
+    // Unit access comes from the caller's own memberships (their session, so RLS applies).
+    const { memberships, error: membershipError } = await fetchActiveUnitMemberships(supabase as any, user.id)
+    if (membershipError) {
+      return NextResponse.json({ error: 'Could not check your unit access. Try again.' }, { status: 503 })
+    }
+    const candidateUnits = Object.keys(BRIEFING_UNITS).filter(slug => isPlatformAdmin || unitAccess(memberships, slug, viewer).isMember)
+    if (candidateUnits.length === 0) {
       return NextResponse.json(
-        { error: 'Your role does not have edit permissions for Papa briefing fields.' },
+        { error: 'Your unit does not have edit permissions for Papa briefing fields.' },
         { status: 403 }
       )
     }
@@ -57,49 +70,35 @@ export async function PATCH(
       return NextResponse.json({ error: 'Papa not found' }, { status: 404 })
     }
 
-    // A unit head may update briefings only through the unit they actually
-    // lead. Platform administrators retain cross-program authority. During the
-    // additive membership rollout, an active title assignment remains a safe
-    // compatibility path for legacy head accounts.
-    if (!isAdmin(role, userData.has_admin_access)) {
-      const requiredUnit = ROLE_UNIT[effectiveRole]
-      let hasScopedAuthority = false
-
-      if (requiredUnit) {
-        const { data: membership } = await (supabase as any)
-          .from('unit_memberships')
-          .select('access_level, status, units!inner(slug)')
-          .eq('user_id', user.id)
-          .eq('access_level', 'head')
-          .eq('status', 'active')
-          .eq('units.slug', requiredUnit)
-          .maybeSingle()
-        hasScopedAuthority = Boolean(membership)
+    const editableUnits: string[] = []
+    for (const slug of candidateUnits) {
+      const access = unitAccess(memberships, slug, viewer)
+      let allowed = access.canCoordinate
+      if (!allowed && targetPapa.program_id) {
+        const { data: canWork } = await (supabase as any).rpc('can_work_unit_programme', {
+          unit_slug: slug,
+          target_program: targetPapa.program_id,
+        })
+        allowed = canWork === true
       }
+      if (allowed) editableUnits.push(slug)
+    }
 
-      if (!hasScopedAuthority && targetPapa.program_id) {
-        const { data: assignment } = await (supabase as any)
-          .from('current_title_assignments')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('program_id', targetPapa.program_id)
-          .eq('is_active', true)
-          .maybeSingle()
-        hasScopedAuthority = Boolean(assignment)
-      }
+    const configs = editableUnits
+      .map(slug => ROLE_BRIEFING_CONFIG[BRIEFING_UNITS[slug]])
+      .filter((config): config is RoleBriefingConfig => Boolean(config) && config.editableFields.length > 0)
 
-      if (!hasScopedAuthority) {
-        return NextResponse.json(
-          { error: 'You do not have authority for this Papa or program.' },
-          { status: 403 }
-        )
-      }
+    if (configs.length === 0) {
+      return NextResponse.json(
+        { error: 'You do not have authority for this Papa or program.' },
+        { status: 403 }
+      )
     }
 
     const body = await req.json()
 
-    // Strictly filter: only allow keys that this role is permitted to edit
-    const allowedKeys = new Set(config.editableFields)
+    // Strictly filter: only allow keys the caller's units may edit
+    const allowedKeys = new Set(configs.flatMap(config => config.editableFields))
     const filteredUpdate: Record<string, any> = {}
 
     for (const [key, value] of Object.entries(body)) {
@@ -133,8 +132,8 @@ export async function PATCH(
       changes: {
         updated_fields: Object.keys(filteredUpdate),
         values: filteredUpdate,
-        role_section: config.sectionTitle,
-        effective_role: effectiveRole,
+        role_section: configs.map(config => config.sectionTitle).join(', '),
+        units: editableUnits,
       },
       status: 'success',
     })

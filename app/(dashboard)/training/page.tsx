@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { Suspense, useMemo, useState } from "react"
 import Link from "next/link"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
@@ -8,7 +8,8 @@ import { toast } from "sonner"
 import { notifyError, UserFacingError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
-import { isPlatformAdministrator } from "@/lib/utils"
+import { useUnitAccess } from "@/hooks/useUnitAccess"
+import { canManageTraining } from "@/lib/site-unit-permissions"
 import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/ui/page-header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,8 +22,13 @@ import {
 } from "@/components/ui/dialog"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
 import TrainingOperations from "@/components/training/TrainingOperations"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Skeleton } from "@/components/ui/skeleton"
+import UnitTasks from "@/components/units/UnitTasks"
+import UnitProgrammeTeam from "@/components/units/UnitProgrammeTeam"
+import { canSeeUnitWork, useAddressTab } from "@/components/units/unit-work-tabs"
 import {
-  GraduationCap, Plus, Pencil, Trash2, MapPin, Clock, Users, BookOpen, ArrowRight, CalendarDays, FileText, Shield, X
+  GraduationCap, Plus, Pencil, Trash2, MapPin, Clock, Users, BookOpen, ArrowRight, CalendarDays, FileText, Shield, X, ClipboardList, UsersRound
 } from "lucide-react"
 
 import { ErrorState } from "@/components/ui/error-state"
@@ -79,19 +85,35 @@ function fmtTime(t: string | null) {
 }
 
 export default function TrainingPage() {
+  // useSearchParams (?tab=) needs a Suspense boundary so the page can still prerender.
+  return (
+    <Suspense fallback={<TrainingSkeleton />}>
+      <TrainingContent />
+    </Suspense>
+  )
+}
+
+function TrainingSkeleton() {
+  return (
+    <div className="space-y-6" role="status" aria-label="Loading Training">
+      <Skeleton className="h-8 w-48 max-w-full" />
+      <Skeleton className="h-11 w-full max-w-md" />
+      <Skeleton className="h-40 w-full" />
+    </div>
+  )
+}
+
+function TrainingContent() {
   const { data: currentUser } = useCurrentUser()
   const queryClient = useQueryClient()
   const confirm = useConfirm()
-  const { data: canManageTrainingUnit = false } = useQuery({
-    queryKey: ["can-manage-unit", "training", currentUser?.id],
-    enabled: Boolean(currentUser?.id),
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("can_manage_unit", { unit_slug: "training" })
-      if (error) return false
-      return Boolean(data)
-    },
-  })
-  const canEdit = isPlatformAdministrator(currentUser?.role, currentUser?.has_admin_access) || canManageTrainingUnit
+  // Every Training write (schedules, Training-managed documents) is
+  // can_manage_unit('training'): the Training head and platform admins.
+  const training = useUnitAccess("training")
+  const canEdit = canManageTraining(training)
+  // Tasks and Programme team: Training members and Command (the components decide who edits).
+  const canSeeWork = canSeeUnitWork(training)
+  const [pageTab, selectPageTab] = useAddressTab(canSeeWork ? ["training", "tasks", "team"] : ["training"])
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Training | null>(null)
@@ -347,6 +369,17 @@ export default function TrainingPage() {
         )}
       />
 
+      {/* Covers TrainingOperations below too: it reads the same unit-access
+          query, so its edit controls are hidden for the same reason. */}
+      {training.loadFailed && (
+        <ErrorState
+          title="Could not check your unit access"
+          description="Training controls stay hidden until your membership loads."
+          onRetry={() => { void queryClient.invalidateQueries({ queryKey: ["unit-access"] }) }}
+          className="rounded-2xl border"
+        />
+      )}
+
       {deleteFailed && (
         <div role="alert" className="flex min-w-0 items-start gap-3 rounded-lg border border-destructive/30 p-4 text-sm">
           <p className="min-w-0 flex-1">The record could not be deleted. It has not been removed from this view. Refresh and try again, or contact an administrator.</p>
@@ -354,6 +387,16 @@ export default function TrainingPage() {
         </div>
       )}
 
+      <Tabs value={pageTab} onValueChange={selectPageTab} className="space-y-6">
+        {canSeeWork && (
+          <TabsList className="grid h-auto w-full max-w-xl grid-cols-3 gap-1 p-1">
+            <TabsTrigger value="training" className="min-h-11 min-w-0 gap-1.5 whitespace-normal text-xs sm:text-sm"><GraduationCap className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />Training</TabsTrigger>
+            <TabsTrigger value="tasks" className="min-h-11 min-w-0 gap-1.5 whitespace-normal text-xs sm:text-sm"><ClipboardList className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />Tasks</TabsTrigger>
+            <TabsTrigger value="team" className="min-h-11 min-w-0 gap-1.5 whitespace-normal text-xs sm:text-sm"><UsersRound className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />Programme team</TabsTrigger>
+          </TabsList>
+        )}
+
+        <TabsContent value="training" className="space-y-6">
       <TrainingOperations />
 
       {/* SOP manual entry */}
@@ -475,6 +518,19 @@ export default function TrainingPage() {
           )}
         </div>
       )}
+        </TabsContent>
+
+        {canSeeWork && (
+          <>
+            <TabsContent value="tasks" className="space-y-6">
+              <UnitTasks unitSlug="training" />
+            </TabsContent>
+            <TabsContent value="team" className="space-y-6">
+              <UnitProgrammeTeam unitSlug="training" />
+            </TabsContent>
+          </>
+        )}
+      </Tabs>
 
       {/* Create / edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

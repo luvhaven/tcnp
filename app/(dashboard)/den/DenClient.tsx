@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import dynamic from "next/dynamic"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   BarChart3, Boxes, CalendarDays, ClipboardCheck, ClipboardList, FileText, FolderOpen, Home,
   LayoutDashboard, MapPin, Store, Users, UtensilsCrossed, type LucideIcon,
@@ -30,10 +30,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import type { DenTeamMember } from "@/hooks/useDenTeam"
-import { useUnitAccess } from "@/hooks/useUnitAccess"
-import { DEN_FLOOR_GRANTS_KEY, DEN_TABS, hasFloorAccessFor, resolveDenProgramme, resolveDenTab, type DenTab } from "@/lib/den"
+import { useCanWorkUnitProgramme, useUnitAccess } from "@/hooks/useUnitAccess"
+import { useProgrammeStanding } from "@/hooks/useProgrammeStanding"
+import { ErrorState } from "@/components/ui/error-state"
+import { DEN_TABS, resolveDenProgramme, resolveDenTab, type DenTab } from "@/lib/den"
+import {
+  briefingConfigKey, canDeleteMenus, canDeleteVendors, canEditMenus, canEditVendors, canManageDenLocations,
+  canManagePostings, canTakeMealOrders, programmeWorkNotice,
+} from "@/lib/site-unit-permissions"
 import { createClient } from "@/lib/supabase/client"
-import { canManageNoscarDen, canManageWelfare, isAdmin } from "@/lib/utils"
+import { isAdmin } from "@/lib/utils"
 
 // The dashboard is the only tab that draws charts, so its chart library is
 // loaded when that tab is first opened rather than with the page.
@@ -72,8 +78,6 @@ const TAB_ICON: Record<DenTab, LucideIcon> = {
   reports: FileText,
 }
 
-const BRIEFING_ROLES = ["noscar_nest", "head_noscar_nest", "noscar_den", "head_noscar_den", "november_oscar"]
-
 function toProfile(member: DenTeamMember): OfficerProfileData {
   return {
     id: member.id,
@@ -93,8 +97,11 @@ function toProfile(member: DenTeamMember): OfficerProfileData {
 
 export default function DenClient({ initialDens, initialTab, initialProgramme }: { initialDens: any[]; initialTab: string | null; initialProgramme: string | null }) {
   const supabase = createClient()
+  const queryClient = useQueryClient()
   const { data: currentUser } = useCurrentUser()
   const denUnit = useUnitAccess("november_den")
+  const nestUnit = useUnitAccess("november_nest")
+  const welfareUnit = useUnitAccess("welfare")
 
   const [chosenProgram, setChosenProgram] = useState<string | null>(initialProgramme)
   const [profile, setProfile] = useState<OfficerProfileData | null>(null)
@@ -113,34 +120,45 @@ export default function DenClient({ initialDens, initialTab, initialProgramme }:
   const selectedProgram = resolveDenProgramme(chosenProgram, programs, programsLoaded)
 
   const role = currentUser?.role ?? null
-  const oscar = currentUser?.oscar ?? null
-  const hasAdminAccess = currentUser?.has_admin_access ?? false
 
-  // Admins and command keep everything they already had. The unit check only
-  // ever adds the Den head on top; it never takes access away from anyone.
-  const canManage = canManageNoscarDen(role, oscar, hasAdminAccess)
-  const canManageVendors = canManageWelfare(role, oscar, hasAdminAccess)
-  // Floor work (publishing menus, taking a Papa's order) reaches other Den
-  // officers one programme at a time: they must be active for the programme
-  // and the Den head must have switched them on for it (DenFloorAccess).
-  const { data: floorPrograms = [] } = useQuery({
-    queryKey: [...DEN_FLOOR_GRANTS_KEY, "mine", currentUser?.id],
-    enabled: Boolean(currentUser?.id) && denUnit.isMember,
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("den_floor_grants")
-        .select("program_id")
-        .eq("user_id", currentUser!.id)
-      // Before the grants table exists there is simply nothing granted.
-      if (error) return [] as string[]
-      return (data ?? []).map((row: { program_id: string }) => row.program_id) as string[]
-    },
-  })
-  const hasFloorAccess = hasFloorAccessFor(floorPrograms, selectedProgram)
-  const canEditMenus = canManageVendors || hasFloorAccess
-  const canTakeOrders = canManage || hasFloorAccess
+  // One rule: unit access comes from membership only (useUnitAccess), and
+  // every flag below mirrors the RLS policy that judges the write, so a button
+  // only shows when the database will accept it. Admin and Command keep
+  // everything those policies give them.
+  const units = { den: denUnit, nest: nestUnit, welfare: welfareUnit }
+  // Programme work (publishing menus, taking a Papa's order, posting officers)
+  // reaches other members one programme at a time: active on the programme
+  // AND a head-issued grant (Den floor access or a unit programme grant). Only
+  // the database knows both, so ask it (can_work_unit_programme).
+  const programmeId = selectedProgram === "all" ? null : selectedProgram
+  const denWork = useCanWorkUnitProgramme("november_den", denUnit.isMember ? programmeId : null)
+  const nestWork = useCanWorkUnitProgramme("november_nest", nestUnit.isMember ? programmeId : null)
+  const welfareWork = useCanWorkUnitProgramme("welfare", welfareUnit.isMember ? programmeId : null)
+  const work = { den: denWork.canWork, nest: nestWork.canWork, welfare: welfareWork.canWork }
+  const { activeOnProgramme } = useProgrammeStanding(programmeId, denUnit.isMember && !denUnit.canCoordinate && !denUnit.isCommand)
+
+  const canManage = canManageDenLocations(denUnit)
+  const canManageVendors = canEditVendors(units)
+  const canRemoveVendors = canDeleteVendors(units)
+  const canEditProgrammeMenus = canEditMenus(units, work)
+  const canRemoveMenus = canDeleteMenus(units)
+  const canTakeOrders = canTakeMealOrders(units, work)
+  // Den lounges are staffed by Den coordinators and Den programme workers
+  // only; Nest access never reaches them.
+  const canPostOfficersFor = (programId: string | null) =>
+    canManagePostings(role, denUnit, Boolean(programId) && programId === programmeId && work.den)
   const canManageTeam = denUnit.canManage
-  const showBriefings = Boolean(role && BRIEFING_ROLES.includes(role))
+  const briefingKey = briefingConfigKey("november_den", denUnit)
+  const floorNotice = programmeWorkNotice({
+    access: denUnit,
+    programmeSelected: Boolean(programmeId),
+    activeOnProgramme,
+    workLoading: denWork.isLoading || nestWork.isLoading || welfareWork.isLoading,
+    workFailed: denWork.loadFailed || nestWork.loadFailed || welfareWork.loadFailed,
+    canWork: canEditProgrammeMenus || canTakeOrders,
+    work: "take orders or publish menus",
+    granter: "the Den head",
+  })
 
   const tabs = DEN_TABS
   const [requestedTab, setRequestedTab] = useState<string | null>(initialTab)
@@ -226,6 +244,15 @@ export default function DenClient({ initialDens, initialTab, initialProgramme }:
         }
       />
 
+      {denUnit.loadFailed && (
+        <ErrorState
+          title="Could not check your unit access"
+          description="Den controls stay hidden until your membership loads."
+          onRetry={() => { void queryClient.invalidateQueries({ queryKey: ["unit-access"] }) }}
+          className="rounded-2xl border"
+        />
+      )}
+
       <Tabs value={tab} onValueChange={selectTab} className="space-y-4">
         {/* A phone gets one swipeable row (the open tab is kept in view, and
             the row bleeds to the screen edge so it reads as scrollable);
@@ -260,14 +287,20 @@ export default function DenClient({ initialDens, initialTab, initialProgramme }:
 
         <TabsContent value="service">
           <div className="space-y-6">
-            <DenMenus canEdit={canEditMenus} selectedProgram={selectedProgram} currentUserId={currentUser?.id ?? null} />
+            {floorNotice && (
+              <p role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-800 dark:text-amber-300">
+                {floorNotice}
+              </p>
+            )}
+            <DenMenus canEdit={canEditProgrammeMenus} canDelete={canRemoveMenus} selectedProgram={selectedProgram} currentUserId={currentUser?.id ?? null} />
             <PapaMealOrders canOrder={canTakeOrders} selectedProgram={selectedProgram} currentUserId={currentUser?.id ?? null} />
           </div>
         </TabsContent>
 
         <TabsContent value="vendors">
           <VendorDirectory
-            canEdit={canManageVendors || denUnit.canManage}
+            canEdit={canManageVendors}
+            canDelete={canRemoveVendors}
             canRate={denUnit.isMember}
             currentUserId={currentUser?.id ?? null}
             programs={programs}
@@ -292,6 +325,7 @@ export default function DenClient({ initialDens, initialTab, initialProgramme }:
             programs={programs}
             selectedProgram={selectedProgram}
             canManage={canManage}
+            canPostOfficersFor={canPostOfficersFor}
             onOpenProfile={openProfile}
           />
         </TabsContent>
@@ -360,9 +394,9 @@ export default function DenClient({ initialDens, initialTab, initialProgramme }:
               currentUserId={currentUser?.id ?? null}
               canManage={denUnit.canManage}
             />
-            {showBriefings && role && (
+            {briefingKey && (
               <div className="rounded-xl border bg-muted/30 p-4">
-                <PapaBriefingsSection role={role} />
+                <PapaBriefingsSection role={briefingKey} />
               </div>
             )}
           </div>
@@ -373,7 +407,7 @@ export default function DenClient({ initialDens, initialTab, initialProgramme }:
         officer={profile}
         open={Boolean(profile)}
         onOpenChange={(open) => { if (!open) setProfile(null) }}
-        canManage={Boolean(currentUser && (isAdmin(currentUser.role, currentUser.has_admin_access) || isAdmin(currentUser.oscar)))}
+        canManage={Boolean(currentUser && isAdmin(currentUser.role, currentUser.has_admin_access))}
       />
     </div>
     </DenProgrammeProvider>
