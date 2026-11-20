@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useMemo, useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -16,10 +17,13 @@ import {
     Clock, CheckSquare, Navigation, Volume2, Landmark, Lock, Star,
     ChevronDown, Info, Terminal, RefreshCw, ScrollText
 } from 'lucide-react'
-import { cn, effectiveOscarRole, isAdmin as hasAdminAccess } from '@/lib/utils'
+import { cn, isAdmin as hasAdminAccess } from '@/lib/utils'
+import { useMyUnitMemberships } from '@/hooks/useUnitAccess'
+import { memberUnitSlugs } from '@/lib/unit-access'
+import { MIN_ROUNDS, VICTOR_ROUTINE_ITEMS } from '@/components/theatre/DenChecklist'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type SubSection = { heading: string; body?: string; list?: string[]; table?: { cols: string[]; rows: string[][] }; highlight?: string; script?: string[] }
+type SubSection = { heading: string; body?: string; list?: string[]; table?: { cols: string[]; rows: string[][] }; highlight?: string; script?: string[]; link?: { href: string; label: string } }
 type SOPSection = {
     id: string; title: string; icon: React.ComponentType<any>; color: string; bg: string;
     badge: string; roleGate?: string[]; subsections: SubSection[]
@@ -521,7 +525,7 @@ const SOP_SECTIONS: SOPSection[] = [
                     'Mobilize all Oscars not assigned to principals to welcome Papas at the Den',
                     'Liaise with HOP on bouquet presentations and ensure photographer is available',
                     'Ensure Prof or Duchess is available to welcome principal where necessary (in consultation with Captain)',
-                    'Run checklist on all Den facilities before and during each operation — minimum 4 times per day',
+                    'Run the Routine Check (below) on the Den and Theatre facilities before and during each day\'s operation — at least 4 rounds',
                     'Liaise with cleaning services and School for cleaning and toiletries stock replenishment',
                     'Receive seating arrangement from Captain/HOP and liaise with ushers to reserve/block required seats',
                     'Reserved seats must remain vacant unless changed by Prof, Captain, VC, or HOP',
@@ -530,6 +534,36 @@ const SOP_SECTIONS: SOPSection[] = [
                     'Make contingency arrangements for special requirements at Mount Sinai, Den, or Theatre',
                     'Liaise with Tango Uniform for reservation of Cheetah park for principal and all TCNP Oscars',
                 ],
+            },
+            {
+                heading: 'Key Risks & Controls',
+                table: {
+                    cols: ['Key Risk', 'Key Control'],
+                    rows: [
+                        ['Principals might be obstructed from accessing or exiting the Theatre', 'Constant communication with Command Centre and Tango Uniform on entry and exit plans for every operation'],
+                        ['Principal seats may be occupied by unwanted elements at arrival', 'Victor Oscar liaises with HOP and the ushers to reserve seats as appropriate'],
+                        ['Mike Uniform, Tango Uniform and other external groups may not know TCNP requirements for invited principals', 'Victor Oscar team lead relates with the other groups, in consultation with Captain and HOP, per TCNP requirements'],
+                        ['Unfit Theatre facilities may disrupt operations', `Victor Oscar ensures the checklist is followed at all times and rechecked at least ${MIN_ROUNDS} times during operations`],
+                    ],
+                },
+            },
+            {
+                heading: 'Shared Responsibilities',
+                table: {
+                    cols: ['Responsible', 'Task', 'Procedure'],
+                    rows: [
+                        ['HOP / Captain', 'Bouquets', 'Notify Victor Oscar if there will be a bouquet presentation, and contact School / Prof / Duchess / person in charge'],
+                        ['Captain / VC', 'Seating arrangement for principal', 'Where necessary, receive the seating arrangement from Prof and notify Victor Oscar for implementation'],
+                        ['Captain / VO', 'Papas security', 'Confirm and implement the security protocol and arrangement made for the principal in the Theatre'],
+                    ],
+                },
+            },
+            {
+                heading: 'Routine Check for Victor Oscar',
+                highlight: `Before the operation, then at least ${MIN_ROUNDS} rounds in all`,
+                body: 'Run on the Den and Theatre facilities before and during each day\'s operation. Log every round in Victor → Routine Check; when an item is not done, say what is outstanding in the notes.',
+                list: VICTOR_ROUTINE_ITEMS.map(item => `☐ ${item.label}${item.source.startsWith('TCNP.01.09') ? '' : ` (${item.source})`}`),
+                link: { href: '/victor?tab=routine-check', label: 'Open the Routine Check' },
             },
         ],
     },
@@ -671,6 +705,36 @@ const SOP_SECTIONS: SOPSection[] = [
 // ─── Component ────────────────────────────────────────────────────────────────
 type UnitDoc = { id: string, oscar: string, title: string, content: string, doc_type: string }
 
+// Training targets a unit document at a unit role key (training/page.tsx
+// TARGET_OSCARS). The one access rule says unit belonging comes from active
+// memberships, so a target matches the officer's membership slugs, not their
+// role or Oscar text. A target stored as a slug matches that slug directly.
+const DOC_TARGET_UNIT_SLUGS: Record<string, string[]> = {
+    alpha_oscar: ['alpha'],
+    command: ['command'],
+    compliance_oscar: ['compliance'],
+    echo_oscar: ['echo'],
+    november_oscar: ['november_den', 'november_nest'],
+    noscar_den: ['november_den'],
+    noscar_nest: ['november_nest'],
+    serial_oscar: ['serial'],
+    sierra_oscar: ['serial'],
+    tango_oscar: ['tango'],
+    training_oscar: ['training'],
+    victor_oscar: ['victor'],
+    welfare_oscar: ['welfare'],
+}
+
+function docMatchesOfficer(target: string | null | undefined, unitSlugs: readonly string[], role: string | null): boolean {
+    const key = (target ?? '').trim().toLowerCase()
+    if (!key) return false
+    if (key === 'all') return true
+    // Delta Oscar is a duty (the role), not a unit.
+    if (key === 'delta_oscar') return role === 'delta_oscar'
+    const unitKey = key.replace(/^head_/, '')
+    return (DOC_TARGET_UNIT_SLUGS[unitKey] ?? [unitKey]).some(slug => unitSlugs.includes(slug))
+}
+
 const subsectionKey = (sectionId: string, index: number) => `${sectionId}-${index}`
 
 const subsectionMatches = (sub: SubSection, q: string) =>
@@ -684,7 +748,7 @@ function SOPContent() {
     const [search, setSearch] = useState('')
     const [adminGranted, setAdminGranted] = useState(false)
     const [userRole, setUserRole] = useState<string | null>(null)
-    const [userOscar, setUserOscar] = useState<string | null>(null)
+    const { memberships } = useMyUnitMemberships()
     const [customDocs, setCustomDocs] = useState<UnitDoc[]>([])
     const [docsStatus, setDocsStatus] = useState<'loading' | 'error' | 'ready'>('loading')
     // Bumped by "Try again" to run the loader once more.
@@ -707,10 +771,10 @@ function SOPContent() {
             try {
                 const { data: { user } } = await supabase.auth.getUser()
                 if (!user) { if (!cancelled) setDocsStatus('ready'); return }
-                const { data, error: userError } = await supabase.from('users').select('role, has_admin_access, oscar').eq('id', user.id).single()
+                const { data, error: userError } = await supabase.from('users').select('role, has_admin_access').eq('id', user.id).single()
                 if (userError) throw userError
                 if (cancelled) return
-                if (data) { setUserRole(data.role); setUserOscar(data.oscar); setAdminGranted(data.has_admin_access) }
+                if (data) { setUserRole(data.role); setAdminGranted(data.has_admin_access) }
 
                 const { data: docs, error: docsError } = await supabase.from('oscar_documents').select('*')
                 if (docsError) throw docsError
@@ -733,8 +797,8 @@ function SOPContent() {
 
     const dynamicSections = useMemo(() => {
         if (!userRole) return SOP_SECTIONS
-        const effective = effectiveOscarRole(userRole, userOscar)
-        const matches = customDocs.filter(d => d.oscar === 'all' || d.oscar === effective)
+        const unitSlugs = memberUnitSlugs(memberships)
+        const matches = customDocs.filter(d => docMatchesOfficer(d.oscar, unitSlugs, userRole))
 
         const sops = matches.filter(d => d.doc_type === 'sop')
         const codes = matches.filter(d => d.doc_type === 'code_of_conduct')
@@ -767,7 +831,7 @@ function SOPContent() {
             })
         }
         return [...SOP_SECTIONS, ...custom]
-    }, [customDocs, userRole, userOscar])
+    }, [customDocs, userRole, memberships])
 
     // Always show DO section to DOs, admins, captains
     const isDO = userRole === 'delta_oscar'
@@ -866,6 +930,14 @@ function SOPContent() {
                         </li>
                     ))}
                 </ul>
+            )}
+            {sub.link && (
+                <Link
+                    href={sub.link.href}
+                    className="mt-2 inline-flex min-h-11 items-center rounded-md border border-primary/30 bg-primary/5 px-3 text-sm font-medium text-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
+                >
+                    {sub.link.label}
+                </Link>
             )}
             {sub.table && (
                 <div className="overflow-x-auto rounded-xl border border-border/50">

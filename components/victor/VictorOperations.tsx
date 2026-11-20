@@ -34,6 +34,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { useUnitAccess } from "@/hooks/useUnitAccess"
 
 const supabase = createClient()
 const POST_CODES = ["A", "B", "C", "D", "E", "F"] as const
@@ -105,7 +106,7 @@ function requirementValue(value: unknown) {
 
 export default function VictorOperations({ canManage: legacyCanManage, currentUserId, selectedTheatreId }: Props) {
   const db = supabase as any
-  const [membershipCanManage, setMembershipCanManage] = useState<boolean | null>(null)
+  const victorAccess = useUnitAccess("victor")
   const [data, setData] = useState<OperationsData>(EMPTY_DATA)
   const [selectedVenueId, setSelectedVenueId] = useState("")
   const [loading, setLoading] = useState(true)
@@ -125,18 +126,12 @@ export default function VictorOperations({ canManage: legacyCanManage, currentUs
   const [showVenueForm, setShowVenueForm] = useState(false)
   const [venueForm, setVenueForm] = useState({ programId: "", theatreId: "", label: "", startsAt: "", endsAt: "" })
   const syncedTheatreRef = useRef<string | null | undefined>(undefined)
-  // The page passes the officer's unit access in as `canManage`; the RPC can
-  // widen it but never narrows it, so an RPC error or a slow answer does not
-  // turn a Head or admin read-only. The database still enforces every write.
-  const canManage = legacyCanManage || membershipCanManage === true
-
-  useEffect(() => {
-    let active = true
-    void db.rpc("can_manage_unit", { unit_slug: "victor" }).then(({ data: allowed, error }: Row) => {
-      if (active) setMembershipCanManage(error ? null : allowed === true)
-    })
-    return () => { active = false }
-  }, [db])
+  // Every write here is RLS can_manage_unit('victor') (the Victor head or a
+  // platform admin; Command is not in those policies). The answer comes from
+  // the shared membership query (useUnitAccess), the same one rule the page
+  // uses; the page's own `canManage` is the same flag, so either is enough.
+  // The database still enforces every write.
+  const canManage = legacyCanManage || victorAccess.canManage
 
   const loadOperations = useCallback(async () => {
     setLoading(true)

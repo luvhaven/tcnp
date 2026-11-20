@@ -22,6 +22,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 if (event === 'SIGNED_OUT') {
                     // Also cover expired sessions, password enforcement and other sign-out paths.
                     void import('@/lib/device-push').then(m => m.disconnectDevicePush(false)).catch(() => undefined)
+                    // Drop unsent Victor routine-check notes so the next officer
+                    // on a shared device starts clean (lazy: keeps the checklist
+                    // out of the root bundle; same module instance if loaded).
+                    void import('@/components/theatre/DenChecklist').then(m => m.clearRoutineDrafts()).catch(() => undefined)
                     // Clear any client-side cache
                     isAuthenticating.current = false
                     // Stop attributing errors to the officer who just left;
