@@ -1,13 +1,15 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { Suspense, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
 import { notifyError } from '@/lib/notify'
 import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
-import { canManageCompliance, cn } from "@/lib/utils"
+import { cn } from "@/lib/utils"
+import { useUnitAccess } from "@/hooks/useUnitAccess"
 import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/ui/page-header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,11 +26,18 @@ import {
 } from "@/components/ui/select"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
 import ComplianceInitiatives from "@/components/compliance/ComplianceInitiatives"
+import ComplianceInspections from "@/components/compliance/ComplianceInspections"
+import ComplianceRecognition from "@/components/compliance/ComplianceRecognition"
+import { resolveComplianceTab, type ComplianceTab } from "@/components/compliance/inspection-logic"
+import UnitTasks from "@/components/units/UnitTasks"
+import UnitProgrammeTeam from "@/components/units/UnitProgrammeTeam"
+import { canSeeUnitWork, type UnitWorkTabValue } from "@/components/units/unit-work-tabs"
 import {
-  Shirt, Plus, Trash2, Pencil, Sparkles, Scissors, CheckCircle2, ImageIcon, Loader2, CalendarDays,
+  Shirt, Plus, Trash2, Pencil, Sparkles, Scissors, CheckCircle2, ImageIcon, Loader2, CalendarDays, ClipboardCheck, Trophy, ClipboardList, Users,
 } from "lucide-react"
 import { UPLOAD_RULES, validateUploadFiles } from "@/lib/security/upload-validation"
 import { ErrorState } from "@/components/ui/error-state"
+import { Skeleton } from "@/components/ui/skeleton"
 import { format, isValid, parseISO } from "date-fns"
 
 // ─── Singleton client ───
@@ -94,20 +103,69 @@ function formatEventDate(value: string) {
 }
 
 export default function CompliancePage() {
-  const { data: currentUser } = useCurrentUser()
+  // useSearchParams (?tab=) needs a Suspense boundary so the page can still prerender.
+  return (
+    <Suspense fallback={<ComplianceSkeleton />}>
+      <ComplianceContent />
+    </Suspense>
+  )
+}
+
+function ComplianceSkeleton() {
+  return (
+    <div className="space-y-6" role="status" aria-label="Loading Compliance">
+      <Skeleton className="h-16 w-full max-w-xl" />
+      <Skeleton className="h-11 w-full" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-64 rounded-xl" />)}
+      </div>
+    </div>
+  )
+}
+
+function ComplianceContent() {
+  const currentUserQuery = useCurrentUser()
+  const currentUser = currentUserQuery.data
   const queryClient = useQueryClient()
   const confirm = useConfirm()
+  const searchParams = useSearchParams()
 
-  const { data: canManageComplianceUnit = false } = useQuery({
-    queryKey: ["can-manage-unit", "compliance", currentUser?.id],
-    enabled: Boolean(currentUser?.id),
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("can_manage_unit", { unit_slug: "compliance" })
-      if (error) return false
-      return Boolean(data)
-    },
-  })
-  const canEdit = canManageCompliance(currentUser?.role, currentUser?.oscar, currentUser?.has_admin_access) || canManageComplianceUnit
+  // One access rule (lib/unit-access): Compliance membership, not the role or
+  // Oscar text. Matches the compliance_posts / compliance-media policies:
+  // write = Command or a Compliance coordinator; delete = Command or the head.
+  // (Programme workers may also post for their programme under RLS; that
+  // path has no UI yet because nobody is staffed on a programme.)
+  const compliance = useUnitAccess("compliance")
+  const canEdit = compliance.isCommand || compliance.canCoordinate
+  const canDelete = compliance.isCommand || compliance.canManage
+  const canInspect = compliance.isCommand || compliance.canCoordinate
+  // Same rule as the recognition RLS: Command keeps oversight (hide or remove an entry).
+  const canRecognise = compliance.isCommand || compliance.canCoordinate
+
+  // The tab lives in the address bar (?tab=inspections|recognition) so a
+  // notification lands on it. A link followed while the page is open changes
+  // tabParam; the last seen value is kept in state to switch tab in render.
+  // ?tab=tasks and ?tab=team open the unit's Tasks and Programme team (members and Command).
+  const canSeeWork = canSeeUnitWork(compliance)
+  const resolvePageTab = (value: string | null): ComplianceTab | UnitWorkTabValue =>
+    value === "tasks" || value === "team" ? value : resolveComplianceTab(value)
+  const tabParam = searchParams.get("tab")
+  const [requestedTab, setTab] = useState<ComplianceTab | UnitWorkTabValue>(() => resolvePageTab(tabParam))
+  const [seenParam, setSeenParam] = useState(tabParam)
+  if (seenParam !== tabParam) {
+    setSeenParam(tabParam)
+    setTab(resolvePageTab(tabParam))
+  }
+  // Kept while access loads, so a notification link opens the tab once it arrives.
+  const tab = (requestedTab === "tasks" || requestedTab === "team") && !canSeeWork ? "outfits" : requestedTab
+  const selectTab = (value: string) => {
+    const next = resolvePageTab(value)
+    setTab(next)
+    const url = new URL(window.location.href)
+    if (next === "outfits") url.searchParams.delete("tab")
+    else url.searchParams.set("tab", next)
+    window.history.replaceState(null, "", url)
+  }
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<CompliancePost | null>(null)
@@ -146,6 +204,10 @@ export default function CompliancePage() {
     },
   })
 
+  const programOptions = useMemo(
+    () => (programs as { id: string; name: string | null }[]).map((p) => ({ id: p.id, name: p.name ?? "Programme" })),
+    [programs],
+  )
   const outfits = useMemo(() => posts.filter(p => p.post_type !== "grooming"), [posts])
   const groomingPosts = useMemo(() => posts.filter(p => p.post_type === "grooming"), [posts])
   const today = localToday()
@@ -227,7 +289,7 @@ export default function CompliancePage() {
     setDialogOpen(true)
   }
 
-  const PostCard = ({ post, highlight = false }: { post: CompliancePost; highlight?: boolean }) => {
+  const renderPostCard = (post: CompliancePost, highlight = false) => {
     const meta = POST_TYPES.find(t => t.value === post.post_type) ?? POST_TYPES[0]
     return (
       <Card className={cn("card-hover h-full overflow-hidden", highlight && "border-emerald-500/50 shadow-[0_0_24px_-8px_rgba(16,185,129,0.4)]")}>
@@ -254,18 +316,18 @@ export default function CompliancePage() {
                 </p>
               )}
             </div>
-            {canEdit && (
+            {(canEdit || canDelete) && (
               <div className="flex shrink-0 gap-1">
-                <Button aria-label={`Edit post: ${post.title}`} title="Edit post" variant="ghost" size="icon" className="h-9 w-9" onClick={() => openEdit(post)}><Pencil className="h-4 w-4" aria-hidden="true" /></Button>
-                <Button aria-label={`Delete post: ${post.title}`} title="Delete post"
-                  variant="ghost" size="icon" className="h-9 w-9 text-red-500"
+                {canEdit && <Button aria-label={`Edit post: ${post.title}`} title="Edit post" variant="ghost" size="icon" onClick={() => openEdit(post)}><Pencil className="h-4 w-4" aria-hidden="true" /></Button>}
+                {canDelete && <Button aria-label={`Delete post: ${post.title}`} title="Delete post"
+                  variant="ghost" size="icon" className="text-red-500"
                   onClick={async () => {
                     const ok = await confirm({ title: "Delete post?", message: `"${post.title}" will be removed.` })
                     if (ok) deleteMutation.mutate(post)
                   }}
                 >
                   <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </Button>
+                </Button>}
               </div>
             )}
           </div>
@@ -297,17 +359,32 @@ export default function CompliancePage() {
             <Sparkles className="h-4 w-4" aria-hidden="true" /> Today&apos;s Outfit
           </p>
           <div className="max-w-xl">
-            <PostCard post={outfitOfToday} highlight />
+            {renderPostCard(outfitOfToday, true)}
           </div>
         </motion.div>
       )}
 
-      <ComplianceInitiatives />
+      {compliance.loadFailed && (
+        <ErrorState
+          className="rounded-xl border py-6"
+          title="We could not check your Compliance access"
+          description="Unit tools stay hidden until this loads."
+          onRetry={() => { void queryClient.invalidateQueries({ queryKey: ["unit-access"] }) }}
+        />
+      )}
 
-      <Tabs defaultValue="outfits" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="outfits"><Shirt className="mr-2 h-4 w-4" />Outfits</TabsTrigger>
-          <TabsTrigger value="grooming"><Scissors className="mr-2 h-4 w-4" />Grooming Standards</TabsTrigger>
+      <Tabs value={tab} onValueChange={selectTab} className="space-y-4">
+        <TabsList className="h-auto w-full justify-start overflow-x-auto sm:w-auto">
+          <TabsTrigger value="outfits" className="min-h-10"><Shirt className="mr-1.5 h-4 w-4" aria-hidden="true" />Outfits</TabsTrigger>
+          <TabsTrigger value="grooming" className="min-h-10"><Scissors className="mr-1.5 h-4 w-4" aria-hidden="true" />Grooming</TabsTrigger>
+          <TabsTrigger value="inspections" className="min-h-10"><ClipboardCheck className="mr-1.5 h-4 w-4" aria-hidden="true" />Inspections</TabsTrigger>
+          <TabsTrigger value="recognition" className="min-h-10"><Trophy className="mr-1.5 h-4 w-4" aria-hidden="true" />Recognition</TabsTrigger>
+          {canSeeWork && (
+            <>
+              <TabsTrigger value="tasks" className="min-h-10"><ClipboardList className="mr-1.5 h-4 w-4" aria-hidden="true" />Tasks</TabsTrigger>
+              <TabsTrigger value="team" className="min-h-10"><Users className="mr-1.5 h-4 w-4" aria-hidden="true" />Programme team</TabsTrigger>
+            </>
+          )}
         </TabsList>
 
         <TabsContent value="outfits" className="space-y-4">
@@ -328,7 +405,7 @@ export default function CompliancePage() {
               <AnimatePresence>
                 {outfits.map(post => (
                   <motion.div key={post.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-                    <PostCard post={post} />
+                    {renderPostCard(post)}
                   </motion.div>
                 ))}
               </AnimatePresence>
@@ -364,7 +441,7 @@ export default function CompliancePage() {
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Unit Tips</p>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {groomingPosts.map(post => <PostCard key={post.id} post={post} />)}
+                {groomingPosts.map(post => <div key={post.id}>{renderPostCard(post)}</div>)}
               </div>
             </div>
           )}
@@ -375,7 +452,40 @@ export default function CompliancePage() {
             </Button>
           )}
         </TabsContent>
+
+        <TabsContent value="inspections">
+          <ComplianceInspections
+            canInspect={canInspect}
+            currentUserId={currentUser?.id}
+            userStatus={currentUserQuery.isError ? "error" : currentUserQuery.isPending ? "loading" : "ready"}
+            onRetryUser={() => void currentUserQuery.refetch()}
+            programs={programOptions}
+          />
+        </TabsContent>
+
+        <TabsContent value="recognition">
+          <ComplianceRecognition
+            canRecognise={canRecognise}
+            canManageAwards={compliance.canManage}
+            isUnitMember={compliance.isMember}
+            currentUserId={currentUser?.id}
+            programs={programOptions}
+          />
+        </TabsContent>
+
+        {canSeeWork && (
+          <>
+            <TabsContent value="tasks">
+              <UnitTasks unitSlug="compliance" />
+            </TabsContent>
+            <TabsContent value="team">
+              <UnitProgrammeTeam unitSlug="compliance" />
+            </TabsContent>
+          </>
+        )}
       </Tabs>
+
+      <ComplianceInitiatives />
 
       {/* Create / edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

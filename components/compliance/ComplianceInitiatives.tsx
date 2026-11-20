@@ -24,7 +24,8 @@ import {
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
-import { cn, isPlatformAdministrator } from "@/lib/utils"
+import { cn } from "@/lib/utils"
+import { useUnitAccess } from "@/hooks/useUnitAccess"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -39,7 +40,6 @@ import { ErrorState } from "@/components/ui/error-state"
 const supabase = createClient()
 
 type Unit = { id: string; slug: string }
-type UnitMembership = { unit_id: string; user_id: string; access_level: string; status: string }
 type Officer = { id: string; full_name: string | null; email: string | null }
 type UnitProject = {
   id: string
@@ -94,8 +94,6 @@ const PROJECT_TYPES = {
   },
 } as const
 
-const MANAGER_ACCESS = new Set(["head", "head_of_unit", "manager", "admin"])
-
 function formatDate(value: string | null) {
   if (!value) return "Not scheduled"
   return new Intl.DateTimeFormat("en-NG", {
@@ -110,7 +108,33 @@ function formatDate(value: string | null) {
 /** Missing table/relation (not yet migrated) rather than a network or permission failure. */
 function isNotProvisioned(error: unknown) {
   const code = (error as { code?: string } | null)?.code
-  return code === "42P01" || code === "PGRST205" || code === "PGRST200"
+  // PGRST202 / 42883: an RPC that is not deployed yet.
+  return code === "42P01" || code === "PGRST205" || code === "PGRST200" || code === "PGRST202" || code === "42883"
+}
+
+/**
+ * Active Compliance members for the task owner picker, sorted by name. Rows
+ * whose user is missing or deactivated are dropped, matching the database
+ * guard (an active member of the owning unit).
+ */
+function compliancePickerMembers(rows: unknown): Officer[] {
+  const seen = new Set<string>()
+  const members: Officer[] = []
+  for (const row of (Array.isArray(rows) ? rows : []) as { user_id?: string; user?: (Officer & { is_active?: boolean | null }) | null }[]) {
+    const user = row?.user
+    if (!user?.id || user.is_active === false || seen.has(user.id)) continue
+    seen.add(user.id)
+    members.push({ id: user.id, full_name: user.full_name ?? null, email: user.email ?? null })
+  }
+  return members.sort((a, b) => (a.full_name || a.email || "").localeCompare(b.full_name || b.email || ""))
+}
+
+/** The unit-task assignee guard (23514) in plain words; other errors pass through. */
+function taskWriteError(error: unknown) {
+  if ((error as { code?: string } | null)?.code === "23514") {
+    return new UserFacingError("That officer is not an active member of the Compliance unit, so they cannot own this task. Add them to the unit first, or choose someone else.")
+  }
+  return error
 }
 
 function toLocalInput(value: string | null) {
@@ -156,26 +180,10 @@ export default function ComplianceInitiatives() {
     },
   })
 
-  const membershipQuery = useQuery({
-    queryKey: ["unit-membership", unitQuery.data?.id, currentUser?.id],
-    enabled: Boolean(unitQuery.data?.id && currentUser?.id),
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("unit_memberships")
-        .select("unit_id, user_id, access_level, status")
-        .eq("unit_id", unitQuery.data!.id)
-        .eq("user_id", currentUser!.id)
-        .eq("status", "active")
-        .maybeSingle()
-      if (error) throw error
-      return data as UnitMembership | null
-    },
-  })
-
-  const canManage = Boolean(
-    isPlatformAdministrator(currentUser?.role, currentUser?.has_admin_access) ||
-      (membershipQuery.data?.status === "active" && MANAGER_ACCESS.has(membershipQuery.data.access_level)),
-  )
+  // Initiatives and their tasks are written by the unit head (and platform
+  // admins): RLS on unit_projects / unit_tasks is can_manage_unit('compliance').
+  const compliance = useUnitAccess("compliance")
+  const canManage = compliance.canManage
 
   const projectsQuery = useQuery({
     queryKey: ["compliance-unit-projects", unitQuery.data?.id],
@@ -207,17 +215,19 @@ export default function ComplianceInitiatives() {
     },
   })
 
+  // Owner picker: only active Compliance members can hold a Compliance task
+  // (the database guard refuses anyone else with 23514), so list just them.
   const officersQuery = useQuery({
-    queryKey: ["active-officers-lite", "compliance-initiatives"],
-    enabled: canManage,
+    queryKey: ["compliance-active-members", unitQuery.data?.id],
+    enabled: canManage && Boolean(unitQuery.data?.id),
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("users")
-        .select("id, full_name, email")
-        .eq("is_active", true)
-        .order("full_name", { ascending: true })
+      const { data, error } = await (supabase as any)
+        .from("unit_memberships")
+        .select("user_id, user:users!unit_memberships_user_id_fkey(id, full_name, email, is_active)")
+        .eq("unit_id", unitQuery.data!.id)
+        .eq("status", "active")
       if (error) throw error
-      return (data ?? []) as Officer[]
+      return compliancePickerMembers(data)
     },
   })
 
@@ -309,17 +319,31 @@ export default function ComplianceInitiatives() {
       setTaskForm({ title: "", description: "", assigned_to: "", due_at: "" })
       invalidateOperations()
     },
-    onError: (error: Error) => notifyError(error, "Could not add task"),
+    onError: (error: Error) => notifyError(taskWriteError(error), "Could not add task"),
   })
 
   const toggleTaskMutation = useMutation({
     mutationFn: async (task: UnitTask) => {
       const complete = task.status !== "done"
-      const { error } = await (supabase as any)
-        .from("unit_tasks")
-        .update({ status: complete ? "done" : "todo", completed_at: complete ? new Date().toISOString() : null })
-        .eq("id", task.id)
-      if (error) throw error
+      if (canManage) {
+        const { error } = await (supabase as any)
+          .from("unit_tasks")
+          .update({ status: complete ? "done" : "todo", completed_at: complete ? new Date().toISOString() : null })
+          .eq("id", task.id)
+        if (error) throw error
+        return
+      }
+      // A member moves only their own task, through the shared status RPC
+      // (assignee only; it cannot retitle, reassign or re-date the task).
+      const { error } = await (supabase as any).rpc("unit_set_my_task_status", {
+        task: task.id,
+        new_status: complete ? "done" : "todo",
+      })
+      if (error) {
+        if (isNotProvisioned(error)) throw new UserFacingError("Marking your own task is not switched on yet. Ask the unit head to update it.")
+        if (error.code === "42501") throw new UserFacingError("This task is not assigned to you, or you are no longer in the Compliance unit")
+        throw error
+      }
     },
     onSuccess: invalidateOperations,
     onError: (error: Error) => notifyError(error, "Could not update task"),
@@ -508,10 +532,13 @@ export default function ComplianceInitiatives() {
                             {projectTasks.length === 0 ? <p className="rounded-2xl border border-dashed p-5 text-center text-sm text-muted-foreground">No tasks have been added.</p> : projectTasks.map((task) => {
                               const assigneeName = ownerName(task.assigned_to)
                               const completed = task.status === "done"
+                              const isMine = Boolean(currentUser?.id) && task.assigned_to === currentUser?.id
+                              // Managers move any task; a member moves only their own (not a cancelled one).
+                              const canToggle = canManage || (isMine && task.status !== "cancelled")
                               return (
-                                <div key={task.id} className="flex items-start gap-3 rounded-2xl border border-border/70 bg-background/80 p-3.5">
-                                  <button type="button" disabled={!canManage || toggleTaskMutation.isPending} onClick={() => toggleTaskMutation.mutate(task)} className={cn("mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors", completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-border hover:border-primary", !canManage && "cursor-default")} aria-label={completed ? "Mark task pending" : "Mark task complete"}>{completed ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}</button>
-                                  <div className="min-w-0 flex-1"><p className={cn("text-sm font-medium", completed && "text-muted-foreground line-through")}>{task.title}</p>{task.description && <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{task.description}</p>}<div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">{assigneeName && <span className="inline-flex min-w-0 items-center gap-1"><UserRound className="h-3 w-3 shrink-0" aria-hidden="true" /><span className="sr-only">Owner: </span><span className="truncate">{assigneeName}</span></span>}{task.due_at && <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />{formatDate(task.due_at)}</span>}</div></div>
+                                <div key={task.id} className="flex items-start gap-2 rounded-2xl border border-border/70 bg-background/80 p-2">
+                                  <button type="button" disabled={!canToggle || toggleTaskMutation.isPending} onClick={() => toggleTaskMutation.mutate(task)} className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-full", !canToggle && "cursor-default")} aria-label={`${completed ? "Mark task pending" : "Mark task complete"}: ${task.title}`}><span className={cn("flex h-6 w-6 items-center justify-center rounded-full border transition-colors", completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-border hover:border-primary")} aria-hidden="true">{completed ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}</span></button>
+                                  <div className="min-w-0 flex-1 py-1.5 pr-1.5"><p className={cn("text-sm font-medium", completed && "text-muted-foreground line-through")}>{task.title}{isMine && !canManage && <Badge variant="outline" className="ml-2 align-middle text-[10px]">Yours</Badge>}</p>{task.description && <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{task.description}</p>}<div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">{assigneeName && <span className="inline-flex min-w-0 items-center gap-1"><UserRound className="h-3 w-3 shrink-0" aria-hidden="true" /><span className="sr-only">Owner: </span><span className="truncate">{assigneeName}</span></span>}{task.due_at && <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />{formatDate(task.due_at)}</span>}</div></div>
                                 </div>
                               )
                             })}
@@ -551,7 +578,7 @@ export default function ComplianceInitiatives() {
           <form onSubmit={submitTask} className="space-y-4">
             <div className="space-y-2"><Label htmlFor="initiative-task-title">Task</Label><Input id="initiative-task-title" value={taskForm.title} onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))} placeholder="What needs to be done?" maxLength={180} /></div>
             <div className="space-y-2"><Label htmlFor="initiative-task-notes">Notes</Label><Textarea id="initiative-task-notes" rows={3} value={taskForm.description} onChange={(event) => setTaskForm((current) => ({ ...current, description: event.target.value }))} placeholder="Acceptance notes, dependencies or context" /></div>
-            <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="initiative-task-owner">Owner</Label><Select value={taskForm.assigned_to || "unassigned"} onValueChange={(value) => setTaskForm((current) => ({ ...current, assigned_to: value === "unassigned" ? "" : value }))}><SelectTrigger id="initiative-task-owner"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unassigned">Unassigned</SelectItem>{officers.map((officer) => <SelectItem key={officer.id} value={officer.id}>{officer.full_name || officer.email || "Unnamed officer"}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label htmlFor="initiative-task-due">Due</Label><Input id="initiative-task-due" type="datetime-local" value={taskForm.due_at} onChange={(event) => setTaskForm((current) => ({ ...current, due_at: event.target.value }))} /></div></div>
+            <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="initiative-task-owner">Owner</Label><Select value={taskForm.assigned_to || "unassigned"} onValueChange={(value) => setTaskForm((current) => ({ ...current, assigned_to: value === "unassigned" ? "" : value }))}><SelectTrigger id="initiative-task-owner" className="h-11" aria-describedby="initiative-task-owner-help"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unassigned">Unassigned</SelectItem>{officers.map((officer) => <SelectItem key={officer.id} value={officer.id}>{officer.full_name || officer.email || "Unnamed officer"}</SelectItem>)}</SelectContent></Select><p id="initiative-task-owner-help" className="text-xs text-muted-foreground" aria-live="polite">{officersQuery.isError ? "Could not load the Compliance team. You can still add the task unassigned." : officersQuery.isPending && canManage ? "Loading the Compliance team..." : officers.length === 0 ? "No active Compliance members yet. Add the task unassigned for now." : "Only active Compliance members can own a task."}</p></div><div className="space-y-2"><Label htmlFor="initiative-task-due">Due</Label><Input id="initiative-task-due" type="datetime-local" value={taskForm.due_at} onChange={(event) => setTaskForm((current) => ({ ...current, due_at: event.target.value }))} /></div></div>
             <div className="flex justify-end gap-2 pt-2"><Button type="button" variant="outline" onClick={() => setTaskDialogOpen(false)}>Cancel</Button><Button type="submit" disabled={createTaskMutation.isPending}>{createTaskMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardList className="mr-2 h-4 w-4" />}Add task</Button></div>
           </form>
         </DialogContent>
