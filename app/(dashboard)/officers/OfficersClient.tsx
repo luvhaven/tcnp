@@ -19,6 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { UserCircle, Plus, Edit, Trash2, UserCheck, UserX, Award, Search, LayoutGrid, List, Download, Filter, Eye } from "lucide-react"
 import { toast } from "sonner"
 import { notifyError, UserFacingError } from '@/lib/notify'
+import { looksLikeImage, photoToJpeg, uploadErrorForUser } from '@/lib/headshot-image'
 import { motion, AnimatePresence } from "framer-motion"
 import { OfficerProfileDialog } from "@/components/officers/OfficerProfileDialog"
 import { cn, isExecutiveRole, isPlatformAdministrator, oscarToRole, privilegedAccessLabel } from "@/lib/utils"
@@ -29,6 +30,7 @@ import { isPermanentOwnerEmail } from "@/lib/platform-owner"
 import { OFFICER_PRESENCE_REFRESH_MS } from "@/lib/presence"
 import { useSearchParams } from "next/navigation"
 import { PasswordResetRequestsTab } from "@/components/officers/PasswordResetRequestsTab"
+import { bulkAssignToasts, programChatRemovedIds } from "@/lib/chat-room-restore"
 import { OFFICER_ROLE_OPTIONS, OFFICER_CATEGORIES, officerRoleLabel, canonicalOfficerRole, officerAccountStatus, leadershipSummary, filterDirectoryOfficers, toggleVisibleOfficerSelection, officerCSVCell, officerCategoryId, adminNeedsOscar, ADMIN_NEEDS_OSCAR_MESSAGE, ADMIN_WITHOUT_OSCAR } from '@/lib/officer-directory'
 
 /** The server refused to activate a declined signup without overrideDecline. */
@@ -519,8 +521,16 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
           .select('current_title_id').single()
         if (pointerError) throw pointerError
       } else if (payload.titleData?.title_id && payload.rpcData?.p_title_code) {
+        // A programme title restores the officer's programme chat access even after
+        // an admin removed them from it (the database lifts the removal). Read it
+        // first so the admin is told; failing to read it never blocks the assignment.
+        const programId = payload.rpcData.p_program_id
+        const wasRemovedFromChat = programId
+          ? await programChatRemovedIds(supabase, programId, [payload.rpcData.p_user_id]).then(ids => ids.size > 0, () => false)
+          : false
         const { error } = await supabase.rpc('assign_title', payload.rpcData)
         if (error) throw error
+        if (wasRemovedFromChat) payload.chatRestored = true
 
         // Approve pending accounts only; do not reactivate deactivated officers.
         if (payload.rpcData.p_program_id) {
@@ -547,6 +557,11 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
         queryClient.invalidateQueries({ queryKey: ['officer-details', variables.rpcData.p_user_id] })
       }
       toast.success(variables?.clearTitle ? 'Title unassigned successfully!' : variables?.rpcData?.p_title_code ? 'Title assigned successfully!' : 'Account role updated successfully!')
+      if (variables?.chatRestored) {
+        const officer = officers.find((o: any) => o.id === variables.rpcData?.p_user_id)
+        const program = programs.find((p: any) => p.id === variables.rpcData?.p_program_id)
+        toast.success(`${officer?.full_name || 'The officer'} is back in the ${program?.name ? `${program.name} ` : 'programme '}chat.`)
+      }
       setTitleDialogOpen(false)
       setAssignFromDirectoryOpen(false)
       setAssigningTitleFor(null)
@@ -593,27 +608,36 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
     setEditing(null)
   }
 
+  const [photoUploading, setPhotoUploading] = useState(false)
+
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    // Reset so choosing the same file again still fires onChange.
+    e.target.value = ''
     if (!file) return
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please upload an image file')
+    if (!looksLikeImage(file)) {
+      toast.error('Please choose a photo (JPG or PNG).')
       return
     }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be less than 5MB')
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error('This photo is over 15 MB. Choose a smaller photo.')
       return
     }
+    setPhotoUploading(true)
     try {
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
-      const { error: uploadError } = await supabase.storage.from('officer-photos').upload(fileName, file)
-      if (uploadError) throw uploadError
+      // Converted to a 1024px JPEG first: the bucket accepts common types up
+      // to 5 MB, and phone photos (HEIC, 8 MB+) would otherwise be refused.
+      const jpeg = await photoToJpeg(file, 1024)
+      const fileName = `${crypto.randomUUID()}.jpg`
+      const { error: uploadError } = await supabase.storage.from('officer-photos').upload(fileName, jpeg, { contentType: 'image/jpeg' })
+      if (uploadError) throw uploadErrorForUser(uploadError)
       const { data: { publicUrl } } = supabase.storage.from('officer-photos').getPublicUrl(fileName)
       setFormData(prev => ({ ...prev, photo_url: publicUrl }))
-      toast.success('Photo uploaded successfully')
+      toast.success('Photo ready. Save the officer to keep it.')
     } catch (error: any) {
-      notifyError(error, 'Failed to upload photo')
+      notifyError(error, "The photo couldn't be uploaded. Check your connection and try again.", { tags: { area: 'officers-photo' } })
+    } finally {
+      setPhotoUploading(false)
     }
   }
 
@@ -718,10 +742,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
       if (!response.ok) throw new UserFacingError(result.error || "Failed to batch assign officers")
 
       queryClient.invalidateQueries({ queryKey: ['officers'] })
-      const assigned = Number(result.assigned_count || 0)
-      const existing = Number(result.already_assigned_count || 0)
-      if (assigned > 0) toast.success(`Assigned ${assigned} officer${assigned === 1 ? '' : 's'} to the program.`)
-      if (existing > 0) toast.info(`${existing} officer${existing === 1 ? ' is' : 's are'} already assigned.`)
+      const programName = programs.find((p: any) => p.id === assignForm.program_id)?.name
+      for (const notice of bulkAssignToasts(result, programName)) toast[notice.kind](notice.message)
       if (result.inactive_count > 0) {
         toast.warning(`${result.inactive_count} deactivated officer(s) were skipped. Reactivate them first.`)
       }
@@ -1734,7 +1756,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
             </div>
             <div className="space-y-2">
               <Label htmlFor="photo">Officer Photo (Optional)</Label>
-              <Input id="photo" type="file" accept="image/*" onChange={handlePhotoUpload} className="cursor-pointer" />
+              <Input id="photo" type="file" accept="image/*" onChange={handlePhotoUpload} disabled={photoUploading} className="cursor-pointer" />
+              {photoUploading && <p role="status" className="mt-2 text-sm text-muted-foreground">Uploading photo…</p>}
               {formData.photo_url && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
                   <Avatar className="h-10 w-10">
@@ -1747,7 +1770,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
             </div>
             <div className="flex gap-2 pt-4">
               <Button type="button" variant="outline" onClick={() => { setDialogOpen(false); setEditing(null); resetForm() }} className="flex-1">Cancel</Button>
-              <Button type="submit" className="flex-1" pending={officerSavePending}>{editing ? 'Update Officer' : 'Create Officer'}</Button>
+              <Button type="submit" className="flex-1" pending={officerSavePending} disabled={photoUploading}>{editing ? 'Update Officer' : 'Create Officer'}</Button>
             </div>
           </form>
         </DialogContent>

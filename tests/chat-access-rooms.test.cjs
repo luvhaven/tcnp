@@ -198,6 +198,10 @@ test('with removals enabled, admins can remove automatic members and the removal
   assert.equal(listed.body.canRemoveAutomatic, true)
   assert.equal(listed.body.members.some(member => member.id === MEMBER), false)
   assert.equal(listed.body.candidates.some(member => member.id === MEMBER), true)
+  // Removed officers are labelled and listed first so an admin can add them back.
+  assert.equal(listed.body.candidates[0].id, MEMBER)
+  assert.equal(listed.body.candidates[0].removed, true)
+  assert.equal(listed.body.candidates.find(member => member.id === CANDIDATE)?.removed, false)
 
   // Adding back clears the removal and relies on the assignment again (no duplicate invitation).
   const before = system.writes.length

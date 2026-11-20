@@ -15,6 +15,7 @@ import { DeviceNotificationControl } from "@/components/notifications/DeviceNoti
 import { CompletionRing } from "@/components/profile/CompletionRing"
 import { useCelebrate } from "@/components/providers/CelebrateProvider"
 import { HeadshotCropDialog } from "@/components/profile/HeadshotCropDialog"
+import { looksLikeImage, uploadErrorForUser } from "@/lib/headshot-image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -163,8 +164,9 @@ export default function ProfilePage() {
     // Reset the input so choosing the same file again still fires onChange
     e.target.value = ""
     if (!file) return
-    if (!file.type.startsWith("image/")) { toast.error("Please choose an image file"); return }
-    if (file.size > 15 * 1024 * 1024) { toast.error("Image must be under 15MB"); return }
+    // Some phones give HEIC photos an empty type, so the name is checked too.
+    if (!looksLikeImage(file)) { toast.error("Please choose a photo (JPG or PNG)."); return }
+    if (file.size > 15 * 1024 * 1024) { toast.error("This photo is over 15 MB. Choose a smaller photo, or take a screenshot of it and use that."); return }
     // Full-length or group photos are common here — open the cropper so the
     // officer can isolate just the headshot before it's uploaded.
     setPendingFile(file)
@@ -181,7 +183,7 @@ export default function ProfilePage() {
         contentType: "image/jpeg",
         upsert: true,
       })
-      if (upErr) throw upErr
+      if (upErr) throw uploadErrorForUser(upErr)
       const url = supabase.storage.from("avatars").getPublicUrl(path).data.publicUrl
       // Persist immediately so the headshot survives even if they don't hit Save
       const { error: dbErr } = await supabase.from("users").update({ photo_url: url, updated_at: new Date().toISOString() }).eq("id", currentUser.id)
@@ -190,7 +192,7 @@ export default function ProfilePage() {
       queryClient.invalidateQueries({ queryKey: ["currentUser"] })
       toast.success("Headshot updated")
     } catch (err: any) {
-      notifyError(err, "Upload failed")
+      notifyError(err, "Your headshot couldn't be uploaded. Check your connection and try again.", { tags: { area: "profile-headshot" } })
     } finally {
       setUploading(false)
       setPendingFile(null)
@@ -463,6 +465,7 @@ export default function ProfilePage() {
         open={cropOpen}
         onClose={() => { setCropOpen(false); setPendingFile(null) }}
         onCropped={handleCroppedUpload}
+        onChooseAnother={() => { setCropOpen(false); setPendingFile(null); fileRef.current?.click() }}
       />
     </div>
   )

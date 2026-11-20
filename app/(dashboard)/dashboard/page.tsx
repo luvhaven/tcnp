@@ -414,6 +414,17 @@ export default function DashboardPage() {
     void loadDashboardData()
   }
 
+  // If the first load fails (for example the database was briefly busy), keep
+  // trying in the background so the screen recovers without anyone tapping.
+  useEffect(() => {
+    if (!loadError) return
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void handleDashboardRetry()
+    }, 15_000)
+    return () => clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadError])
+
   // A quiet reload: the page stays on screen and only the button shows progress.
   const handleRefresh = async () => {
     if (refreshing) return

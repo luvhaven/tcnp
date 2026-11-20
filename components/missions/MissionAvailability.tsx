@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import { notifyError, UserFacingError } from '@/lib/notify'
+import { bulkAssignToasts } from "@/lib/chat-room-restore"
 import { createClient } from "@/lib/supabase/client"
 import { isMissionAudience, MISSION_AUDIENCES, type MissionAudience } from "@/lib/mission-audiences"
 import { cn } from "@/lib/utils"
@@ -276,19 +277,15 @@ export function AvailabilityRosterButton({
       })
       const data = await res.json()
       if (!res.ok) throw new UserFacingError(data.error || "Assignment failed")
-      const assignedCount = Number(data.assigned_count ?? selected.length)
-      const alreadyAssignedCount = Number(data.already_assigned_count ?? 0)
       const confirmedAssignedIds = [...(data.assigned_ids ?? []), ...(data.already_assigned_ids ?? [])]
       if (confirmedAssignedIds.length > 0) {
         queryClient.setQueryData<string[]>(["program-assignments", programId], previous =>
           Array.from(new Set([...(previous ?? []), ...confirmedAssignedIds]))
         )
       }
-      if (assignedCount > 0) {
-        toast.success(`${assignedCount} officer${assignedCount === 1 ? "" : "s"} assigned to ${programName}`)
-      } else if (alreadyAssignedCount > 0) {
-        toast.info(`Selected officer${alreadyAssignedCount === 1 ? " is" : "s are"} already assigned to ${programName}`)
-      }
+      // Officers already on the programme are told so, and are put back in the
+      // programme chat if an admin had removed them from it.
+      for (const notice of bulkAssignToasts(data, programName)) toast[notice.kind](notice.message)
       if (data.inactive_count > 0) {
         toast.warning(`${data.inactive_count} deactivated officer${data.inactive_count === 1 ? " was" : "s were"} skipped. Reactivate them first.`)
       }

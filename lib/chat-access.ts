@@ -27,6 +27,8 @@ export type ChatRoomMember = {
   accessType: 'executive' | 'admin' | 'member' | 'team' | 'program' | 'duty'
   /** Said "available" to this program's mission request. */
   available?: boolean
+  /** Removed from this room by an admin; adding them back restores access. */
+  removed?: boolean
 }
 
 export type ChatRoomsResponse = {

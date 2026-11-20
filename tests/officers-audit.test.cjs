@@ -63,7 +63,7 @@ function bulkRoute({ status = 'active', role = 'vice_captain', failRPC = false, 
  }, rpc: async (_, args) => { calls.push(args); return { error: failRPC ? Error('capacity reached') : null } } }
  const serverQuery = { select() { return this }, eq() { return this }, or() { return this }, single: async () => ({ data: { role: 'super_admin' } }) }
  const utils = compile('lib/utils.ts')
- const route = compile('app/api/admin/bulk-assign-program/route.ts', { 'next/server': { NextResponse: { json: (body, options = {}) => ({ body, status: options.status || 200 }) } }, '@/lib/supabase/server': { createClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: 'admin' } } }) }, from: () => serverQuery }) }, '@/lib/supabase/admin': { createAdminClient: () => db }, '@/lib/utils': utils })
+ const route = compile('app/api/admin/bulk-assign-program/route.ts', { 'next/server': { NextResponse: { json: (body, options = {}) => ({ body, status: options.status || 200 }) } }, '@/lib/supabase/server': { createClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: 'admin' } } }) }, from: () => serverQuery }) }, '@/lib/supabase/admin': { createAdminClient: () => db }, '@/lib/utils': utils, '@/lib/chat-room-restore': { programChatRemovedIds: async () => new Set(), restoreProgramChatAccess: async () => [] } })
  return { run: () => route.POST({ json: async () => ({ officer_ids: ['vice-two'], program_id: 'program' }) }), calls, updates }
 }
 test('bulk assignment maps the second Vice Captain correctly and blocks closed programs before writes', async () => {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { restoreProgramChatAccess } from '@/lib/chat-room-restore'
 import {
     ADDITION_UNITS,
     additionOutcome,
@@ -185,7 +186,15 @@ export async function POST(request: Request) {
             .eq('user_id', userId)
             .eq('is_active', true)
             .limit(1)
-        if (existing?.length) return NextResponse.json({ outcome: 'added', already: true })
+        if (existing?.length) {
+            // Already on the programme: a lead adding them again still puts them back
+            // in the programme chat if an admin had removed them from it.
+            const restored = await restoreProgramChatAccess(db, programId, [userId]).catch((restoreError: unknown) => {
+                console.error('program-additions: could not restore programme chat access:', restoreError)
+                return [] as string[]
+            })
+            return NextResponse.json({ outcome: 'added', already: true, chat_restored: restored.length > 0 })
+        }
 
         const { data: openRequest } = await db
             .from('program_addition_requests')

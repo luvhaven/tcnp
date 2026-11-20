@@ -72,15 +72,17 @@ export default function DenFloorAccess({ selectedProgram, programName, currentUs
       })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new UserFacingError(body.error || "Could not add this officer to the programme")
-      return { member, outcome: body.outcome as "added" | "pending" }
+      return { member, outcome: body.outcome as "added" | "pending", already: body.already === true, chatRestored: body.chat_restored === true }
     },
-    onSuccess: ({ member, outcome }) => {
+    onSuccess: ({ member, outcome, already, chatRestored }) => {
       refresh()
       setNeedsReason(null)
       setReason("")
       const name = member.full_name ?? "Officer"
       toast.success(outcome === "added"
-        ? `${name} is now on ${programLabel}`
+        ? already
+          ? `${name} is already on ${programLabel}.${chatRestored ? " They are back in the programme chat." : ""}`
+          : `${name} is now on ${programLabel}`
         : `Sent for approval: ${name} will join ${programLabel} once leadership approves`)
     },
     onError: (error) => notifyError(error, "Could not add this officer to the programme"),

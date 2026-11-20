@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isPlatformAdministrator, oscarToRole } from '@/lib/utils'
+import { programChatRemovedIds, restoreProgramChatAccess } from '@/lib/chat-room-restore'
 
 export async function POST(request: Request) {
     try {
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
         if (uniqueOfficerIds.length === 0) {
             return NextResponse.json({ error: 'No valid officers were selected' }, { status: 400 })
         }
-        const { data: program, error: programError } = await (adminClient as any).from('programs').select('status').eq('id', program_id).maybeSingle()
+        const { data: program, error: programError } = await (adminClient as any).from('programs').select('status, name').eq('id', program_id).maybeSingle()
         if (programError) return NextResponse.json({ error: 'Could not verify program' }, { status: 500 })
         if (!program) return NextResponse.json({ error: 'Program not found' }, { status: 404 })
         if (!['active', 'planning'].includes(program.status)) return NextResponse.json({ error: 'Select an active or planning program' }, { status: 409 })
@@ -55,14 +56,38 @@ export async function POST(request: Request) {
             console.error('Failed to check existing program assignments:', assignmentLookupError)
             return NextResponse.json({ error: 'Could not verify existing program assignments' }, { status: 500 })
         }
-        const alreadyAssignedIds = new Set((existingAssignments || []).map((assignment: { user_id: string }) => assignment.user_id))
+        const alreadyAssignedIds = new Set<string>((existingAssignments || []).map((assignment: { user_id: string }) => assignment.user_id))
         const pendingOfficerIds = uniqueOfficerIds.filter(id => !alreadyAssignedIds.has(id))
+
+        // Assigning an officer restores their programme chat access even after an
+        // admin removed them from the room. A new assignment lifts the removal in
+        // the database (migration 20261120120000); an officer who is already on
+        // the programme changes no assignment row, so lift it here. Chat access
+        // never blocks the assignment itself.
+        let removedBefore = new Set<string>()
+        let restoredAlready: string[] = []
+        try {
+            removedBefore = await programChatRemovedIds(adminClient, program_id, uniqueOfficerIds)
+            restoredAlready = await restoreProgramChatAccess(adminClient, program_id, [...alreadyAssignedIds])
+        } catch (restoreError) {
+            console.error('Failed to restore programme chat access:', restoreError)
+        }
+        const officerNames = async (ids: string[]) => {
+            if (ids.length === 0) return {}
+            const { data } = await (adminClient as any).from('users').select('id, full_name').in('id', ids)
+            return Object.fromEntries((data || []).map((row: { id: string; full_name: string | null }) => [row.id, row.full_name]))
+        }
+
         if (pendingOfficerIds.length === 0) {
             return NextResponse.json({
                 success: true,
+                program_name: program.name ?? null,
                 assigned_count: 0,
+                assigned_ids: [],
                 already_assigned_count: alreadyAssignedIds.size,
                 already_assigned_ids: [...alreadyAssignedIds],
+                chat_restored_ids: restoredAlready,
+                officer_names: await officerNames([...alreadyAssignedIds]),
             })
         }
 
@@ -191,8 +216,12 @@ export async function POST(request: Request) {
             assignedIds.push(u.id)
         }
 
+        const chatRestoredIds = [...restoredAlready, ...assignedIds.filter(id => removedBefore.has(id))]
         return NextResponse.json({
             success: failedIds.length === 0,
+            program_name: program.name ?? null,
+            chat_restored_ids: chatRestoredIds,
+            officer_names: await officerNames([...new Set([...assignedIds, ...alreadyAssignedIds])]),
             assigned_count: assignedCount,
             assigned_ids: assignedIds,
             already_assigned_count: alreadyAssignedIds.size,

@@ -5,7 +5,10 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { ZoomIn, ZoomOut, RotateCcw, Check, ScanFace, Loader2 } from "lucide-react"
+import { ZoomIn, ZoomOut, RotateCcw, Check, ScanFace, Loader2, ImageOff } from "lucide-react"
+import {
+  PHOTO_CANNOT_OPEN_MESSAGE, PHOTO_CANNOT_PREPARE_MESSAGE, canvasToBlob, convertWithImageBitmap,
+} from "@/lib/headshot-image"
 
 const VIEWPORT_SIZE = 288 // CSS px — square crop window shown to the user
 const OUTPUT_SIZE = 512   // px — exported headshot resolution
@@ -13,6 +16,8 @@ const MIN_ZOOM = 1
 const MAX_ZOOM = 4
 
 type Point = { x: number; y: number }
+/** loading: the browser is opening the photo; converting: a second decoder is trying. */
+type LoadStatus = "idle" | "loading" | "converting" | "ready" | "error"
 
 /**
  * Canvas-based headshot cropper. Full-length or group photos are common
@@ -26,11 +31,14 @@ export function HeadshotCropDialog({
   open,
   onClose,
   onCropped,
+  onChooseAnother,
 }: {
   file: File | null
   open: boolean
   onClose: () => void
   onCropped: (blob: Blob) => void
+  /** Offered when the photo cannot be opened, so the officer can pick another. */
+  onChooseAnother?: () => void
 }) {
   const imgRef = useRef<HTMLImageElement | null>(null)
   const viewportRef = useRef<HTMLDivElement | null>(null)
@@ -41,17 +49,37 @@ export function HeadshotCropDialog({
   const [dragging, setDragging] = useState(false)
   const [detecting, setDetecting] = useState(false)
   const [faceFound, setFaceFound] = useState<boolean | null>(null)
+  const [status, setStatus] = useState<LoadStatus>("idle")
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [preparing, setPreparing] = useState(false)
   const dragStartRef = useRef<{ pointer: Point; pan: Point } | null>(null)
+  // Object URLs created for the current file (the original, and a converted
+  // JPEG when the browser could not open the original). Revoked on change.
+  // One object per chosen file; `cancelled` is set when a different file
+  // replaces it, so a slow conversion of the old file is ignored.
+  const loadRef = useRef<{ cancelled: boolean; converted: boolean; urls: string[] }>({ cancelled: true, converted: false, urls: [] })
 
-  // Load the file into an object URL whenever a new one is provided
+  // Load the file into an object URL whenever a new one is provided. Every
+  // piece of state from the previous photo is cleared: a stale size would
+  // otherwise leave "Use photo" enabled over a photo that never opened.
   useEffect(() => {
-    if (!file) { setImgUrl(null); return }
-    const url = URL.createObjectURL(file)
-    setImgUrl(url)
+    const load = { cancelled: false, converted: false, urls: [] as string[] }
+    loadRef.current = load
+    setNaturalSize(null)
     setZoom(1)
     setPan({ x: 0, y: 0 })
     setFaceFound(null)
-    return () => URL.revokeObjectURL(url)
+    setErrorMessage(null)
+    setPreparing(false)
+    if (!file) { setImgUrl(null); setStatus("idle"); return }
+    const url = URL.createObjectURL(file)
+    load.urls.push(url)
+    setImgUrl(url)
+    setStatus("loading")
+    return () => {
+      load.cancelled = true
+      for (const u of load.urls) URL.revokeObjectURL(u)
+    }
   }, [file])
 
   const baseScale = naturalSize
@@ -96,12 +124,38 @@ export function HeadshotCropDialog({
     }
   }, [baseScale])
 
+  // The browser could not open the photo (an iPhone HEIC photo outside
+  // Safari, a gallery item that never downloaded, a damaged file). Try the
+  // second decoder once, converting to JPEG; otherwise say so plainly.
+  const handleImageError = async () => {
+    const load = loadRef.current
+    if (!file || load.cancelled || load.converted) {
+      setStatus("error")
+      setErrorMessage(PHOTO_CANNOT_OPEN_MESSAGE)
+      return
+    }
+    load.converted = true
+    setStatus("converting")
+    const converted = await convertWithImageBitmap(file)
+    if (load.cancelled) return // a different photo was chosen meanwhile
+    if (!converted) {
+      setStatus("error")
+      setErrorMessage(PHOTO_CANNOT_OPEN_MESSAGE)
+      return
+    }
+    const url = URL.createObjectURL(converted)
+    load.urls.push(url)
+    setImgUrl(url)
+  }
+
   const handleImageLoad = () => {
     const img = imgRef.current
     if (!img) return
     const w = img.naturalWidth
     const h = img.naturalHeight
+    if (!w || !h) { void handleImageError(); return }
     setNaturalSize({ w, h })
+    setStatus("ready")
     void attemptFaceDetection(img, w, h)
   }
 
@@ -140,15 +194,30 @@ export function HeadshotCropDialog({
 
   const reset = () => { setZoom(1); setPan({ x: 0, y: 0 }) }
 
-  const confirmCrop = () => {
+  const confirmCrop = async () => {
     const img = imgRef.current
-    if (!img || !naturalSize) return
+    if (!img || !naturalSize || status !== "ready" || preparing) return
+    setPreparing(true)
+    setErrorMessage(null)
+    try {
+      const blob = await cropToBlob(img, naturalSize)
+      if (!blob) { setErrorMessage(PHOTO_CANNOT_PREPARE_MESSAGE); return }
+      onCropped(blob)
+    } catch {
+      setErrorMessage(PHOTO_CANNOT_PREPARE_MESSAGE)
+    } finally {
+      setPreparing(false)
+    }
+  }
 
+  // Draws the framed area at OUTPUT_SIZE and encodes it as a JPEG. Resolves
+  // null when the browser cannot encode (canvas.toBlob gave nothing).
+  const cropToBlob = (img: HTMLImageElement, naturalSize: { w: number; h: number }): Promise<Blob | null> => {
     const canvas = document.createElement("canvas")
     canvas.width = OUTPUT_SIZE
     canvas.height = OUTPUT_SIZE
     const ctx = canvas.getContext("2d")
-    if (!ctx) return
+    if (!ctx) return Promise.resolve(null)
 
     const displayedW = naturalSize.w * effectiveScale
     const displayedH = naturalSize.h * effectiveScale
@@ -167,8 +236,11 @@ export function HeadshotCropDialog({
     sh = Math.min(sh, naturalSize.h - sy)
 
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE)
-    canvas.toBlob((blob) => { if (blob) onCropped(blob) }, "image/jpeg", 0.92)
+    return canvasToBlob(canvas, "image/jpeg", 0.92)
   }
+
+  const opening = status === "loading" || status === "converting"
+  const failedToOpen = status === "error"
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -197,30 +269,49 @@ export function HeadshotCropDialog({
             onPointerUp={onPointerUp}
             onPointerLeave={onPointerUp}
           >
-            {imgUrl && (
+            {imgUrl && !failedToOpen && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 ref={imgRef}
                 src={imgUrl}
                 alt="Crop preview"
                 onLoad={handleImageLoad}
+                onError={() => void handleImageError()}
                 draggable={false}
                 className="pointer-events-none absolute left-1/2 top-1/2 max-w-none"
                 style={{
                   width: naturalSize?.w,
                   height: naturalSize?.h,
+                  visibility: naturalSize ? "visible" : "hidden",
                   maxWidth: "none",
                   transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px) scale(${effectiveScale})`,
                   transformOrigin: "center center",
                 }}
               />
             )}
-            {detecting && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                <Loader2 className="h-6 w-6 animate-spin text-white" />
+            {(detecting || opening) && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/30 text-xs text-white">
+                <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
+                {opening && <span role="status">{status === "converting" ? "Converting photo…" : "Opening photo…"}</span>}
+              </div>
+            )}
+            {failedToOpen && (
+              <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                <ImageOff className="h-10 w-10" aria-hidden="true" />
               </div>
             )}
           </div>
+
+          {errorMessage && (
+            <div role="alert" className="space-y-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-center text-sm">
+              <p>{errorMessage}</p>
+              {failedToOpen && onChooseAnother && (
+                <Button type="button" variant="outline" size="sm" onClick={onChooseAnother}>
+                  Choose another photo
+                </Button>
+              )}
+            </div>
+          )}
 
           {faceFound !== null && (
             <p className="flex items-center justify-center gap-1.5 text-center text-[11px] text-muted-foreground">
@@ -248,14 +339,15 @@ export function HeadshotCropDialog({
               does push the dialog past the viewport, the confirm action stays
               on screen rather than requiring a scroll to discover. */}
           <div className="sticky bottom-0 -mx-6 -mb-6 flex gap-2 border-t bg-background px-6 pb-6 pt-3">
-            <Button type="button" variant="outline" className="flex-1 gap-1.5" onClick={reset}>
+            <Button type="button" variant="outline" className="flex-1 gap-1.5" onClick={reset} disabled={status !== "ready"}>
               <RotateCcw className="h-4 w-4" /> Reset
             </Button>
             <Button type="button" variant="ghost" className="flex-1" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="button" className="flex-1 gap-1.5" onClick={confirmCrop} disabled={!naturalSize}>
-              <Check className="h-4 w-4" /> Use Photo
+            <Button type="button" className="flex-1 gap-1.5" onClick={() => void confirmCrop()} disabled={status !== "ready" || !naturalSize || preparing}>
+              {preparing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
+              {preparing ? "Preparing…" : "Use Photo"}
             </Button>
           </div>
         </div>

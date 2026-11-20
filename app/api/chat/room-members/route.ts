@@ -9,11 +9,11 @@ import { getAvailableOfficerIds, getAvailableProgramDutyOfficerIds, getChatRemov
 
 const MEMBER_FIELDS = 'id, full_name, role, has_admin_access, oscar, photo_url, is_online, last_seen, is_active, activation_status, team'
 
-function memberView(user: any, accessType: ChatRoomMember['accessType'], available = false): ChatRoomMember {
+function memberView(user: any, accessType: ChatRoomMember['accessType'], available = false, removed = false): ChatRoomMember {
   return {
     id: user.id, full_name: user.full_name, role: user.role, oscar: user.oscar,
     photo_url: user.photo_url, last_seen: user.last_seen,
-    is_online: isOfficerOnline(user), accessType, available,
+    is_online: isOfficerOnline(user), accessType, available, removed,
   }
 }
 
@@ -94,11 +94,12 @@ export async function GET(request: Request) {
           : scope.team ? 'team' : dutyMemberIds.has(user.id) ? 'duty' : programMemberIds.has(user.id) ? 'program' : 'member',
         availableIds.has(user.id),
       ))
-    // Available officers first (keeping alphabetical order within each group).
+    // Officers removed from this room come first so an admin can add them back,
+    // then available officers (keeping alphabetical order within each group).
     const candidates = canManageMembers && !scope.team
       ? activeUsers.filter(user => !canManageChatMemberships(user.role, user.has_admin_access) && !explicitIds.has(user.id))
-        .map(user => memberView(user, 'member', availableIds.has(user.id)))
-        .sort((a, b) => Number(b.available) - Number(a.available))
+        .map(user => memberView(user, 'member', availableIds.has(user.id), removedIds.has(user.id)))
+        .sort((a, b) => Number(b.removed) - Number(a.removed) || Number(b.available) - Number(a.available))
       : undefined
     return NextResponse.json({
       members, candidates,
