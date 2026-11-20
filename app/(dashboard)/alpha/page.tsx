@@ -1,7 +1,9 @@
 "use client"
 
 import { useReloadOnDeletion } from "@/hooks/useDashboardDeletions"
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
+import { useSearchParams } from "next/navigation"
+import { useQueryClient } from "@tanstack/react-query"
 import PapaBriefingsSection from "@/components/papas/PapaBriefingsSection"
 import AOArrivalTimeline from "@/components/eagles/AOArrivalTimeline"
 import FlightSearch from "@/components/eagles/FlightSearch"
@@ -11,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/ui/page-header"
 import { ErrorState } from "@/components/ui/error-state"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
@@ -18,36 +21,92 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plane, Plus, Edit, Trash2, MapPin } from "lucide-react"
+import { Plane, Plus, Edit, Trash2, MapPin, ClipboardList, Users } from "lucide-react"
 import { toast } from "sonner"
 import { notifyError } from '@/lib/notify'
-import { useCurrentUser } from "@/hooks/useCurrentUser"
-import { canManageEagles, effectiveOscarRole, oscarToRole } from '@/lib/utils'
+import { useUnitAccess } from "@/hooks/useUnitAccess"
+import UnitTasks from "@/components/units/UnitTasks"
+import UnitProgrammeTeam from "@/components/units/UnitProgrammeTeam"
+import { canSeeUnitWork, isUnitWorkTab } from "@/components/units/unit-work-tabs"
 
-const ALPHA_ROLES = ['alpha_oscar', 'head_alpha_oscar']
+type AlphaTab = 'squares' | 'tracking' | 'timeline' | 'tasks' | 'team'
+
+/** The tab named in the address bar, when this officer can open it. */
+function resolveAlphaTab(requested: string | null | undefined, canSeeTimeline: boolean, canSeeWork = false): AlphaTab {
+    if (requested === 'tracking') return 'tracking'
+    if (requested === 'timeline' && canSeeTimeline) return 'timeline'
+    if (isUnitWorkTab(requested, canSeeWork)) return requested
+    return 'squares'
+}
 
 /**
- * The officer's Alpha role, or null when they are not Alpha. Officers keep the
- * signup role ("viewer") and are identified by the Oscar they registered under,
- * which effectiveOscarRole only reads for Delta Oscars, so read it here too.
- * Those officers get the read-only Alpha briefings: the role-update API works
- * out their role with effectiveOscarRole ("viewer") and refuses every edit, so
- * a Head Alpha Oscar on the signup role must not be shown edit controls.
+ * Briefing config from the officer's Alpha level, not their role or Oscar:
+ * the head and Sub-Team Leads (and platform admins) get the editable config,
+ * other Alpha members the read-only one, everyone else none.
  */
-function alphaRoleFor(role: string | null | undefined, oscar: string | null | undefined): string | null {
-    const effective = effectiveOscarRole(role, oscar)
-    if (effective && ALPHA_ROLES.includes(effective)) return effective
-    if (!role || role === 'viewer') {
-        const fromOscar = oscarToRole(oscar)
-        if (fromOscar && ALPHA_ROLES.includes(fromOscar)) return 'alpha_oscar'
-    }
+function alphaBriefingRole(access: { canCoordinate: boolean; isMember: boolean }): string | null {
+    if (access.canCoordinate) return 'head_alpha_oscar'
+    if (access.isMember) return 'alpha_oscar'
     return null
 }
 
+/** Keeps a view setting in the address bar without a navigation. */
+function writeAddress(values: Record<string, string | null>) {
+    const url = new URL(window.location.href)
+    for (const [name, value] of Object.entries(values)) {
+        if (value) url.searchParams.set(name, value)
+        else url.searchParams.delete(name)
+    }
+    window.history.replaceState(null, "", url)
+}
+
 export default function EaglesPage() {
-    const { data: currentUser } = useCurrentUser()
-    // PapaBriefingsSection keys its fields off this Alpha role.
-    const alphaRole = alphaRoleFor(currentUser?.role, currentUser?.oscar)
+    // useSearchParams needs a Suspense boundary so the page can still prerender.
+    return (
+        <Suspense fallback={<AlphaSkeleton />}>
+            <AlphaContent />
+        </Suspense>
+    )
+}
+
+function AlphaSkeleton() {
+    return (
+        <div className="space-y-6" role="status" aria-label="Loading Alpha">
+            <Skeleton className="h-8 w-48 max-w-full" />
+            <Skeleton className="h-11 w-full max-w-md" />
+            <Skeleton className="h-40 w-full" />
+        </div>
+    )
+}
+
+function AlphaContent() {
+    const params = useSearchParams()
+    const queryClient = useQueryClient()
+    const alpha = useUnitAccess('alpha')
+    const command = useUnitAccess('command')
+    // Matches the timeline read policy: admin/Command, Alpha or Command members.
+    const canSeeTimeline = alpha.isMember || alpha.isCommand || command.isMember
+    // Eagle Squares RLS: is_admin() OR can_manage_unit('alpha').
+    const canManageSquares = alpha.canManage || alpha.isCommand
+    // Tasks and Programme team: Alpha members and Command (the components decide who edits).
+    const canSeeWork = canSeeUnitWork(alpha)
+    const briefingRole = alphaBriefingRole(alpha)
+
+    // The address bar leads: a notification tap or back/forward that changes
+    // ?tab= while the page stays mounted moves the tab with it. A tab click
+    // is shown at once and written back with replaceState.
+    const addressTab = params.get('tab')
+    const [requestedTab, setRequestedTab] = useState<string | null>(addressTab)
+    const [seenAddressTab, setSeenAddressTab] = useState<string | null>(addressTab)
+    if (seenAddressTab !== addressTab) {
+        setSeenAddressTab(addressTab)
+        setRequestedTab(addressTab)
+    }
+    const tab = resolveAlphaTab(requestedTab, canSeeTimeline, canSeeWork)
+    const selectTab = (next: string) => {
+        setRequestedTab(next)
+        writeAddress({ tab: next === 'squares' ? null : next })
+    }
 
     return (
         <div className="space-y-6 page-enter">
@@ -58,24 +117,42 @@ export default function EaglesPage() {
                 description="Airport hubs, VIP tarmac reception, and live flight telemetry."
             />
 
-            {/* ── Papa Arrival Briefings + AO Timeline for Alpha Oscar ── */}
-            {alphaRole && (
-                <div className="grid gap-4 md:grid-cols-2">
-                    <div className="border rounded-xl p-4 bg-muted/30">
-                        <PapaBriefingsSection role={alphaRole} />
-                    </div>
-                    <AOArrivalTimeline />
+            {(alpha.loadFailed || command.loadFailed) && (
+                <Card>
+                    <ErrorState
+                        title="We couldn't confirm your unit access"
+                        description="Alpha controls stay hidden until it loads. Check your connection and try again."
+                        onRetry={() => { void queryClient.invalidateQueries({ queryKey: ['unit-access'] }) }}
+                    />
+                </Card>
+            )}
+
+            {/* Papa arrival briefings: read-only for Alpha members, editable for the head. */}
+            {briefingRole && (
+                <div className="border rounded-xl p-4 bg-muted/30">
+                    <PapaBriefingsSection role={briefingRole} />
                 </div>
             )}
 
-            <Tabs defaultValue="squares" className="space-y-6">
-                <TabsList className="grid w-full grid-cols-2 max-w-md">
-                    <TabsTrigger value="squares" className="min-w-0 whitespace-normal text-center text-xs sm:text-sm">Eagle Squares (Airports)</TabsTrigger>
-                    <TabsTrigger value="tracking">Flight Tracking</TabsTrigger>
+            <Tabs value={tab} onValueChange={selectTab} className="space-y-6">
+                <TabsList className={canSeeWork
+                    ? `grid h-auto w-full grid-cols-3 gap-1 p-1 ${canSeeTimeline ? 'sm:grid-cols-5 max-w-4xl' : 'sm:grid-cols-4 max-w-3xl'}`
+                    : canSeeTimeline ? "grid w-full grid-cols-3 max-w-xl" : "grid w-full grid-cols-2 max-w-md"}>
+                    <TabsTrigger value="squares" className="min-h-11 min-w-0 whitespace-normal text-center text-xs sm:text-sm">Eagle Squares</TabsTrigger>
+                    <TabsTrigger value="tracking" className="min-h-11 min-w-0 whitespace-normal text-center text-xs sm:text-sm">Flight Tracking</TabsTrigger>
+                    {canSeeTimeline && (
+                        <TabsTrigger value="timeline" className="min-h-11 min-w-0 whitespace-normal text-center text-xs sm:text-sm">Arrival Timeline</TabsTrigger>
+                    )}
+                    {canSeeWork && (
+                        <>
+                            <TabsTrigger value="tasks" className="min-h-11 min-w-0 gap-1.5 whitespace-normal text-center text-xs sm:text-sm"><ClipboardList className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />Tasks</TabsTrigger>
+                            <TabsTrigger value="team" className="min-h-11 min-w-0 gap-1.5 whitespace-normal text-center text-xs sm:text-sm"><Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />Programme team</TabsTrigger>
+                        </>
+                    )}
                 </TabsList>
 
                 <TabsContent value="squares" className="space-y-6">
-                    <ManageSquares />
+                    <ManageSquares canManage={canManageSquares} />
                 </TabsContent>
 
                 <TabsContent value="tracking" className="space-y-6">
@@ -85,22 +162,42 @@ export default function EaglesPage() {
                         description="Exact, itinerary-scoped OpenSky tracking for Papa arrivals. Schedule estimates are never presented as confirmed live positions."
                     />
                 </TabsContent>
+
+                {canSeeTimeline && (
+                    <TabsContent value="timeline" className="space-y-6">
+                        <AOArrivalTimeline
+                            access={{
+                                loadFailed: alpha.loadFailed,
+                                isMember: alpha.isMember,
+                                isCommand: alpha.isCommand,
+                                isCommandMember: command.isMember,
+                                canCoordinate: alpha.canCoordinate,
+                            }}
+                            initialProgrammeId={params.get('programme')}
+                            initialPapaId={params.get('papa')}
+                            onSelectionChange={({ programme, papa }) => writeAddress({ programme, papa })}
+                        />
+                    </TabsContent>
+                )}
+
+                {canSeeWork && (
+                    <>
+                        <TabsContent value="tasks" className="space-y-6">
+                            <UnitTasks unitSlug="alpha" />
+                        </TabsContent>
+                        <TabsContent value="team" className="space-y-6">
+                            <UnitProgrammeTeam unitSlug="alpha" />
+                        </TabsContent>
+                    </>
+                )}
             </Tabs>
         </div>
     )
 }
 
-function ManageSquares() {
+function ManageSquares({ canManage }: { canManage: boolean }) {
     const supabase = createClient()
     const confirm = useConfirm()
-    const { data: currentUser } = useCurrentUser()
-    // canManageEagles reads the role. The database also lets any officer whose
-    // Oscar mentions Alpha edit Eagle Squares (is_alpha_oscar matches the oscar
-    // column by substring), including those still on the signup role, so keep
-    // their controls too rather than hide something they can do today.
-    const canManage =
-        canManageEagles(currentUser?.role, currentUser?.oscar, currentUser?.has_admin_access) ||
-        Boolean(currentUser?.oscar?.toLowerCase().includes('alpha'))
     const [airports, setAirports] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [loadFailed, setLoadFailed] = useState(false)

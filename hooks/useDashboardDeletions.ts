@@ -12,12 +12,14 @@ const queryFamiliesByTable: Record<string, readonly string[]> = {
     'papa-meal-orders', 'papa-meal-order-menus', 'papa-meal-order-papas',
     'serial-media', 'finance-documents', 'compliance-posts', 'seat-arrangements',
     'seat-assignments', 'welfare-prayer-campaigns', 'nest-papa-arrivals', 'officers',
+    'alpha-arrival-board', 'alpha-arrival-timeline', 'alpha-timeline-programmes',
   ],
   theatres: ['theatres', 'theatres-lite', 'programs', 'seat-arrangements', 'victor'],
   papas: [
     'papas', 'papas-lite', 'papas-lite-seating', 'papa-briefings', 'papa-accommodations',
     'papa-meal-order-papas', 'papa-meal-orders', 'chat-rooms', 'nest-papa-arrivals',
     'seat-assignments', 'tango-papa-itineraries', 'chat-room-members',
+    'alpha-arrival-board', 'alpha-arrival-timeline',
   ],
   cheetahs: ['cheetahs', 'journey-cheetahs', 'tango-journeys-board'],
   nests: ['nests', 'nests-lite', 'myNestId', 'noscar_assignments', 'papa-accommodations', 'nest-rooms', 'nest-room-stays'],
@@ -45,6 +47,10 @@ const queryFamiliesByTable: Record<string, readonly string[]> = {
   compliance_posts: ['compliance-posts'],
   prayer_campaigns: ['welfare-prayer-campaigns', 'welfare-prayer-slots', 'welfare-prayer-slot-members'],
   prayer_slot_members: ['welfare-prayer-slot-members'],
+  // Alpha arrival timelines (AOArrivalTimeline): a deleted timeline or item
+  // refreshes the board and any open timeline card.
+  alpha_arrival_timelines: ['alpha-arrival-board', 'alpha-arrival-timeline'],
+  alpha_arrival_timeline_items: ['alpha-arrival-board', 'alpha-arrival-timeline'],
 }
 
 type DeletionListener = (tables: ReadonlySet<string> | null) => void
