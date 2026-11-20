@@ -18,11 +18,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { DatePicker } from "@/components/ui/date-picker"
-import { Car, Plus, Edit, Trash2, ChevronDown, AlertTriangle, Gauge } from "lucide-react"
+import { ErrorState } from "@/components/ui/error-state"
+import { Car, Plus, Edit, Trash2, ChevronDown, AlertTriangle, Gauge, UserRound } from "lucide-react"
 import { toast } from "sonner"
 import { notifyError } from '@/lib/notify'
 import { motion, AnimatePresence } from "framer-motion"
 import TangoOperations from "@/components/tango/TangoOperations"
+import { driverOptionLabel, driverShortBlocker, lagosDate, rethrowDriverError, useTangoDriverRoster } from "@/components/tango/DriversPanel"
 
 type Cheetah = {
   id: string
@@ -40,8 +42,10 @@ type Cheetah = {
   features: string | null
   last_maintenance: string | null
   next_maintenance: string | null
-  driver_name: string
-  driver_phone: string
+  /** Copied from the default driver by the database; free text on older vehicles. */
+  driver_name: string | null
+  driver_phone: string | null
+  default_driver_id?: string | null
   created_at: string
   programs: { name: string } | null
   mileage: number | null
@@ -51,8 +55,8 @@ type Cheetah = {
 
 type CheetahFormState = {
   registration_number: string
-  driver_name: string
-  driver_phone: string
+  /** Optional default driver (tango_drivers); '' = none. */
+  default_driver_id: string
   make: string
   model: string
   year: number
@@ -68,7 +72,13 @@ type CheetahFormState = {
   mileage: string
 }
 
-type CheetahUpdatePayload = Database['public']['Tables']['cheetahs']['Update']
+// default_driver_id is newer than the generated types, and driver_name /
+// driver_phone became nullable in 20261116193000_tango_drivers.sql.
+type CheetahUpdatePayload = Omit<Database['public']['Tables']['cheetahs']['Update'], 'driver_name' | 'driver_phone'> & {
+  driver_name?: string | null
+  driver_phone?: string | null
+  default_driver_id?: string | null
+}
 
 const VEHICLE_STATUS_LABELS: Record<string, string> = {
   available: 'Available',
@@ -97,8 +107,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
 
   const [formData, setFormData] = useState<CheetahFormState>({
     registration_number: '',
-    driver_name: '',
-    driver_phone: '',
+    default_driver_id: '',
     make: '',
     model: '',
     year: new Date().getFullYear(),
@@ -138,19 +147,26 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
     }
   })
 
-  const canManage = tangoAccess.canManage
+  // cheetahs writes: Tango head (cheetahs_tango_head_manage_v4) or Command
+  // (cheetahs_command_manage). FLOWER checks: any Tango member or Command.
+  const canManage = tangoAccess.canManage || tangoAccess.isCommand
+  const canRunFlower = tangoAccess.isMember || tangoAccess.isCommand
+  const rosterQuery = useTangoDriverRoster(canManage)
+  const drivers = rosterQuery.data ?? []
+  const today = lagosDate(new Date()) as string
 
   const saveMutation = useMutation({
     mutationFn: async (payload: { isEdit: boolean, data: any }) => {
       if (payload.isEdit) {
-        const { error } = await supabase.from('cheetahs').update(payload.data).eq('id', editingCheetah!.id)
-        if (error) throw error
+        const { error } = await (supabase as any).from('cheetahs').update(payload.data).eq('id', editingCheetah!.id)
+        if (error) rethrowDriverError(error)
       } else {
         const { count } = await supabase.from('cheetahs').select('*', { count: 'exact', head: true })
         const nextNumber = (count || 0) + 1
         const callSign = `CHEETAH-${nextNumber.toString().padStart(3, '0')}`
-        const { error } = await supabase.from('cheetahs').insert([{ ...payload.data, call_sign: callSign }])
-        if (error) throw error
+        // driver_name / driver_phone are optional now and copied from the default driver.
+        const { error } = await (supabase as any).from('cheetahs').insert([{ ...payload.data, call_sign: callSign }])
+        if (error) rethrowDriverError(error)
       }
     },
     onSuccess: (_, variables) => {
@@ -196,8 +212,6 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
     e.preventDefault()
 
     const trimmedRegNo = formData.registration_number.trim()
-    const trimmedDriverName = formData.driver_name.trim()
-    const trimmedDriverPhone = formData.driver_phone.trim()
     const trimmedMake = formData.make.trim()
     const trimmedModel = formData.model.trim()
     const trimmedColor = formData.color.trim()
@@ -209,8 +223,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
     const basePayload: CheetahUpdatePayload = {
       reg_no: trimmedRegNo,
       registration_number: trimmedRegNo,
-      driver_name: trimmedDriverName,
-      driver_phone: trimmedDriverPhone,
+      default_driver_id: formData.default_driver_id || null,
       make: trimmedMake,
       model: trimmedModel,
       year: formData.year,
@@ -225,6 +238,13 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
       mileage: Number.isFinite(parsedMileage) && parsedMileage >= 0 ? parsedMileage : null
     }
 
+    // Removing a default driver also clears the details copied from them.
+    // Older free-text details (no default driver) are left as they are.
+    if (editingCheetah?.default_driver_id && !formData.default_driver_id) {
+      basePayload.driver_name = null
+      basePayload.driver_phone = null
+    }
+
     if (saveMutation.isPending) return
     saveMutation.mutate({ isEdit: !!editingCheetah, data: basePayload })
   }
@@ -233,8 +253,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
     setEditingCheetah(cheetah)
     setFormData({
       registration_number: cheetah.registration_number || cheetah.reg_no || '',
-      driver_name: cheetah.driver_name,
-      driver_phone: cheetah.driver_phone,
+      default_driver_id: cheetah.default_driver_id || '',
       make: cheetah.make,
       model: cheetah.model,
       year: cheetah.year,
@@ -259,8 +278,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
   const resetForm = () => {
     setFormData({
       registration_number: '',
-      driver_name: '',
-      driver_phone: '',
+      default_driver_id: '',
       make: '',
       model: '',
       year: new Date().getFullYear(),
@@ -305,10 +323,18 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
         <StatCard label="Maintenance" value={cheetahs.filter(c => c.status === 'maintenance').length} tone="warning" />
       </StatGrid>
 
+      {tangoAccess.loadFailed && !tangoAccess.isCommand && (
+        <ErrorState
+          title="Your Tango access could not be checked"
+          description="Vehicles are shown read-only until your unit membership loads."
+          onRetry={() => void queryClient.invalidateQueries({ queryKey: ['unit-access'] })}
+          className="rounded-xl border py-6"
+        />
+      )}
+
       <TangoOperations
         cheetahs={cheetahs}
         programs={programs}
-        legacyCanManage={canManage}
       />
 
       <Card>
@@ -357,6 +383,15 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
                         <p className="mt-1 truncate text-xs text-muted-foreground">
                           {cheetah.color} • Capacity: {cheetah.capacity} passengers
                         </p>
+                        {cheetah.driver_name && (
+                          <p className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                            <UserRound className="h-3 w-3 shrink-0" aria-hidden="true" />
+                            <span className="truncate">
+                              {cheetah.default_driver_id ? 'Default driver' : 'Driver'}: {cheetah.driver_name}
+                              {cheetah.driver_phone ? ` · ${cheetah.driver_phone}` : ''}
+                            </span>
+                          </p>
+                        )}
                         {/* Mileage display + SOP 35k warning */}
                         {cheetah.mileage != null && (
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
@@ -389,7 +424,7 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
                             </Button>
                           </>
                         )}
-                        <Button aria-label="Toggle FLOWER checklist"
+                        {canRunFlower && <Button aria-label="Toggle FLOWER checklist"
                           variant="ghost"
                           size="icon"
                           className="hover:bg-teal-500/10"
@@ -397,10 +432,10 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
                           onClick={() => setExpandedFlower(expandedFlower === cheetah.id ? null : cheetah.id)}
                         >
                           <ChevronDown className={`h-4 w-4 text-teal-500 transition-transform ${expandedFlower === cheetah.id ? 'rotate-180' : ''}`} />
-                        </Button>
+                        </Button>}
                       </div>
                     </motion.div>
-                    {expandedFlower === cheetah.id && (
+                    {canRunFlower && expandedFlower === cheetah.id && (
                       <div className="px-2 pb-3 space-y-2">
                         <FlowerChecklist cheetahId={cheetah.id} cheetahCallSign={cheetah.call_sign || cheetah.registration_number} />
                         <CheetahPrerequisites cheetahId={cheetah.id} cheetahCallSign={cheetah.call_sign || cheetah.registration_number} />
@@ -434,28 +469,43 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
               />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="driver_name">Driver Name *</Label>
-                <Input
-                  id="driver_name"
-                  required
-                  placeholder="e.g., James Okafor"
-                  value={formData.driver_name}
-                  onChange={(e) => setFormData({ ...formData, driver_name: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="driver_phone">Driver Phone *</Label>
-                <Input
-                  id="driver_phone"
-                  required
-                  placeholder="e.g., +2348012345678"
-                  value={formData.driver_phone}
-                  onChange={(e) => setFormData({ ...formData, driver_phone: e.target.value })}
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="default_driver_id">Default driver</Label>
+              <select
+                id="default_driver_id"
+                className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 sm:h-10"
+                value={formData.default_driver_id}
+                onChange={(e) => setFormData({ ...formData, default_driver_id: e.target.value })}
+              >
+                <option value="">No default driver</option>
+                {/* While the roster is loading or failed, keep the saved driver visible
+                    instead of letting the select fall back to "No default driver". */}
+                {formData.default_driver_id && !drivers.some(driver => driver.id === formData.default_driver_id) && (
+                  <option value={formData.default_driver_id}>
+                    {formData.default_driver_id === editingCheetah?.default_driver_id && editingCheetah?.driver_name
+                      ? `${editingCheetah.driver_name} (current)`
+                      : 'Current driver'}
+                  </option>
+                )}
+                {drivers
+                  .filter(driver => driver.status !== 'inactive' || driver.id === formData.default_driver_id)
+                  .map(driver => {
+                    // The current choice stays selectable so an edit never silently drops it.
+                    const reason = driver.id === editingCheetah?.default_driver_id ? null : driverShortBlocker(driver, null, today)
+                    return (
+                      <option key={driver.id} value={driver.id} disabled={Boolean(reason)}>
+                        {driverOptionLabel(driver, reason)}
+                      </option>
+                    )
+                  })}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                {rosterQuery.isError
+                  ? 'Drivers could not be loaded. You can save the vehicle and pick a driver later.'
+                  : editingCheetah && !editingCheetah.default_driver_id && editingCheetah.driver_name && !formData.default_driver_id
+                    ? `Recorded as free text: ${editingCheetah.driver_name}${editingCheetah.driver_phone ? ` · ${editingCheetah.driver_phone}` : ''}. Pick a driver to link this vehicle to the driver list.`
+                    : 'Optional. Journeys allocated this Cheetah start with this driver. Drivers are managed in the Drivers tab.'}
+              </p>
             </div>
 
             <div className="space-y-2">

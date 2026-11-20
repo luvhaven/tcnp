@@ -1,6 +1,7 @@
 "use client"
 
 import { FormEvent, useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   AlertTriangle,
@@ -8,8 +9,11 @@ import {
   Building2,
   Car,
   CheckCircle2,
+  ClipboardList,
   Clock3,
   Edit3,
+  IdCard,
+  Info,
   Loader2,
   MessageSquareText,
   Plane,
@@ -33,11 +37,44 @@ import { Textarea } from "@/components/ui/textarea"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
 import { toast } from "sonner"
 import { notifyError, UserFacingError } from '@/lib/notify'
+import { useUnitAccess } from "@/hooks/useUnitAccess"
+import DriversPanel, {
+  driverOptionLabel,
+  driverShortBlocker,
+  journeyNeededDate,
+  lagosDate,
+  rethrowDriverError,
+  useTangoDriverRoster,
+} from "@/components/tango/DriversPanel"
+import UnitTasks from "@/components/units/UnitTasks"
+import UnitProgrammeTeam from "@/components/units/UnitProgrammeTeam"
+import { canSeeUnitWork } from "@/components/units/unit-work-tabs"
 
 type TangoOperationsProps = {
   cheetahs: any[]
   programs: any[]
-  legacyCanManage?: boolean
+}
+
+export const TANGO_TABS = ["board", "allocations", "drivers", "partners", "feedback", "flights", "tasks", "team"] as const
+export type TangoTab = (typeof TANGO_TABS)[number]
+
+/** The tab named by ?tab=, or the call-sign board. */
+export function resolveTangoTab(value: string | null | undefined): TangoTab {
+  return (TANGO_TABS as readonly string[]).includes(value ?? "") ? (value as TangoTab) : "board"
+}
+
+/**
+ * Who may allocate a Cheetah to this journey (mirrors the journey_cheetahs
+ * policies): Command, Tango head / sub-leads, or a member doing programme work
+ * on the journey's programme (can_work_unit_programme).
+ */
+export function canAllocateForJourney(
+  access: { isCommand: boolean; canCoordinate: boolean },
+  workProgramIds: ReadonlySet<string>,
+  journey: { program_id?: string | null } | null | undefined,
+): boolean {
+  if (access.isCommand || access.canCoordinate) return true
+  return Boolean(journey?.program_id && workProgramIds.has(journey.program_id))
 }
 
 type PartnerForm = {
@@ -74,6 +111,56 @@ const formatDateTime = (value?: string | null) => {
 const UNAVAILABLE_VEHICLE_STATUSES = ["maintenance", "retired"]
 /** journey_cheetahs rows in these states no longer hold the vehicle. */
 const RELEASED_ALLOCATION_STATUSES = ["completed", "cancelled"]
+/** Allocation form: the officer chose "no driver" on purpose (not the vehicle's default). */
+export const NO_DRIVER = "__no_driver__"
+
+/** Allocation row picker: an older free-text driver that is not on the driver list. */
+export const LEGACY_DRIVER = "__legacy_driver__"
+
+/**
+ * The driver part of a new journey_cheetahs row. "" leaves it to the database
+ * (the vehicle's default driver, when that driver may work). NO_DRIVER sends
+ * driver_name '': tango_journey_cheetah_driver() then skips the default and
+ * stores the blank as NULL.
+ */
+export function allocationDriverFields(driverChoice: string): { driver_id?: string; driver_name?: string } {
+  if (!driverChoice) return {}
+  if (driverChoice === NO_DRIVER) return { driver_name: "" }
+  return { driver_id: driverChoice }
+}
+
+type AllocationDriver = { driver_id?: string | null; driver_name?: string | null }
+
+/** The value the allocation row's driver picker shows. */
+export function allocationDriverValue(allocation: AllocationDriver): string {
+  if (allocation.driver_id) return allocation.driver_id
+  return allocation.driver_name ? LEGACY_DRIVER : NO_DRIVER
+}
+
+/**
+ * What choosing `value` in an allocation row's driver picker changes, or null
+ * when nothing does. "No driver" also clears an older free-text driver.
+ */
+export function allocationDriverChange(allocation: AllocationDriver, value: string): { driverId: string | null } | null {
+  if (value === LEGACY_DRIVER) return null
+  const driverId = value === NO_DRIVER ? null : value
+  if (driverId === (allocation.driver_id ?? null) && (driverId !== null || !allocation.driver_name)) return null
+  return { driverId }
+}
+
+/**
+ * The allocation form after the officer picks a Cheetah. A driver the officer
+ * chose stays; a driver filled in from the previous vehicle's default is
+ * replaced by the new vehicle's default (when that driver may work).
+ */
+export function allocationFormForCheetah<T extends { cheetah_id: string; driver_id: string; driver_auto: boolean }>(
+  current: T,
+  cheetahId: string,
+  usableDefault: string | null,
+): T {
+  if (current.driver_id && !current.driver_auto) return { ...current, cheetah_id: cheetahId }
+  return { ...current, cheetah_id: cheetahId, driver_id: usableDefault ?? "", driver_auto: Boolean(usableDefault) }
+}
 
 const journeyLabel = (journey: any) =>
   journey?.name || [journey?.origin, journey?.destination].filter(Boolean).join(" → ") || "Unnamed journey"
@@ -99,10 +186,31 @@ function QueryNotice({ title, onRetry }: { title: string; onRetry: () => void })
   )
 }
 
-export default function TangoOperations({ cheetahs, programs, legacyCanManage = false }: TangoOperationsProps) {
+export default function TangoOperations({ cheetahs, programs }: TangoOperationsProps) {
   const supabase = createClient()
   const queryClient = useQueryClient()
   const confirm = useConfirm()
+  const searchParams = useSearchParams()
+  const tango = useUnitAccess("tango")
+  // ?tab= wins whenever it changes (a notification link to ?tab=drivers);
+  // a tab the officer picks holds until then.
+  const tabParam = searchParams.get("tab")
+  const [pickedTab, setPickedTab] = useState<{ tab: TangoTab; param: string | null } | null>(null)
+  // Tasks and Programme team: Tango members and Command (the components decide who edits).
+  const canSeeWork = canSeeUnitWork(tango)
+  const shownTab = pickedTab && pickedTab.param === tabParam ? pickedTab.tab : resolveTangoTab(tabParam)
+  const activeTab: TangoTab = (shownTab === "tasks" || shownTab === "team") && !canSeeWork ? "board" : shownTab
+  const changeTab = (value: string) => {
+    const tab = resolveTangoTab(value)
+    setPickedTab({ tab, param: tabParam })
+    try {
+      const url = new URL(window.location.href)
+      url.searchParams.set("tab", tab)
+      window.history.replaceState(window.history.state, "", url)
+    } catch {
+      // The tab still changes; only the shareable URL is skipped.
+    }
+  }
 
   const [partnerForm, setPartnerForm] = useState<PartnerForm>(emptyPartner)
   const [editingPartnerId, setEditingPartnerId] = useState<string | null>(null)
@@ -110,8 +218,9 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
     journey_id: "",
     cheetah_id: "",
     assignment_role: "support",
-    driver_name: "",
-    driver_phone: "",
+    driver_id: "",
+    /** driver_id came from the vehicle's default, not from the officer. */
+    driver_auto: false,
   })
   const [feedbackForm, setFeedbackForm] = useState({
     journey_id: "",
@@ -121,24 +230,6 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
     punctuality_rating: 5,
     cleanliness_rating: 5,
     notes: "",
-  })
-
-  const accessQuery = useQuery({
-    queryKey: ["unit-access", "tango"],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return { userId: null, isMember: false, canManage: false }
-      const [memberResult, managerResult] = await Promise.all([
-        (supabase as any).rpc("is_unit_member", { unit_slug: "tango" }),
-        (supabase as any).rpc("can_manage_unit", { unit_slug: "tango" }),
-      ])
-      return {
-        userId: user.id,
-        isMember: memberResult.error ? legacyCanManage : Boolean(memberResult.data),
-        canManage: managerResult.error ? legacyCanManage : Boolean(managerResult.data),
-      }
-    },
-    staleTime: 5 * 60 * 1000,
   })
 
   const partnersQuery = useQuery({
@@ -251,16 +342,45 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
     return () => { void supabase.removeChannel(channel) }
   }, [queryClient, supabase])
 
-  const userId = accessQuery.data?.userId || null
-  const canManage = accessQuery.data?.canManage ?? legacyCanManage
-  const journeys = journeysQuery.data || []
+  const userId = tango.currentUser?.id ?? null
+  // fleet_partners writes: Tango head (can_manage_unit). cheetahs writes: head or Command.
+  const canManagePartners = tango.canManage
+  const canManageFleet = tango.canManage || tango.isCommand
+  const canViewDrivers = tango.isMember || tango.isCommand
+  const rosterQuery = useTangoDriverRoster(canViewDrivers)
+  const roster = useMemo(() => rosterQuery.data ?? [], [rosterQuery.data])
+  const driverById = useMemo(() => new Map(roster.map((driver) => [driver.id, driver] as [string, any])), [roster])
+  const today = lagosDate(new Date()) as string
+  const journeys = useMemo<any[]>(() => journeysQuery.data || [], [journeysQuery.data])
   const allocations = allocationsQuery.data || []
-  const dutyOfficers = dutyOfficersQuery.data || []
-  const people = peopleQuery.data || []
+  const dutyOfficers = useMemo<any[]>(() => dutyOfficersQuery.data || [], [dutyOfficersQuery.data])
+  const people = useMemo<any[]>(() => peopleQuery.data || [], [peopleQuery.data])
   const peopleById = useMemo(() => new Map<string, any>(people.map((person: any) => [person.id, person] as [string, any])), [people])
   const cheetahById = useMemo(() => new Map<string, any>(cheetahs.map((cheetah: any) => [cheetah.id, cheetah] as [string, any])), [cheetahs])
   const journeyById = useMemo(() => new Map<string, any>(journeys.map((journey: any) => [journey.id, journey] as [string, any])), [journeys])
   const activeJourneys = journeys.filter((journey: any) => !["completed", "cancelled"].includes(journey.status || journey.current_status))
+
+  // Programmes this member may allocate on (can_work_unit_programme). Command
+  // and Tango head / sub-leads need no lookup.
+  const journeyProgramIds = Array.from(new Set<string>(activeJourneys.map((journey: any) => journey.program_id).filter(Boolean))).sort()
+  const needsWorkLookup = tango.isMember && !tango.canCoordinate && !tango.isCommand && journeyProgramIds.length > 0
+  const workQuery = useQuery({
+    queryKey: ["unit-access", "tango-programme-work", userId, journeyProgramIds.join(",")],
+    queryFn: async () => {
+      const allowed = await Promise.all(journeyProgramIds.map(async (programId) => {
+        const { data, error } = await (supabase as any).rpc("can_work_unit_programme", { unit_slug: "tango", target_program: programId })
+        if (error) throw error
+        return data === true ? programId : null
+      }))
+      return allowed.filter((programId): programId is string => Boolean(programId))
+    },
+    enabled: needsWorkLookup,
+    staleTime: 60 * 1000,
+  })
+  const workProgramIds = useMemo(() => new Set<string>(workQuery.data ?? []), [workQuery.data])
+  const canAllocate = (journey: any) => canAllocateForJourney(tango, workProgramIds, journey)
+  const allocatableJourneys = activeJourneys.filter(canAllocate)
+  const showAllocationForm = tango.isCommand || tango.canCoordinate || allocatableJourneys.length > 0
 
   const myJourneyIds = useMemo(() => {
     if (!userId) return new Set<string>()
@@ -353,24 +473,40 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
     mutationFn: async () => {
       if (!userId) throw new UserFacingError("Sign in again before assigning a vehicle")
       if (!allocationForm.journey_id || !allocationForm.cheetah_id) throw new UserFacingError("Choose a journey and Cheetah")
+      if (!canAllocate(journeyById.get(allocationForm.journey_id))) throw new UserFacingError("You are not active on this journey's programme yet")
+      // driver_name / driver_phone are copied from the driver by the database.
       const { error } = await (supabase as any).from("journey_cheetahs").insert({
         journey_id: allocationForm.journey_id,
         cheetah_id: allocationForm.cheetah_id,
         assignment_role: allocationForm.assignment_role,
-        driver_name: allocationForm.driver_name.trim() || null,
-        driver_phone: allocationForm.driver_phone.trim() || null,
+        ...allocationDriverFields(allocationForm.driver_id),
         status: "assigned",
         assigned_by: userId,
       })
-      if (error) throw error
+      if (error) rethrowDriverError(error)
     },
     onSuccess: () => {
       toast.success("Cheetah assigned to journey")
-      setAllocationForm({ journey_id: "", cheetah_id: "", assignment_role: "support", driver_name: "", driver_phone: "" })
+      setAllocationForm({ journey_id: "", cheetah_id: "", assignment_role: "support", driver_id: "", driver_auto: false })
       void queryClient.invalidateQueries({ queryKey: ["journey-cheetahs"] })
       void queryClient.invalidateQueries({ queryKey: ["tango-journeys-board"] })
     },
     onError: (error: any) => notifyError(error, "Cheetah could not be assigned"),
+  })
+
+  // Change or clear the driver on an existing allocation. Setting a driver is
+  // guarded and copied by the database; clearing also clears the copied text.
+  const setAllocationDriver = useMutation({
+    mutationFn: async ({ id, driverId }: { id: string; driverId: string | null }) => {
+      const payload = driverId ? { driver_id: driverId } : { driver_id: null, driver_name: null, driver_phone: null }
+      const { error } = await (supabase as any).from("journey_cheetahs").update(payload).eq("id", id)
+      if (error) rethrowDriverError(error)
+    },
+    onSuccess: (_data, { driverId }) => {
+      toast.success(driverId ? "Driver updated" : "Driver removed from the allocation")
+      void queryClient.invalidateQueries({ queryKey: ["journey-cheetahs"] })
+    },
+    onError: (error: any) => notifyError(error, "Driver could not be changed"),
   })
 
   const removeAllocation = useMutation({
@@ -490,7 +626,16 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
     }).filter((row: any) => row.legs.length)
   }, [flightsQuery.data])
 
-  const isLoading = journeysQuery.isLoading || accessQuery.isLoading
+  const isLoading = journeysQuery.isLoading || tango.isLoading
+  const allocationJourney = journeyById.get(allocationForm.journey_id)
+  const allocationNeeded = journeyNeededDate(allocationJourney)
+  const chooseAllocationCheetah = (cheetahId: string) => {
+    // Start from the vehicle's default driver when that driver can work.
+    const fallback = cheetahId ? cheetahById.get(cheetahId)?.default_driver_id : null
+    const driver = fallback ? driverById.get(fallback) : null
+    const usable = driver && !driverShortBlocker(driver, allocationNeeded, today) ? (fallback as string) : null
+    setAllocationForm((current) => allocationFormForCheetah(current, cheetahId, usable))
+  }
 
   return (
     <section className="space-y-4" aria-labelledby="tango-operations-title">
@@ -507,17 +652,26 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]" />
-          {canManage ? "Unit-head controls enabled" : "Operational view"}
+          {tango.canCoordinate ? "Coordinator controls enabled" : tango.isCommand ? "Command controls enabled" : "Operational view"}
         </div>
       </div>
 
-      <Tabs defaultValue="board" className="w-full">
+      {/* A failed membership read is reported once, by CheetahsClient above. */}
+
+      <Tabs value={activeTab} onValueChange={changeTab} className="w-full">
         <TabsList className="h-auto w-full justify-start overflow-x-auto p-1">
           <TabsTrigger value="board" className="gap-2"><Route className="h-3.5 w-3.5" />Call-sign board</TabsTrigger>
           <TabsTrigger value="allocations" className="gap-2"><Car className="h-3.5 w-3.5" />Allocations</TabsTrigger>
+          <TabsTrigger value="drivers" className="gap-2"><IdCard className="h-3.5 w-3.5" />Drivers</TabsTrigger>
           <TabsTrigger value="partners" className="gap-2"><Building2 className="h-3.5 w-3.5" />Partners</TabsTrigger>
           <TabsTrigger value="feedback" className="gap-2"><MessageSquareText className="h-3.5 w-3.5" />Driver feedback</TabsTrigger>
           <TabsTrigger value="flights" className="gap-2"><Plane className="h-3.5 w-3.5" />Papa flights</TabsTrigger>
+          {canSeeWork && (
+            <>
+              <TabsTrigger value="tasks" className="gap-2"><ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />Tasks</TabsTrigger>
+              <TabsTrigger value="team" className="gap-2"><UsersRound className="h-3.5 w-3.5" aria-hidden="true" />Programme team</TabsTrigger>
+            </>
+          )}
         </TabsList>
 
         <TabsContent value="board" className="space-y-3">
@@ -578,19 +732,26 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
 
         <TabsContent value="allocations" className="space-y-4">
           {allocationsQuery.isError && <QueryNotice title="Multi-vehicle allocations are not available yet" onRetry={() => void allocationsQuery.refetch()} />}
-          {canManage && (
-            <form onSubmit={handleAllocationSubmit} className="grid gap-4 rounded-xl border bg-muted/20 p-4 lg:grid-cols-[1.35fr_1fr_.7fr_1fr_1fr_auto] lg:items-end">
+          {workQuery.isError && <QueryNotice title="Your programme work could not be checked" onRetry={() => void workQuery.refetch()} />}
+          {!showAllocationForm && tango.isMember && !workQuery.isLoading && (
+            <p role="status" className="flex items-start gap-2 rounded-xl border bg-muted/30 p-3 text-sm text-muted-foreground">
+              <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>You are not active on a programme with Tango work yet. The Tango head and sub-leads allocate Cheetahs; you can follow every allocation below.</span>
+            </p>
+          )}
+          {showAllocationForm && (
+            <form onSubmit={handleAllocationSubmit} className="grid gap-4 rounded-xl border bg-muted/20 p-4 sm:grid-cols-2 lg:grid-cols-[1.35fr_1fr_.7fr_1.2fr_auto] lg:items-end">
               <div className="space-y-2">
                 <Label>Journey</Label>
                 <Select value={allocationForm.journey_id || "none"} onValueChange={(value) => setAllocationForm((current) => ({ ...current, journey_id: value === "none" ? "" : value }))}>
-                  <SelectTrigger><SelectValue placeholder="Choose journey" /></SelectTrigger>
-                  <SelectContent><SelectItem value="none">Choose journey</SelectItem>{activeJourneys.map((journey: any) => <SelectItem key={journey.id} value={journey.id}>{journeyLabel(journey)}</SelectItem>)}</SelectContent>
+                  <SelectTrigger aria-label="Journey"><SelectValue placeholder="Choose journey" /></SelectTrigger>
+                  <SelectContent><SelectItem value="none">Choose journey</SelectItem>{allocatableJourneys.map((journey: any) => <SelectItem key={journey.id} value={journey.id}>{journeyLabel(journey)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label>Cheetah</Label>
-                <Select value={allocationForm.cheetah_id || "none"} onValueChange={(value) => setAllocationForm((current) => ({ ...current, cheetah_id: value === "none" ? "" : value }))}>
-                  <SelectTrigger><SelectValue placeholder="Choose Cheetah" /></SelectTrigger>
+                <Select value={allocationForm.cheetah_id || "none"} onValueChange={(value) => chooseAllocationCheetah(value === "none" ? "" : value)}>
+                  <SelectTrigger aria-label="Cheetah"><SelectValue placeholder="Choose Cheetah" /></SelectTrigger>
                   <SelectContent><SelectItem value="none">Choose Cheetah</SelectItem>{allocatableCheetahs.map((cheetah: any) => <SelectItem key={cheetah.id} value={cheetah.id}>{cheetah.call_sign || cheetah.registration_number}</SelectItem>)}</SelectContent>
                 </Select>
                 {hiddenVehicleCount > 0 && (
@@ -602,12 +763,25 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
               <div className="space-y-2">
                 <Label>Role</Label>
                 <Select value={allocationForm.assignment_role} onValueChange={(value) => setAllocationForm((current) => ({ ...current, assignment_role: value }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label="Allocation role"><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="primary">Primary</SelectItem><SelectItem value="support">Support</SelectItem><SelectItem value="luggage">Luggage</SelectItem><SelectItem value="security">Security</SelectItem></SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2"><Label htmlFor="allocation-driver">Driver</Label><Input id="allocation-driver" value={allocationForm.driver_name} onChange={(event) => setAllocationForm((current) => ({ ...current, driver_name: event.target.value }))} placeholder="Driver name" /></div>
-              <div className="space-y-2"><Label htmlFor="allocation-phone">Phone</Label><Input id="allocation-phone" type="tel" value={allocationForm.driver_phone} onChange={(event) => setAllocationForm((current) => ({ ...current, driver_phone: event.target.value }))} placeholder="+234…" /></div>
+              <div className="space-y-2">
+                <Label htmlFor="allocation-driver">Driver</Label>
+                <Select value={allocationForm.driver_id || "auto"} onValueChange={(value) => setAllocationForm((current) => ({ ...current, driver_id: value === "auto" ? "" : value, driver_auto: false }))}>
+                  <SelectTrigger id="allocation-driver" aria-label="Driver"><SelectValue placeholder="Choose driver" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Vehicle&apos;s default driver (if available)</SelectItem>
+                    <SelectItem value={NO_DRIVER}>No driver for this journey</SelectItem>
+                    {roster.filter((driver) => driver.status !== "inactive" || driver.id === allocationForm.driver_id).map((driver) => {
+                      const reason = driverShortBlocker(driver, allocationNeeded, today)
+                      return <SelectItem key={driver.id} value={driver.id} disabled={Boolean(reason)}>{driverOptionLabel(driver, reason)}</SelectItem>
+                    })}
+                  </SelectContent>
+                </Select>
+                {rosterQuery.isError && <p className="text-xs text-muted-foreground">Drivers could not be loaded; the vehicle&apos;s default driver is used.</p>}
+              </div>
               <Button type="submit" disabled={addAllocation.isPending} className="gap-2">{addAllocation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Assign</Button>
               {conflictingJourneys.length > 0 && (
                 <p role="status" className="flex min-w-0 items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 text-xs text-amber-800 dark:text-amber-300 lg:col-span-full">
@@ -623,23 +797,63 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
             {allocations.length === 0 ? <p className="rounded-xl border border-dashed py-10 text-center text-sm text-muted-foreground">No additional Cheetahs have been allocated.</p> : allocations.map((allocation: any) => {
               const journey = journeyById.get(allocation.journey_id)
               const vehicle = cheetahById.get(allocation.cheetah_id)
+              const canChangeDriver = canViewDrivers && rosterQuery.isSuccess
+                && !RELEASED_ALLOCATION_STATUSES.includes(allocation.status)
+                && (canAllocate(journey) || tango.canManage)
+              const rowNeeded = journeyNeededDate(journey)
               return (
                 <div key={allocation.id} className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600"><Car className="h-5 w-5" /></div>
-                    <div className="min-w-0"><p className="truncate font-medium">{vehicle?.call_sign || vehicle?.registration_number || "Unknown Cheetah"} · {allocation.assignment_role}</p><p className="truncate text-xs text-muted-foreground">{journeyLabel(journey)}{allocation.driver_name ? ` · ${allocation.driver_name}` : ""}</p></div>
+                    <div className="min-w-0"><p className="truncate font-medium">{vehicle?.call_sign || vehicle?.registration_number || "Unknown Cheetah"} · {allocation.assignment_role}</p><p className="truncate text-xs text-muted-foreground">{journeyLabel(journey)}{allocation.driver_name ? ` · ${allocation.driver_name}` : " · No driver yet"}</p>{allocation.driver_phone && <a href={`tel:${allocation.driver_phone}`} className="text-xs text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400">{allocation.driver_phone}</a>}</div>
                   </div>
-                  <div className="flex items-center gap-2"><Badge variant={statusVariant(allocation.status)}>{allocation.status || "assigned"}</Badge>{canManage && <Button type="button" variant="ghost" size="icon" aria-label="Remove allocation" onClick={async () => { if (await confirm({ message: "Remove this Cheetah from the journey?", variant: "destructive" })) removeAllocation.mutate(allocation.id) }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {canChangeDriver && (
+                      <Select
+                        value={allocationDriverValue(allocation)}
+                        onValueChange={(value) => {
+                          const change = allocationDriverChange(allocation, value)
+                          if (change) setAllocationDriver.mutate({ id: allocation.id, driverId: change.driverId })
+                        }}
+                        disabled={setAllocationDriver.isPending}
+                      >
+                        <SelectTrigger aria-label={`Driver for ${vehicle?.call_sign || vehicle?.registration_number || "this Cheetah"}`} className="h-11 w-full min-w-0 sm:h-9 sm:w-48"><SelectValue placeholder="Choose driver" /></SelectTrigger>
+                        <SelectContent>
+                          {allocation.driver_name && !allocation.driver_id && <SelectItem value={LEGACY_DRIVER}>{`${allocation.driver_name} (not on the list)`}</SelectItem>}
+                          <SelectItem value={NO_DRIVER}>No driver</SelectItem>
+                          {roster.filter((driver) => driver.status !== "inactive" || driver.id === allocation.driver_id).map((driver) => {
+                            const reason = driver.id === allocation.driver_id ? null : driverShortBlocker(driver, rowNeeded, today)
+                            return <SelectItem key={driver.id} value={driver.id} disabled={Boolean(reason)}>{driverOptionLabel(driver, reason)}</SelectItem>
+                          })}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <Badge variant={statusVariant(allocation.status)}>{allocation.status || "assigned"}</Badge>{(canAllocate(journey) || tango.canManage) && <Button type="button" variant="ghost" size="icon" aria-label="Remove allocation" onClick={async () => { if (await confirm({ message: "Remove this Cheetah from the journey?", variant: "destructive" })) removeAllocation.mutate(allocation.id) }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</div>
                 </div>
               )
             })}
           </div>
         </TabsContent>
 
+        <TabsContent value="drivers" className="space-y-4">
+          <DriversPanel
+            programs={programs}
+            cheetahs={cheetahs}
+            partners={partnersQuery.data || []}
+            userId={userId}
+            canView={canViewDrivers}
+            canEdit={tango.canCoordinate || tango.isCommand}
+            canSeeLicences={tango.canCoordinate}
+            accessLoading={tango.isLoading}
+            accessFailed={tango.loadFailed && !tango.isCommand}
+            onRetryAccess={() => void queryClient.invalidateQueries({ queryKey: ["unit-access"] })}
+          />
+        </TabsContent>
+
         <TabsContent value="partners" className="space-y-4">
           {partnersQuery.isError && <QueryNotice title="Fleet partner records are not available yet" onRetry={() => void partnersQuery.refetch()} />}
           <div className="grid gap-4 xl:grid-cols-[.85fr_1.15fr]">
-            {canManage && (
+            {canManagePartners && (
               <form onSubmit={handlePartnerSubmit} className="space-y-4 rounded-xl border bg-muted/20 p-4">
                 <div><h3 className="font-semibold">{editingPartnerId ? "Edit fleet partner" : "Add fleet partner"}</h3><p className="mt-1 text-xs text-muted-foreground">Record internal teams and external vehicle suppliers.</p></div>
                 <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="partner-name">Partner name</Label><Input id="partner-name" required value={partnerForm.name} onChange={(event) => setPartnerForm((current) => ({ ...current, name: event.target.value }))} /></div><div className="space-y-2"><Label>Partner type</Label><Select value={partnerForm.partner_type} onValueChange={(value: "internal" | "external") => setPartnerForm((current) => ({ ...current, partner_type: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="internal">Internal</SelectItem><SelectItem value="external">External</SelectItem></SelectContent></Select></div></div>
@@ -652,13 +866,13 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
             <div className="space-y-3">
               {(partnersQuery.data || []).length === 0 ? <div className="rounded-xl border border-dashed py-12 text-center"><Building2 className="mx-auto h-8 w-8 text-muted-foreground/40" /><p className="mt-3 text-sm font-medium">No fleet partners recorded</p></div> : (partnersQuery.data || []).map((partner: any) => (
                 <article key={partner.id} className="rounded-xl border p-4">
-                  <div className="flex items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{partner.name}</h3><Badge variant="outline">{partner.partner_type}</Badge>{partner.is_active === false && <Badge variant="secondary">Inactive</Badge>}</div><p className="mt-1 text-xs text-muted-foreground">{[partner.contact_name, partner.phone, partner.email].filter(Boolean).join(" · ") || "Contact details pending"}</p></div>{canManage && <div className="flex gap-1"><Button type="button" variant="ghost" size="icon" aria-label="Edit partner" onClick={() => { setEditingPartnerId(partner.id); setPartnerForm({ name: partner.name || "", partner_type: partner.partner_type || "internal", contact_name: partner.contact_name || "", phone: partner.phone || "", email: partner.email || "", notes: partner.notes || "" }) }}><Edit3 className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon" aria-label="Delete partner" onClick={async () => { if (await confirm({ message: "Delete this fleet partner? Linked vehicles must be reassigned first.", variant: "destructive" })) deletePartner.mutate(partner.id) }}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>}</div>
+                  <div className="flex items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{partner.name}</h3><Badge variant="outline">{partner.partner_type}</Badge>{partner.is_active === false && <Badge variant="secondary">Inactive</Badge>}</div><p className="mt-1 text-xs text-muted-foreground">{[partner.contact_name, partner.phone, partner.email].filter(Boolean).join(" · ") || "Contact details pending"}</p></div>{canManagePartners && <div className="flex gap-1"><Button type="button" variant="ghost" size="icon" aria-label="Edit partner" onClick={() => { setEditingPartnerId(partner.id); setPartnerForm({ name: partner.name || "", partner_type: partner.partner_type || "internal", contact_name: partner.contact_name || "", phone: partner.phone || "", email: partner.email || "", notes: partner.notes || "" }) }}><Edit3 className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon" aria-label="Delete partner" onClick={async () => { if (await confirm({ message: "Delete this fleet partner? Linked vehicles must be reassigned first.", variant: "destructive" })) deletePartner.mutate(partner.id) }}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>}</div>
                   {partner.notes && <p className="mt-3 text-sm text-muted-foreground">{partner.notes}</p>}
                 </article>
               ))}
             </div>
           </div>
-          {canManage && cheetahs.length > 0 && (
+          {canManageFleet && cheetahs.length > 0 && (
             <Card>
               <CardHeader><CardTitle className="text-base">Fleet ownership</CardTitle><CardDescription>Connect every Cheetah to its internal owner or external supplier.</CardDescription></CardHeader>
               <CardContent className="grid gap-3 lg:grid-cols-2">
@@ -693,7 +907,7 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
               <div className="flex items-center justify-between"><div><h3 className="font-semibold">Live feedback feed</h3><p className="text-xs text-muted-foreground">Newest observations appear first.</p></div><span className="flex items-center gap-2 text-xs text-muted-foreground"><span className="h-2 w-2 rounded-full bg-emerald-500" />Live</span></div>
               {(feedbackQuery.data || []).length === 0 ? <p className="rounded-xl border border-dashed py-10 text-center text-sm text-muted-foreground">No driver feedback submitted.</p> : (feedbackQuery.data || []).map((feedback: any) => { const journey = journeyById.get(feedback.journey_id); const vehicle = cheetahById.get(feedback.cheetah_id); const reviewer = peopleById.get(feedback.reviewer_id); return (
                 <article key={feedback.id} className="rounded-xl border p-4">
-                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium">{vehicle?.call_sign || vehicle?.registration_number || "Driver review"}</p><p className="truncate text-xs text-muted-foreground">{journeyLabel(journey)} · {reviewer?.full_name || "Duty Officer"}</p></div><div className="text-right"><p className="text-lg font-semibold tabular-nums">{feedback.rating}/5</p><p className="text-xs text-muted-foreground">overall</p></div></div>
+                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium">{vehicle?.call_sign || vehicle?.registration_number || "Driver review"}{feedback.driver_id && driverById.get(feedback.driver_id) ? ` · ${driverById.get(feedback.driver_id).full_name}` : ""}</p><p className="truncate text-xs text-muted-foreground">{journeyLabel(journey)} · {reviewer?.full_name || "Duty Officer"}</p></div><div className="text-right"><p className="text-lg font-semibold tabular-nums">{feedback.rating}/5</p><p className="text-xs text-muted-foreground">overall</p></div></div>
                   {feedback.notes && <p className="mt-3 text-sm leading-relaxed">{feedback.notes}</p>}
                   <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground"><span>Safety {feedback.safety_rating}/5</span><span>·</span><span>Punctuality {feedback.punctuality_rating}/5</span><span>·</span><span>Cleanliness {feedback.cleanliness_rating}/5</span><span className="ml-auto">{formatDateTime(feedback.created_at)}</span></div>
                 </article>
@@ -716,6 +930,17 @@ export default function TangoOperations({ cheetahs, programs, legacyCanManage = 
             </article>
           ))}
         </TabsContent>
+
+        {canSeeWork && (
+          <>
+            <TabsContent value="tasks" className="space-y-4">
+              <UnitTasks unitSlug="tango" />
+            </TabsContent>
+            <TabsContent value="team" className="space-y-4">
+              <UnitProgrammeTeam unitSlug="tango" />
+            </TabsContent>
+          </>
+        )}
       </Tabs>
     </section>
   )
