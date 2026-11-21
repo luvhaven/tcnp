@@ -4,10 +4,31 @@ import { useEffect, useState } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { uniqueTopic } from '@/lib/realtime/topic'
+import { myOpsWorkFilter } from '@/lib/notification-route'
+
+type SupabaseBrowserClient = ReturnType<typeof createClient>
 
 /**
- * Returns the count of unread assignment notifications for the current user.
- * Used by the sidebar to show a badge on "My Operations".
+ * Marks the officer's unread "you have work" notifications (the ones the My
+ * Ops badge counts) as read. Called when My Operations opens, so the badge
+ * clears once the officer has looked at their work.
+ */
+export async function markMyOpsWorkRead(supabase: SupabaseBrowserClient, userId: string): Promise<void> {
+  const { error } = await (supabase as any)
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('user_id', userId)
+    .eq('is_read', false)
+    .or(myOpsWorkFilter())
+  if (error) throw error
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('tcnp:notifications-changed'))
+}
+
+/**
+ * Returns the count of unread work notifications for the current user: Duty
+ * Officer assignments, journey reminders, and unit / Den task and shift
+ * assignments. Reminders for other pages (Tango licence expiry) are left out.
+ * Used by the sidebar and bottom nav to show a badge on "My Operations".
  */
 export function useUnreadAssignments() {
   const supabase = createClient()
@@ -25,8 +46,8 @@ export function useUnreadAssignments() {
           .from('notifications')
           .select('id', { count: 'exact', head: true })
           .eq('user_id', user.id)
-          .in('type', ['assignment', 'reminder'])
           .eq('is_read', false)
+          .or(myOpsWorkFilter())
 
         if (!error && mounted) setCount(c ?? 0)
       } catch (err) {

@@ -29,6 +29,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { notificationService } from '@/lib/services/notificationService'
 import { useMyOperations, isOwnAssignment, type ActiveProgram, type OpsJourney } from '@/hooks/useMyOperations'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { markMyOpsWorkRead } from '@/hooks/useUnreadAssignments'
+import { createClient } from '@/lib/supabase/client'
 import { canViewLiveTracking, cn } from '@/lib/utils'
 
 const TERMINAL = ['completed', 'cancelled']
@@ -65,6 +67,17 @@ export default function MyOperationsPage() {
   // a stale id (completed, reassigned, or a Program Feed row) falls back to the
   // first assignment instead of rendering an empty panel.
   const selected = myAssigned.find(j => j.id === selectedJourneyId) ?? myAssigned[0] ?? null
+
+  // Opening My Operations is seeing your work: clear the My Ops badge once
+  // per visit. A failure only leaves the badge up, so it is not surfaced.
+  const markedWorkReadFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!userId || markedWorkReadFor.current === userId) return
+    markedWorkReadFor.current = userId
+    markMyOpsWorkRead(createClient(), userId).catch(err => {
+      console.warn('Could not clear the My Ops badge:', err)
+    })
+  }, [userId])
 
   // ── Reminder engine ─────────────────────────────────────────────────────
   // Fires once per journey per threshold, on the first check at or below it.

@@ -81,6 +81,42 @@ function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID_PATTERN.test(value)
 }
 
+/**
+ * Notification kinds that mean "you have been given work". The My Ops badge
+ * counts them (with type 'assignment', and 'reminder' rows that carry no
+ * kind), and opening My Operations marks them read. do_assignment is the Duty
+ * Officer assignment from notify_do_assignment (older rows carry type
+ * 'assignment' and no kind).
+ */
+export const MY_OPS_WORK_KINDS: readonly string[] = [
+  'do_assignment',
+  'unit_task_assigned',
+  'unit_task_reminder',
+  'den_task_assigned',
+  'den_task_reminder',
+  'den_shift_assigned',
+]
+
+/**
+ * PostgREST `or` filter matching the notifications the My Ops badge counts
+ * and opening My Operations clears: every 'assignment' row (they all route to
+ * My Operations), the work kinds, and 'reminder' rows with no kind (the
+ * journey departure / arrival reminders). Reminders that carry another kind,
+ * such as tango_licence_expiring, belong to another page and stay unread.
+ */
+export function myOpsWorkFilter(): string {
+  return `type.eq.assignment,metadata->>kind.in.(${MY_OPS_WORK_KINDS.join(',')}),and(type.eq.reminder,metadata->>kind.is.null)`
+}
+
+/** Mirrors myOpsWorkFilter for a notification already in memory. */
+export function isMyOpsWorkNotification(n: { type?: string | null; metadata?: unknown }): boolean {
+  const meta = n.metadata && typeof n.metadata === 'object' ? (n.metadata as Record<string, unknown>) : null
+  const kind = meta && typeof meta.kind === 'string' ? meta.kind : null
+  if (n.type === 'assignment') return true
+  if (kind !== null && MY_OPS_WORK_KINDS.includes(kind)) return true
+  return n.type === 'reminder' && (meta?.kind === undefined || meta?.kind === null)
+}
+
 /** Unit task and programme-team notifications, which carry metadata.unit_slug. */
 const UNIT_TASK_KINDS = new Set(['unit_task_assigned', 'unit_task_status', 'unit_task_reminder'])
 
