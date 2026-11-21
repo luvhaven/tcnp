@@ -11,7 +11,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   BookOpen, Search, MapPin, MessageCircle, Shield, Bell, ChevronRight,
-  BarChart2, Navigation, Smartphone, HelpCircle, Home,
+  BarChart2, Navigation, Smartphone, HelpCircle, Home, Users,
 } from 'lucide-react'
 
 const sections = [
@@ -32,8 +32,8 @@ const sections = [
         body: '• **Papa** — The principal being protected\n• **Cheetah** — An assigned vehicle with a call sign\n• **Delta Oscar (DO)** — Duty Officer assigned to a journey\n• **Call Sign** — The live status code for a journey phase (e.g. Chapman means arrival at the Theatre gate)\n• **Broken Arrow** — A major incident declaration that triggers a system-wide alert',
       },
       {
-        heading: 'Role Hierarchy',
-        body: '**Super Admin / Dev Admin** → full system access\n**Admin** → all ops management\n**Head of Command / Captain** → command-level decisions\n**Delta Oscar** → journey management & call sign updates\n**Tango / Alpha / Victor Oscars** → assigned support roles\n**Viewer** → read-only access to dashboards',
+        heading: 'Who Can Do What',
+        body: '**Super Admin / Admin / Captain / Vice Captain** → full system access\n**Command (Head of Command, Head of Operations, Command)** → command-level decisions, and every unit page\n**Delta Oscar** → the journeys you are assigned to, and their call signs\n**Unit members** → your unit\'s pages, from your unit membership. A unit head or sub-lead runs the unit\n\nYour Oscar is a label that names your unit. Access comes from your role and your unit membership, not from the Oscar.',
       },
     ],
   },
@@ -103,23 +103,19 @@ const sections = [
     content: [
       {
         heading: 'Location Sharing',
-        body: 'When you sign in, the platform automatically requests location permission. Granting it makes you visible on the Live Tracking map. Your location updates every 10 seconds while you are active. A green banner appears at the bottom of the screen when sharing is active.',
+        body: 'Location sharing is **off** until you turn it on. Open **Profile** (or **Settings**) and switch on **Location sharing**. Your browser then asks for location permission: allow it.\n\nWhile sharing is on and the app is open, your position is sent as you move and you appear on the Live Tracking map. Turn the switch off at any time: tracking stops and your pin is hidden. The choice is saved on each device separately, so turn it on again on a new phone or browser.',
       },
       {
-        heading: 'Map Features',
-        body: '• **Blue markers** — Active officers (updated < 2 min ago)\n• **Pulsing red dots** — Stale locations (> 5 min since update)\n• **Popup on click** — Shows full name, OSCAR, role, battery %, speed, and last update time',
+        heading: 'Who Sees the Map',
+        body: 'The Live Tracking map is for admins and Command. Each officer shows as **Active** (updated in the last 2 minutes), **Stale** (2 to 10 minutes) or **Offline** (more than 10 minutes). Select an officer to see their role, last update and, where the device reports them, speed and battery.',
       },
       {
         heading: 'Filters',
-        body: 'Use the sidebar filters to narrow by: name/OSCAR/role search, role category (DO, AO, TO, VO), and status (Active / Stale / Offline). The sidebar can be collapsed for a full-screen map view.',
+        body: 'Use the sidebar filters to search by name, Oscar or role, pick a role, and show Active, Stale or Offline officers. Collapse the sidebar for a full-screen map.',
       },
       {
-        heading: 'iOS Devices',
-        body: 'Location tracking now works on iPhone and iPad (iOS 16+). Safari will prompt for permission on first load. Ensure "Allow location access: While using the app" is selected in Safari settings.',
-      },
-      {
-        heading: 'Battery & Speed',
-        body: 'The app reads device battery level (Android/Desktop only) and calculated speed from GPS delta. Battery below 20% shows in red in the map popup and triggers a system notification to admins.',
+        heading: 'iPhone and iPad',
+        body: 'Location sharing works on iPhone and iPad (iOS 16 and later). Safari asks for permission when you turn sharing on. If you said no before, allow location for this site in **Settings → Safari → Location** (choose "While Using the App" or "Ask"), then turn sharing on again.',
       },
     ],
   },
@@ -180,6 +176,28 @@ const sections = [
     ],
   },
   {
+    id: 'units',
+    icon: Users,
+    color: 'text-primary',
+    bg: 'bg-primary/10',
+    title: 'Unit Pages',
+    badge: 'Units',
+    content: [
+      {
+        heading: 'Which unit pages you see',
+        body: 'You see the pages of the units you are a member of. Admins and Command see every unit. Your unit head (or an admin) adds you to a unit; ask them if a page you need is missing.',
+      },
+      {
+        heading: 'Tasks tab',
+        body: 'Every unit page has a **Tasks** tab. The unit head or a sub-lead adds tasks for a programme, gives each one an owner and a deadline, and edits them. If a task is yours, mark it in progress or done. You get a notification when a task is given to you and a reminder before it is due. All your tasks across units also appear in **My Operations**.',
+      },
+      {
+        heading: 'Programme team tab',
+        body: 'The **Programme team** tab lists the unit\'s members for the chosen programme and shows who is working on it. To do programme work in a unit, you must be active on the programme. The head and sub-leads work by right; other members need the head (or Command) to add them to the team.',
+      },
+    ],
+  },
+  {
     id: 'den',
     icon: Home,
     color: 'text-primary',
@@ -236,8 +254,16 @@ const sections = [
     badge: 'Admin',
     content: [
       {
-        heading: 'Role-Based Access',
-        body: 'Every page and action enforces role-based access control. If you do not have permission for a feature, it is silently hidden rather than showing an error page.',
+        heading: 'Access by Role and Unit',
+        body: 'Admin and Command access comes from your role. Unit pages follow your unit membership: a member works in their own unit, and the head and sub-leads run it. Admins and Command keep full access to every unit. If you do not have permission for a feature, it is hidden rather than showing an error page. The database checks every read and write as well.',
+      },
+      {
+        heading: 'Sign-up Approvals',
+        body: 'New sign-ups wait on **Approvals**. An admin decides any sign-up; a unit head decides sign-ups for their own unit. To decline, give a short reason. A declined person sees a message when they try to sign in, and admins and Command can reopen a declined sign-up from the list of the last 30 days.',
+      },
+      {
+        heading: 'Passports Are Private',
+        body: 'A Papa\'s passport details are kept apart from the rest of the Papa record. Only admins, Command and the Alpha head or sub-leads, who handle immigration, can see or edit them. Other officers, Delta Oscars and Alpha members never see a passport.',
       },
       {
         heading: 'Audit Logs',
