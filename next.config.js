@@ -103,8 +103,11 @@ const withPWA = require("@ducanh2912/next-pwa").default({
   // Cache pages navigated to on the client so they work offline later
   cacheOnFrontEndNav: false,
   aggressiveFrontEndNavCaching: false,
-  // Reload the app when connectivity returns instead of leaving stale offline UI
-  reloadOnOnline: true,
+  // Never reload on reconnect: phones flap offline/online on weak signal, and a
+  // reload throws away whatever the officer was typing or uploading. The app
+  // reconnects itself (syncService on online/visibilitychange, React Query
+  // refetch, the online-status banner), and /offline.html reloads itself.
+  reloadOnOnline: false,
   // Serve the branded offline page when a navigation misses cache while offline
   fallbacks: {
     document: "/offline.html",

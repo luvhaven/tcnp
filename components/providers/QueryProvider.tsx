@@ -38,6 +38,13 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
         retry: retryTransientReads,
         retryDelay: transientRetryDelay,
       },
+      mutations: {
+        // The default ('online') pauses a save made offline: the button spins
+        // with no message and the save is later dropped. 'always' lets it fail
+        // straight away through the caller's notifyError path, which tells the
+        // officer they are offline and keeps the form open with their input.
+        networkMode: 'always',
+      },
     },
     // Reporting here rather than inside each queryFn means a failure is
     // recorded ONCE, after the retries are exhausted — not once per attempt,
