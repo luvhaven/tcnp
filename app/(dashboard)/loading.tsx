@@ -1,8 +1,8 @@
 import { Skeleton } from '@/components/ui/skeleton'
 
 /**
- * Generic fallback while a (dashboard) route segment streams in. Pages with a
- * more specific shape keep their own skeletons (components/ui/page-skeleton).
+ * Generic fallback while a (dashboard) route segment streams in. A page with a
+ * more specific shape can add its own loading.tsx next to it.
  */
 export default function Loading() {
   return (

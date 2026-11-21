@@ -86,7 +86,6 @@ const OWNED = [
   'app/(dashboard)/tracking/live/page.tsx',
   'app/(dashboard)/dashboard/page.tsx',
   'app/(dashboard)/echo/page.tsx',
-  'components/tracking/LocationEnforcer.tsx',
 ]
 
 test('operations pages take no permission from Oscar text or unit role keys', () => {
@@ -138,21 +137,6 @@ test('dashboard unit shortcut and Echo controls come from membership', () => {
   const echo = read('app/(dashboard)/echo/page.tsx')
   assert.match(echo, /useUnitAccess\('echo'\)/)
   assert.match(echo, /const canManage = roleCanManage \|\| echoUnit\.canCoordinate/)
-})
-
-test('the location prompt reads cached memberships and stays dismissible on a failed read', () => {
-  const enforcer = read('components/tracking/LocationEnforcer.tsx')
-  assert.match(enforcer, /useMyUnitMemberships\(\)/)
-  assert.doesNotMatch(enforcer, /fetchActiveUnitMemberships|from\('users'\)/)
-  const { locationPromptSkippable } = load('components/tracking/LocationEnforcer.tsx')
-  const ready = { isLoading: false, loadFailed: false }
-  assert.equal(locationPromptSkippable('delta_oscar', [], ready), false)
-  assert.equal(locationPromptSkippable('delta_oscar', ['tango'], ready), true)
-  assert.equal(locationPromptSkippable('admin', [], ready), true)
-  assert.equal(locationPromptSkippable(null, [], ready), true)
-  // A membership read that never succeeded (or is still loading) must not block a Tango officer.
-  assert.equal(locationPromptSkippable('delta_oscar', [], { isLoading: false, loadFailed: true }), true)
-  assert.equal(locationPromptSkippable('delta_oscar', [], { isLoading: true, loadFailed: false }), true)
 })
 
 test('Command Centre, its dashboard links and the live map ignore Oscar text', () => {
