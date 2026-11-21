@@ -66,11 +66,11 @@ type NoscarAssignment = {
   user?: Officer
 }
 
-export default function NestsClient({ initialNests }: { initialNests: any[] }) {
+export default function NestsClient({ initialNests, initialNestsError = false }: { initialNests: any[]; initialNestsError?: boolean }) {
   // useSearchParams (?tab=) needs a Suspense boundary so the page can still prerender.
   return (
     <Suspense fallback={<NestsSkeleton />}>
-      <NestsContent initialNests={initialNests} />
+      <NestsContent initialNests={initialNests} initialNestsError={initialNestsError} />
     </Suspense>
   )
 }
@@ -85,7 +85,7 @@ function NestsSkeleton() {
   )
 }
 
-function NestsContent({ initialNests }: { initialNests: any[] }) {
+function NestsContent({ initialNests, initialNestsError }: { initialNests: any[]; initialNestsError: boolean }) {
   const supabase = createClient()
   const confirm = useConfirm()
   const queryClient = useQueryClient()
@@ -139,14 +139,16 @@ function NestsContent({ initialNests }: { initialNests: any[] }) {
   // 30-min ETA reminder for this NO's assigned nest
   useNestETAReminder(myNestId ?? null)
 
-  const { data: nests = [] } = useQuery({
+  // A failed server read is not a fresh empty list: it seeds nothing, so
+  // the client fetches and an error shows instead of "No nests".
+  const { data: nests = [], isError: nestsFailed, refetch: refetchNests } = useQuery({
     queryKey: ['nests'],
     queryFn: async () => {
       const { data, error } = await supabase.from('nests').select(`*, programs(name)`).order('name')
       if (error) throw error
       return data
     },
-    initialData: initialNests
+    initialData: initialNestsError ? undefined : initialNests,
   })
 
   const { data: programs = [] } = useQuery({
@@ -456,6 +458,15 @@ function NestsContent({ initialNests }: { initialNests: any[] }) {
           </SelectContent>
         </Select>
       </motion.div>
+
+      {nestsFailed && (
+        <ErrorState
+          title="Could not load Nests"
+          description="Check your connection and try again."
+          onRetry={() => { void refetchNests() }}
+          className="rounded-2xl border"
+        />
+      )}
 
       {nestAccess.loadFailed && (
         <ErrorState

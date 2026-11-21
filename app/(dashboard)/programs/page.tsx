@@ -26,8 +26,10 @@ export default async function ProgramsPage() {
 
   return (
     <ProgramsClient 
-      initialPrograms={programsRes.data || []} 
-      initialTheatres={theatresRes.data || []} 
+      initialPrograms={programsRes.data || []}
+      initialProgramsError={Boolean(programsRes.error)}
+      initialTheatres={theatresRes.data || []}
+      initialTheatresError={Boolean(theatresRes.error)}
     />
   )
 }

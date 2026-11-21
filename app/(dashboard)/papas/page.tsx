@@ -20,14 +20,15 @@ export default async function PapasPage() {
   // Explicit columns: the server-rendered payload never carries anything
   // private (passports live in papa_private_details and are fetched on
   // demand, only for people allowed to see them).
-  const { data: initialPapas } = await supabase
+  const { data: initialPapas, error: papasError } = await supabase
     .from('papas')
     .select(PAPA_DIRECTORY_COLUMNS)
     .order('full_name')
 
   return (
     <PapasClient 
-      initialPapas={(initialPapas || []) as any} 
+      initialPapas={(initialPapas || []) as any}
+      initialPapasError={Boolean(papasError)}
     />
   )
 }

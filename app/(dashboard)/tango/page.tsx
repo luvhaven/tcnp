@@ -16,7 +16,7 @@ export default async function CheetahsPage() {
     }
   )
 
-  const { data: initialCheetahs } = await supabase
+  const { data: initialCheetahs, error: cheetahsError } = await supabase
     .from('cheetahs')
     .select(`
       *,
@@ -27,7 +27,8 @@ export default async function CheetahsPage() {
 
   return (
     <CheetahsClient 
-      initialCheetahs={initialCheetahs || []} 
+      initialCheetahs={initialCheetahs || []}
+      initialCheetahsError={Boolean(cheetahsError)}
     />
   )
 }

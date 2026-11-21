@@ -96,7 +96,7 @@ function vehicleStatusLabel(status: string | null | undefined): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1)
 }
 
-export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: any[] }) {
+export default function CheetahsClient({ initialCheetahs, initialCheetahsError = false }: { initialCheetahs: any[]; initialCheetahsError?: boolean }) {
   const supabase = createClient()
   const confirm = useConfirm()
   const queryClient = useQueryClient()
@@ -124,14 +124,16 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
 
   const tangoAccess = useUnitAccess('tango')
 
-  const { data: cheetahs = [] } = useQuery({
+  // A failed server read seeds nothing (not a fresh empty fleet), so the
+  // client fetches and an error shows instead of "No Cheetahs".
+  const { data: cheetahs = [], isError: cheetahsFailed, isFetching: cheetahsFetching, refetch: refetchCheetahs } = useQuery({
     queryKey: ['cheetahs'],
     queryFn: async () => {
       const { data, error } = await supabase.from('cheetahs').select(`*, programs(name)`).order('call_sign').limit(100)
       if (error) throw error
       return data as any[]
     },
-    initialData: initialCheetahs
+    initialData: initialCheetahsError ? undefined : initialCheetahs,
   })
 
   const { data: programs = [] } = useQuery({
@@ -322,6 +324,16 @@ export default function CheetahsClient({ initialCheetahs }: { initialCheetahs: a
         <StatCard label="In Use" value={cheetahs.filter(c => c.status === 'in_use').length} tone="info" />
         <StatCard label="Maintenance" value={cheetahs.filter(c => c.status === 'maintenance').length} tone="warning" />
       </StatGrid>
+
+      {cheetahsFailed && (
+        <ErrorState
+          title="Couldn't load the fleet"
+          description={cheetahs.length > 0 ? "Showing the last list we loaded." : "Check your connection and try again."}
+          onRetry={() => { void refetchCheetahs() }}
+          retrying={cheetahsFetching}
+          className="rounded-xl border py-6"
+        />
+      )}
 
       {tangoAccess.loadFailed && !tangoAccess.isCommand && (
         <ErrorState

@@ -87,7 +87,7 @@ type Papa = {
   created_at: string
 }
 
-export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) {
+export default function PapasClient({ initialPapas, initialPapasError = false }: { initialPapas: Papa[]; initialPapasError?: boolean }) {
   const supabase = createClient()
   const confirm = useConfirm()
   const queryClient = useQueryClient()
@@ -146,7 +146,9 @@ export default function PapasClient({ initialPapas }: { initialPapas: Papa[] }) 
         if (!data || data.length < 1000) return rows
       }
     },
-    initialData: initialPapas
+    // A failed server read seeds nothing, so the client fetches instead of
+    // showing a fresh-looking empty list for a minute.
+    initialData: initialPapasError ? undefined : initialPapas,
   })
 
   const { data: programs = [] } = useQuery({

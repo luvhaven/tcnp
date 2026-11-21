@@ -95,7 +95,7 @@ function toProfile(member: DenTeamMember): OfficerProfileData {
   }
 }
 
-export default function DenClient({ initialDens, initialTab, initialProgramme }: { initialDens: any[]; initialTab: string | null; initialProgramme: string | null }) {
+export default function DenClient({ initialDens, initialDensError = false, initialTab, initialProgramme }: { initialDens: any[]; initialDensError?: boolean; initialTab: string | null; initialProgramme: string | null }) {
   const supabase = createClient()
   const queryClient = useQueryClient()
   const { data: currentUser } = useCurrentUser()
@@ -195,14 +195,17 @@ export default function DenClient({ initialDens, initialTab, initialProgramme }:
     list.scrollLeft = Math.max(0, target)
   }, [tab])
 
-  const { data: dens = [] } = useQuery({
-    queryKey: ["nests"],
+  // Den lounges only, under their own key: sharing ['nests'] with the Nests
+  // page seeded that page with this (den-only) list. A failed server read is
+  // not a fresh empty list, so it seeds nothing and the client fetches.
+  const { data: dens = [], isError: densFailed, refetch: refetchDens } = useQuery({
+    queryKey: ["nests", "den"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("nests").select("*, programs(name)").order("name")
+      const { data, error } = await supabase.from("nests").select("*, programs(name)").eq("type", "den").order("name").limit(100)
       if (error) throw error
       return data as any[]
     },
-    initialData: initialDens,
+    initialData: initialDensError ? undefined : initialDens,
   })
 
   const programName = selectedProgram === "all"
@@ -243,6 +246,15 @@ export default function DenClient({ initialDens, initialTab, initialProgramme }:
           </div>
         }
       />
+
+      {densFailed && (
+        <ErrorState
+          title="Could not load Den locations"
+          description="Check your connection and try again."
+          onRetry={() => { void refetchDens() }}
+          className="rounded-2xl border"
+        />
+      )}
 
       {denUnit.loadFailed && (
         <ErrorState

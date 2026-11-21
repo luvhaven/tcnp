@@ -16,7 +16,7 @@ export default async function NestsPage() {
     }
   )
 
-  const { data: initialNests } = await supabase
+  const { data: initialNests, error: nestsError } = await supabase
     .from('nests')
     .select(`
       *,
@@ -27,7 +27,8 @@ export default async function NestsPage() {
 
   return (
     <NestsClient 
-      initialNests={initialNests || []} 
+      initialNests={initialNests || []}
+      initialNestsError={Boolean(nestsError)}
     />
   )
 }

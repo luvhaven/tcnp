@@ -8,7 +8,7 @@ export default async function DenPage({
 }) {
   const [{ tab, programme }, supabase] = await Promise.all([searchParams, createClient()])
 
-  const { data: initialDens } = await supabase
+  const { data: initialDens, error: densError } = await supabase
     .from('nests')
     .select(`
       *,
@@ -21,6 +21,7 @@ export default async function DenPage({
   return (
     <DenClient
       initialDens={initialDens || []}
+      initialDensError={Boolean(densError)}
       initialTab={Array.isArray(tab) ? tab[0] ?? null : tab ?? null}
       initialProgramme={Array.isArray(programme) ? programme[0] ?? null : programme ?? null}
     />

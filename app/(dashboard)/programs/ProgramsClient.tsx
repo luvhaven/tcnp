@@ -26,6 +26,7 @@ import { RequestAvailabilityButton, AvailabilityRosterButton } from "@/component
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { isAdmin, isPlatformAdministrator } from "@/lib/utils"
 import { isCommandAuthority } from "@/lib/unit-access"
+import { ErrorState } from "@/components/ui/error-state"
 
 type Program = {
   id: string
@@ -68,7 +69,17 @@ function compareByStartDate(a: Program, b: Program, today: Date): number {
   return aUpcoming ? aStart.getTime() - bStart.getTime() : bStart.getTime() - aStart.getTime()
 }
 
-export default function ProgramsClient({ initialPrograms, initialTheatres }: { initialPrograms: Program[], initialTheatres: any[] }) {
+export default function ProgramsClient({
+  initialPrograms,
+  initialProgramsError = false,
+  initialTheatres,
+  initialTheatresError = false,
+}: {
+  initialPrograms: Program[]
+  initialProgramsError?: boolean
+  initialTheatres: any[]
+  initialTheatresError?: boolean
+}) {
   const supabase = createClient()
   const confirm = useConfirm()
   const queryClient = useQueryClient()
@@ -145,7 +156,9 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
   // page now uses a shape-specific key (`['programs', 'full']` here) so they
   // no longer collide; `invalidateQueries({queryKey:['programs']})` below
   // still refreshes all of them via React Query's key-prefix matching.
-  const { data: programs = [] } = useQuery({
+  // A failed server read seeds nothing (it is not a fresh empty list), so the
+  // client fetches and an error shows instead of "No programs registered".
+  const { data: programs = [], isError: programsFailed, isFetching: programsFetching, refetch: refetchPrograms } = useQuery({
     queryKey: ['programs', 'full'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -155,7 +168,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
       if (error) throw error
       return data as Program[]
     },
-    initialData: initialPrograms,
+    initialData: initialProgramsError ? undefined : initialPrograms,
     initialDataUpdatedAt: 0,
   })
 
@@ -167,7 +180,7 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
       if (error) throw error
       return data
     },
-    initialData: initialTheatres
+    initialData: initialTheatresError ? undefined : initialTheatres,
   })
 
   // React Query: Mutations
@@ -429,7 +442,13 @@ export default function ProgramsClient({ initialPrograms, initialTheatres }: { i
           </div>
         </CardHeader>
         <CardContent className="p-4 sm:p-6">
-          {filteredPrograms.length === 0 ? (
+          {programsFailed && programs.length === 0 ? (
+            <ErrorState
+              title="Couldn't load programs"
+              onRetry={() => { void refetchPrograms() }}
+              retrying={programsFetching}
+            />
+          ) : filteredPrograms.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="h-12 w-12 rounded-2xl bg-muted/60 flex items-center justify-center text-muted-foreground/60 mb-3">
                 <Calendar className="h-6 w-6" />
