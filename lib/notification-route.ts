@@ -16,6 +16,7 @@ export type NotificationType =
   | 'birthday_reminder'
   | 'alert'
   | 'reminder'
+  | 'assignment'
 
 export interface AppNotification {
   id: string
@@ -105,6 +106,11 @@ export function resolveNotificationRoute(n: AppNotification): string | null {
   if (kind === 'compliance_recognition') return '/compliance?tab=recognition'
   // A declined applicant has no account to open; nothing to route to.
   if (kind === 'signup_declined') return null
+  // An approved officer's first stop is their profile, to add a headshot.
+  if (kind === 'signup_approved') return '/profile'
+  // A Duty Officer assignment opens the officer's own work, not the Journeys
+  // planning page (which is for leadership).
+  if (kind === 'do_assignment' || n.type === 'assignment') return '/my-operations'
   if (kind === 'tango_licence_expiring') return '/tango?tab=drivers'
   if (kind === 'alpha_timeline_overdue') {
     // Open that Papa's timeline on the right programme (alpha/page reads ?programme=&papa=).
@@ -114,6 +120,11 @@ export function resolveNotificationRoute(n: AppNotification): string | null {
       : '/alpha?tab=timeline'
   }
   if (kind === 'password_reset_request') return '/officers?tab=resets'
+  // Someone asked to reset this officer's password. If it was not them, the
+  // first thing to do is change it.
+  if (kind === 'password_reset_requested_for_you') return '/change-password'
+  // An officer's location or battery alert (notify_location_offline) for Command.
+  if (kind === 'location_offline') return '/tracking/live'
   if (kind === 'food_ready') return '/welfare'
   if (kind === 'program_addition_request') return '/approvals'
   if (kind === 'den_task_assigned' || kind === 'den_task_reminder') return '/den?tab=work'
@@ -155,6 +166,10 @@ export function describeNotificationForDevice(
   if (kind === 'mission_request') return { title: 'Availability request', body: 'Leadership is asking who can serve. Open TCNP and confirm whether you are available.' }
   if (kind === 'food_ready') return { title: 'Food is ready', body: 'Welfare has called mealtime. Head to the serving point.' }
   if (kind === 'mention') return { title: 'You were mentioned in chat', body: 'Someone needs your attention. Open the conversation to read and reply.' }
+  if (kind === 'location_offline') return { title: 'Officer location offline', body: "An officer's location stopped updating or their battery is nearly flat. Open Live Tracking to check on them." }
+  if (kind === 'password_reset_requested_for_you') return { title: 'Password reset requested', body: 'Someone asked to reset your password. If it was not you, open TCNP, change your password and tell Command.' }
+  if (kind === 'signup_approved') return { title: 'Account approved', body: 'Your TCNP account has been approved. Sign in and add your headshot to your profile.' }
+  if (kind === 'do_assignment' || n.type === 'assignment') return { title: 'New duty assignment', body: 'You have been assigned as a Duty Officer. Open My Operations to see the journey and acknowledge it.' }
   if (kind === 'password_reset_request') return { title: 'Password reset awaiting approval', body: 'An officer has asked to reset their password. Review the request and approve or reject it.' }
   if (kind === 'birthday_0700' || n.type === 'birthday_reminder') return { title: 'Birthday today', body: 'An officer is celebrating today. Open Welfare to see who and send your wishes.' }
   if (kind === 'den_task_assigned' || kind === 'unit_task_assigned') return { title: 'New task for you', body: 'Your unit has given you a task. Open TCNP to see what it is and when it is due.' }

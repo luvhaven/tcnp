@@ -20,6 +20,7 @@ import {
   Megaphone,
   CakeSlice,
   Clock3,
+  ClipboardList,
   ChevronRight,
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
@@ -43,6 +44,7 @@ const TYPE_META: Record<
   birthday_reminder: { icon: CakeSlice,color: "text-pink-500",  bg: "bg-pink-50 dark:bg-pink-950/40", border: "border-l-pink-500",  label: "Birthday"    },
   alert:        { icon: AlertTriangle, color: "text-amber-500", bg: "bg-amber-50 dark:bg-amber-950/40",border: "border-l-amber-500", label: "Alert"       },
   reminder:     { icon: Clock3,        color: "text-sky-500",   bg: "bg-sky-50 dark:bg-sky-950/40",  border: "border-l-sky-500",   label: "Reminder"    },
+  assignment:   { icon: ClipboardList, color: "text-primary",   bg: "bg-primary/5",                    border: "border-l-primary",   label: "Assignment"  },
 }
 
 function getTypeMeta(type: string) {
