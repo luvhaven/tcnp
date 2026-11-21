@@ -4,10 +4,12 @@
 -- instances got a fresh allowance on each. Counters now live here, written only
 -- by the server (service role) through rate_limit_hit().
 --
--- Idempotent. Not yet applied to the live database; until it is, the app falls
--- back to its in-memory limiter.
-
-BEGIN;
+-- Idempotent. Until it is applied, the app falls back to its in-memory limiter.
+--
+-- Version 20261019170500 (was 20261019170000, which it shared with
+-- 20261019170000_journey_events_assigned_do_insert.sql, so it could not be
+-- recorded in schema_migrations). No BEGIN/COMMIT: the migration runner wraps
+-- each file in its own transaction.
 
 CREATE TABLE IF NOT EXISTS public.api_rate_limits (
   key text PRIMARY KEY,
@@ -53,5 +55,3 @@ $$;
 
 REVOKE ALL ON FUNCTION public.rate_limit_hit(text, integer, integer) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.rate_limit_hit(text, integer, integer) TO service_role;
-
-COMMIT;
