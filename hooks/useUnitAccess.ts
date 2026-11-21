@@ -72,11 +72,29 @@ export function useUnitAccess(unit: UnitSlug) {
     hasAdminAccess: currentUser?.has_admin_access,
   })
 
+  // A programme's Tango Team Lead manages the Tango page while that programme
+  // is open, without being the unit head (is_tango_programme_lead). Asked of
+  // the database, only for Tango members who are not already head.
+  const leadQuery = useQuery({
+    queryKey: ['unit-access', 'tango-programme-lead', currentUser?.id ?? null] as const,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('is_tango_programme_lead')
+      if (error) throw error
+      return data === true
+    },
+    enabled: unit === 'tango' && Boolean(currentUser?.id) && access.isMember && !access.canManage,
+    staleTime: 60 * 1000,
+  })
+  const programmeLead = unit === 'tango' && access.isMember && leadQuery.data === true
+
   return {
     currentUser,
     ...access,
+    canCoordinate: access.canCoordinate || programmeLead,
+    canManage: access.canManage || programmeLead,
+    isProgrammeLead: programmeLead,
     loadFailed,
-    isLoading,
+    isLoading: isLoading || (leadQuery.isLoading && leadQuery.fetchStatus !== 'idle'),
   }
 }
 
