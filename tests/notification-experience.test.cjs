@@ -31,16 +31,20 @@ test('push uses device sound and vibration in background, stays silent in foregr
  await push({ critical: true })
  assert.deepEqual(Array.from(shown[2].vibrate), [200,100,200,100,400])
  owner = 'another-officer'
- await push(); assert.equal(shown.length, 3)
+ await push(); assert.equal(shown.length, 4)
+ assert.equal(shown[3].silent, true, 'another account on a shared device is announced quietly')
+ assert.equal(shown[3].data.notificationId, undefined)
  owner = 'officer'; failClients = true
  await push({ url: 'https://attacker.example/secret' })
- assert.equal(shown[3].data.url, '/dashboard')
- assert.equal(shown[3].silent, false, 'client lookup failure must not prevent background delivery')
+ assert.equal(shown[4].data.url, '/dashboard')
+ assert.equal(shown[4].silent, false, 'client lookup failure must not prevent background delivery')
  failClients = false
  let pending
  handlers.notificationclick({ notification: { data: shown[0].data, close: () => closed.push(true) }, waitUntil: work => pending = work })
  await pending
- assert.deepEqual(navigations, ['https://tcnp.example/chat?programId=program'])
+ // An open app is focused and told where to go; it is not controlled by the push worker, so it routes itself.
+ assert.equal(messages[messages.length - 1].type, 'TCNP_OPEN'); assert.equal(messages[messages.length - 1].url, '/chat?programId=program')
+ assert.deepEqual(navigations, [])
  assert.equal(closed.length, 1)
 })
 test('custom tones schedule short composed audio, and mute prevents all their oscillators', () => {
@@ -96,7 +100,7 @@ test('real notification banner, inbox and feedback controls work together withou
   if (name === '@/lib/supabase/client') return { createClient: () => db }
   if (name === '@/lib/realtime/topic') return { uniqueTopic: value => value }
   if (name === 'next/navigation') return { useRouter: () => router, usePathname: () => '/chat' }
-  if (name === '@/lib/device-push') return { devicePushConnected: async () => false }
+  if (name === '@/lib/device-push') return { devicePushConnected: async () => false, syncAppBadge: async () => {} }
   if (name === '@/lib/services/system-notification') return { showSystemNotification: async (title, options) => systemAlerts.push({ title, ...options }) }
   if (name === 'sonner') return { toast }
   if (name === '@/lib/utils') return { cn: require('clsx').clsx }

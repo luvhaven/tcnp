@@ -22,6 +22,9 @@ test('DO reason choices respect theatre and return destination', () => {
   assert.deepEqual(Array.from(reasons({ destination: 'Theatre' }, 'nest')), ['nest_settled'])
   assert.deepEqual(Array.from(reasons({ destination: 'Theatre' }, 'eagle_square')), ['flight_departed','flight_landed'])
   assert.deepEqual(Array.from(reasons({ destination: 'Nest', assigned_theatre_id: 'previous-theatre' })), ['nest_settled'])
+  assert.deepEqual(Array.from(reasons({ destination: 'Theatre', origin: 'Self-Driven' })), ['papa_departed'])
+  assert.deepEqual(Array.from(reasons({ destination: 'Theatre', journey_type: 'self_arrival' })), ['papa_departed'])
+  assert.deepEqual(Array.from(reasons({ destination: 'Theatre', origin: 'Self-Driven' }, 'nest')), ['nest_settled'])
 })
 test('closed-app worker protects shared devices and routes notification clicks', async () => {
   const handlers = {}, shown = [], navigated = [], stored = new Map()
@@ -30,12 +33,18 @@ test('closed-app worker protects shared devices and routes notification clicks',
   vm.runInNewContext(fs.readFileSync('public/notification-worker.js', 'utf8'), { self, caches: { open: async () => cache }, Response, URL })
   async function event(name, data) { let pending; handlers[name]({ ...data, waitUntil: p => { pending = p } }); await pending }
   const push = targetUserId => event('push', { data: { json: () => ({ targetUserId, tag: 'one', url: '/chat?programId=abc' }) } })
-  await push('officer-a'); assert.equal(shown.length, 0)
-  await event('message', { data: { type: 'TCNP_PUSH_OWNER', userId: 'officer-a' }, ports: [] })
-  await push('officer-b'); assert.equal(shown.length, 0)
+  // Every push shows something: iPhone and Safari revoke a subscription that stays silent.
+  // With no account marker (storage evicted) the privacy-safe text is shown as sent.
   await push('officer-a'); assert.equal(shown.length, 1); assert.equal(shown[0].data.url, '/chat?programId=abc')
-  await event('notificationclick', { notification: { data: shown[0].data, close() {} } })
+  await event('message', { data: { type: 'TCNP_PUSH_OWNER', userId: 'officer-a' }, ports: [] })
+  // Another officer's update on a shared device is generic, quiet and carries no route or id.
+  await push('officer-b'); assert.equal(shown.length, 2)
+  assert.equal(shown[1].silent, true); assert.equal(shown[1].data.url, '/dashboard'); assert.equal(shown[1].data.notificationId, undefined)
+  assert.equal(shown[1].tag, 'tcnp-other-account')
+  await push('officer-a'); assert.equal(shown.length, 3); assert.equal(shown[2].data.url, '/chat?programId=abc')
+  await event('notificationclick', { notification: { data: shown[2].data, close() {} } })
   assert.equal(navigated[0], 'https://tcnp.vercel.app/chat?programId=abc')
-  await event('message', { data: { type: 'TCNP_PUSH_OWNER', userId: null }, ports: [] })
-  await push('officer-a'); assert.equal(shown.length, 1)
+  // An unreadable payload still produces a notification.
+  let pending; handlers.push({ data: { json: () => { throw Error('bad') } }, waitUntil: p => { pending = p } }); await pending
+  assert.equal(shown.length, 4); assert.equal(shown[3].title, 'TCNP')
 })

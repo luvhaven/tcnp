@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useNotifications, AppNotification, NotificationType, resolveNotificationRoute } from "@/hooks/useNotifications"
 import { Button } from "@/components/ui/button"
+import { syncAppBadge } from "@/lib/device-push"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Bell,
@@ -165,6 +166,8 @@ export default function NotificationCenter() {
   const [open, setOpen] = useState(false)
   const [filter, setFilter] = useState<FilterTab>("all")
   const panelRef = useRef<HTMLDivElement>(null)
+  // Keep the app-icon badge equal to the true unread total, like a messaging app.
+  useEffect(() => { if (!loading) void syncAppBadge(unreadCount) }, [unreadCount, loading])
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent) => {

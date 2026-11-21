@@ -32,7 +32,8 @@ async function change(request: Request, remove: boolean) {
   if (readError) return chatError('Device notifications are being set up. Please retry shortly.', 503)
   if (existing && (existing.p256dh !== body.keys.p256dh || existing.auth_key !== body.keys.auth)) return chatError('Refresh your device notification subscription.', 409)
   const { error } = await caller.db.from('device_push_subscriptions').upsert({ endpoint: body.endpoint, user_id: caller.profile.id, session_id: sessionId, p256dh: body.keys.p256dh, auth_key: body.keys.auth, updated_at: new Date().toISOString() }, { onConflict: 'endpoint' })
-  return error ? chatError('Could not enable device notifications. Please retry.', 503) : NextResponse.json({ ok: true }, { headers: CHAT_PRIVATE_HEADERS })
+  // The account id lets the device mark itself for this officer without another round trip.
+  return error ? chatError('Could not enable device notifications. Please retry.', 503) : NextResponse.json({ ok: true, userId: caller.profile.id }, { headers: CHAT_PRIVATE_HEADERS })
 }
 export const POST = (request: Request) => change(request, false)
 export const DELETE = (request: Request) => change(request, true)

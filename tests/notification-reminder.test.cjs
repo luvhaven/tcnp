@@ -39,10 +39,12 @@ test('actual login reminder returns after a new login and opens native permissio
  const reminders = compile('lib/notification-reminder.ts')
  const cache = new Map()
  const push = {
-  pushSupported: () => supported, pushDisabled: () => disabled, devicePushConnected: async () => connected,
-  getPushConfig: async () => ({ ready: true, publicKey: 'public', userId: 'officer' }),
-  connectDevicePush: async (_, ask, onProgress) => {
-   if (ask) { nativeRequests++; permission = 'granted' }
+  pushSupport: () => supported ? 'supported' : 'ios-install', pushSupported: () => supported,
+  pushSupportMessage: () => 'Open TCNP from your Home Screen to turn on notifications.',
+  blockedHelp: () => 'Notifications are blocked in this browser. Allow them in the site settings.',
+  pushDisabled: () => disabled, devicePushConnected: async () => connected,
+  enableDevicePush: async onProgress => {
+   nativeRequests++; permission = 'granted'
    onProgress?.('Connecting this device…')
    connected = true
    dom.window.dispatchEvent(new dom.window.Event('tcnp-push-change'))
@@ -64,8 +66,8 @@ test('actual login reminder returns after a new login and opens native permissio
   return cache.get(file)
  }
  const Banner = load('components/notifications/NotificationPermissionBanner.tsx').default
- const wrapper = () => document.querySelector('section[aria-label="Device notifications"]').parentElement
- const visible = () => wrapper().className !== 'hidden'
+ const wrapper = () => document.querySelector('section[aria-label="Device notifications"]')?.parentElement
+ const visible = () => Boolean(wrapper())
  const button = text => Array.from(document.querySelectorAll('button')).find(node => node.textContent.includes(text))
  async function mount(Component = Banner) {
   await act(async () => root.unmount())
@@ -90,10 +92,10 @@ test('actual login reminder returns after a new login and opens native permissio
   await mount()
   assert.equal(visible(), true)
  })
- await t.test('Enable calls the native-permission path, confirms setup and hides the reminder', async () => {
-  await act(async () => button('Enable on this device').click())
+ await t.test('Enable calls the native-permission path and the reminder leaves the screen at once', async () => {
+  await act(async () => { button('Enable notifications').click(); await new Promise(resolve => setTimeout(resolve, 10)) })
   assert.equal(nativeRequests, 1)
-  assert.equal(testNotifications, 1)
+  assert.equal(testNotifications, 0, 'no surprise test alert on enabling')
   assert.equal(connected, true)
   assert.equal(visible(), false)
  })

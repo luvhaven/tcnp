@@ -11,7 +11,7 @@ import { BrokenArrowAlert } from "@/components/operations/BrokenArrowAlert"
 import { createClient } from "@/lib/supabase/client"
 import { useLocationSharing } from "@/hooks/useLocationSharing"
 import { LocationSharingSync } from '@/components/tracking/LocationSharingSync'
-import { PushFeedbackSync } from '@/components/notifications/PushFeedbackSync'
+import { DevicePushBridge } from '@/components/notifications/DevicePushBridge'
 
 // ─── Singleton client — always the same instance, safe to use in effects ───
 const supabase = createClient()
@@ -200,7 +200,7 @@ export default function DashboardLayout({
         <BrokenArrowAlert />
         <LocationSharingSync />
         {/* Lets a closed app still honour this device's sound and vibration choices */}
-        <PushFeedbackSync />
+        <DevicePushBridge />
 
         {/* Dev tools - DISABLED on iOS */}
         {canMountExtras && !isIOS && <DevLoggerInit />}
