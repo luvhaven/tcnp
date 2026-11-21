@@ -3,6 +3,14 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isPlatformAdministrator } from '@/lib/utils'
 
+/** A pending or approved request whose expiry has passed is shown as expired. */
+function markExpired<T extends { status: string; expires_at: string | null }>(row: T, now: number = Date.now()): T {
+  if ((row.status === 'pending' || row.status === 'approved') && row.expires_at && new Date(row.expires_at).getTime() < now) {
+    return { ...row, status: 'expired' }
+  }
+  return row
+}
+
 export async function GET(request: Request) {
   try {
     const supabase = await createServerClient()
@@ -28,6 +36,17 @@ export async function GET(request: Request) {
 
     const adminClient = createAdminClient()
     const db = adminClient as any
+
+    // A pending or approved request past its expiry can never be used. Record
+    // it as expired so it stops showing as awaiting action. If that write
+    // fails, the rows are still reported as expired below.
+    const nowIso = new Date().toISOString()
+    const { error: expireError } = await db
+      .from('password_reset_requests')
+      .update({ status: 'expired', updated_at: nowIso })
+      .in('status', ['pending', 'approved'])
+      .lt('expires_at', nowIso)
+    if (expireError) console.warn('[admin/password-resets] Could not mark expired requests:', expireError)
 
     // Pending requests are never capped; only the history is limited.
     const base = () => db
@@ -63,7 +82,7 @@ export async function GET(request: Request) {
       base().not('status', 'in', '(pending,approved)').order('requested_at', { ascending: false }).limit(50),
     ])
     const fetchError = pending.error || history.error
-    const requests = [...(pending.data || []), ...(history.data || [])]
+    const requests = [...(pending.data || []), ...(history.data || [])].map(row => markExpired(row))
 
     if (fetchError) {
       console.error('[admin/password-resets] Error fetching requests:', fetchError)

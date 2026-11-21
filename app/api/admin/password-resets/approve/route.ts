@@ -51,6 +51,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `This request is ${resetReq.status} and can no longer be approved.` }, { status: 400 })
     }
 
+    // An approval after expiry could never be used by the officer.
+    if (resetReq.expires_at && new Date(resetReq.expires_at).getTime() < Date.now()) {
+      await db
+        .from('password_reset_requests')
+        .update({ status: 'expired', updated_at: new Date().toISOString() })
+        .eq('id', requestId)
+        .eq('status', 'pending')
+      return NextResponse.json({ error: 'This request expired; ask the officer to request again.' }, { status: 400 })
+    }
+
     const { data: target } = await db
       .from('users')
       .select('role, has_admin_access, email')
