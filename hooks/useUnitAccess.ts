@@ -18,7 +18,23 @@ export const myUnitMembershipsKey = (userId: string | null | undefined) =>
   ['unit-access', 'my-memberships', userId ?? null] as const
 
 export function useMyUnitMemberships() {
-  const { data: currentUser, isLoading: userLoading } = useCurrentUser()
+  const { data: currentUser, isLoading: userLoading, isError: userError, refetch: refetchUser } = useCurrentUser()
+  // A profile read that never succeeded leaves the membership query disabled,
+  // which would look like "member of nothing". Report it as a failed load.
+  const userFailed = userError && !currentUser
+
+  // Unit pages retry with invalidateQueries({ queryKey: ['unit-access'] }).
+  // This entry sits under that prefix so the same retry re-reads the profile
+  // when the profile is what failed.
+  useQuery({
+    queryKey: ['unit-access', 'profile-retry'] as const,
+    queryFn: async () => {
+      await refetchUser()
+      return Date.now()
+    },
+    enabled: userFailed,
+    retry: false,
+  })
 
   const query = useQuery({
     queryKey: myUnitMembershipsKey(currentUser?.id),
@@ -38,7 +54,7 @@ export function useMyUnitMemberships() {
     // data on error), so a flaky connection does not strip the nav. Only a read
     // that never succeeded grants no unit access (platform / Command still apply).
     memberships: query.data ?? NO_MEMBERSHIPS,
-    loadFailed: query.isError && query.data === undefined,
+    loadFailed: (query.isError && query.data === undefined) || userFailed,
     isLoading: userLoading || query.isLoading,
   }
 }
