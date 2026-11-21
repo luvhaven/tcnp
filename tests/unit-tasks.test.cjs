@@ -257,9 +257,11 @@ test('task notifications replace the Den trigger once, keep the Den kinds, and t
   assert.match(tasksSql, /cron\.unschedule\(jobid\) FROM cron\.job WHERE jobname IN \('tcnp-den-task-reminders', 'tcnp-unit-task-reminders'\)/)
   assert.match(tasksSql, /DROP POLICY IF EXISTS notifications_insert_all ON public\.notifications;/)
   assert.match(tasksSql, /CREATE POLICY notifications_insert_own ON public\.notifications\s+FOR INSERT TO authenticated\s+WITH CHECK \(user_id = \(SELECT auth\.uid\(\)\) AND \(SELECT public\.is_active_member\(\)\)\);/, 'same as 20261019150000: deactivated accounts cannot notify')
-  // The only browser insert into notifications is for the caller themself.
+  // The location tracker no longer inserts notifications from the browser:
+  // the offline / battery alert for Command goes through an RPC.
   const tracker = fs.readFileSync('components/tracking/LocationTracker.tsx', 'utf8')
-  assert.match(tracker, /from\('notifications'\)\.insert\(\{\s*user_id: user\.id,/)
+  assert.doesNotMatch(tracker, /from\('notifications'\)\.insert/)
+  assert.match(tracker, /rpc\('notify_location_offline'/)
 })
 
 test('one assignee rule for every task: a member of the owning unit, re-checked when the task moves', () => {

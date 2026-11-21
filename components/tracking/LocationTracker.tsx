@@ -6,6 +6,17 @@ import { toast } from 'sonner'
 import { createLocationSharingGuard, isLocationSharingEnabled } from '@/lib/location-sharing'
 import { publishLocation } from '@/lib/location-upload'
 
+const BATTERY_CRITICAL_PERCENT = 15
+const BATTERY_ALERT_KEY = 'tcnp-battery-critical-alert-sent'
+
+function hasSentBatteryAlertThisSession(): boolean {
+  try { return window.sessionStorage.getItem(BATTERY_ALERT_KEY) === '1' } catch { return false }
+}
+
+function markBatteryAlertSent() {
+  try { window.sessionStorage.setItem(BATTERY_ALERT_KEY, '1') } catch { /* storage blocked */ }
+}
+
 /**
  * LocationTracker Component - Clean Permission Flow
  * 
@@ -26,38 +37,45 @@ export function LocationTracker() {
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mountedRef = useRef(true)
   const lastPositionRef = useRef<{ latitude: number; longitude: number; timestamp: number } | null>(null)
+  // The watch callbacks are created once per start, so they read the live
+  // tracking state through refs rather than the values captured at start.
+  const isTrackingRef = useRef(false)
+  const hasEverTrackedRef = useRef(false)
+  useEffect(() => { isTrackingRef.current = isTracking }, [isTracking])
+  useEffect(() => { hasEverTrackedRef.current = hasEverTracked }, [hasEverTracked])
+  const batteryAlertSentRef = useRef(false)
+  const batteryAlertInFlightRef = useRef(false)
+  // Re-runs the battery check; set once the Battery API resolves.
+  const batteryCheckRef = useRef<(() => void) | null>(null)
 
   // Audio Alert System & Admin Notification
   const audioContextRef = useRef<AudioContext | null>(null)
 
-  const sendAdminAlert = async (type: 'LOCATION_LOSS' | 'BATTERY_CRITICAL') => {
+  // Tells Command and platform admins (not this officer) that tracking for
+  // this officer went dark. The SECURITY DEFINER RPC picks the audience and
+  // writes the text, so a client cannot address notifications to others.
+  // Resolves true only when the RPC accepted the alert, so callers that send
+  // once can retry after a failure (the RPC throttles repeats server-side).
+  const sendAdminAlert = async (type: 'LOCATION_LOSS' | 'BATTERY_CRITICAL'): Promise<boolean> => {
     const canShare = createLocationSharingGuard()
-    if (!canShare() || !mountedRef.current) return
+    if (!canShare() || !mountedRef.current) return false
     try {
       const { createClient } = await import('@/lib/supabase/client')
       const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user || !canShare() || !mountedRef.current) return
-
-      await (supabase as any).from('notifications').insert({
-        user_id: user.id,
-        title: type === 'LOCATION_LOSS' ? 'SOS: Location Offline' : 'Battery Critical',
-        message: type === 'LOCATION_LOSS'
-          ? `User ${user.email} location stopped updating.`
-          : `User device battery is critical.`,
-        type: 'alert',
-        is_read: false
+      if (!canShare() || !mountedRef.current) return false
+      const { error } = await (supabase as any).rpc('notify_location_offline', {
+        reason: type === 'LOCATION_LOSS' ? 'location_lost' : 'battery_critical',
       })
+      if (error) throw error
+      return true
     } catch (e) {
       console.warn('Failed to send admin alert', e)
+      return false
     }
   }
 
   const playAlert = (type: 'location_lost' | 'network_lost') => {
     if (!isLocationSharingEnabled() || !mountedRef.current) return
-    if (type === 'location_lost') {
-      sendAdminAlert('LOCATION_LOSS')
-    }
     try {
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
@@ -195,26 +213,66 @@ export function LocationTracker() {
   const [batteryLevel, setBatteryLevel] = useState<number | null>(null)
 
   useEffect(() => {
+    let cancelled = false
+    let detach: (() => void) | null = null
     if (typeof navigator !== 'undefined' && 'getBattery' in navigator) {
       try {
         // @ts-ignore
         navigator.getBattery().then((battery: any) => {
+          if (cancelled) return
           const updateBattery = () => {
-            setBatteryLevel(Math.round(battery.level * 100))
+            const level = Math.round(battery.level * 100)
+            setBatteryLevel(level)
+            // Tell Command once per browser session when a sharing officer's
+            // phone is about to die, so they know the dot may go dark. The
+            // session is only marked once the RPC succeeds, so a failed send
+            // is retried on the next battery or tracking change.
+            if (
+              level < BATTERY_CRITICAL_PERCENT &&
+              !battery.charging &&
+              isTrackingRef.current &&
+              isLocationSharingEnabled() &&
+              !batteryAlertSentRef.current &&
+              !batteryAlertInFlightRef.current &&
+              !hasSentBatteryAlertThisSession()
+            ) {
+              batteryAlertInFlightRef.current = true
+              void sendAdminAlert('BATTERY_CRITICAL').then(sent => {
+                batteryAlertInFlightRef.current = false
+                if (sent) {
+                  batteryAlertSentRef.current = true
+                  markBatteryAlertSent()
+                }
+              })
+            }
           }
 
           updateBattery()
+          batteryCheckRef.current = updateBattery
+          // chargingchange covers unplugging the charger while already low.
           battery.addEventListener('levelchange', updateBattery)
-
-          return () => {
+          battery.addEventListener('chargingchange', updateBattery)
+          detach = () => {
             battery.removeEventListener('levelchange', updateBattery)
+            battery.removeEventListener('chargingchange', updateBattery)
+            batteryCheckRef.current = null
           }
-        })
+        }).catch(() => { /* Battery status unavailable */ })
       } catch (e) {
         console.warn('Battery status not supported')
       }
     }
+    return () => {
+      cancelled = true
+      detach?.()
+    }
   }, [])
+
+  // A phone already below the threshold when tracking starts is reported
+  // straight away, not only after the battery drops another percent.
+  useEffect(() => {
+    if (isTracking) batteryCheckRef.current?.()
+  }, [isTracking])
 
   // The switch requests permission within the tap gesture. Also restart when
   // that request finishes on Safari versions without a Permissions API event.
@@ -431,7 +489,8 @@ export function LocationTracker() {
           watchIdRef.current = navigator.geolocation.watchPosition(
             async (pos) => {
               if (isActive()) {
-                if (!isTracking) {
+                if (!isTrackingRef.current) {
+                  isTrackingRef.current = true
                   setIsTracking(true)
                   console.log('📍 Tracking recovered via watch.')
                 }
@@ -441,11 +500,12 @@ export function LocationTracker() {
             (error) => {
               if (!isActive()) return
               console.warn('📍 Watch position error:', error.message)
-              const wasTracking = isTracking
+              const wasTracking = isTrackingRef.current
+              isTrackingRef.current = false
               setIsTracking(false)
 
               // ONLY alert if we were already tracking (not initial setup)
-              if (wasTracking && hasEverTracked) {
+              if (wasTracking && hasEverTrackedRef.current) {
                 sendAdminAlert('LOCATION_LOSS')
                 playAlert('location_lost')
                 toast.error('Location Access Lost! Please check settings.')
