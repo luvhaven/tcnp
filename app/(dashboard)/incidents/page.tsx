@@ -29,10 +29,20 @@ import {
 import { isAdmin, cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { notifyError, UserFacingError } from '@/lib/notify'
+import { offlineQueue } from '@/lib/offline-queue'
+import { isNetworkFailure } from '@/hooks/useJourneyStatus'
 import { format } from 'date-fns'
 
 type Severity = 'low' | 'medium' | 'high' | 'critical'
 type IncidentStatus = 'open' | 'in_progress' | 'resolved' | 'closed'
+type IncidentForm = {
+  journey_id: string
+  type: string
+  severity: Severity
+  description: string
+  status: IncidentStatus
+}
+const EMPTY_INCIDENT_FORM: IncidentForm = { journey_id: '', type: '', severity: 'medium', description: '', status: 'open' }
 
 type Incident = {
   id: string
@@ -160,19 +170,11 @@ function IncidentsContent() {
   const [typeError, setTypeError] = useState(false)
   const typeTriggerRef = useRef<HTMLButtonElement>(null)
   const loadSeq = useRef(0)
-  const [formData, setFormData] = useState<{
-    journey_id: string
-    type: string
-    severity: Severity
-    description: string
-    status: IncidentStatus
-  }>({
-    journey_id: '',
-    type: '',
-    severity: 'medium',
-    description: '',
-    status: 'open'
-  })
+  const [formData, setFormData] = useState<IncidentForm>(EMPTY_INCIDENT_FORM)
+  // The unsent new report: its id is fixed when the form first opens, so a
+  // retry after a lost response cannot insert a second incident, and its text
+  // survives closing the dialog (a tap outside) or editing another incident.
+  const newReport = useRef<{ id: string; form: IncidentForm | null }>({ id: '', form: null })
 
   const statusParam = searchParams.get('status')
   const statusFilter: StatusFilter = statusParam === 'open' || statusParam === 'resolved' ? statusParam : 'all'
@@ -435,49 +437,52 @@ function IncidentsContent() {
         }
         toast.success('Incident updated successfully!')
       } else {
-        const { error } = await (supabase as any)
-          .from('incidents')
-          .insert([{
-            journey_id: formData.journey_id || null,
-            type: formData.type,
-            severity: formData.severity,
-            description: formData.description,
-            status: 'open',
-            reported_by: currentUser?.id,
-            created_by: currentUser?.id
-          }])
-
-        if (error) throw error
-        toast.success('Incident reported successfully!')
+        if (!newReport.current.id) newReport.current.id = crypto.randomUUID()
+        const record = {
+          id: newReport.current.id,
+          journey_id: formData.journey_id || null,
+          type: formData.type,
+          severity: formData.severity,
+          description: formData.description,
+          status: 'open',
+          reported_by: currentUser?.id,
+          created_by: currentUser?.id
+        }
+        let queued = false
+        try {
+          const { error } = await (supabase as any).from('incidents').insert([record])
+          // 23505: an earlier attempt reached the server and only the reply
+          // was lost. The report is already saved under this id.
+          if (error && error.code !== '23505') throw error
+        } catch (insertError) {
+          if (!isNetworkFailure(insertError)) throw insertError
+          await offlineQueue.addToQueue('incident', record)
+          queued = true
+        }
+        if (queued) toast.success('Saved on this device. The report will send when you are back online.')
+        else toast.success('Incident reported successfully!')
+        newReport.current = { id: '', form: null }
       }
 
       setDialogOpen(false)
       setEditing(null)
-      resetForm()
+      // After an edit, bring back any unsent new report rather than wiping it.
+      setTypeError(false)
+      setFormData(newReport.current.form ?? EMPTY_INCIDENT_FORM)
       void loadData({ background: true })
     } catch (error: any) {
-      console.error('❌ Error saving incident:', error)
       notifyError(error, 'Failed to save incident')
     } finally {
       setSaving(false)
     }
   }
 
-  const resetForm = () => {
-    setTypeError(false)
-    setFormData({
-      journey_id: '',
-      type: '',
-      severity: 'medium',
-      description: '',
-      status: 'open'
-    })
-  }
-
   const openDialog = (incident?: Incident) => {
+    setTypeError(false)
     if (incident) {
+      // Keep an unsent new report while another incident is edited.
+      if (!editing) newReport.current.form = formData
       setEditing(incident)
-      setTypeError(false)
       setFormData({
         journey_id: incident.journey_id || '',
         type: incident.type,
@@ -486,8 +491,10 @@ function IncidentsContent() {
         status: incident.status
       })
     } else {
+      // formData already holds the unsent report unless an edit replaced it.
+      if (editing) setFormData(newReport.current.form ?? EMPTY_INCIDENT_FORM)
       setEditing(null)
-      resetForm()
+      if (!newReport.current.id) newReport.current.id = crypto.randomUUID()
     }
     setDialogOpen(true)
   }
