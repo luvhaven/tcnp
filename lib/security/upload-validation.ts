@@ -93,3 +93,16 @@ export function validateUploadFiles(
   }
   return null
 }
+
+/**
+ * Summary for a multi-file upload. On a partial failure it says how many made
+ * it and that pressing Upload again sends only the rest.
+ */
+export function describeBatchUpload(done: number, total: number): string {
+  const noun = (n: number) => `${n} file${n === 1 ? '' : 's'}`
+  if (done >= total) return `${noun(total)} uploaded`
+  const left = total - done
+  return done === 0
+    ? `Nothing was uploaded. Press Upload to try ${total === 1 ? 'again' : `all ${noun(total)} again`}.`
+    : `${done} of ${total} uploaded. Press "Upload the rest" to send the remaining ${noun(left)}.`
+}

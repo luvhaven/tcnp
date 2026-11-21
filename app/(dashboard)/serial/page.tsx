@@ -34,7 +34,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import UnitTasks from "@/components/units/UnitTasks"
 import UnitProgrammeTeam from "@/components/units/UnitProgrammeTeam"
 import { canSeeUnitWork, useAddressTab } from "@/components/units/unit-work-tabs"
-import { UPLOAD_RULES, validateUploadFiles } from "@/lib/security/upload-validation"
+import { uploadErrorForUser } from "@/lib/headshot-image"
+import { describeBatchUpload, UPLOAD_RULES, validateUploadFiles } from "@/lib/security/upload-validation"
 import { ErrorState } from "@/components/ui/error-state"
 import { EmptyState } from "@/components/ui/empty-state"
 import { useConfirm } from "@/components/providers/ConfirmProvider"
@@ -127,6 +128,8 @@ function SerialContent() {
 
   const [uploadOpen, setUploadOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
+  /** Files finished out of the batch, shown while uploading and after a partial failure. */
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
   const [filterProgram, setFilterProgram] = useState("all")
   const [filterCategory, setFilterCategory] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -221,14 +224,18 @@ function SerialContent() {
       return
     }
     setUploading(true)
+    // Each file leaves form.files as soon as it is stored and recorded, so a
+    // retry after a partial failure sends only what is left (no duplicates).
+    const batch = [...form.files]
     let ok = 0
+    setUploadProgress({ done: 0, total: batch.length })
     try {
-      for (const file of form.files) {
+      for (const file of batch) {
         const isVideo = file.type.startsWith("video/")
-        const ext = file.name.split(".").pop() || (isVideo ? "mp4" : "jpg")
-        const path = `${form.program_id || "untagged"}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+        const ext = (file.name.split(".").pop() || (isVideo ? "mp4" : "jpg")).toLowerCase().replace(/[^a-z0-9]/g, "")
+        const path = `${form.program_id || "untagged"}/${crypto.randomUUID()}.${ext}`
         const { error: upErr } = await supabase.storage.from("serial-media").upload(path, file, { contentType: file.type })
-        if (upErr) throw upErr
+        if (upErr) throw uploadErrorForUser(upErr)
         const { error: insErr } = await supabase.from("media_assets").insert({
           program_id: form.program_id || null,
           uploaded_by: currentUser.id,
@@ -238,17 +245,25 @@ function SerialContent() {
           media_type: isVideo ? "video" : "image",
           storage_path: path,
         })
-        if (insErr) throw insErr
+        if (insErr) {
+          // Do not leave an orphaned file behind a failed record.
+          await supabase.storage.from("serial-media").remove([path])
+          throw insErr
+        }
         ok++
+        setForm(current => ({ ...current, files: current.files.filter(f => f !== file) }))
+        setUploadProgress({ done: ok, total: batch.length })
       }
-      toast.success(`${ok} asset${ok > 1 ? "s" : ""} uploaded`)
+      toast.success(describeBatchUpload(ok, batch.length))
       setUploadOpen(false)
+      setUploadProgress(null)
       setForm({ title: "", caption: "", category: "arrival", program_id: "", files: [] })
-      queryClient.invalidateQueries({ queryKey: ["serial-media"] })
+      if (fileInputRef.current) fileInputRef.current.value = ""
     } catch (err: any) {
-      notifyError(err, "Upload failed")
+      notifyError(err, "Upload failed", { description: describeBatchUpload(ok, batch.length) })
     } finally {
       setUploading(false)
+      if (ok > 0) void queryClient.invalidateQueries({ queryKey: ["serial-media"] })
     }
   }
 
@@ -544,10 +559,14 @@ function SerialContent() {
                 accept="image/*,video/*"
                 multiple
                 className="cursor-pointer"
-                onChange={(e) => setForm({ ...form, files: Array.from(e.target.files ?? []) })}
+                onChange={(e) => { setUploadProgress(null); setForm({ ...form, files: Array.from(e.target.files ?? []) }) }}
               />
               {form.files.length > 0 && (
-                <p className="text-xs text-muted-foreground">{form.files.length} file(s) selected</p>
+                <p className="text-xs text-muted-foreground">
+                  {uploadProgress && uploadProgress.done > 0
+                    ? `${uploadProgress.done} of ${uploadProgress.total} uploaded · ${form.files.length} left to upload`
+                    : `${form.files.length} file(s) selected`}
+                </p>
               )}
             </div>
             <div className="space-y-2">
@@ -583,7 +602,9 @@ function SerialContent() {
               <Button type="button" variant="outline" className="flex-1" onClick={() => setUploadOpen(false)}>Cancel</Button>
               <Button type="submit" className="flex-1 gap-2" disabled={uploading}>
                 {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                {uploading ? "Uploading…" : "Upload"}
+                {uploading
+                  ? `Uploading ${Math.min((uploadProgress?.done ?? 0) + 1, uploadProgress?.total ?? 1)} of ${uploadProgress?.total ?? 1}…`
+                  : uploadProgress && uploadProgress.done > 0 ? "Upload the rest" : "Upload"}
               </Button>
             </div>
           </form>
