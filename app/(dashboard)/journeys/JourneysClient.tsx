@@ -277,6 +277,10 @@ export default function JourneysClient({
     })
   const [selectedDOs, setSelectedDOs] = useState<string[]>([])
   const [teamLeadId, setTeamLeadId] = useState<string>('')
+  // True once the officer adds or removes a duty officer in the open dialog.
+  // An edited list is authoritative (it may be empty); an untouched one keeps
+  // the journey's existing lead.
+  const [doListTouched, setDOListTouched] = useState(false)
 
   const [formData, setFormData] = useState({
     papa_id: '',
@@ -364,12 +368,14 @@ export default function JourneysClient({
     // a state updater, so the lead can never point at an unselected officer.
     const next = selectedDOs.includes(userId) ? selectedDOs.filter(id => id !== userId) : [...selectedDOs, userId]
     setSelectedDOs(next)
+    setDOListTouched(true)
     if (next.length === 1 || !next.includes(teamLeadId)) setTeamLeadId(next[0] ?? '')
   }
 
   const resetDOState = () => {
     setSelectedDOs([])
     setTeamLeadId('')
+    setDOListTouched(false)
   }
 
   useEffect(() => {
@@ -646,6 +652,7 @@ export default function JourneysClient({
 
     setSelectedDOs(initialDOs)
     setTeamLeadId(initialLead)
+    setDOListTouched(false)
 
     let initialSecondaryPapas: string[] = []
     try {
@@ -693,7 +700,11 @@ export default function JourneysClient({
     if (isUpdatingJourney) return
     setIsUpdatingJourney(true)
     try {
-      const lead = teamLeadId || selectedDOs[0] || formData.assigned_duty_officer_id || null
+      // An edited DO list is authoritative, so removing every DO clears the
+      // lead. Only an untouched list falls back to the journey's old lead.
+      const lead = doListTouched
+        ? (teamLeadId || selectedDOs[0] || null)
+        : (teamLeadId || selectedDOs[0] || formData.assigned_duty_officer_id || null)
       // secondary_papa_ids is client-only form state for the journey_papas
       // junction table below — no matching column on `journeys` itself.
       const { secondary_papa_ids: _secondaryPapaIds, ...formDataForJourneysTable } = formData
@@ -719,28 +730,45 @@ export default function JourneysClient({
 
       if (error) throw error
 
-      // Update secondary papas
+      const failedParts: string[] = []
+
+      // Update secondary papas. supabase-js returns errors rather than
+      // throwing, so each response is checked explicitly.
       try {
-        await (supabase as any).from('journey_papas').delete().eq('journey_id', selectedJourney.id).eq('is_primary', false)
+        const { error: deleteError } = await (supabase as any).from('journey_papas').delete().eq('journey_id', selectedJourney.id).eq('is_primary', false)
+        if (deleteError) throw deleteError
         if (formData.secondary_papa_ids.length > 0) {
           const papaPayload = formData.secondary_papa_ids.map(pid => ({ journey_id: selectedJourney.id, papa_id: pid, is_primary: false }))
-          await (supabase as any).from('journey_papas').insert(papaPayload)
+          const { error: insertError } = await (supabase as any).from('journey_papas').insert(papaPayload)
+          if (insertError) throw insertError
         }
       } catch (e) {
-        console.warn('Failed to update secondary papas', e)
+        console.warn('Journey updated, but secondary papas could not be saved.', e)
+        failedParts.push('the secondary Papas')
       }
 
-      // Sync DO assignments if any were selected
-      if (selectedDOs.length > 0) {
-        const doPayload = selectedDOs.map(uid => ({ user_id: uid, is_lead: uid === (lead ?? '') }))
-        await fetch('/api/journey-duty-officers', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ journey_id: selectedJourney.id, officers: doPayload })
-        })
+      // Sync DO assignments. An edited list is always sent, even when empty,
+      // so removing every DO actually clears them.
+      if (doListTouched || selectedDOs.length > 0) {
+        try {
+          const doPayload = selectedDOs.map(uid => ({ user_id: uid, is_lead: uid === (lead ?? '') }))
+          const response = await fetch('/api/journey-duty-officers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ journey_id: selectedJourney.id, officers: doPayload })
+          })
+          if (!response.ok) throw new Error(`Duty officer assignment failed (${response.status})`)
+        } catch (assignmentError) {
+          console.error('Journey updated, but duty officer assignments could not be saved:', assignmentError)
+          failedParts.push('the duty officers')
+        }
       }
 
-      toast.success('Journey updated successfully!')
+      if (failedParts.length > 0) {
+        toast.warning(`Journey updated, but ${failedParts.join(' and ')} could not be saved.`)
+      } else {
+        toast.success('Journey updated successfully!')
+      }
       setSelectedJourney(null)
       resetDOState()
       resetPage()
