@@ -84,6 +84,25 @@ function useDialogState(open: boolean | undefined, onOpenChange: ((open: boolean
   return [value, setValue] as const
 }
 
+/** Males / Females requests filter on users.gender, so officers without one are skipped. */
+export function isGenderAudience(audience: string): boolean {
+  return audience === "male" || audience === "female"
+}
+
+/**
+ * How many active officers get_mission_audience_gaps reports with no gender.
+ * Accepts the bare count or a row (or one-row set) carrying it; anything
+ * else counts as none, so an unexpected reply never blocks sending.
+ */
+export function parseAudienceGapCount(data: unknown): number {
+  const row = Array.isArray(data) ? data[0] : data
+  const value = typeof row === "object" && row !== null
+    ? (row as Record<string, unknown>).no_gender ?? (row as Record<string, unknown>).missing_gender ?? (row as Record<string, unknown>).count
+    : row
+  const count = typeof value === "string" ? Number(value) : value
+  return typeof count === "number" && Number.isFinite(count) && count > 0 ? Math.floor(count) : 0
+}
+
 // A datetime-local input takes local wall-clock time. Building this from
 // toISOString() gave a UTC time, so the default was off by the officer's
 // UTC offset (an hour in Lagos).
@@ -100,9 +119,31 @@ export function RequestAvailabilityButton({
   const [open, setOpen] = useDialogState(openProp, onOpenChange)
   const [sending, setSending] = useState(false)
   const [audience, setAudience] = useState<MissionAudience>("all")
+  const [includeUnsetGender, setIncludeUnsetGender] = useState(false)
   const audienceId = useId()
+  const includeUnsetId = useId()
   const queryClient = useQueryClient()
   const [form, setForm] = useState(() => ({ message: "", deadline: defaultDeadline() }))
+
+  // A Males / Females request only reaches officers whose gender is set.
+  // Ask how many active officers have none, so the sender can include them.
+  // If the database cannot answer (function not deployed yet), say nothing.
+  const genderAudience = isGenderAudience(audience)
+  const { data: unsetGenderCount = 0 } = useQuery({
+    queryKey: ["mission-audience-gaps", programId, audience],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_mission_audience_gaps", {
+        program: programId,
+        audience,
+      })
+      if (error) throw error
+      return parseAudienceGapCount(data)
+    },
+    enabled: open && genderAudience,
+    retry: false,
+    staleTime: 60_000,
+  })
+  const showUnsetGender = genderAudience && unsetGenderCount > 0
 
   const send = async () => {
     setSending(true)
@@ -115,6 +156,7 @@ export function RequestAvailabilityButton({
           message: form.message || null,
           deadline: new Date(form.deadline).toISOString(),
           audience,
+          include_unset_gender: showUnsetGender && includeUnsetGender,
         }),
       })
       const data = await res.json()
@@ -122,6 +164,7 @@ export function RequestAvailabilityButton({
       toast.success(`Mission request broadcast to ${data.recipients} officers 🎖️`)
       setOpen(false)
       setAudience("all")
+      setIncludeUnsetGender(false)
       queryClient.invalidateQueries({ queryKey: ["mission-requests"] })
       queryClient.invalidateQueries({ queryKey: ["my-mission-requests"] })
     } catch (err: any) {
@@ -163,6 +206,25 @@ export function RequestAvailabilityButton({
                   ))}
                 </SelectContent>
               </Select>
+              {showUnsetGender && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                  <p>
+                    {unsetGenderCount === 1 ? "1 active officer has" : `${unsetGenderCount} active officers have`} no gender
+                    on their profile and will not be asked unless you include them.
+                  </p>
+                  <label htmlFor={includeUnsetId} className="mt-2 flex min-h-[44px] cursor-pointer items-center gap-2 font-medium sm:min-h-0">
+                    <input
+                      id={includeUnsetId}
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-input"
+                      checked={includeUnsetGender}
+                      onChange={e => setIncludeUnsetGender(e.target.checked)}
+                      disabled={sending}
+                    />
+                    Include officers with no gender set
+                  </label>
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Message (optional)</Label>
@@ -266,6 +328,35 @@ export function AvailabilityRosterButton({
   const yesCount = responses.filter(r => r.response === "yes").length
   const noCount = responses.filter(r => r.response === "no").length
 
+  // Ask officers a still-open request missed: anyone who now matches its
+  // audience (for example an officer who set their gender after it was sent)
+  // and, for Males / Females, optionally officers with no gender set.
+  const [addingRecipients, setAddingRecipients] = useState(false)
+  const [addUnsetGender, setAddUnsetGender] = useState(false)
+  const addUnsetId = useId()
+  const requestStillOpen = Boolean(
+    latestRequest && latestRequest.status === "open" && latestRequest.audience && new Date(latestRequest.deadline).getTime() > Date.now()
+  )
+  const addRecipients = async () => {
+    if (!latestRequest) return
+    setAddingRecipients(true)
+    try {
+      const { data, error } = await (supabase as any).rpc("add_mission_request_recipients", {
+        target_request_id: latestRequest.id,
+        include_unset_gender: isGenderAudience(latestRequest.audience ?? "") && addUnsetGender,
+      })
+      if (error) throw error
+      const added = typeof data === "number" ? data : 0
+      if (added > 0) toast.success(`Asked ${added} more officer${added === 1 ? "" : "s"}`)
+      else toast.info("Everyone this request should reach has already been asked.")
+      setAddUnsetGender(false)
+    } catch (err: any) {
+      notifyError(err, "Could not ask more officers")
+    } finally {
+      setAddingRecipients(false)
+    }
+  }
+
   const assignSelected = async () => {
     if (selected.length === 0) return
     setAssigning(true)
@@ -333,6 +424,31 @@ export function AvailabilityRosterButton({
               )}
             </DialogDescription>
           </DialogHeader>
+
+          {latestRequest && requestStillOpen && (
+            <div className="flex flex-col gap-2 rounded-md border p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <p className="text-muted-foreground">Officers who joined or updated their profile since this was sent can be asked too.</p>
+                {isGenderAudience(latestRequest.audience ?? "") && (
+                  <label htmlFor={addUnsetId} className="flex min-h-[44px] cursor-pointer items-center gap-2 sm:min-h-0">
+                    <input
+                      id={addUnsetId}
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-input"
+                      checked={addUnsetGender}
+                      onChange={e => setAddUnsetGender(e.target.checked)}
+                      disabled={addingRecipients}
+                    />
+                    Include officers with no gender set
+                  </label>
+                )}
+              </div>
+              <Button size="sm" variant="outline" className="h-11 shrink-0 gap-1.5 sm:h-9" onClick={addRecipients} disabled={addingRecipients}>
+                {addingRecipients ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Megaphone className="h-4 w-4" aria-hidden="true" />}
+                Ask officers who were missed
+              </Button>
+            </div>
+          )}
 
           {latestRequest && (
             <div className="space-y-4">

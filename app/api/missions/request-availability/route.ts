@@ -6,6 +6,15 @@ import { isMissionAudience } from '@/lib/mission-audiences'
 import { isCommandAuthority } from '@/lib/unit-access'
 
 /**
+ * The deadline as officers read it: Lagos time, day-month order. The server
+ * runs in UTC, so a bare toLocaleString() printed it an hour early and in
+ * US order.
+ */
+function formatLagosDeadline(date: Date): string {
+    return date.toLocaleString('en-GB', { timeZone: 'Africa/Lagos', dateStyle: 'medium', timeStyle: 'short' })
+}
+
+/**
  * Creates a mission availability request for a program and broadcasts a
  * high-priority notification to the selected audience, asking them to
  * confirm availability before the deadline.
@@ -33,13 +42,20 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Forbidden: Command or Admin access required' }, { status: 403 })
         }
 
-        const { program_id, title, message, deadline, audience = 'all' } = await req.json()
+        const { program_id, title, message, deadline, audience = 'all', include_unset_gender = false } = await req.json()
         if (!program_id || !deadline) {
             return NextResponse.json({ error: 'program_id and deadline are required' }, { status: 400 })
         }
         if (!isMissionAudience(audience)) {
             return NextResponse.json({ error: 'Select a valid audience' }, { status: 400 })
         }
+        if (typeof include_unset_gender !== 'boolean') {
+            return NextResponse.json({ error: 'include_unset_gender must be true or false' }, { status: 400 })
+        }
+        // Only a Males / Females request can widen to officers with no gender
+        // set. The parameter is sent only when used, so this route keeps
+        // working against a database that predates it.
+        const includeUnsetGender = include_unset_gender && (audience === 'male' || audience === 'female')
         const deadlineDate = new Date(deadline)
         if (isNaN(deadlineDate.getTime()) || deadlineDate <= new Date()) {
             return NextResponse.json({ error: 'Deadline must be a valid future date/time' }, { status: 400 })
@@ -58,7 +74,8 @@ export async function POST(req: NextRequest) {
                 request_deadline: deadlineDate.toISOString(),
                 sender_id: user.id,
                 request_audience: audience,
-                notification_message: `${program.name}: please confirm your availability to serve before ${deadlineDate.toLocaleString()}. Respond from your dashboard.`,
+                ...(includeUnsetGender ? { include_unset_gender: true } : {}),
+                notification_message: `${program.name}: please confirm your availability to serve before ${formatLagosDeadline(deadlineDate)}. Respond from your dashboard.`,
             })
             .single()
         if (reqError) throw reqError
