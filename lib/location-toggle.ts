@@ -8,6 +8,22 @@ let currentUserId: string | null = null
 let pendingOff = false
 let queue: Promise<unknown> = Promise.resolve()
 const listeners = new Set<() => void>()
+/**
+ * What the server says about this officer's sharing, which can differ from
+ * this device: sharing switched on from another phone, or a reinstalled Home
+ * Screen app (iPhone gives it fresh storage) whose local switch reads "off".
+ * null until the first successful check.
+ */
+let serverSharing: boolean | null = null
+const serverListeners = new Set<() => void>()
+export const getServerSharing = () => serverSharing
+export const getServerSharingSnapshot = () => null
+export function subscribeToServerSharing(listener: () => void) { serverListeners.add(listener); return () => { serverListeners.delete(listener) } }
+function setServerSharing(value: boolean | null) {
+  if (value === serverSharing) return
+  serverSharing = value
+  serverListeners.forEach(listener => listener())
+}
 export const getLocationSharingStatus = () => status
 export const getServerLocationSharingStatus = () => IDLE
 export function subscribeToLocationSharingStatus(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } }
@@ -22,7 +38,7 @@ function markPendingOff(value: boolean) {
 export function setLocationSharingUser(userId: string) {
   if (currentUserId === userId) return
   const unboundPendingOff = !currentUserId && pendingOff
-  if (currentUserId) { intent++; setLocationSharingEnabled(false); updateStatus(IDLE) }
+  if (currentUserId) { intent++; setLocationSharingEnabled(false); updateStatus(IDLE); setServerSharing(null) }
   currentUserId = userId
   try { pendingOff = unboundPendingOff || window.localStorage.getItem(PENDING_KEY) === userId } catch {}
   if (pendingOff) markPendingOff(true)
@@ -45,6 +61,7 @@ async function unpublish(version: number, onError: (message: string) => void) {
   try {
     await saveChoice(false)
     if (version !== intent) return
+    setServerSharing(false)
     markPendingOff(false)
     updateStatus(IDLE)
   } catch {
@@ -82,6 +99,7 @@ export function toggleLocationSharing(value: boolean, onError: (message: string)
         try {
           await saveChoice(true)
           if (version !== intent) return
+          setServerSharing(true)
           markPendingOff(false)
           setLocationSharingEnabled(true)
           updateStatus(IDLE)
@@ -110,6 +128,7 @@ export async function refreshLocationSharing() {
     const remote = await serverRequest('GET')
     if (version !== intent || (currentUserId && remote.userId !== currentUserId)) return
     if (!currentUserId) setLocationSharingUser(remote.userId)
+    setServerSharing(remote.enabled)
     if (!remote.enabled && isLocationSharingEnabled()) setLocationSharingEnabled(false)
   } catch { /* A failed check never enables sharing; the server still rejects opted-out uploads. */ }
 }

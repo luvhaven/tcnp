@@ -110,6 +110,10 @@ async function drain() {
       scheduleRetry()
     } else {
       console.warn('📍 Location update failed (non-fatal):', (error as any)?.message ?? error)
+      // The server refused the position (sharing switched off for this
+      // account, or the account deactivated). Re-check sharing at once so the
+      // phone stops claiming it is live instead of failing silently forever.
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('tcnp-location-rejected'))
     }
   } finally {
     inFlight = false

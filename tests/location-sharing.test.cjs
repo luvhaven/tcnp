@@ -140,6 +140,33 @@ test('a server opt-out stops another device locally without silently enabling it
   assert.equal(p.serverEnabled(), false)
 })
 
+test('a phone whose account shares but whose own switch is off is told, never silently enabled', async () => {
+  // A reinstalled iPhone Home Screen app gets fresh storage: the account still
+  // says "share", this phone says off. The map would show a frozen pin.
+  const p = toggleDevice()
+  p.toggle(true); p.requests[0].success({}); await settle()
+  assert.equal(p.toggleModule.getServerSharing(), true)
+  p.store.setLocationSharingEnabled(false)
+  const seen = []
+  p.toggleModule.subscribeToServerSharing(() => seen.push(p.toggleModule.getServerSharing()))
+  await p.toggleModule.refreshLocationSharing()
+  assert.equal(p.toggleModule.getServerSharing(), true, 'the mismatch is visible to the resume prompt')
+  assert.equal(p.store.isLocationSharingEnabled(), false, 'but the phone is not opted in without a tap')
+  p.toggle(false); await settle()
+  assert.equal(p.toggleModule.getServerSharing(), false)
+  assert.deepEqual(seen, [false])
+  p.toggleModule.setLocationSharingUser('another-officer')
+  assert.equal(p.toggleModule.getServerSharing(), null, 'a new sign-in forgets the previous account')
+})
+
+test('a rejected upload makes the phone re-check sharing instead of failing silently', () => {
+  const upload = fs.readFileSync('lib/location-upload.ts', 'utf8')
+  assert.match(upload, /window\.dispatchEvent\(new Event\('tcnp-location-rejected'\)\)/)
+  const sync = fs.readFileSync('components/tracking/LocationSharingSync.tsx', 'utf8')
+  assert.match(sync, /addEventListener\('tcnp-location-rejected', sync\)/)
+  assert.match(sync, /removeEventListener\('tcnp-location-rejected', sync\)/)
+})
+
 test('a saved opt-out survives reloads and synchronizes subscribers', () => {
   const p = preference('off')
   assert.equal(p.store.isLocationSharingEnabled(), false)

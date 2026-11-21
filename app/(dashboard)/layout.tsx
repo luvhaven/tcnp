@@ -11,6 +11,7 @@ import { BrokenArrowAlert } from "@/components/operations/BrokenArrowAlert"
 import { createClient } from "@/lib/supabase/client"
 import { useLocationSharing } from "@/hooks/useLocationSharing"
 import { LocationSharingSync } from '@/components/tracking/LocationSharingSync'
+import { LocationResumePrompt } from '@/components/tracking/LocationResumePrompt'
 import { DevicePushBridge } from '@/components/notifications/DevicePushBridge'
 
 // ─── Singleton client — always the same instance, safe to use in effects ───
@@ -329,6 +330,12 @@ export default function DashboardLayout({
           {canMountTracker && locationSharingEnabled && (
             <ErrorBoundary>
               <LocationTracker />
+            </ErrorBoundary>
+          )}
+          {/* Account says "share", this phone does not (reinstalled app, cleared data) */}
+          {canMountTracker && !locationSharingEnabled && (
+            <ErrorBoundary>
+              <LocationResumePrompt />
             </ErrorBoundary>
           )}
         </FloatingStack>

@@ -33,6 +33,9 @@ export function LocationTracker() {
   const [bannerDismissed, setBannerDismissed] = useState(false)
   const [permissionRequested, setPermissionRequested] = useState(false)
   const [hasEverTracked, setHasEverTracked] = useState(false) // NEW: Track if we've successfully tracked before
+  // iPhone: sharing is on but location must be re-allowed from a tap. Shown as
+  // a visible button so the officer knows the map is not receiving them.
+  const [needsTap, setNeedsTap] = useState(false)
   const watchIdRef = useRef<number | null>(null)
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mountedRef = useRef(true)
@@ -144,20 +147,29 @@ export function LocationTracker() {
     }
   }, [hasEverTracked])
 
-  // Wake Lock API (Keep screen on)
+  // Wake Lock API (keep the screen on while sharing). A locked iPhone stops
+  // sending its location, so this matters most there. iPhone only grants the
+  // lock from a tap, so besides trying on start and on return to the app, it
+  // is requested again on the next tap whenever no lock is held.
   useEffect(() => {
     let wakeLock: any = null;
+    let requesting = false;
     let cancelled = false;
     const requestWakeLock = async () => {
+      if (cancelled || requesting || (wakeLock && !wakeLock.released)) return
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
       try {
-        if ('wakeLock' in navigator) {
+        if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
+          requesting = true
           const lock = await (navigator as any).wakeLock.request('screen');
           if (cancelled || !isLocationSharingEnabled()) { await lock.release(); return }
           wakeLock = lock;
           console.log('💡 Screen Wake Lock active');
         }
       } catch (err: any) {
-        console.warn(`${err.name}, ${err.message}`);
+        console.warn(`${err?.name}, ${err?.message}`);
+      } finally {
+        requesting = false
       }
     };
 
@@ -168,11 +180,16 @@ export function LocationTracker() {
         requestWakeLock();
       }
     };
+    const handleTap = () => { void requestWakeLock() }
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pointerup', handleTap, { passive: true });
+    window.addEventListener('touchend', handleTap, { passive: true });
     return () => {
       cancelled = true;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pointerup', handleTap);
+      window.removeEventListener('touchend', handleTap);
       if (wakeLock) wakeLock.release();
     };
   }, []);
@@ -359,9 +376,11 @@ export function LocationTracker() {
               // officer opted in. Ask on their next tap (a real gesture) rather
               // than waiting for them to find the profile switch again.
               console.log('📍 iOS: will request location on the next tap')
+              setNeedsTap(true)
               const onGesture = () => {
                 window.removeEventListener('touchend', onGesture)
                 window.removeEventListener('click', onGesture)
+                setNeedsTap(false)
                 if (isActive()) setPermissionRequested(false)
               }
               window.addEventListener('touchend', onGesture, { once: true, passive: true })
@@ -541,6 +560,21 @@ export function LocationTracker() {
 
     startTracking()
   }, [isClient, permissionRequested])
+
+  if (needsTap) {
+    return (
+      <div className="pointer-events-none flex justify-center sm:justify-end">
+        <button
+          type="button"
+          onClick={() => { setNeedsTap(false); setPermissionRequested(false) }}
+          className="pointer-events-auto flex min-h-11 items-center gap-2 rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-lg"
+        >
+          <span className="inline-flex h-2 w-2 rounded-full bg-white animate-pulse" />
+          Tap to resume sharing your location
+        </button>
+      </div>
+    )
+  }
 
   // Only show banner if tracking is active and not dismissed
   const showBanner = isTracking && !bannerDismissed

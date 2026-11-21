@@ -17,9 +17,10 @@ export function LocationSharingSync() {
     const interval = window.setInterval(sync, 15000)
     window.addEventListener('online', sync)
     window.addEventListener('focus', sync)
+    window.addEventListener('tcnp-location-rejected', sync)
     const visible = () => { if (document.visibilityState === 'visible') sync() }
     document.addEventListener('visibilitychange', visible)
-    return () => { clearInterval(interval); window.removeEventListener('online', sync); window.removeEventListener('focus', sync); document.removeEventListener('visibilitychange', visible); void db.removeChannel(channel) }
+    return () => { clearInterval(interval); window.removeEventListener('online', sync); window.removeEventListener('focus', sync); window.removeEventListener('tcnp-location-rejected', sync); document.removeEventListener('visibilitychange', visible); void db.removeChannel(channel) }
   }, [user?.id])
   return null
 }
