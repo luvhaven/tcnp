@@ -66,6 +66,18 @@ type NoscarAssignment = {
   user?: Officer
 }
 
+/**
+ * Who can be posted to a hotel besides active November (Nest) members: the
+ * Command and admin roles that have always been offered here, and the Nest
+ * roles. The roles grant nothing (RLS judges the posting); they keep the
+ * list complete for Command, who cannot read Nest memberships unless they
+ * are platform admins.
+ */
+const POSTING_EXTRA_ROLES = [
+  'super_admin', 'dev_admin', 'admin', 'head_of_operations', 'head_of_command', 'command',
+  'november_oscar', 'noscar_nest', 'head_noscar_nest',
+]
+
 export default function NestsClient({ initialNests, initialNestsError = false }: { initialNests: any[]; initialNestsError?: boolean }) {
   // useSearchParams (?tab=) needs a Suspense boundary so the page can still prerender.
   return (
@@ -163,13 +175,25 @@ function NestsContent({ initialNests, initialNestsError }: { initialNests: any[]
     }
   })
 
+  // Officers who can be posted to a hotel: active November (Nest) members
+  // (membership, not role: most members keep a legacy 'viewer' role) plus
+  // Command and admin. Under 'unit-access' so membership changes refresh it.
   const { data: officers = [] } = useQuery({
-    queryKey: ['officers', 'admin-roles'],
+    queryKey: ['unit-access', 'nest', 'posting-officers'],
     queryFn: async () => {
+      const { data: memberRows, error: memberError } = await (supabase as any)
+        .from('unit_memberships')
+        .select('user_id, units!inner(slug)')
+        .eq('units.slug', 'november_nest')
+        .eq('status', 'active')
+      if (memberError) throw memberError
+      const memberIds = Array.from(new Set(((memberRows ?? []) as { user_id: string }[]).map(row => row.user_id)))
+      const filter = [`role.in.(${POSTING_EXTRA_ROLES.join(',')})`]
+      if (memberIds.length > 0) filter.push(`id.in.(${memberIds.join(',')})`)
       const { data, error } = await supabase
         .from('users')
         .select('id, full_name, email, role, oscar')
-        .in('role', ['november_oscar', 'noscar_nest', 'head_noscar_nest', 'head_of_operations', 'admin', 'super_admin'])
+        .or(filter.join(','))
         .eq('is_active', true)
         .order('full_name')
       if (error) throw error
