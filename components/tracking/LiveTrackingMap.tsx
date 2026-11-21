@@ -16,7 +16,6 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CallSignKey, getCallSignLabel, getCallSignColor, CALL_SIGNS } from '@/lib/constants/call-signs'
-import { useLocationTracking } from '@/hooks/useLocationTracking'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { useLocationSharing } from '@/hooks/useLocationSharing'
 import { Switch } from '@/components/ui/switch'
@@ -24,6 +23,7 @@ import { Label } from '@/components/ui/label'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { visibleSharedLocations } from '@/lib/location-visibility'
 import { isLocationSharingEnabled } from '@/lib/location-sharing'
+import { broadcastStatus } from '@/lib/location-broadcast'
 
 type UserLocation = {
   user_id: string
@@ -155,6 +155,22 @@ function SidebarSection({
   )
 }
 
+/** The browser's geolocation permission, kept current, without requesting a fix. */
+function useGeolocationPermission(): PermissionState | 'unknown' {
+  const [state, setState] = useState<PermissionState | 'unknown'>('unknown')
+  useEffect(() => {
+    let permission: PermissionStatus | null = null
+    let cancelled = false
+    const update = () => { if (!cancelled && permission) setState(permission.state) }
+    if (typeof navigator === 'undefined' || !navigator.permissions?.query) return
+    navigator.permissions.query({ name: 'geolocation' as PermissionName })
+      .then(status => { permission = status; update(); status.addEventListener?.('change', update) })
+      .catch(() => { /* Some browsers (older iOS) cannot query geolocation. */ })
+    return () => { cancelled = true; permission?.removeEventListener?.('change', update) }
+  }, [])
+  return state
+}
+
 export default function LiveTrackingMap() {
   const { enabled: sharingEnabled, checked: sharingChecked, pending: sharingPending, error: sharingError, setEnabled: setSharingEnabled } = useLocationSharing()
   const { data: currentUser } = useCurrentUser()
@@ -178,8 +194,14 @@ export default function LiveTrackingMap() {
   const [showTraffic, setShowTraffic] = useState(false)
   const [trafficAvailable, setTrafficAvailable] = useState<boolean | null>(null)
 
-  const { permissionStatus, isTracking } =
-    useLocationTracking({ enableTracking: true, updateInterval: 10000, highAccuracy: true })
+  // Only one tracker publishes this device's location: the app-wide
+  // LocationTracker in the dashboard layout. The map reads the shared sharing
+  // state and the browser permission; it never starts a GPS watch of its own.
+  // "Broadcasting" needs proof: this officer's own pin updated recently. Sharing
+  // switched on is not enough (iOS waits for a tap; Safari may not report).
+  const permissionStatus = useGeolocationPermission()
+  const ownUpdatedAt = userLocations.find(location => location.user_id === currentUser?.id)?.updated_at
+  const broadcast = broadcastStatus({ permission: permissionStatus, ownUpdatedAt })
 
   useEffect(() => { setIsClient(true) }, [])
 
@@ -407,7 +429,7 @@ export default function LiveTrackingMap() {
             <span className="text-xs text-muted-foreground" role="status">{sharingChecked ? 'Enabling location sharing…' : 'Hiding your shared location…'}</span>
           ) : !sharingEnabled ? (
             <span className="text-xs text-muted-foreground" role="status">Location sharing is off — your pin is hidden</span>
-          ) : isTracking ? (
+          ) : broadcast === 'live' ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 select-none">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -415,7 +437,7 @@ export default function LiveTrackingMap() {
               </span>
               Broadcasting location
             </span>
-          ) : permissionStatus === 'denied' ? (
+          ) : broadcast === 'blocked' ? (
             <button
               onClick={handleEnableLocation}
               className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 border border-destructive/30 px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/20 transition-colors"
@@ -423,13 +445,21 @@ export default function LiveTrackingMap() {
               <WifiOff className="h-3 w-3" />
               Location blocked — tap to fix
             </button>
+          ) : broadcast === 'finding' ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground" role="status">
+              <RefreshCw className="h-3 w-3 animate-spin" />
+              Finding your location…
+            </span>
           ) : (
+            // The app-wide tracker asks for location on the next tap (iOS needs a
+            // real gesture), so tapping here is enough to bring up the prompt.
             <button
+              type="button"
               onClick={handleEnableLocation}
               className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/10 border border-orange-500/30 px-3 py-1 text-xs font-medium text-orange-700 dark:text-orange-400 hover:bg-orange-500/20 transition-colors"
             >
               <Wifi className="h-3 w-3" />
-              Enable sharing
+              Waiting for location — tap to allow
             </button>
           )}
 
