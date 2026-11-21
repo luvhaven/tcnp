@@ -48,11 +48,17 @@ tsc_errors.log
 *.bak
 *.log
 
+# next-pwa writes the service worker, its workbox runtime and the offline
+# fallback chunk into public/ on every production build (Vercel builds them
+# fresh), so the generated files are never committed either.
 # next-pwa emits service worker source maps once Sentry enables
 # hidden-source-map on the client build. They are build artifacts for workbox
 # glue code, not application source, and must not be committed.
+public/sw.js
 public/sw.js.map
+public/workbox-*.js
 public/workbox-*.js.map
+public/fallback-*.js
 public/fallback-*.js.map
 public/worker-*.js
 public/worker-*.js.map
