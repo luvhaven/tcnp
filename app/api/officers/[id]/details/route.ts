@@ -1,7 +1,23 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { canViewOfficerFullProfile } from '@/lib/utils'
+import { fetchActiveUnitMemberships, isCommandAuthority, unitAccess } from '@/lib/unit-access'
+
+/**
+ * Another officer's full profile (personal details, titles, duty history) is
+ * for admin and Command (the same check as SQL is_admin()), and for the head of
+ * Welfare by an active head membership. The Oscar text grants nothing. The
+ * membership read uses the caller's own session, so a failed read only denies.
+ */
+async function canViewOfficerFullProfile(
+  sessionClient: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  caller: { role: string | null; has_admin_access: boolean | null },
+): Promise<boolean> {
+  if (isCommandAuthority(caller.role, caller.has_admin_access)) return true
+  const { memberships } = await fetchActiveUnitMemberships(sessionClient as any, userId)
+  return unitAccess(memberships, 'welfare').isHead
+}
 
 export async function GET(
   request: Request,
@@ -21,13 +37,13 @@ export async function GET(
 
     const { data: caller, error: callerError } = await supabase
       .from('users')
-      .select('role, has_admin_access, oscar, activation_status, is_active')
+      .select('role, has_admin_access, activation_status, is_active')
       .eq('id', user.id)
       .maybeSingle()
     if (callerError || !caller || caller.activation_status !== 'active' || caller.is_active === false) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
-    if (user.id !== id && !canViewOfficerFullProfile(caller.role, caller.oscar, caller.has_admin_access)) {
+    if (user.id !== id && !(await canViewOfficerFullProfile(supabase, user.id, caller))) {
       return NextResponse.json({ error: 'Forbidden: You cannot view this officer profile' }, { status: 403 })
     }
 

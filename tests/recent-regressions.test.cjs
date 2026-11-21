@@ -84,10 +84,16 @@ test('public signup always creates a pending Viewer request regardless of submit
 
 test('officer full-profile endpoint limits access to self or approved profile viewers', () => {
   const source = fs.readFileSync('app/api/officers/[id]/details/route.ts', 'utf8')
-  const guard = source.indexOf('user.id !== id && !canViewOfficerFullProfile')
+  const guard = source.indexOf('user.id !== id && !(await canViewOfficerFullProfile(supabase, user.id, caller))')
   const serviceRead = source.indexOf('const adminClient = createAdminClient()')
   assert.ok(guard >= 0 && serviceRead > guard)
   assert.match(source, /caller\.activation_status !== 'active'/)
+  // Admin/Command by role, or the Welfare head by an active membership read with
+  // the caller's own session. The Oscar text grants nothing.
+  assert.match(source, /isCommandAuthority\(caller\.role, caller\.has_admin_access\)/)
+  assert.match(source, /fetchActiveUnitMemberships\(sessionClient as any, userId\)/)
+  assert.match(source, /unitAccess\(memberships, 'welfare'\)\.isHead/)
+  assert.doesNotMatch(source, /caller\.oscar|has_admin_access, oscar|effectiveOscarRole/)
 })
 
 test('program officer roster is restricted to journey managers or program participants', () => {
