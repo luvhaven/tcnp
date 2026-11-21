@@ -5,6 +5,8 @@ import { useIsClient } from '@/hooks/useIsClient'
 import { toast } from 'sonner'
 import { createLocationSharingGuard, isLocationSharingEnabled } from '@/lib/location-sharing'
 import { publishLocation } from '@/lib/location-upload'
+import { createKeepAwake, type KeepAwake } from '@/lib/keep-awake'
+import { PocketModeScreen } from '@/components/tracking/PocketModeScreen'
 
 const BATTERY_CRITICAL_PERCENT = 15
 const BATTERY_ALERT_KEY = 'tcnp-battery-critical-alert-sent'
@@ -36,6 +38,11 @@ export function LocationTracker() {
   // iPhone: sharing is on but location must be re-allowed from a tap. Shown as
   // a visible button so the officer knows the map is not receiving them.
   const [needsTap, setNeedsTap] = useState(false)
+  // Pocket mode: a dark, touch-proof screen that keeps TCNP in front.
+  const [pocketMode, setPocketMode] = useState(false)
+  const [lastSentAt, setLastSentAt] = useState<number | null>(null)
+  const [screenHeld, setScreenHeld] = useState(false)
+  const keepAwakeRef = useRef<KeepAwake | null>(null)
   const watchIdRef = useRef<number | null>(null)
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mountedRef = useRef(true)
@@ -147,52 +154,40 @@ export function LocationTracker() {
     }
   }, [hasEverTracked])
 
-  // Wake Lock API (keep the screen on while sharing). A locked iPhone stops
-  // sending its location, so this matters most there. iPhone only grants the
-  // lock from a tap, so besides trying on start and on return to the app, it
-  // is requested again on the next tap whenever no lock is held.
+  // Keep the screen on while sharing. A locked iPhone stops sending its
+  // location and no web app can prevent that, so the screen must not lock.
+  // iPhone only lets a page hold the screen after a tap, so this is retried on
+  // every tap and whenever the app comes back into view (lib/keep-awake).
   useEffect(() => {
-    let wakeLock: any = null;
-    let requesting = false;
-    let cancelled = false;
-    const requestWakeLock = async () => {
-      if (cancelled || requesting || (wakeLock && !wakeLock.released)) return
-      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
-      try {
-        if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
-          requesting = true
-          const lock = await (navigator as any).wakeLock.request('screen');
-          if (cancelled || !isLocationSharingEnabled()) { await lock.release(); return }
-          wakeLock = lock;
-          console.log('💡 Screen Wake Lock active');
-        }
-      } catch (err: any) {
-        console.warn(`${err?.name}, ${err?.message}`);
-      } finally {
-        requesting = false
-      }
-    };
-
-    requestWakeLock();
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        requestWakeLock();
-      }
-    };
-    const handleTap = () => { void requestWakeLock() }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('pointerup', handleTap, { passive: true });
-    window.addEventListener('touchend', handleTap, { passive: true });
+    const keepAwake = createKeepAwake()
+    keepAwakeRef.current = keepAwake
+    const hold = () => {
+      if (!isLocationSharingEnabled()) return
+      keepAwake.enable()
+      setScreenHeld(keepAwake.isHeld())
+    }
+    hold()
+    const onVisible = () => { if (document.visibilityState === 'visible') hold() }
+    const check = window.setInterval(() => setScreenHeld(keepAwake.isHeld()), 5000)
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('pointerup', hold, { passive: true })
+    window.addEventListener('touchend', hold, { passive: true })
     return () => {
-      cancelled = true;
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pointerup', handleTap);
-      window.removeEventListener('touchend', handleTap);
-      if (wakeLock) wakeLock.release();
-    };
-  }, []);
+      window.clearInterval(check)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('pointerup', hold)
+      window.removeEventListener('touchend', hold)
+      keepAwake.disable()
+      keepAwakeRef.current = null
+    }
+  }, [])
+
+  // When this phone's position last reached the server (shown in pocket mode).
+  useEffect(() => {
+    const sent = () => setLastSentAt(Date.now())
+    window.addEventListener('tcnp-location-sent', sent)
+    return () => window.removeEventListener('tcnp-location-sent', sent)
+  }, [])
 
   // Helper to calculate distance in meters
   const getDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -576,6 +571,10 @@ export function LocationTracker() {
     )
   }
 
+  if (pocketMode) {
+    return <PocketModeScreen lastSentAt={lastSentAt} screenHeld={screenHeld} onExit={() => setPocketMode(false)} />
+  }
+
   // Only show banner if tracking is active and not dismissed
   const showBanner = isTracking && !bannerDismissed
 
@@ -586,6 +585,13 @@ export function LocationTracker() {
       <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-2 text-xs text-white shadow-lg sm:text-sm whitespace-nowrap">
         <span className="inline-flex h-2 w-2 rounded-full bg-emerald-300 animate-pulse" />
         <span>Live location sharing is active.</span>
+        <button
+          type="button"
+          onClick={() => { keepAwakeRef.current?.enable(); setPocketMode(true) }}
+          className="ml-1 rounded-full bg-white/20 px-2 py-0.5 text-xs font-semibold text-white hover:bg-white/30"
+        >
+          Pocket mode
+        </button>
         <button
           type="button"
           onClick={() => setBannerDismissed(true)}

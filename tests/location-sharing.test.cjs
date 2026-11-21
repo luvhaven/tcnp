@@ -221,6 +221,7 @@ async function settle() { for (let i = 0; i < 15; i++) await Promise.resolve() }
 
 test('the dashboard tracker clears its actual GPS watch and rejects late uploads when switched off', async () => {
   const p = preference('on')
+  p.window.setInterval = () => 0; p.window.clearInterval = () => {}
   const slots = [], pending = [], requests = [], writes = [], cleared = []
   const watches = new Map()
   let cursor = 0
@@ -245,6 +246,8 @@ test('the dashboard tracker clears its actual GPS watch and rejects late uploads
       if (name === '@/lib/supabase/client') return { createClient: () => ({ auth: { getUser: async () => ({ data: { user: { id: 'officer' } } }) }, rpc: async (...args) => { writes.push(args); return {} } }) }
       if (name === '@/lib/location-upload') return { publishLocation: (userId, fix) => writes.push(['upsert_user_location', { p_user_id: userId, ...fix }]) }
       if (name === 'sonner') return { toast: Object.assign(() => {}, { error() {} }) }
+      if (name === '@/lib/keep-awake') return { createKeepAwake: () => ({ enable() {}, disable() {}, isHeld: () => false }) }
+      if (name === '@/components/tracking/PocketModeScreen') return { PocketModeScreen: () => null }
       throw Error(`Unexpected import ${name}`)
     },
   })

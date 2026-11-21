@@ -103,6 +103,8 @@ async function drain() {
   inFlight = true
   try {
     await send(job.userId, job.fix)
+    // Lets the phone show the officer when their position last reached the server.
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('tcnp-location-sent'))
   } catch (error) {
     if (isNetworkError(error) && canShare()) {
       // Keep the newest position: a fresher fix that arrived meanwhile wins.
