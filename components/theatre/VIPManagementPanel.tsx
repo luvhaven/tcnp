@@ -12,6 +12,9 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { notifyError } from '@/lib/notify'
+import { uploadErrorForUser } from '@/lib/headshot-image'
+import { photoExtension, preparePhotoForUpload } from '@/lib/photo-upload'
+import { PHOTO_INPUT_ACCEPT } from '@/lib/security/upload-validation'
 import { ShieldCheck, Loader2, Search, Plus, Edit, Trash2, User, Upload, Eye, X, RotateCw } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
@@ -103,29 +106,21 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
         const file = e.target.files?.[0]
         if (!file) return
 
-        // Validate file type
-        if (!file.type.startsWith('image/')) {
-            toast.error("Please upload an image file")
-            return
-        }
-
-        // Validate file size (max 5MB)
-        if (file.size > 5 * 1024 * 1024) {
-            toast.error("Image must be less than 5MB")
-            return
-        }
+        // Clear the input so picking the same photo again re-runs the upload.
+        e.target.value = ''
 
         setUploading(true)
         try {
-            const fileExt = file.name.split('.').pop()
-            const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
-            const filePath = `vip-photos/${fileName}`
+            // Shrink and convert to JPEG in the browser instead of refusing
+            // ordinary phone photos (5-12 MB, or HEIC from iPhones).
+            const photo = await preparePhotoForUpload(file, { maxSide: 1600, maxBytes: 5 * 1024 * 1024 })
+            const filePath = `vip-photos/${crypto.randomUUID()}.${photoExtension(photo)}`
 
             const { error: uploadError } = await supabase.storage
                 .from('vip-photos')
-                .upload(filePath, file)
+                .upload(filePath, photo, { contentType: photo.type })
 
-            if (uploadError) throw uploadError
+            if (uploadError) throw uploadErrorForUser(uploadError)
 
             const { data: { publicUrl } } = supabase.storage
                 .from('vip-photos')
@@ -134,7 +129,6 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
             setFormData((current) => ({ ...current, photo_url: publicUrl }))
             toast.success("Photo uploaded successfully")
         } catch (error: any) {
-            console.error("Error uploading photo:", error)
             notifyError(error, "Failed to upload photo")
         } finally {
             setUploading(false)
@@ -554,13 +548,13 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
                                 <div className="flex-1">
                                     <Input
                                         type="file"
-                                        accept="image/*"
+                                        accept={PHOTO_INPUT_ACCEPT}
                                         onChange={handlePhotoUpload}
                                         disabled={uploading}
                                         className="cursor-pointer"
                                     />
                                     <p className="text-xs text-muted-foreground mt-1">
-                                        Upload a photo (max 5MB)
+                                        Any phone photo works; it is resized before upload.
                                     </p>
                                 </div>
                             </div>

@@ -4,7 +4,9 @@ import { useRef, useState } from 'react'
 import { Camera, Loader2, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { UPLOAD_RULES, validateUploadFiles } from '@/lib/security/upload-validation'
+import { PHOTO_INPUT_ACCEPT, UPLOAD_RULES, validateUploadFiles } from '@/lib/security/upload-validation'
+import { preparePhotoForUpload, PHOTO_TOO_LARGE_MESSAGE } from '@/lib/photo-upload'
+import { notifyError } from '@/lib/notify'
 
 type PapaPhotoStepProps = {
   papa: { id: string; full_name: string; title?: string | null; profile_photo_url?: string | null }
@@ -20,24 +22,30 @@ export default function PapaPhotoStep({ papa, onUploaded, onDone, doneLabel }: P
   const [busy, setBusy] = useState(false)
   const [photoUrl, setPhotoUrl] = useState<string | null>(papa.profile_photo_url ?? null)
 
-  const upload = async (file: File) => {
-    const invalid = validateUploadFiles([file], UPLOAD_RULES.image)
-    if (invalid) {
-      toast.error(invalid)
-      return
-    }
+  const upload = async (picked: File) => {
     setBusy(true)
     try {
+      // Shrink and convert to JPEG in the browser first. The upload passes
+      // through a Vercel function, which refuses bodies over 4.5 MB, and a
+      // stored HEIC would show as a broken image on Android and Windows.
+      const file = await preparePhotoForUpload(picked, { maxSide: 1600, maxBytes: UPLOAD_RULES.functionPhoto.maxBytes })
+      const invalid = validateUploadFiles([file], UPLOAD_RULES.functionPhoto)
+      if (invalid) {
+        toast.error(invalid)
+        return
+      }
       const body = new FormData()
       body.append('file', file)
       const res = await fetch(`/api/papas/${papa.id}/photo`, { method: 'POST', body })
       const json = await res.json().catch(() => ({}))
+      if (res.status === 413) throw new Error(PHOTO_TOO_LARGE_MESSAGE)
       if (!res.ok) throw new Error(json.error || 'Failed to upload photo')
       setPhotoUrl(json.profile_photo_url)
       onUploaded(json.profile_photo_url)
       toast.success('Photo saved')
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to upload photo')
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'UserFacingError') notifyError(error, 'Failed to upload photo')
+      else toast.error(error instanceof Error && error.message ? error.message : 'Failed to upload photo')
     } finally {
       setBusy(false)
     }
@@ -93,7 +101,7 @@ export default function PapaPhotoStep({ papa, onUploaded, onDone, doneLabel }: P
       <input
         ref={inputRef}
         type="file"
-        accept={UPLOAD_RULES.image.allowedTypes.join(',')}
+        accept={PHOTO_INPUT_ACCEPT}
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0]

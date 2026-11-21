@@ -11,8 +11,6 @@ const EXTENSIONS: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp',
   'image/gif': 'gif',
-  'image/heic': 'heic',
-  'image/heif': 'heif',
 }
 
 /**
@@ -67,7 +65,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!(file instanceof File)) {
       return NextResponse.json({ error: 'No photo was provided' }, { status: 400 })
     }
-    const invalid = validateUploadFiles([file], UPLOAD_RULES.image)
+    // The client shrinks photos to a JPEG first (lib/photo-upload.ts). This
+    // rule refuses HEIC (broken on Android and Windows) and stays under
+    // Vercel's 4.5 MB function body limit.
+    const invalid = validateUploadFiles([file], UPLOAD_RULES.functionPhoto)
     if (invalid) return NextResponse.json({ error: invalid }, { status: 400 })
 
     const adminClient = createAdminClient()

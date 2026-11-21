@@ -55,6 +55,8 @@ test('real React dialog forms preserve typing, selection, keyboard focus and sub
         if (name === '@/components/profile/CompletionRing') return { CompletionRing: () => null }
         if (name === '@/components/profile/HeadshotCropDialog') return { HeadshotCropDialog: () => null }
         if (name === '@/lib/headshot-image') return { looksLikeImage: () => true, uploadErrorForUser: err => err }
+        if (name === '@/lib/photo-upload') return { preparePhotoForUpload: async file => file }
+        if (name === '@/lib/security/upload-validation') return load('lib/security/upload-validation.ts')
         if (name === '@/components/providers/CelebrateProvider') return { useCelebrate: () => () => {} }
         if (name === 'next/link') return { __esModule: true, default: ({ children, ...props }) => React.createElement('a', props, children) }
         if (name === 'framer-motion') return { motion: { div: ({ initial: _initial, animate: _animate, children, ...props }) => React.createElement('div', props, children) } }
