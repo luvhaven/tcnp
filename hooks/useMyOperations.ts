@@ -56,6 +56,7 @@ export interface OpsJourney {
   assigned_nest_id: string | null
   assigned_eagle_square_id: string | null
   assigned_theatre_id: string | null
+  journey_type?: string | null
   do_return_destination?: DOReturnDestination | null
   do_completion_reason?: DOCompletionReason | null
   papas: { full_name: string; title: string } | null
@@ -72,7 +73,7 @@ const JOURNEY_COLUMNS = `
   id, status, origin, destination,
   scheduled_departure, scheduled_arrival, etd, eta, notes, status_updated_at,
   program_id, papa_id, assigned_duty_officer_id,
-  assigned_nest_id, assigned_eagle_square_id, assigned_theatre_id,
+  assigned_nest_id, assigned_eagle_square_id, assigned_theatre_id, journey_type,
   do_return_destination, do_completion_reason,
   papas:papas!papa_id(full_name, title),
   cheetahs:cheetahs!assigned_cheetah_id(id, call_sign, registration_number),

@@ -68,4 +68,23 @@ test('PostgreSQL keeps DO responsibility through theatre, return escort and veri
     const reopened = await row(10)
     for (const field of ['do_return_destination','do_completion_reason','completed_at','completed_by']) assert.equal(reopened[field], null)
   })
+  await t.test('a self-arrival Papa needs no return escort; only he can leave in his own transport', async () => {
+    await db.exec(`SELECT set_config('test.admin','false',false); ALTER TABLE journeys ADD COLUMN origin text, ADD COLUMN journey_type text`)
+    await db.exec(fs.readFileSync('supabase/migrations/20261121100000_self_arrival_duty_completion.sql', 'utf8'))
+    await db.exec(`INSERT INTO journeys(id,papa_id,status,destination,assigned_theatre_id,assigned_duty_officer_id,origin,journey_type) VALUES
+      ('${id(13)}','${id(90)}','chapman','Theatre','${id(91)}','${id(1)}','Self-Driven',null),
+      ('${id(14)}','${id(90)}','chapman','Theatre','${id(91)}','${id(1)}','Nest','self_arrival'),
+      ('${id(15)}','${id(90)}','chapman','Theatre','${id(91)}','${id(1)}','Eagle Square','airport_to_theatre')`)
+    await reject(`SELECT complete_do_journey('${id(15)}','papa_departed')`)
+    await reject(`SELECT complete_do_journey('${id(15)}','nest_settled')`)
+    await reject(`UPDATE journeys SET status='completed',do_completion_reason='papa_departed' WHERE id='${id(15)}'`)
+    await db.exec(`SELECT complete_do_journey('${id(13)}','papa_departed')`)
+    const done = await row(13)
+    assert.equal(done.status, 'completed'); assert.equal(done.do_completion_reason, 'papa_departed'); assert.equal(done.do_return_destination, null)
+    await db.exec(`UPDATE journeys SET status='completed',do_completion_reason='papa_departed' WHERE id='${id(14)}'`)
+    assert.equal((await row(14)).do_return_destination, null)
+    await db.exec(`SELECT start_do_return('${id(15)}','eagle_square')`)
+    await reject(`SELECT complete_do_journey('${id(15)}','papa_departed')`)
+    await db.exec(`SELECT complete_do_journey('${id(15)}','flight_departed')`)
+  })
 })

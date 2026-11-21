@@ -22,7 +22,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useConfirm } from '@/components/providers/ConfirmProvider'
 import { DutyCompletionDialog } from '@/components/operations/DutyCompletionDialog'
-import { dutyCompletionReasons, isTheatreDuty, type DOReturnDestination } from '@/lib/duty-workflow'
+import { dutyCompletionReasons, isSelfArrival, needsReturnEscort, type DOReturnDestination } from '@/lib/duty-workflow'
 
 /** Direction glyph per movement phase — identity carried by form, not colour. */
 const PHASE_ICON: Record<CallSignDirection, React.ComponentType<{ className?: string }>> = {
@@ -109,15 +109,17 @@ export default function CurrentMissionCard({
       : null,
   ].filter((c): c is { key: string; label: string; phone: string } => !!c)
 
-  const firstSign = firstCallSignFor(journey.origin, journey.destination)
+  const selfArrival = isSelfArrival(journey)
+  // Papa makes his own way, so the DO's duty starts when he reaches the Theatre gate.
+  const firstSign = selfArrival ? 'chapman' : firstCallSignFor(journey.origin, journey.destination)
   const hasPapa = Boolean(journey.papa_id)
   const returnDestination = liveReturnDestination ?? journey.do_return_destination ?? null
   const completionReasons = dutyCompletionReasons(journey, returnDestination)
-  const needsReturnChoice = hasPapa && isTheatreDuty(journey) && !returnDestination
-  const canChooseReturn = hasPapa && (status === 'chapman' || status === 'dessert' || Boolean(returnDestination))
+  const needsReturnChoice = hasPapa && needsReturnEscort(journey) && !returnDestination
+  const canChooseReturn = hasPapa && !selfArrival && (status === 'chapman' || status === 'dessert' || Boolean(returnDestination))
   let next = isPlanned ? firstSign : NEXT_CALL_SIGN[status] ?? null
   if (needsReturnChoice && (status === 'chapman' || status === 'dessert')) next = null
-  if (returnDestination && !isPlanned && !isBrokenArrow) next = 'complete'
+  if ((returnDestination || (selfArrival && hasPapa)) && !isPlanned && !isBrokenArrow) next = 'complete'
 
   const escortReturn = async (destination: DOReturnDestination) => {
     if (!await confirm({ title: 'Start Papa’s return escort?', message: `Confirm Papa has finished speaking and you are staying with him on the return to ${destination === 'nest' ? 'the Nest' : 'Eagle Square'}.`, confirmText: 'Record return escort' })) return
@@ -280,7 +282,7 @@ export default function CurrentMissionCard({
           )}
 
           {/* Next action + the rest of the call signs */}
-          {hasPapa && !isTerminal && <div className="space-y-3 rounded-xl border bg-muted/25 p-3 text-sm"><p>Remain with Papa through the speaking engagement and the return escort. Finish duty after Papa is settled at the Nest, or after confirming the flight has taken off or landed.</p>{canChooseReturn && <div className="flex flex-wrap gap-2"><button type="button" disabled={sending || returnDestination === 'nest'} onClick={() => void escortReturn('nest')} className="min-h-11 rounded-lg border bg-card px-3 font-medium disabled:opacity-50">{returnDestination === 'nest' ? 'Escorting to Nest' : 'Escort back to Nest'}</button><button type="button" disabled={sending || returnDestination === 'eagle_square'} onClick={() => void escortReturn('eagle_square')} className="min-h-11 rounded-lg border bg-card px-3 font-medium disabled:opacity-50">{returnDestination === 'eagle_square' ? 'Escorting to Eagle Square' : 'Escort to Eagle Square'}</button></div>}{needsReturnChoice && status === 'chapman' && <p className="text-muted-foreground">Papa is at the theatre. Stay with him until he finishes speaking, then select the return escort.</p>}</div>}
+          {hasPapa && !isTerminal && <div className="space-y-3 rounded-xl border bg-muted/25 p-3 text-sm"><p>{selfArrival ? 'Papa is travelling in his own transport. Remain with Papa through the speaking engagement. Finish duty after Papa has left in his own transport.' : 'Remain with Papa through the speaking engagement and the return escort. Finish duty after Papa is settled at the Nest, or after confirming the flight has taken off or landed.'}</p>{canChooseReturn && <div className="flex flex-wrap gap-2"><button type="button" disabled={sending || returnDestination === 'nest'} onClick={() => void escortReturn('nest')} className="min-h-11 rounded-lg border bg-card px-3 font-medium disabled:opacity-50">{returnDestination === 'nest' ? 'Escorting to Nest' : 'Escort back to Nest'}</button><button type="button" disabled={sending || returnDestination === 'eagle_square'} onClick={() => void escortReturn('eagle_square')} className="min-h-11 rounded-lg border bg-card px-3 font-medium disabled:opacity-50">{returnDestination === 'eagle_square' ? 'Escorting to Eagle Square' : 'Escort to Eagle Square'}</button></div>}{needsReturnChoice && status === 'chapman' && <p className="text-muted-foreground">Papa is at the theatre. Stay with him until he finishes speaking, then select the return escort.</p>}</div>}
           {!isPendingAcknowledge && !isTerminal && (
             <div className="space-y-3">
               {next && (
