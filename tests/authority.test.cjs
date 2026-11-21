@@ -7,7 +7,9 @@ const moduleUnderTest = { exports: {} }
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/utils.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText, { exports: moduleUnderTest.exports, module: moduleUnderTest, require })
-const { isPlatformAdministrator, platformAuthorityRank, isUnitHeadRole, canApproveSignups, canApproveSignupFor, canAccessCommandCentre, canViewLiveTracking, PLATFORM_ADMIN_ROLES } = moduleUnderTest.exports
+const { isPlatformAdministrator, platformAuthorityRank, canApproveSignups, canDecideSignup, canAccessCommandCentre, canViewLiveTracking, PLATFORM_ADMIN_ROLES } = moduleUnderTest.exports
+const head = (slug) => ({ slug, access_level: 'head', status: 'active' })
+const member = (slug) => ({ slug, access_level: 'member', status: 'active' })
 test('only platform administrator roles have platform administration', () => {
   for (const role of PLATFORM_ADMIN_ROLES) assert.equal(isPlatformAdministrator(role), true, role)
   for (const role of [null, undefined, '', 'delta_oscar', 'head_victor_oscar', 'head_of_operations', 'command']) assert.equal(isPlatformAdministrator(role), false, role)
@@ -17,33 +19,27 @@ test('executives have cross-workspace authority; the Head of Command needs an ex
   for (const role of ['captain', 'vice_captain']) {
     assert.equal(platformAuthorityRank(role), platformAuthorityRank('admin'))
     assert.equal(canAccessCommandCentre(role), true)
-    assert.equal(canApproveSignupFor(role, null, 'Tango Oscar'), true)
-    assert.equal(canApproveSignupFor(role, null, 'Victor Oscar'), true)
+    assert.equal(canDecideSignup({ role }, ['tango']), true)
+    assert.equal(canDecideSignup({ role }, ['victor']), true)
   }
   assert.equal(isPlatformAdministrator('head_of_command'), false)
-  assert.equal(canApproveSignupFor('head_of_command', null, 'Victor Oscar'), false)
+  assert.equal(canDecideSignup({ role: 'head_of_command', memberships: [head('command')] }, ['victor']), false)
   assert.equal(isPlatformAdministrator('head_of_command', true), true)
-  assert.equal(canApproveSignupFor('tango_oscar', 'Tango Oscar', 'Victor Oscar', true), true)
+  assert.equal(canDecideSignup({ role: 'tango_oscar', hasAdminAccess: true, memberships: [member('tango')] }, ['victor']), true)
 })
-test('a unit head role does not by itself grant another unit head authority', () => {
-  assert.equal(isUnitHeadRole('victor', 'head_victor_oscar'), true)
-  assert.equal(isUnitHeadRole('training', 'head_victor_oscar'), false)
-})
-test('admins approve any signup; unit heads approve only their own unit', () => {
-  assert.equal(canApproveSignupFor('admin', null, 'Tango Oscar'), true)
-  assert.equal(canApproveSignupFor('super_admin', null, null), true)
-  assert.equal(canApproveSignupFor('head_tango_oscar', null, 'Tango Oscar'), true)
-  assert.equal(canApproveSignupFor('head_tango_oscar', null, 'Victor Oscar'), false)
-  // Headship comes from the head role only: a "Head ..." Oscar left on a Delta
-  // Oscar or a demoted viewer approves nothing.
-  assert.equal(canApproveSignupFor('delta_oscar', 'Head Tango Oscar', 'Tango Oscar'), false)
-  assert.equal(canApproveSignupFor('viewer', 'head_alpha_oscar', 'Alpha Oscar'), false)
+test('admins decide any signup; unit heads decide only their own unit, by membership', () => {
+  assert.equal(canDecideSignup({ role: 'admin' }, ['tango']), true)
+  assert.equal(canDecideSignup({ role: 'super_admin' }, []), true)
+  assert.equal(canDecideSignup({ role: 'head_tango_oscar', memberships: [head('tango')] }, ['tango']), true)
+  assert.equal(canDecideSignup({ role: 'head_tango_oscar', memberships: [head('tango')] }, ['victor']), false)
+  // Headship comes from an active head membership only: a head role whose row was
+  // removed, or a plain member, decides nothing.
+  assert.equal(canDecideSignup({ role: 'head_tango_oscar', memberships: [] }, ['tango']), false)
+  assert.equal(canDecideSignup({ role: 'tango_oscar', memberships: [member('tango')] }, ['tango']), false)
   assert.equal(canApproveSignups('viewer', 'head_alpha_oscar'), false)
-  assert.equal(canApproveSignupFor('head_noscar_nest', null, 'November (Nest)'), true)
-  assert.equal(canApproveSignupFor('head_noscar_nest', null, 'November (Den)'), false)
-  assert.equal(canApproveSignupFor('head_of_command', null, 'Command'), true)
-  assert.equal(canApproveSignupFor('tango_oscar', 'Tango Oscar', 'Tango Oscar'), false)
-  assert.equal(canApproveSignupFor('captain', null, 'Tango Oscar'), true)
+  assert.equal(canDecideSignup({ role: 'head_noscar_nest', memberships: [head('november_nest')] }, ['november_nest']), true)
+  assert.equal(canDecideSignup({ role: 'head_noscar_nest', memberships: [head('november_nest')] }, ['november_den']), false)
+  assert.equal(canDecideSignup({ role: 'head_of_command', memberships: [head('command')] }, ['command']), true)
 })
 test('only admins and unit heads can open signup approvals', () => {
   for (const role of ['admin', 'head_welfare_oscar', 'head_serial_oscar', 'captain', 'vice_captain', 'head_of_command']) assert.equal(canApproveSignups(role, null), true)
