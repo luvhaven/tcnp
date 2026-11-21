@@ -117,8 +117,17 @@ export const ALL_NAV = NAV_SECTIONS.flatMap(s => s.items)
 const BASE_HREFS = [
   "/dashboard", "/my-operations", "/outbox", "/chat", "/programs", "/guide", "/sop",
   "/training", "/compliance", "/welfare",
-  "/profile", "/change-password",
+  "/profile", "/change-password", "/settings",
 ]
+
+/**
+ * Who may open the Audit Log: platform admins and Command (SQL is_admin()),
+ * the audience the audit_logs SELECT policy is aligned to. The client-only
+ * hod / hop ranks are not admitted, because the database returns them nothing.
+ */
+export function canReadAuditLogs(role: string | null | undefined, hasAdminAccess?: boolean | null): boolean {
+  return isPlatformAdministrator(role, hasAdminAccess) || isCommandAuthority(role, hasAdminAccess)
+}
 
 /** Platform administrators and Command see every destination. */
 const ADMIN_ROLES = new Set([
@@ -179,6 +188,11 @@ export function getVisibleNav(
   } else {
     const allowed = new Set([...BASE_HREFS, ...membershipHrefs])
     visibleList = ALL_NAV.filter(n => allowed.has(n.href) || (n.href === "/command" && canAccessCommand))
+  }
+
+  // Audit Log: the page's own gate (canReadAuditLogs), so the link never bounces.
+  if (!canReadAuditLogs(role, hasAdminAccess)) {
+    visibleList = visibleList.filter(n => n.href !== "/audit-logs")
   }
 
   // Command Centre: platform administrators and Command roles only.

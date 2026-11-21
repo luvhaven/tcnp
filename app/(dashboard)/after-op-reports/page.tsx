@@ -13,7 +13,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ClipboardList, Star, AlertTriangle, Download, User, Calendar, MapPin, Gift, ChevronDown, Search } from 'lucide-react'
 import { format } from 'date-fns'
-import { cn, isAdmin } from '@/lib/utils'
+import { cn } from '@/lib/utils'
+import { isCommandAuthority } from '@/lib/unit-access'
 import { notifyError } from '@/lib/notify'
 import { ErrorState } from '@/components/ui/error-state'
 
@@ -179,7 +180,10 @@ export default function AfterOpReportPage() {
         URL.revokeObjectURL(url)
     }
 
-    const isUserAdmin = Boolean(userRole && isAdmin(userRole))
+    // Mirrors the do_feedback_forms SELECT policy (own reports OR is_admin():
+    // platform admins and Command), so 'All reports visible' and the export
+    // only show to people the database returns every report to.
+    const isUserAdmin = isCommandAuthority(userRole)
 
     return (
         <div className="space-y-6 animate-fade-in">

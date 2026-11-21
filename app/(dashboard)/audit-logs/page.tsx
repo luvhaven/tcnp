@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 const PAGE = 200
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
-import { isAdmin } from "@/lib/utils"
+import { canReadAuditLogs } from "@/components/layout/nav-config"
 
 export default function AuditLogsPage() {
   const supabase = createClient()
@@ -50,7 +50,10 @@ export default function AuditLogsPage() {
         .single()
 
       // Leadership comes from the role (or the admin grant) only; the Oscar is a label.
-      if (!userData || !isAdmin(userData.role, userData.has_admin_access)) {
+      // Platform admins and Command (SQL is_admin()), matching who the
+      // audit_logs SELECT policy is aligned to admit. The client-only hod/hop
+      // ranks are not admitted: the database returns them nothing.
+      if (!userData || !canReadAuditLogs(userData.role, userData.has_admin_access)) {
         setAuthorized(false)
         toast.error('Access denied. Leadership privileges required to view audit logs.')
         return
