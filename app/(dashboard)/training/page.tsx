@@ -655,7 +655,7 @@ function TrainingContent() {
             <div className="space-y-2 flex-1 flex flex-col">
               <Label htmlFor="training-field-14">Content (Markdown supported)</Label>
               <Textarea id="training-field-14"
-                className="min-h-[250px] font-mono text-sm leading-relaxed whitespace-pre-wrap resize-y"
+                className="min-h-[250px] font-mono text-base sm:text-sm leading-relaxed whitespace-pre-wrap resize-y"
                 value={docForm.content}
                 onChange={(e) => setDocForm({ ...docForm, content: e.target.value })}
                 placeholder="Enter document text or markdown here..."

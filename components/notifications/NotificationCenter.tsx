@@ -263,7 +263,9 @@ export default function NotificationCenter() {
                 // Responsive width: fills the screen on mobile, capped at 380px on desktop
                 "w-[calc(100vw-1rem)] max-w-[380px] sm:w-[380px] overflow-hidden",
                 "rounded-xl border bg-popover shadow-2xl shadow-black/15 ring-1 ring-border/50",
-                "flex flex-col max-h-[calc(100vh-80px)] sm:max-h-[520px]"
+                // dvh, not vh: iOS Safari's 100vh includes the area behind its toolbar.
+                // Also clear the bottom nav and the home-indicator inset.
+                "flex flex-col max-h-[calc(100dvh_-_80px_-_var(--bottom-nav-h,0px)_-_env(safe-area-inset-bottom))] sm:max-h-[520px]"
               )}
             >
               {/* Header */}

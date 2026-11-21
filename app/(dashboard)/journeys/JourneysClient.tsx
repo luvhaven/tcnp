@@ -1405,7 +1405,7 @@ export default function JourneysClient({
                 <select
                   id="program_id"
                   required
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={formData.program_id}
                   onChange={(e) => setFormData({ ...formData, program_id: e.target.value })}
                 >
@@ -1489,7 +1489,7 @@ export default function JourneysClient({
                 <select
                   id="origin"
                   required
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={formData.origin}
                   onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
                 >
@@ -1506,7 +1506,7 @@ export default function JourneysClient({
                 <select
                   id="destination"
                   required
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={formData.destination}
                   onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
                 >
@@ -1525,7 +1525,7 @@ export default function JourneysClient({
                 <select
                   id="papa_id"
                   required
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={formData.papa_id}
                   onChange={(e) => setFormData({ ...formData, papa_id: e.target.value })}
                 >
@@ -1545,7 +1545,7 @@ export default function JourneysClient({
                 <select
                   id="assigned_cheetah_id"
                   required
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={formData.assigned_cheetah_id}
                   onChange={(e) => setFormData({ ...formData, assigned_cheetah_id: e.target.value })}
                 >
@@ -1683,7 +1683,7 @@ export default function JourneysClient({
                 <Label htmlFor="edit_papa_id">Principal (Papa) *</Label>
                 <select
                   id="edit_papa_id"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   value={formData.papa_id}
                   onChange={(e) => setFormData({ ...formData, papa_id: e.target.value })}
                   required
@@ -1701,7 +1701,7 @@ export default function JourneysClient({
                 <Label htmlFor="edit_program_id">Program (Optional)</Label>
                 <select
                   id="edit_program_id"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   value={formData.program_id}
                   onChange={(e) => setFormData({ ...formData, program_id: e.target.value })}
                 >
@@ -1720,7 +1720,7 @@ export default function JourneysClient({
                 <Label htmlFor="edit_assigned_cheetah_id">Assigned Cheetah</Label>
                 <select
                   id="edit_assigned_cheetah_id"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   value={formData.assigned_cheetah_id}
                   onChange={(e) => setFormData({ ...formData, assigned_cheetah_id: e.target.value })}
                 >
@@ -1785,7 +1785,7 @@ export default function JourneysClient({
               <Label htmlFor="edit_journey_type">Journey Type</Label>
               <select
                 id="edit_journey_type"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 value={formData.journey_type}
                 onChange={(e) => setFormData({ ...formData, journey_type: e.target.value })}
               >

@@ -244,7 +244,7 @@ export default function ProgramSchedule({
                                             <div className="space-y-2">
                                                 <Label>Type</Label>
                                                 <select
-                                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm"
                                                     value={sessionForm.session_type}
                                                     onChange={e => setSessionForm({ ...sessionForm, session_type: e.target.value as any })}
                                                 >
@@ -325,7 +325,7 @@ export default function ProgramSchedule({
                         <div className="space-y-2">
                             <Label>Papa (Speaker)</Label>
                             <select
-                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm"
                                 value={speakerForm.papa_id}
                                 onChange={e => setSpeakerForm({ ...speakerForm, papa_id: e.target.value })}
                             >

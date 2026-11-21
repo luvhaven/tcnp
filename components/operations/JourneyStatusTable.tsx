@@ -1115,7 +1115,7 @@ export default function JourneyStatusTable() {
                                 type="datetime-local"
                                 value={timesForm.eta}
                                 onChange={(e) => setTimesForm(prev => ({ ...prev, eta: e.target.value }))}
-                                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+                                className="w-full rounded-md border bg-background px-3 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
                             />
                         </div>
                         <div className="space-y-2">
@@ -1125,7 +1125,7 @@ export default function JourneyStatusTable() {
                                 type="datetime-local"
                                 value={timesForm.etd}
                                 onChange={(e) => setTimesForm(prev => ({ ...prev, etd: e.target.value }))}
-                                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+                                className="w-full rounded-md border bg-background px-3 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
                             />
                         </div>
                     </div>

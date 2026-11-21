@@ -12,6 +12,9 @@ import { Lock, Plus, X } from 'lucide-react'
 import { MIC_PREF_OPTIONS } from '@/lib/constants/papaBriefingFields'
 import { PASSPORT_COUNTRY_MAX, PASSPORT_NUMBER_MAX } from '@/lib/papa-privacy'
 
+/** Compact tab labels on phones so all five fit in a 3-column grid. */
+const PHONE_TAB = 'min-w-0 whitespace-normal px-1.5 text-xs sm:whitespace-nowrap sm:px-3 sm:text-sm'
+
 type PapaFormData = {
   // Basic Info
   event_id: string
@@ -198,12 +201,13 @@ export default function PapaFormTabs({
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="basic">Basic Info</TabsTrigger>
-          <TabsTrigger value="presentation">Presentation</TabsTrigger>
-          <TabsTrigger value="preferences">Preferences</TabsTrigger>
-          <TabsTrigger value="speaking">Speaking</TabsTrigger>
-          <TabsTrigger value="entourage">Entourage</TabsTrigger>
+        {/* Three columns on phones (two rows) so Speaking and Entourage stay visible at 360px. */}
+        <TabsList className="grid h-auto w-full grid-cols-3 gap-1 sm:grid-cols-5">
+          <TabsTrigger value="basic" className={PHONE_TAB}>Basic Info</TabsTrigger>
+          <TabsTrigger value="presentation" className={PHONE_TAB}>Presentation</TabsTrigger>
+          <TabsTrigger value="preferences" className={PHONE_TAB}>Preferences</TabsTrigger>
+          <TabsTrigger value="speaking" className={PHONE_TAB}>Speaking</TabsTrigger>
+          <TabsTrigger value="entourage" className={PHONE_TAB}>Entourage</TabsTrigger>
         </TabsList>
 
         {/* Basic Info Tab */}
@@ -218,7 +222,7 @@ export default function PapaFormTabs({
                     required
                     value={formData.event_id}
                     onChange={(e) => setFormData({ ...formData, event_id: e.target.value })}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
                     <option value="">Select event</option>
                     {events.map((event) => (
@@ -505,7 +509,7 @@ export default function PapaFormTabs({
                   id="water_temperature"
                   value={formData.water_temperature}
                   onChange={(e) => setFormData({ ...formData, water_temperature: e.target.value })}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   <option value="Room Temperature">Room Temperature</option>
                   <option value="Cold">Cold</option>

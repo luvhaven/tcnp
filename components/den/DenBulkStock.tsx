@@ -64,7 +64,7 @@ export default function DenBulkStock({ currentUserId, existingNames }: { current
               <Textarea
                 id="den-bulk-stock"
                 rows={8}
-                className="font-mono text-sm"
+                className="font-mono text-base sm:text-sm"
                 placeholder={"Bottled water 50cl, pcs, 120, 24\nFace towels, pcs, 40, 10\nGlass cups, pcs, 60"}
                 value={text}
                 onChange={(event) => setText(event.target.value)}

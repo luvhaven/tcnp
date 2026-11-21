@@ -138,7 +138,7 @@ function EditableField({
         value={value ?? ''}
         onChange={(e) => onChange(field.key, e.target.value)}
         rows={2}
-        className="text-sm resize-none"
+        className="text-base sm:text-sm resize-none"
       />
     )
   }
@@ -149,7 +149,7 @@ function EditableField({
         type="number"
         value={value ?? ''}
         onChange={(e) => onChange(field.key, e.target.value ? Number(e.target.value) : null)}
-        className="h-8 text-sm"
+        className="h-8 text-base sm:text-sm"
       />
     )
   }
@@ -159,7 +159,7 @@ function EditableField({
     <Input
       value={value ?? ''}
       onChange={(e) => onChange(field.key, e.target.value)}
-      className="h-8 text-sm"
+      className="h-8 text-base sm:text-sm"
       placeholder={field.hint}
     />
   )

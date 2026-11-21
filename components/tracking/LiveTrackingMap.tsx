@@ -505,10 +505,10 @@ export default function LiveTrackingMap() {
         <div className={cn(
           'min-w-0 transition-all duration-300 ease-in-out',
           // On phones the panel stacks below the map, so give the map a fixed share and let the panel scroll.
-          sidebarOpen ? 'h-[42dvh] shrink-0 lg:h-auto lg:shrink lg:flex-[0.74]' : 'flex-1'
+          sidebarOpen ? 'h-[42dvh] min-h-[260px] shrink-0 lg:h-auto lg:min-h-0 lg:shrink lg:flex-[0.74]' : 'flex-1 min-h-[300px]'
         )}>
           <Card className="flex flex-col h-full overflow-hidden shadow-lg border border-border/70">
-            <CardContent className="flex-1 p-0 relative min-h-[360px]">
+            <CardContent className="flex-1 p-0 relative min-h-0 lg:min-h-[360px]">
               <div className="absolute inset-0">
                 {isClient && (
                   <ErrorBoundary fallback={
@@ -566,7 +566,7 @@ export default function LiveTrackingMap() {
                   placeholder="Name, OSCAR, or role…"
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  className="pl-9 h-8 text-sm"
+                  className="pl-9 h-10 text-base sm:h-8 sm:text-sm"
                 />
               </div>
 

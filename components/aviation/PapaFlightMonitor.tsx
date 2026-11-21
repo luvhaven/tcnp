@@ -490,7 +490,7 @@ export default function PapaFlightMonitor({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search Papa, flight, airline or airport"
-                className="h-9 bg-background pl-9 text-xs"
+                className="h-9 bg-background pl-9 text-base sm:text-xs"
               />
             </div>
             <Select value={programFilter} onValueChange={setProgramFilter}>

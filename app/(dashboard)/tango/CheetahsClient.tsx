@@ -485,7 +485,7 @@ export default function CheetahsClient({ initialCheetahs, initialCheetahsError =
               <Label htmlFor="default_driver_id">Default driver</Label>
               <select
                 id="default_driver_id"
-                className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 sm:h-10"
+                className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 sm:h-10"
                 value={formData.default_driver_id}
                 onChange={(e) => setFormData({ ...formData, default_driver_id: e.target.value })}
               >
@@ -524,7 +524,7 @@ export default function CheetahsClient({ initialCheetahs, initialCheetahsError =
               <Label htmlFor="program_id">Program</Label>
               <select
                 id="program_id"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 value={formData.program_id}
                 onChange={(e) => setFormData({ ...formData, program_id: e.target.value })}
               >
@@ -617,7 +617,7 @@ export default function CheetahsClient({ initialCheetahs, initialCheetahsError =
                 <select
                   id="fuel_status"
                   required
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   value={formData.fuel_status}
                   onChange={(e) => setFormData({ ...formData, fuel_status: e.target.value })}
                 >
@@ -634,7 +634,7 @@ export default function CheetahsClient({ initialCheetahs, initialCheetahsError =
                 <select
                   id="status"
                   required
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 >

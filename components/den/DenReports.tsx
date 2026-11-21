@@ -430,7 +430,7 @@ export default function DenReports({ selectedProgram, programName, programs, can
                                 <Input
                                   aria-label={`Caption for ${item.file_name}`}
                                   placeholder="Caption"
-                                  className="h-8 text-xs"
+                                  className="h-8 text-base sm:text-xs"
                                   maxLength={200}
                                   defaultValue={item.caption ?? ""}
                                   onBlur={(event) => { if (event.target.value.trim() !== (item.caption ?? "")) setCaption.mutate({ id: item.id, caption: event.target.value }) }}

@@ -774,7 +774,7 @@ export default function SeatArrangements({ canEdit, currentUserId }: Props) {
                 value={form.rowsText}
                 onChange={(e) => setForm({ ...form, rowsText: e.target.value })}
                 placeholder={"Row A: Prof, Duchess, Papa Smith\nRow B: Pastor A, , Pastor B"}
-                className="font-mono text-xs"
+                className="font-mono text-base sm:text-xs"
                 required
               />
             </div>
