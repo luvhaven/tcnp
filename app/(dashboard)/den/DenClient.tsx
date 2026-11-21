@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import dynamic from "next/dynamic"
+import { useSearchParams } from "next/navigation"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   BarChart3, Boxes, CalendarDays, ClipboardCheck, ClipboardList, FileText, FolderOpen, Home,
@@ -104,6 +105,21 @@ export default function DenClient({ initialDens, initialDensError = false, initi
   const welfareUnit = useUnitAccess("welfare")
 
   const [chosenProgram, setChosenProgram] = useState<string | null>(initialProgramme)
+  const [requestedTab, setRequestedTab] = useState<string | null>(initialTab)
+
+  // A link opened while the page is already up (a notification for the
+  // roster, a programme grant) changes ?tab= / ?programme= without remounting
+  // this component. Follow the address bar when it changes. Our own
+  // replaceState writes below keep it equal to the state, so they are no-ops.
+  const searchParams = useSearchParams()
+  const urlTab = searchParams?.get("tab") ?? null
+  const urlProgramme = searchParams?.get("programme") ?? null
+  const [seenUrl, setSeenUrl] = useState({ tab: urlTab, programme: urlProgramme })
+  if (seenUrl.tab !== urlTab || seenUrl.programme !== urlProgramme) {
+    if (seenUrl.tab !== urlTab) setRequestedTab(urlTab)
+    if (seenUrl.programme !== urlProgramme && urlProgramme) setChosenProgram(urlProgramme)
+    setSeenUrl({ tab: urlTab, programme: urlProgramme })
+  }
   const [profile, setProfile] = useState<OfficerProfileData | null>(null)
 
   const { data: programs = [], isSuccess: programsLoaded } = useQuery({
@@ -161,7 +177,6 @@ export default function DenClient({ initialDens, initialDensError = false, initi
   })
 
   const tabs = DEN_TABS
-  const [requestedTab, setRequestedTab] = useState<string | null>(initialTab)
   const tab = resolveDenTab(requestedTab, tabs)
 
   // The tab and the programme live in the address bar, so a link, a refresh or
