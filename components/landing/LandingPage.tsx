@@ -101,6 +101,10 @@ export function LandingPage({ androidUrl, iosUrl, windowsUrl, macUrl, version }:
       id: 'android', name: 'Android', icon: <Smartphone className="h-7 w-7" />,
       line: native.android ? 'The full app. Shares your location even with the phone locked.' : 'Installs from Chrome in one tap. The full app with locked-screen tracking is on its way.',
       action: native.android ? 'Download .apk' : 'Install', tag: native.android ? 'Native app' : 'Available now',
+      // The app comes from this site, not Google Play, so Android asks first.
+      // Alerts with the app closed are not built into it yet, and saying so
+      // here stops an officer swapping the web app for it and missing them.
+      note: native.android ? 'Open the downloaded file and, when Android asks, allow your browser to install apps. Alerts while the app is closed are coming in an update; keep the web app too if you rely on them.' : undefined,
     },
     {
       id: 'ios', name: 'iPhone & iPad', icon: <TabletSmartphone className="h-7 w-7" />,

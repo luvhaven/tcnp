@@ -58,6 +58,23 @@ test('installed apps skip the download page, and download links are only ever ht
   }
 })
 
+test('the Android card downloads the real app, published beside the Windows installer', () => {
+  const home = fs.readFileSync('app/page.tsx', 'utf8')
+  // "releases/latest" serves one release, so both downloads share it.
+  assert.match(home, /releases\/latest\/download\/TCNP-Central\.apk/)
+  assert.match(home, /releases\/latest\/download\/TCNP-Central-Setup\.exe/)
+  assert.match(home, /androidUrl=\{downloadLink\(process\.env\.NEXT_PUBLIC_ANDROID_APP_URL\) \?\? ANDROID_APP\}/)
+  const page = fs.readFileSync('components/landing/LandingPage.tsx', 'utf8')
+  assert.match(page, /note: native\.android \? '[^']*allow your browser to install apps[^']*keep the web app/, 'the install prompt and the missing closed-app alerts are stated up front')
+
+  // The phone build produces an installable .apk and sends Expo only mobile/.
+  const eas = JSON.parse(fs.readFileSync('mobile/eas.json', 'utf8'))
+  assert.equal(eas.build.preview.android.buildType, 'apk')
+  const ignore = fs.readFileSync('.easignore', 'utf8').split(/\r?\n/)
+  assert.ok(ignore.includes('/*') && ignore.includes('!/mobile'), 'nothing outside mobile/ is uploaded')
+  assert.ok(ignore.includes('.env*') && ignore.includes('node_modules/'))
+})
+
 test('a device that already has TCNP is offered "Open TCNP", not told to install it by hand', async () => {
   const load = navigator => {
     const mod = { exports: {} }

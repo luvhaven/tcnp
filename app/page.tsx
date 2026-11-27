@@ -20,6 +20,13 @@ const downloadLink = (value: string | undefined) => value && /^https:\/\//.test(
 const WINDOWS_INSTALLER = 'https://github.com/luvhaven/tcnp/releases/latest/download/TCNP-Central-Setup.exe'
 
 /**
+ * The Android app built from mobile/ and published in the same release as the
+ * Windows installer. "latest" serves files from one release only, so both
+ * files must be attached to every release or one of the links breaks.
+ */
+const ANDROID_APP = 'https://github.com/luvhaven/tcnp/releases/latest/download/TCNP-Central.apk'
+
+/**
  * The public front door. Signed-in officers go straight to their dashboard;
  * everyone else sees the download page. (proxy.ts already sends installed
  * native-app sessions and signed-in visitors on before this renders.)
@@ -31,7 +38,7 @@ export default async function HomePage() {
 
   return (
     <LandingPage
-      androidUrl={downloadLink(process.env.NEXT_PUBLIC_ANDROID_APP_URL)}
+      androidUrl={downloadLink(process.env.NEXT_PUBLIC_ANDROID_APP_URL) ?? ANDROID_APP}
       iosUrl={downloadLink(process.env.NEXT_PUBLIC_IOS_APP_URL)}
       windowsUrl={downloadLink(process.env.NEXT_PUBLIC_WINDOWS_APP_URL) ?? WINDOWS_INSTALLER}
       macUrl={downloadLink(process.env.NEXT_PUBLIC_MAC_APP_URL)}

@@ -44,6 +44,10 @@ npm run build:win
 gh release create desktop-v1.0.0 dist/TCNP-Central-Setup.exe --title "TCNP Central for Windows 1.0.0"
 ```
 
+The Android download (`TCNP-Central.apk`, built from `mobile/`) uses the same
+"latest release" address. A new release must carry both files, or the Android
+button on the download page leads nowhere.
+
 ## Known limits
 
 - The installer is not signed with a code-signing certificate, so Windows
