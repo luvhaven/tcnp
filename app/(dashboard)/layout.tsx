@@ -13,7 +13,7 @@ import { useLocationSharing } from "@/hooks/useLocationSharing"
 import { LocationSharingSync } from '@/components/tracking/LocationSharingSync'
 import { LocationResumePrompt } from '@/components/tracking/LocationResumePrompt'
 import { NativeLocationTracker } from '@/components/tracking/NativeLocationTracker'
-import { isNativeShell } from '@/lib/native-shell'
+import { isDesktopShell, isNativeShell } from '@/lib/native-shell'
 import { DevicePushBridge } from '@/components/notifications/DevicePushBridge'
 
 // ─── Singleton client — always the same instance, safe to use in effects ───
@@ -106,6 +106,9 @@ export default function DashboardLayout({
   // Inside the native TCNP app (mobile/): the app does location and its own
   // install, so the browser-only tracker and prompts stay out of the way.
   const nativeShell = isClient && isNativeShell()
+  // Inside either installed program (phone app or desktop program) there is
+  // nothing to install and no browser push to switch on.
+  const insideApp = nativeShell || (isClient && isDesktopShell())
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   // Mount global chat notification listener (supabase singleton defined at module level)
@@ -318,9 +321,9 @@ export default function DashboardLayout({
               </ErrorBoundary>
             </>
           )}
-          {canMountTracker && !nativeShell && <ErrorBoundary><NotificationPermissionBanner /></ErrorBoundary>}
+          {canMountTracker && !insideApp && <ErrorBoundary><NotificationPermissionBanner /></ErrorBoundary>}
           {/* The install prompt is how iOS users learn about Add to Home Screen */}
-          {canMountTracker && !nativeShell && (
+          {canMountTracker && !insideApp && (
             <ErrorBoundary>
               <PWAInstallPrompt />
             </ErrorBoundary>

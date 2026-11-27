@@ -1,0 +1,62 @@
+{
+  "name": "tcnp-central-desktop",
+  "productName": "TCNP Central",
+  "version": "1.0.0",
+  "description": "TCNP Central for Windows and Mac",
+  "author": "The Covenant Nation Protocol",
+  "private": true,
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "smoke": "electron . --smoke",
+    "build:win": "electron-builder --win nsis --x64",
+    "build:mac": "electron-builder --mac dmg"
+  },
+  "devDependencies": {
+    "electron": "45.5.0",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "com.tcnp.central",
+    "productName": "TCNP Central",
+    "copyright": "The Covenant Nation Protocol",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "TCNP-Central-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "TCNP Central",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.business",
+      "icon": "build/icon.png",
+      "artifactName": "TCNP-Central.${ext}"
+    },
+    "publish": null
+  }
+}

@@ -60,6 +60,9 @@ export function isStandalone() {
 }
 export function pushSupport(): PushSupport {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return 'unsupported'
+  // The desktop program has the browser APIs but no push service behind them:
+  // it shows alerts itself while it is running.
+  if (/TCNPDesktop\//.test(navigator.userAgent || '')) return 'unsupported'
   const apis = 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window
   if (isIOS()) {
     // iPhone and iPad only offer Web Push to apps opened from the Home Screen (iOS 16.4+).

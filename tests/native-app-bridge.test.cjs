@@ -173,7 +173,7 @@ test('the Home Screen app keeps its own tracker; only the native app swaps it', 
   const layout = fs.readFileSync('app/(dashboard)/layout.tsx', 'utf8')
   assert.match(layout, /const nativeShell = isClient && isNativeShell\(\)/)
   assert.match(layout, /\{nativeShell \? <NativeLocationTracker \/> : <LocationTracker \/>\}/)
-  assert.match(layout, /canMountTracker && !nativeShell && <ErrorBoundary><NotificationPermissionBanner \/>/)
+  assert.match(layout, /canMountTracker && !insideApp && <ErrorBoundary><NotificationPermissionBanner \/>/)
   const toggle = fs.readFileSync('lib/location-toggle.ts', 'utf8')
   assert.match(toggle, /if \(isNativeShell\(\)\) \{[\s\S]*?requestNativeLocationPermission\(\)[\s\S]*?return\s*\}\s*if \(typeof navigator === 'undefined' \|\| !navigator\.geolocation\)/, 'the browser path is untouched after the native branch')
   assert.match(fs.readFileSync('components/layout/header.tsx', 'utf8'), /stopNativeTracking\(\)\)\.catch\(\(\) => undefined\)\s*await supabase\.auth\.signOut\(\)/)

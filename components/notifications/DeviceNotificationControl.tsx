@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Bell, BellOff, CheckCircle2, Smartphone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { isNativeShell } from '@/lib/native-shell'
+import { isDesktopShell, isNativeShell } from '@/lib/native-shell'
 import {
   blockedHelp, devicePushConnected, disconnectDevicePush, enableDevicePush, pushDisabled, pushSupport, pushSupportMessage,
   sendDeviceNotificationTest, type PushSupport,
@@ -31,7 +31,9 @@ export function DeviceNotificationControl({ compact = false, onEnabled }: { comp
       // The native app's web view has no browser push; say so plainly instead of blaming the browser.
       setMessage(isNativeShell()
         ? 'Alerts appear inside TCNP while the app is open. Notifications with the app closed are coming to the TCNP app in an update.'
-        : pushSupportMessage(next))
+        : isDesktopShell()
+          ? 'Alerts appear on this computer while TCNP is open. Keep it running, or minimised, to keep receiving them.'
+          : pushSupportMessage(next))
       return
     }
     const permission = Notification.permission

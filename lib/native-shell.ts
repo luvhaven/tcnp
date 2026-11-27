@@ -37,6 +37,15 @@ export function isNativeShell(): boolean {
   return typeof window !== 'undefined' && typeof (window as NativeWindow).ReactNativeWebView?.postMessage === 'function'
 }
 
+/**
+ * True inside the desktop program for Windows and Mac (desktop/). It is a
+ * plain browser window around TCNP, with no bridge: this is only used to hide
+ * things that make no sense there, such as "install this app".
+ */
+export function isDesktopShell(): boolean {
+  return typeof navigator !== 'undefined' && /TCNPDesktop\//.test(navigator.userAgent || '')
+}
+
 function install() {
   if (installed || typeof window === 'undefined') return
   installed = true
