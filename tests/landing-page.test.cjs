@@ -57,3 +57,25 @@ test('installed apps skip the download page, and download links are only ever ht
     assert.match(selector, /\.landing/, selector.trim())
   }
 })
+
+test('a device that already has TCNP is offered "Open TCNP", not told to install it by hand', async () => {
+  const load = navigator => {
+    const mod = { exports: {} }
+    vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/pwa-install.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, { module: mod, exports: mod.exports, navigator })
+    return mod.exports.isInstalledOnThisDevice
+  }
+  assert.equal(await load({ getInstalledRelatedApps: async () => [{ platform: 'webapp', url: 'https://tcnp.vercel.app/manifest.json' }] })(), true)
+  assert.equal(await load({ getInstalledRelatedApps: async () => [] })(), false)
+  assert.equal(await load({})(), false, 'browsers without the check report "not known" as not installed')
+  assert.equal(await load({ getInstalledRelatedApps: async () => { throw new Error('blocked') } })(), false)
+
+  // The browser only answers the check for an app the manifest names.
+  const manifest = JSON.parse(fs.readFileSync('public/manifest.json', 'utf8'))
+  assert.deepEqual(manifest.related_applications, [{ platform: 'webapp', url: 'https://tcnp.vercel.app/manifest.json' }])
+  assert.equal(manifest.prefer_related_applications, false, 'the browser must still offer its own install dialog')
+
+  const page = fs.readFileSync('components/landing/LandingPage.tsx', 'utf8')
+  assert.match(page, /isInstalledOnThisDevice\(\)\.then\(installed => \{ if \(live && installed\) setHasApp\(true\) \}\)/)
+  assert.match(page, /if \(hasApp\) \{ router\.push\('\/login'\); return \}/)
+  assert.match(page, /hasApp \? 'Open TCNP' : 'Install web app'/)
+})

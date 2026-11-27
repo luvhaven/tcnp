@@ -12,6 +12,7 @@ import { PWAInstallModal } from '@/components/pwa/PWAInstallModal'
 import { usePWAInstall, type PWAPlatform } from '@/hooks/usePWAInstall'
 import { useBrowserSnapshot } from '@/hooks/useBrowserSnapshot'
 import { isNativeShell } from '@/lib/native-shell'
+import { isInstalledOnThisDevice } from '@/lib/pwa-install'
 
 type Device = 'android' | 'ios' | 'windows' | 'mac'
 
@@ -43,6 +44,14 @@ export function LandingPage({ androidUrl, iosUrl, version }: LandingPageProps) {
   const device = useBrowserSnapshot<Device | null>(detectDevice, null)
   const [steps, setSteps] = useState<PWAPlatform | null>(null)
   const [busy, setBusy] = useState<Device | 'hero' | 'web' | null>(null)
+  // TCNP is already installed here, though this visit is in a browser tab. The
+  // browser will not offer to install it again, so the page offers to open it.
+  const [hasApp, setHasApp] = useState(false)
+  useEffect(() => {
+    let live = true
+    void isInstalledOnThisDevice().then(installed => { if (live && installed) setHasApp(true) })
+    return () => { live = false }
+  }, [])
 
   // Someone opening the installed app (Home Screen or native) is here to work,
   // not to read a brochure: take them straight to sign-in.
@@ -57,6 +66,7 @@ export function LandingPage({ androidUrl, iosUrl, version }: LandingPageProps) {
     const link = native[target]
     if (link) { window.location.assign(link); return }
     if (target !== device) { setSteps(STEPS_FOR[target]); return }
+    if (hasApp) { router.push('/login'); return }
     setBusy(from)
     try {
       if (await install() === 'show-instructions') setSteps(platform ?? STEPS_FOR[target])
@@ -68,13 +78,15 @@ export function LandingPage({ androidUrl, iosUrl, version }: LandingPageProps) {
    * needs no store, works on every device, and is what officers already use.
    */
   const installWeb = async () => {
+    if (hasApp) { router.push('/login'); return }
     setBusy('web')
     try {
       if (await install() === 'show-instructions') setSteps(platform ?? (device ? STEPS_FOR[device] : 'desktop-other'))
     } finally { setBusy(null) }
   }
 
-  const heroLabel = device === 'android' ? (native.android ? 'Download for Android' : 'Install on Android')
+  const heroLabel = hasApp && !(device && native[device]) ? 'Open TCNP'
+    : device === 'android' ? (native.android ? 'Download for Android' : 'Install on Android')
     : device === 'ios' ? (native.ios ? 'Get it for iPhone' : 'Install on iPhone')
     : device === 'windows' ? 'Install on Windows'
     : device === 'mac' ? 'Install on Mac'
@@ -147,7 +159,7 @@ export function LandingPage({ androidUrl, iosUrl, version }: LandingPageProps) {
               </p>
               <div className="landing-rise landing-rise-4 mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <button type="button" onClick={() => void get(device ?? 'windows', 'hero')} disabled={busy === 'hero'} className="landing-cta inline-flex min-h-14 items-center justify-center gap-2.5 rounded-full px-8 text-base font-bold text-white disabled:opacity-70">
-                  <Download className="h-5 w-5" aria-hidden="true" />
+                  {hasApp && !(device && native[device]) ? <ArrowRight className="h-5 w-5" aria-hidden="true" /> : <Download className="h-5 w-5" aria-hidden="true" />}
                   {busy === 'hero' ? 'Opening…' : heroLabel}
                 </button>
                 <Link href="/login" className="landing-ghost inline-flex min-h-14 items-center justify-center gap-2 rounded-full px-7 text-base font-semibold">
@@ -156,7 +168,7 @@ export function LandingPage({ androidUrl, iosUrl, version }: LandingPageProps) {
               </div>
               <p className="landing-rise landing-rise-4 mt-5 flex items-center gap-2 text-sm text-white/55">
                 <ShieldCheck className="h-4 w-4 text-emerald-400" aria-hidden="true" />
-                Members only. Every account is approved by Command.
+                {hasApp ? 'TCNP is already installed on this device. You can also open it from your apps.' : 'Members only. Every account is approved by Command.'}
               </p>
             </div>
             <PhoneMockup className="landing-rise landing-rise-3 justify-self-center lg:justify-self-end" />
@@ -184,18 +196,19 @@ export function LandingPage({ androidUrl, iosUrl, version }: LandingPageProps) {
           <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {downloads.map(item => {
               const mine = item.id === device
+              const installed = mine && hasApp && !native[item.id]
               return (
                 <article key={item.id} className={`landing-card relative flex flex-col rounded-3xl p-6 ${mine ? 'ring-2 ring-[#f26522]' : ''}`}>
                   {mine && <span className="absolute -top-3 left-6 rounded-full bg-[#f26522] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">Your device</span>}
                   <div className="flex items-center justify-between">
                     <span className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-white/15 to-white/5 text-[#ffb347]">{item.icon}</span>
-                    <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">{item.tag}</span>
+                    <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">{installed ? 'Installed' : item.tag}</span>
                   </div>
                   <h3 className="mt-5 text-xl font-bold">{item.name}</h3>
                   <p className="mt-2 flex-1 text-sm leading-relaxed text-white/60">{item.line}</p>
                   <button type="button" onClick={() => void get(item.id, item.id)} disabled={busy === item.id} className={`mt-6 inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-5 text-sm font-bold disabled:opacity-70 ${mine ? 'landing-cta text-white' : 'landing-ghost'}`}>
-                    <Download className="h-4 w-4" aria-hidden="true" />
-                    {busy === item.id ? 'Opening…' : item.action}
+                    {installed ? <ArrowRight className="h-4 w-4" aria-hidden="true" /> : <Download className="h-4 w-4" aria-hidden="true" />}
+                    {busy === item.id ? 'Opening…' : installed ? 'Open TCNP' : item.action}
                   </button>
                 </article>
               )
@@ -209,7 +222,7 @@ export function LandingPage({ androidUrl, iosUrl, version }: LandingPageProps) {
               <div>
                 <div className="flex flex-wrap items-center gap-3">
                   <h3 className="text-xl font-bold">Web app</h3>
-                  <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">Works on every device</span>
+                  <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">{hasApp ? 'Installed on this device' : 'Works on every device'}</span>
                 </div>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/60">
                   No store and nothing to download. Install TCNP straight from your browser and it opens like any other app, with its own icon, and keeps itself up to date. Or just open it and sign in.
@@ -218,8 +231,8 @@ export function LandingPage({ androidUrl, iosUrl, version }: LandingPageProps) {
             </div>
             <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
               <button type="button" onClick={() => void installWeb()} disabled={busy === 'web'} className="landing-cta inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 text-sm font-bold text-white disabled:opacity-70">
-                <Download className="h-4 w-4" aria-hidden="true" />
-                {busy === 'web' ? 'Opening…' : 'Install web app'}
+                {hasApp ? <ArrowRight className="h-4 w-4" aria-hidden="true" /> : <Download className="h-4 w-4" aria-hidden="true" />}
+                {busy === 'web' ? 'Opening…' : hasApp ? 'Open TCNP' : 'Install web app'}
               </button>
               <Link href="/login" className="landing-ghost inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold">
                 Open in browser <ArrowRight className="h-4 w-4" aria-hidden="true" />

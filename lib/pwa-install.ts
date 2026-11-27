@@ -73,6 +73,26 @@ export function isRunningInstalled() {
     || (navigator as Navigator & { standalone?: boolean }).standalone === true
 }
 
+type RelatedApp = { platform?: string; url?: string; id?: string }
+
+/**
+ * Whether TCNP is already installed on this device, asked from an ordinary
+ * browser tab. A browser stops offering its install dialog once the app is
+ * installed, so without this the page would tell an officer who already has
+ * TCNP to go and install it by hand.
+ *
+ * Uses getInstalledRelatedApps (Chrome and Edge, Android and desktop 140+),
+ * which reads the "related_applications" entry in the manifest. Anywhere it is
+ * missing the answer is "not known", reported as false.
+ */
+export async function isInstalledOnThisDevice(): Promise<boolean> {
+  try {
+    const nav = navigator as Navigator & { getInstalledRelatedApps?: () => Promise<RelatedApp[]> }
+    if (typeof nav.getInstalledRelatedApps !== 'function') return false
+    return (await nav.getInstalledRelatedApps()).length > 0
+  } catch { return false }
+}
+
 /** Apps that open links in their own embedded browser, which cannot install anything. */
 const IN_APP_BROWSER = /FBAN|FBAV|FB_IAB|Instagram|Line\/|MicroMessenger|Snapchat|; wv\)/
 
