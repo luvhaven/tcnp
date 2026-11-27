@@ -1,0 +1,68 @@
+{
+  "expo": {
+    "name": "TCNP Central",
+    "slug": "tcnp-central",
+    "scheme": "tcnp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#ffffff",
+    "ios": {
+      "bundleIdentifier": "com.tcnp.central",
+      "buildNumber": "1",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "TCNP uses the camera when you take a photo to attach, such as a headshot or an incident photo.",
+        "NSPhotoLibraryUsageDescription": "TCNP opens your photo library when you choose a photo or document to upload.",
+        "NSMicrophoneUsageDescription": "TCNP uses the microphone only when you record a video to upload.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.tcnp.central",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png"
+      },
+      "permissions": [
+        "CAMERA",
+        "POST_NOTIFICATIONS"
+      ],
+      "predictiveBackGestureEnabled": false,
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "TCNP shares your location with Command on Live Tracking while location sharing is switched on.",
+          "locationAlwaysAndWhenInUsePermission": "TCNP shares your location with Command on Live Tracking while location sharing is switched on, including when the app is closed or the phone is locked. You can switch sharing off in TCNP at any time.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "backgroundColor": "#0d1017"
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "appUrl": "https://tcnp.vercel.app"
+    }
+  }
+}
