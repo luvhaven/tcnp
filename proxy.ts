@@ -14,8 +14,11 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   if (pathname === '/') {
-    const destination = hasSupabaseSessionCookie(request) ? '/dashboard' : '/login'
-    return NextResponse.redirect(new URL(destination, request.url))
+    if (hasSupabaseSessionCookie(request)) return NextResponse.redirect(new URL('/dashboard', request.url))
+    // The native app opens here signed out: it wants sign-in, not the public
+    // download page that browsers get.
+    if (/TCNPApp\//.test(request.headers.get('user-agent') || '')) return NextResponse.redirect(new URL('/login', request.url))
+    return NextResponse.next()
   }
 
   if (isPublicPage(pathname)) {
