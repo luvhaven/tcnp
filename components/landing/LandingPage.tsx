@@ -11,7 +11,7 @@ import { PhoneMockup } from '@/components/landing/PhoneMockup'
 import { PWAInstallModal } from '@/components/pwa/PWAInstallModal'
 import { usePWAInstall, type PWAPlatform } from '@/hooks/usePWAInstall'
 import { useBrowserSnapshot } from '@/hooks/useBrowserSnapshot'
-import { isNativeShell } from '@/lib/native-shell'
+import { isDesktopShell, isNativeShell } from '@/lib/native-shell'
 import { isInstalledOnThisDevice } from '@/lib/pwa-install'
 
 type Device = 'android' | 'ios' | 'windows' | 'mac'
@@ -21,6 +21,10 @@ export interface LandingPageProps {
   androidUrl?: string | null
   /** App Store or TestFlight link for the native iPhone app, once it exists. */
   iosUrl?: string | null
+  /** Direct link to the Windows installer (.exe) built from desktop/. */
+  windowsUrl?: string | null
+  /** Direct link to the Mac app (.dmg) built from desktop/. */
+  macUrl?: string | null
   version: string
 }
 
@@ -38,7 +42,7 @@ function detectDevice(): Device | null {
 /** The manual steps to show when a visitor picks a device they are not on. */
 const STEPS_FOR: Record<Device, PWAPlatform> = { android: 'android', ios: 'ios', windows: 'desktop-chrome', mac: 'mac-safari' }
 
-export function LandingPage({ androidUrl, iosUrl, version }: LandingPageProps) {
+export function LandingPage({ androidUrl, iosUrl, windowsUrl, macUrl, version }: LandingPageProps) {
   const router = useRouter()
   const { isInstalled, install, platform } = usePWAInstall()
   const device = useBrowserSnapshot<Device | null>(detectDevice, null)
@@ -56,10 +60,10 @@ export function LandingPage({ androidUrl, iosUrl, version }: LandingPageProps) {
   // Someone opening the installed app (Home Screen or native) is here to work,
   // not to read a brochure: take them straight to sign-in.
   useEffect(() => {
-    if (isInstalled || isNativeShell()) router.replace('/login')
+    if (isInstalled || isNativeShell() || isDesktopShell()) router.replace('/login')
   }, [isInstalled, router])
 
-  const native: Record<Device, string | null> = { android: androidUrl || null, ios: iosUrl || null, windows: null, mac: null }
+  const native: Record<Device, string | null> = { android: androidUrl || null, ios: iosUrl || null, windows: windowsUrl || null, mac: macUrl || null }
 
   /** Install for the device the visitor is on; otherwise show that device's steps. */
   const get = async (target: Device, from: Device | 'hero') => {
@@ -88,11 +92,11 @@ export function LandingPage({ androidUrl, iosUrl, version }: LandingPageProps) {
   const heroLabel = hasApp && !(device && native[device]) ? 'Open TCNP'
     : device === 'android' ? (native.android ? 'Download for Android' : 'Install on Android')
     : device === 'ios' ? (native.ios ? 'Get it for iPhone' : 'Install on iPhone')
-    : device === 'windows' ? 'Install on Windows'
-    : device === 'mac' ? 'Install on Mac'
+    : device === 'windows' ? (native.windows ? 'Download for Windows' : 'Install on Windows')
+    : device === 'mac' ? (native.mac ? 'Download for Mac' : 'Install on Mac')
     : 'Get the app'
 
-  const downloads: { id: Device; name: string; icon: ReactNode; line: string; action: string; tag: string }[] = [
+  const downloads: { id: Device; name: string; icon: ReactNode; line: string; action: string; tag: string; note?: string }[] = [
     {
       id: 'android', name: 'Android', icon: <Smartphone className="h-7 w-7" />,
       line: native.android ? 'The full app. Shares your location even with the phone locked.' : 'Installs from Chrome in one tap. The full app with locked-screen tracking is on its way.',
@@ -105,13 +109,15 @@ export function LandingPage({ androidUrl, iosUrl, version }: LandingPageProps) {
     },
     {
       id: 'windows', name: 'Windows', icon: <Monitor className="h-7 w-7" />,
-      line: 'Installs from Edge or Chrome with its own window, taskbar icon and alerts.',
-      action: 'Install', tag: 'Available now',
+      line: native.windows ? 'A real Windows program. Run the installer and TCNP is in your Start menu, with its own window and alerts.' : 'Installs from Edge or Chrome with its own window, taskbar icon and alerts.',
+      action: native.windows ? 'Download installer' : 'Install', tag: native.windows ? 'Desktop app' : 'Available now',
+      // The installer is not yet signed with a paid certificate, so Windows asks first.
+      note: native.windows ? 'If Windows shows “Windows protected your PC”, choose More info, then Run anyway.' : undefined,
     },
     {
       id: 'mac', name: 'Mac', icon: <Laptop className="h-7 w-7" />,
-      line: 'Installs from Chrome, Edge or Safari and lives in your Dock.',
-      action: 'Install', tag: 'Available now',
+      line: native.mac ? 'A real Mac app. Open the download and drag TCNP into Applications.' : 'Installs from Chrome, Edge or Safari and lives in your Dock.',
+      action: native.mac ? 'Download for Mac' : 'Install', tag: native.mac ? 'Desktop app' : 'Available now',
     },
   ]
 
@@ -206,6 +212,7 @@ export function LandingPage({ androidUrl, iosUrl, version }: LandingPageProps) {
                   </div>
                   <h3 className="mt-5 text-xl font-bold">{item.name}</h3>
                   <p className="mt-2 flex-1 text-sm leading-relaxed text-white/60">{item.line}</p>
+                  {item.note && <p className="mt-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs leading-relaxed text-white/55">{item.note}</p>}
                   <button type="button" onClick={() => void get(item.id, item.id)} disabled={busy === item.id} className={`mt-6 inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-5 text-sm font-bold disabled:opacity-70 ${mine ? 'landing-cta text-white' : 'landing-ghost'}`}>
                     {installed ? <ArrowRight className="h-4 w-4" aria-hidden="true" /> : <Download className="h-4 w-4" aria-hidden="true" />}
                     {busy === item.id ? 'Opening…' : installed ? 'Open TCNP' : item.action}

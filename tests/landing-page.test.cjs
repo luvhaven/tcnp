@@ -38,7 +38,7 @@ test('every other page is guarded exactly as before', () => {
 
 test('installed apps skip the download page, and download links are only ever https', () => {
   const page = fs.readFileSync('components/landing/LandingPage.tsx', 'utf8')
-  assert.match(page, /if \(isInstalled \|\| isNativeShell\(\)\) router\.replace\('\/login'\)/)
+  assert.match(page, /if \(isInstalled \|\| isNativeShell\(\) \|\| isDesktopShell\(\)\) router\.replace\('\/login'\)/)
   assert.doesNotMatch(page, /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/, 'no stray control characters')
   // The web app stays on offer even when native downloads exist: its install
   // never consults the native links.
