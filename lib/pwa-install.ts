@@ -68,8 +68,17 @@ export const wasInstalledThisSession = () => view().__tcnpInstalled === true
 
 const STANDALONE_MODES = ['standalone', 'window-controls-overlay', 'minimal-ui', 'fullscreen']
 
+/**
+ * The installed programs (desktop/ for Windows and Mac, mobile/ for phones)
+ * name themselves in the user agent. They are not browser installs, so the
+ * display-mode checks below cannot see them, but offering "Install app"
+ * inside an installed app makes no sense.
+ */
+const INSTALLED_PROGRAM = /TCNPDesktop\/|TCNPApp\//
+
 export function isRunningInstalled() {
-  return STANDALONE_MODES.some((mode) => window.matchMedia(`(display-mode: ${mode})`).matches)
+  return INSTALLED_PROGRAM.test(navigator.userAgent || '')
+    || STANDALONE_MODES.some((mode) => window.matchMedia(`(display-mode: ${mode})`).matches)
     || (navigator as Navigator & { standalone?: boolean }).standalone === true
 }
 

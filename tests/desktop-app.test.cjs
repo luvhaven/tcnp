@@ -43,6 +43,23 @@ test('it identifies itself so the site sends it to sign-in and hides install pro
   assert.match(fs.readFileSync('lib/device-push.ts', 'utf8'), /TCNPDesktop[^\n]*return 'unsupported'/, 'no browser push is attempted where none exists')
 })
 
+test('no "Install app" button appears inside an installed program', () => {
+  const installed = (userAgent, standalone = false) => {
+    const mod = { exports: {} }
+    vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/pwa-install.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, {
+      module: mod, exports: mod.exports, navigator: { userAgent }, window: { matchMedia: () => ({ matches: standalone }) },
+    })
+    return mod.exports.isRunningInstalled()
+  }
+  assert.equal(installed('Mozilla/5.0 Chrome/156 Electron/45 TCNPDesktop/1.0.0 TCNPApp/1.0.0'), true, 'Windows / Mac program')
+  assert.equal(installed('Mozilla/5.0 (Linux; Android 14) Chrome/130 Mobile TCNPApp/1.0.0'), true, 'phone app')
+  assert.equal(installed('Mozilla/5.0 (Windows NT 10.0) Chrome/156 Safari/537.36', true), true, 'browser-installed web app, as before')
+  assert.equal(installed('Mozilla/5.0 (Windows NT 10.0) Chrome/156 Safari/537.36'), false, 'an ordinary browser tab is still offered the install')
+  // Every install control reads this one check.
+  assert.match(fs.readFileSync('hooks/usePWAInstall.ts', 'utf8'), /useBrowserSnapshot\(isRunningInstalled, false\)/)
+  assert.match(fs.readFileSync('components/pwa/InstallButton.tsx', 'utf8'), /if \(isInstalled\) return null/)
+})
+
 test('the installer keeps one file name, so the download link never goes stale', () => {
   assert.equal(pkg.build.win.artifactName, 'TCNP-Central-Setup.${ext}')
   assert.equal(pkg.build.appId, 'com.tcnp.central')
