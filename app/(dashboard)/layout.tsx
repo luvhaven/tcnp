@@ -12,6 +12,8 @@ import { createClient } from "@/lib/supabase/client"
 import { useLocationSharing } from "@/hooks/useLocationSharing"
 import { LocationSharingSync } from '@/components/tracking/LocationSharingSync'
 import { LocationResumePrompt } from '@/components/tracking/LocationResumePrompt'
+import { NativeLocationTracker } from '@/components/tracking/NativeLocationTracker'
+import { isNativeShell } from '@/lib/native-shell'
 import { DevicePushBridge } from '@/components/notifications/DevicePushBridge'
 
 // ─── Singleton client — always the same instance, safe to use in effects ───
@@ -101,6 +103,9 @@ export default function DashboardLayout({
   const isIOS = useIsIOS()
   const [canMountExtras, setCanMountExtras] = useState(false)
   const [canMountTracker, setCanMountTracker] = useState(false)
+  // Inside the native TCNP app (mobile/): the app does location and its own
+  // install, so the browser-only tracker and prompts stay out of the way.
+  const nativeShell = isClient && isNativeShell()
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   // Mount global chat notification listener (supabase singleton defined at module level)
@@ -313,9 +318,9 @@ export default function DashboardLayout({
               </ErrorBoundary>
             </>
           )}
-          {canMountTracker && <ErrorBoundary><NotificationPermissionBanner /></ErrorBoundary>}
+          {canMountTracker && !nativeShell && <ErrorBoundary><NotificationPermissionBanner /></ErrorBoundary>}
           {/* The install prompt is how iOS users learn about Add to Home Screen */}
-          {canMountTracker && (
+          {canMountTracker && !nativeShell && (
             <ErrorBoundary>
               <PWAInstallPrompt />
             </ErrorBoundary>
@@ -329,7 +334,7 @@ export default function DashboardLayout({
               the live-location pill while sharing is active */}
           {canMountTracker && locationSharingEnabled && (
             <ErrorBoundary>
-              <LocationTracker />
+              {nativeShell ? <NativeLocationTracker /> : <LocationTracker />}
             </ErrorBoundary>
           )}
           {/* Account says "share", this phone does not (reinstalled app, cleared data) */}

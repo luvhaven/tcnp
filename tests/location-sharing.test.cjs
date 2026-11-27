@@ -61,7 +61,10 @@ function toggleDevice(config = {}) {
       if (options.method === 'POST') serverEnabled = JSON.parse(options.body).enabled
       return { ok: true, json: async () => ({ enabled: serverEnabled, userId: 'officer' }) }
     },
-    require: name => { assert.equal(name, '@/lib/location-sharing'); return p.store },
+    require: name => {
+      if (name === '@/lib/native-shell') return { isNativeShell: () => Boolean(config.native), requestNativeLocationPermission: async () => config.native }
+      assert.equal(name, '@/lib/location-sharing'); return p.store
+    },
   })
   toggleModule.setLocationSharingUser('officer')
   return { ...p, requests, errors, readyEvents, serverRequests, toggleModule, setOffline: value => { failServer = value }, releaseOn: () => releaseOn?.(), serverEnabled: () => serverEnabled, toggle: value => toggleModule.toggleLocationSharing(value, message => errors.push(message)) }
@@ -165,6 +168,20 @@ test('a rejected upload makes the phone re-check sharing instead of failing sile
   const sync = fs.readFileSync('components/tracking/LocationSharingSync.tsx', 'utf8')
   assert.match(sync, /addEventListener\('tcnp-location-rejected', sync\)/)
   assert.match(sync, /removeEventListener\('tcnp-location-rejected', sync\)/)
+})
+
+test('inside the native app the switch asks the app for permission, not the browser', async () => {
+  const allowed = toggleDevice({ native: 'always' })
+  allowed.toggle(true); await settle()
+  assert.equal(allowed.requests.length, 0, 'the browser is never asked for GPS')
+  assert.equal(allowed.store.isLocationSharingEnabled(), true)
+  assert.equal(allowed.serverEnabled(), true)
+
+  const denied = toggleDevice({ native: 'denied' })
+  denied.toggle(true); await settle()
+  assert.equal(denied.store.isLocationSharingEnabled(), false)
+  assert.equal(denied.serverEnabled(), false)
+  assert.match(denied.errors[0], /Allow location for TCNP in your phone settings/)
 })
 
 test('a saved opt-out survives reloads and synchronizes subscribers', () => {

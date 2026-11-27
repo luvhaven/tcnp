@@ -1,4 +1,5 @@
 import { createLocationSharingGuard, isLocationSharingEnabled, setLocationSharingEnabled } from '@/lib/location-sharing'
+import { isNativeShell, requestNativeLocationPermission } from '@/lib/native-shell'
 
 const PENDING_KEY = 'tcnp-location-unpublish-pending'
 const IDLE = { pending: false, requested: false, error: null as string | null }
@@ -90,24 +91,38 @@ export function toggleLocationSharing(value: boolean, onError: (message: string)
     // A denied/unavailable GPS request must not leave an earlier pin published.
     void unpublish(version, () => onError(OFF_ERROR))
   }
+  // The phone has agreed to give its location: record the choice on the server.
+  const confirm = async () => {
+    if (version !== intent) return
+    try {
+      await saveChoice(true)
+      if (version !== intent) return
+      setServerSharing(true)
+      markPendingOff(false)
+      setLocationSharingEnabled(true)
+      updateStatus(IDLE)
+      if (createLocationSharingGuard()()) window.dispatchEvent(new Event('tcnp-location-ready'))
+    } catch (error) {
+      fail(error instanceof Error ? error.message : 'Could not start location sharing. Check your connection and try again.')
+    }
+  }
+  if (isNativeShell()) {
+    // Inside the native TCNP app the app asks for permission (including
+    // "Always", which keeps sharing with the phone locked) and does the tracking.
+    requestNativeLocationPermission().then(
+      permission => {
+        if (permission === 'always' || permission === 'foreground') void confirm()
+        else fail('Location is blocked. Allow location for TCNP in your phone settings, then turn tracking on again.')
+      },
+      error => fail(error instanceof Error ? error.message : 'Location could not start. Please try again.'),
+    )
+    return
+  }
   if (typeof navigator === 'undefined' || !navigator.geolocation) { fail('Location is unavailable on this device.'); return }
   try {
     // This native request stays in the switch's click gesture, including Safari.
     navigator.geolocation.getCurrentPosition(
-      async () => {
-        if (version !== intent) return
-        try {
-          await saveChoice(true)
-          if (version !== intent) return
-          setServerSharing(true)
-          markPendingOff(false)
-          setLocationSharingEnabled(true)
-          updateStatus(IDLE)
-          if (createLocationSharingGuard()()) window.dispatchEvent(new Event('tcnp-location-ready'))
-        } catch (error) {
-          fail(error instanceof Error ? error.message : 'Could not start location sharing. Check your connection and try again.')
-        }
-      },
+      () => { void confirm() },
       error => fail(error.code === 1
         ? 'Location is blocked. Allow location for TCNP in your browser or device settings, then turn tracking on again.'
         : 'Could not get your location. Check device location is on, then try again.'),

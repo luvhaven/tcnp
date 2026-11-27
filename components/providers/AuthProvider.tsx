@@ -22,6 +22,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 if (event === 'SIGNED_OUT') {
                     // Also cover expired sessions, password enforcement and other sign-out paths.
                     void import('@/lib/device-push').then(m => m.disconnectDevicePush(false)).catch(() => undefined)
+                    // Native app: never keep tracking an officer who is signed out.
+                    void import('@/lib/native-shell').then(m => m.stopNativeTracking({ revoke: false })).catch(() => undefined)
                     // Drop unsent Victor routine-check notes so the next officer
                     // on a shared device starts clean (lazy: keeps the checklist
                     // out of the root bundle; same module instance if loaded).

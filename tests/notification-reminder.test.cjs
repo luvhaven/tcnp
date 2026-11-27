@@ -60,6 +60,7 @@ test('actual login reminder returns after a new login and opens native permissio
    if (name === '@/components/ui/button') return load('components/ui/button.tsx')
    if (name === '@/lib/utils') return { cn: require('clsx').clsx }
    if (name === '@/lib/device-push') return push
+   if (name === '@/lib/native-shell') return { isNativeShell: () => false }
    if (name === '@/lib/notification-reminder') return reminders
    if (name === '@/lib/supabase/client') return { createClient: () => ({ auth: { getSession: async () => ({ data: { session: activeSession } }) } }) }
   } }), { window: dom.window, document, navigator: dom.window.navigator, Notification: notificationApi, localStorage: dom.window.localStorage, sessionStorage: dom.window.sessionStorage, crypto: cryptoApi }))

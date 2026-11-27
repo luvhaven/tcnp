@@ -217,6 +217,8 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
       finally { clearTimeout(timeout) }
     }
     await import('@/lib/device-push').then(m => m.disconnectDevicePush(false)).catch(() => undefined)
+    // Native app: stop background location for this officer before the session ends.
+    await import('@/lib/native-shell').then(m => m.stopNativeTracking()).catch(() => undefined)
     await supabase.auth.signOut()
     router.push("/login")
   }
