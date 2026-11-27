@@ -1,0 +1,16 @@
+# What is sent to Expo's build service when the phone app in mobile/ is built.
+#
+# Expo uploads the whole repository by default, which is hundreds of megabytes
+# of website, desktop and working files the phone build never reads. Only
+# mobile/ is needed. This file replaces .gitignore for that upload, so the
+# usual exclusions are repeated here.
+/*
+!/mobile
+node_modules/
+.expo/
+.claude/
+/mobile/android/
+/mobile/ios/
+/mobile/dist/
+*.log
+.env*

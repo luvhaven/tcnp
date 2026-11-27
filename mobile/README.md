@@ -47,6 +47,28 @@ npm run build:android                    # produces an .apk officers can install
 npm run build:ios                        # needs an Apple Developer account ($99/year)
 ```
 
+The project is linked to the Expo account `tcnpjourney`, which also holds the
+Android signing key. Every update must be signed with that same key or phones
+refuse to install it over the old version, so builds must keep using it.
+
+Only `mobile/` is uploaded to Expo; the `.easignore` at the repository root
+keeps the website, the desktop program and working files out of the upload.
+
+### Publishing the Android app
+
+The download page links to
+`https://github.com/luvhaven/tcnp/releases/latest/download/TCNP-Central.apk`.
+"latest" serves files from one release only, and the Windows installer uses
+the same address, so both files must be attached to the newest release:
+
+```bash
+# save the .apk the build links to as TCNP-Central.apk, then
+gh release upload <tag of the newest release> TCNP-Central.apk --clobber
+```
+
+Raise `version` and `android.versionCode` in `app.json` before each new build;
+Android will not install a build whose `versionCode` is not higher.
+
 The Android build prints a download link for the `.apk`. For iPhone, EAS asks
 for the Apple account during the build and can submit to TestFlight with
 `npx eas-cli@latest submit --platform ios`.
