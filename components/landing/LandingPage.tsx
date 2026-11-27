@@ -5,7 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  ArrowRight, BellRing, CheckCircle2, Download, Laptop, LockKeyhole, MapPinned, Monitor, Radio, Route, ShieldCheck, Smartphone, TabletSmartphone, Users,
+  ArrowRight, BellRing, CheckCircle2, Download, Globe, Laptop, LockKeyhole, MapPinned, Monitor, Radio, Route, ShieldCheck, Smartphone, TabletSmartphone, Users,
 } from 'lucide-react'
 import { PhoneMockup } from '@/components/landing/PhoneMockup'
 import { PWAInstallModal } from '@/components/pwa/PWAInstallModal'
@@ -42,7 +42,7 @@ export function LandingPage({ androidUrl, iosUrl, version }: LandingPageProps) {
   const { isInstalled, install, platform } = usePWAInstall()
   const device = useBrowserSnapshot<Device | null>(detectDevice, null)
   const [steps, setSteps] = useState<PWAPlatform | null>(null)
-  const [busy, setBusy] = useState<Device | 'hero' | null>(null)
+  const [busy, setBusy] = useState<Device | 'hero' | 'web' | null>(null)
 
   // Someone opening the installed app (Home Screen or native) is here to work,
   // not to read a brochure: take them straight to sign-in.
@@ -60,6 +60,17 @@ export function LandingPage({ androidUrl, iosUrl, version }: LandingPageProps) {
     setBusy(from)
     try {
       if (await install() === 'show-instructions') setSteps(platform ?? STEPS_FOR[target])
+    } finally { setBusy(null) }
+  }
+
+  /**
+   * The web app (PWA) is always on offer, whatever native downloads exist: it
+   * needs no store, works on every device, and is what officers already use.
+   */
+  const installWeb = async () => {
+    setBusy('web')
+    try {
+      if (await install() === 'show-instructions') setSteps(platform ?? (device ? STEPS_FOR[device] : 'desktop-other'))
     } finally { setBusy(null) }
   }
 
@@ -190,6 +201,31 @@ export function LandingPage({ androidUrl, iosUrl, version }: LandingPageProps) {
               )
             })}
           </div>
+
+          {/* The web app: a fifth option that never goes away */}
+          <article id="web-app" className="landing-card mt-5 flex flex-col gap-6 rounded-3xl p-6 sm:p-7 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-start gap-5">
+              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-white/15 to-white/5 text-[#ffb347]"><Globe className="h-7 w-7" aria-hidden="true" /></span>
+              <div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h3 className="text-xl font-bold">Web app</h3>
+                  <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">Works on every device</span>
+                </div>
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/60">
+                  No store and nothing to download. Install TCNP straight from your browser and it opens like any other app, with its own icon, and keeps itself up to date. Or just open it and sign in.
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
+              <button type="button" onClick={() => void installWeb()} disabled={busy === 'web'} className="landing-cta inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 text-sm font-bold text-white disabled:opacity-70">
+                <Download className="h-4 w-4" aria-hidden="true" />
+                {busy === 'web' ? 'Opening…' : 'Install web app'}
+              </button>
+              <Link href="/login" className="landing-ghost inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold">
+                Open in browser <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            </div>
+          </article>
         </section>
 
         {/* ── What it does ─────────────────────────────────────── */}

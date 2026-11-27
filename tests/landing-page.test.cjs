@@ -40,6 +40,12 @@ test('installed apps skip the download page, and download links are only ever ht
   const page = fs.readFileSync('components/landing/LandingPage.tsx', 'utf8')
   assert.match(page, /if \(isInstalled \|\| isNativeShell\(\)\) router\.replace\('\/login'\)/)
   assert.doesNotMatch(page, /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/, 'no stray control characters')
+  // The web app stays on offer even when native downloads exist: its install
+  // never consults the native links.
+  const installWeb = page.slice(page.indexOf('const installWeb = async'), page.indexOf('const heroLabel'))
+  assert.match(installWeb, /await install\(\)/)
+  assert.doesNotMatch(installWeb, /native\[/)
+  assert.match(page, /id="web-app"[\s\S]*?Install web app[\s\S]*?Open in browser/)
   const home = fs.readFileSync('app/page.tsx', 'utf8')
   assert.match(home, /if \(user\) redirect\('\/dashboard'\)/)
   assert.ok(home.includes('.test(value) ? value : null') && home.includes('^https:'), 'only https links are offered')
