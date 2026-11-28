@@ -183,8 +183,6 @@ function WelfareContent() {
         />
       )}
 
-      <WelfareOperations />
-
       {pageTabs.length > 1 ? (
         <Tabs value={pageTab} onValueChange={selectPageTab} className="space-y-4">
           <TabsList className="h-auto w-full justify-start overflow-x-auto p-1 sm:w-auto">
@@ -224,6 +222,10 @@ function WelfareContent() {
       ) : (
         <div className="space-y-4">{menusSection}</div>
       )}
+
+      {/* Prayer, care and celebrations follow the menus: the meal of the day
+          is what most officers open this page for. */}
+      <WelfareOperations />
 
       {/* Food alarm dialog */}
       <Dialog open={alarmOpen} onOpenChange={setAlarmOpen}>

@@ -514,21 +514,34 @@ function NestsContent({ initialNests, initialNestsError }: { initialNests: any[]
         </div>
       )}
 
+      {/* Four long sections used to be stacked on one page, which put the
+          Nest locations many screens down on a phone. One at a time now. */}
+      <Tabs defaultValue="rooms" className="space-y-4">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 sm:inline-flex sm:w-auto">
+          <TabsTrigger value="rooms" className="min-h-11 sm:min-h-0">Rooms</TabsTrigger>
+          <TabsTrigger value="stays" className="min-h-11 sm:min-h-0">Papa stays</TabsTrigger>
+          <TabsTrigger value="experiences" className="min-h-11 sm:min-h-0">Experiences</TabsTrigger>
+          <TabsTrigger value="locations" className="min-h-11 sm:min-h-0">Locations</TabsTrigger>
+        </TabsList>
+        <TabsContent value="rooms">
       <RoomOperations
         nests={filteredNests}
         selectedProgram={selectedProgram}
         legacyCanManage={nestAccess.canManage}
       />
-
+        </TabsContent>
+        <TabsContent value="stays">
       <PapaAccommodations
         canEdit={canEditAccommodation}
         canDelete={canRemoveAccommodation}
         selectedProgram={selectedProgram}
         currentUserId={currentUser?.id ?? null}
       />
-
+        </TabsContent>
+        <TabsContent value="experiences">
       <GuestExperiences />
-
+        </TabsContent>
+        <TabsContent value="locations">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
@@ -695,6 +708,8 @@ function NestsContent({ initialNests, initialNestsError }: { initialNests: any[]
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+      </Tabs>
         </TabsContent>
 
         {canSeeWork && (

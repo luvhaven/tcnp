@@ -204,7 +204,7 @@ export default function PapaMealOrders({ canOrder, selectedProgram, currentUserI
       </div>
 
       {/* Day and meal stay reachable with a thumb while the list scrolls. */}
-      <div className="sticky top-0 z-10 grid gap-3 rounded-xl border bg-background/95 p-3 backdrop-blur sm:grid-cols-[auto_1fr_auto] sm:items-end">
+      <div className="sticky top-0 z-10 grid grid-cols-2 gap-x-3 gap-y-2 rounded-xl border bg-background/95 p-3 backdrop-blur sm:grid-cols-[auto_1fr_auto] sm:items-end sm:gap-3">
         <div className="space-y-1">
           <Label htmlFor="meal-order-date" className="text-xs">Day</Label>
           <Input
@@ -223,7 +223,7 @@ export default function PapaMealOrders({ canOrder, selectedProgram, currentUserI
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-center gap-2 pb-1 text-sm">
+        <div className="col-span-2 flex items-center gap-2 text-sm sm:col-span-1 sm:pb-1">
           <Badge variant="secondary" className="tabular-nums">{progress.taken}/{progress.total} ordered</Badge>
           {slotMenu?.vendors?.name && (
             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">

@@ -77,7 +77,7 @@ import { OFFICER_ONLINE_WINDOW_MS, OFFICER_PRESENCE_REFRESH_MS } from "@/lib/pre
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { ErrorState } from "@/components/ui/error-state"
 
-const STAT_TILE = "flex min-h-[4.5rem] items-center justify-between gap-3 rounded-xl bg-background/80 backdrop-blur-sm border border-border/60 px-4 py-3.5 shadow-sm"
+const STAT_TILE = "flex min-h-[4.5rem] items-center justify-between gap-3 rounded-xl bg-background/80 backdrop-blur-sm border border-border/60 px-3 py-3 shadow-sm sm:px-4 sm:py-3.5"
 const STAT_TILE_LINK = `${STAT_TILE} transition-colors hover:border-primary/40 hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`
 
 function OfficersOnlineTile({ value }: { value: number | null }) {
@@ -86,13 +86,13 @@ function OfficersOnlineTile({ value }: { value: number | null }) {
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Officers Online</p>
+          <p className="text-[11px] font-semibold uppercase leading-tight text-muted-foreground sm:tracking-wider">Officers Online</p>
         </div>
         <p className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400 mt-0.5">
           {value != null ? <CountUp value={value} /> : "—"}
         </p>
       </div>
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
+      <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:flex bg-emerald-500/10 text-emerald-500">
         <ShieldCheck className="h-5 w-5" aria-hidden="true" />
       </div>
     </>
@@ -221,19 +221,20 @@ export default function CommandPage() {
           </p>
         )}
         {/* Live telemetry stat cards — each opens the list behind its number */}
-        <div className="relative z-10 mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Three across on phones too: stacked, they pushed the map a screen down. */}
+        <div className="relative z-10 mt-6 grid grid-cols-3 gap-2 sm:gap-3">
           <Link
             href="/journeys"
             aria-label={`Active journeys: ${stats ? stats.activeJourneys : "loading"}. Open Journeys`}
             className={STAT_TILE_LINK}
           >
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Active Journeys</p>
+              <p className="text-[11px] font-semibold uppercase leading-tight text-muted-foreground sm:tracking-wider">Active Journeys</p>
               <p className="text-2xl font-bold tracking-tight text-foreground mt-0.5">
                 {stats ? <CountUp value={stats.activeJourneys} /> : "—"}
               </p>
             </div>
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500">
+            <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:flex bg-orange-500/10 text-orange-500">
               <Route className="h-5 w-5" aria-hidden="true" />
             </div>
           </Link>
@@ -260,7 +261,7 @@ export default function CommandPage() {
             className={STAT_TILE_LINK}
           >
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Open Incidents</p>
+              <p className="text-[11px] font-semibold uppercase leading-tight text-muted-foreground sm:tracking-wider">Open Incidents</p>
               <p className={`text-2xl font-bold tracking-tight mt-0.5 ${(stats?.openIncidents ?? 0) > 0 ? "text-amber-500" : "text-foreground"}`}>
                 {stats ? <CountUp value={stats.openIncidents} /> : "—"}
               </p>

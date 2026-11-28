@@ -477,22 +477,6 @@ function EchoPageContent() {
             )}
 
             <TabsContent value="equipment" className="space-y-6">
-            {/* ── Papa AV Briefings (Echo members) + EO Pre-Op Checklist (Echo members, Command, admins) ── */}
-            {canLogEoCheck && (
-                <div className={echoUnit.isMember ? "grid gap-4 md:grid-cols-2" : "grid gap-4"}>
-                    {echoUnit.isMember && (
-                        <div className="min-w-0">
-                            <EchoBriefings
-                                userId={echoUnit.currentUser?.id}
-                                canCoordinate={echoUnit.canCoordinate}
-                                work={echoWork}
-                            />
-                        </div>
-                    )}
-                    <EOChecklist programs={programs} />
-                </div>
-            )}
-
             {echoUnit.isMember && !canManage && !echoWork.isLoading && workablePrograms.length === 0 && (
                 <p className="text-xs text-muted-foreground">
                     Equipment is read only for you. To update it, you need to be active on a programme and added to its Echo team by your Echo head.
@@ -668,6 +652,23 @@ function EchoPageContent() {
                 </TabsContent>
             </Tabs>
             </>
+            )}
+            {/* Briefings and the pre-op checklist follow the inventory, which is
+                what this tab is opened for. */}
+            {/* ── Papa AV Briefings (Echo members) + EO Pre-Op Checklist (Echo members, Command, admins) ── */}
+            {canLogEoCheck && (
+                <div className={echoUnit.isMember ? "grid gap-4 md:grid-cols-2" : "grid gap-4"}>
+                    {echoUnit.isMember && (
+                        <div className="min-w-0">
+                            <EchoBriefings
+                                userId={echoUnit.currentUser?.id}
+                                canCoordinate={echoUnit.canCoordinate}
+                                work={echoWork}
+                            />
+                        </div>
+                    )}
+                    <EOChecklist programs={programs} />
+                </div>
             )}
             </TabsContent>
 

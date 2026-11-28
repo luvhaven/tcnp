@@ -397,24 +397,6 @@ function TrainingContent() {
         )}
 
         <TabsContent value="training" className="space-y-6">
-      <TrainingOperations />
-
-      {/* SOP manual entry */}
-      <Link href="/sop" className="block">
-        <Card className="card-hover group border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
-          <CardContent className="flex items-center gap-4 p-5">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <BookOpen className="h-6 w-6" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold">TCNP SOP Manual</p>
-              <p className="text-sm text-muted-foreground">Call signs, prerequisites, responsibilities and full operating procedures.</p>
-            </div>
-            <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-1" />
-          </CardContent>
-        </Card>
-      </Link>
-
       {/* Upcoming */}
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Upcoming Sessions</p>
@@ -518,6 +500,25 @@ function TrainingContent() {
           )}
         </div>
       )}
+      {/* Courses and the manual follow the sessions: what is on next is what
+          an officer opens this page to see. */}
+      <TrainingOperations />
+
+      {/* SOP manual entry */}
+      <Link href="/sop" className="block">
+        <Card className="card-hover group border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
+          <CardContent className="flex items-center gap-4 p-5">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <BookOpen className="h-6 w-6" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">TCNP SOP Manual</p>
+              <p className="text-sm text-muted-foreground">Call signs, prerequisites, responsibilities and full operating procedures.</p>
+            </div>
+            <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-1" />
+          </CardContent>
+        </Card>
+      </Link>
         </TabsContent>
 
         {canSeeWork && (
