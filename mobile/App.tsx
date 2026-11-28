@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type ForwardRefExoticComponent, type RefAttributes } from 'react'
 import { ActivityIndicator, AppState, BackHandler, Image, Linking, Platform, Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { WebView as NativeWebView, type WebViewMessageEvent, type WebViewNavigation, type WebViewProps } from 'react-native-webview'
 import { APP_URL, APP_VERSION, isAppUrl } from './src/config'
 import { getStatus, requestPermission, startTracking, stopTracking, subscribeToLocation } from './src/location'
+import { saveSharedFile } from './src/files'
 
 const BRAND = '#F26522'
 
@@ -15,13 +16,55 @@ const BRAND = '#F26522'
 type WebHandle = { goBack(): void; reload(): void; injectJavaScript(script: string): void }
 const WebView = NativeWebView as unknown as ForwardRefExoticComponent<WebViewProps & RefAttributes<WebHandle>>
 
-/** Runs before any TCNP script, so the screens know they are inside the app. */
-const BOOTSTRAP = `window.__TCNP_NATIVE__ = ${JSON.stringify({ platform: Platform.OS, version: APP_VERSION })}; true;`
+/**
+ * Runs before any TCNP script, so the screens know they are inside the app,
+ * and tells the page how much of the bottom of the screen belongs to the phone
+ * (gesture bar or home indicator). The page runs to the very bottom edge and
+ * pads its own tab bar by this amount, so the bar's colour reaches the edge
+ * and its buttons sit just above the phone's own controls. Padding the whole
+ * page here instead left a blank strip under the tab bar.
+ */
+const insetScript = (bottom: number) => {
+  const value = Math.max(0, Math.round(bottom))
+  return `(function(){try{var n=window.__TCNP_NATIVE__=window.__TCNP_NATIVE__||{};n.platform=${JSON.stringify(Platform.OS)};n.version=${JSON.stringify(APP_VERSION)};n.insets={top:0,bottom:${value}};var d=document.documentElement;if(d){d.setAttribute('data-tcnp-native','');d.style.setProperty('--native-safe-top','0px');d.style.setProperty('--native-safe-bottom','${value}px')}}catch(e){}})();true;`
+}
 
-type BridgeMessage = { type?: unknown; id?: unknown; token?: unknown; ingestUrl?: unknown }
+/** A colour reported by the page is only used if it is plainly a colour. */
+const SAFE_COLOR = /^(#[0-9a-fA-F]{3,8}|rgba?\([\d\s.,%/]+\))$/
+
+/**
+ * Settings that only mean something on iPhone, and are passed only there.
+ *
+ * On Android the library hands every setting to the native view untouched.
+ * `decelerationRate="normal"` is a word on iPhone (the library turns it into
+ * a number) but the native view expects a number, so on Android the word
+ * reached it as-is and the app closed the moment the screen was drawn.
+ */
+const IOS_ONLY: Partial<WebViewProps> = Platform.OS === 'ios' ? {
+  allowsInlineMediaPlayback: true,
+  allowsBackForwardNavigationGestures: true,
+  pullToRefreshEnabled: false,
+  bounces: false,
+  contentInsetAdjustmentBehavior: 'never',
+  decelerationRate: 'normal',
+} : {}
+
+type BridgeMessage = { type?: unknown; id?: unknown; token?: unknown; ingestUrl?: unknown; dark?: unknown; background?: unknown; name?: unknown; mime?: unknown; data?: unknown }
 
 export default function App() {
-  const dark = useColorScheme() === 'dark'
+  return (
+    <SafeAreaProvider>
+      <Shell />
+    </SafeAreaProvider>
+  )
+}
+
+function Shell() {
+  const systemDark = useColorScheme() === 'dark'
+  const insets = useSafeAreaInsets()
+  // The page reports its own theme; until it does, follow the phone's setting.
+  const [chrome, setChrome] = useState<{ dark: boolean; background: string } | null>(null)
+  const dark = chrome?.dark ?? systemDark
   const web = useRef<WebHandle>(null)
   const canGoBack = useRef(false)
   const currentUrl = useRef(APP_URL)
@@ -47,11 +90,21 @@ export default function App() {
     return () => { unsubscribe(); appState.remove() }
   }, [pushStatus])
 
+  // Keep the page's bottom spacing right when the phone's bars change
+  // (rotation, switching between gesture and button navigation).
+  useEffect(() => {
+    web.current?.injectJavaScript(insetScript(insets.bottom))
+  }, [insets.bottom])
+
   // Android back button: go back inside TCNP before leaving the app.
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (!canGoBack.current) return false
-      web.current?.goBack()
+      // The page decides what Back means: close the open sheet or menu first,
+      // then go back a screen. Only when there is nowhere left to go does it
+      // ask the app to close. A page too old to know this falls back to
+      // plain history.
+      const can = canGoBack.current ? 'true' : 'false'
+      web.current?.injectJavaScript(`(function(){try{if(typeof window.__tcnpNativeBack==='function'){window.__tcnpNativeBack(${can})}else if(${can}){history.back()}else{window.ReactNativeWebView.postMessage('{"type":"app:exit"}')}}catch(e){}})();true;`)
       return true
     })
     return () => subscription.remove()
@@ -63,6 +116,13 @@ export default function App() {
     let message: BridgeMessage
     try { message = JSON.parse(event.nativeEvent.data) } catch { return }
     if (!message || typeof message.type !== 'string') return
+    if (message.type === 'ui:chrome') {
+      if (typeof message.background === 'string' && SAFE_COLOR.test(message.background)) {
+        setChrome({ dark: message.dark === true, background: message.background })
+      }
+      return
+    }
+    if (message.type === 'app:exit') { BackHandler.exitApp(); return }
     const id = typeof message.id === 'string' ? message.id : undefined
     const answer = (payload: Record<string, unknown>) => { if (id) send({ id, ...payload }) }
     try {
@@ -77,6 +137,10 @@ export default function App() {
         case 'location:start':
           if (typeof message.token !== 'string' || typeof message.ingestUrl !== 'string') throw new Error('Incomplete request.')
           answer({ status: await startTracking(message.token, message.ingestUrl) })
+          break
+        case 'file:save':
+          await saveSharedFile(message.name, message.mime, message.data)
+          answer({ saved: true })
           break
         case 'location:stop':
           await stopTracking()
@@ -110,10 +174,9 @@ export default function App() {
     setAttempt(value => value + 1)
   }, [])
 
-  const background = dark ? '#0d1017' : '#ffffff'
+  const background = chrome?.background ?? (dark ? '#0d1017' : '#ffffff')
   return (
-    <SafeAreaProvider>
-      <SafeAreaView style={[styles.fill, { backgroundColor: background }]} edges={['top', 'left', 'right', 'bottom']}>
+      <SafeAreaView style={[styles.fill, { backgroundColor: background }]} edges={['top', 'left', 'right']}>
         <StatusBar style={dark ? 'light' : 'dark'} />
         {!failed && (
           <WebView
@@ -122,11 +185,11 @@ export default function App() {
             source={{ uri: APP_URL }}
             style={[styles.fill, { backgroundColor: background }]}
             applicationNameForUserAgent={`TCNPApp/${APP_VERSION}`}
-            injectedJavaScriptBeforeContentLoaded={BOOTSTRAP}
+            injectedJavaScriptBeforeContentLoaded={insetScript(insets.bottom)}
             onMessage={event => { void onMessage(event) }}
             onNavigationStateChange={onNavigation}
             onShouldStartLoadWithRequest={shouldLoad}
-            onLoadEnd={() => { setLoaded(true); void pushStatus() }}
+            onLoadEnd={() => { web.current?.injectJavaScript(insetScript(insets.bottom)); setLoaded(true); void pushStatus() }}
             onError={event => setFailed(event.nativeEvent.description || 'No connection')}
             onHttpError={event => { if (event.nativeEvent.statusCode >= 500 && isAppUrl(event.nativeEvent.url) && !loaded) setFailed(`Server error ${event.nativeEvent.statusCode}`) }}
             // The system can end the page's process to free memory; bring it back.
@@ -139,17 +202,13 @@ export default function App() {
             thirdPartyCookiesEnabled
             cacheEnabled
             geolocationEnabled
-            allowsInlineMediaPlayback
+            allowsFullscreenVideo
             mediaPlaybackRequiresUserAction={false}
-            allowsBackForwardNavigationGestures
             setSupportMultipleWindows={false}
-            pullToRefreshEnabled={false}
             overScrollMode="never"
-            bounces={false}
             textZoom={100}
-            contentInsetAdjustmentBehavior="never"
-            decelerationRate="normal"
             webviewDebuggingEnabled={__DEV__}
+            {...IOS_ONLY}
           />
         )}
         {!loaded && !failed && (
@@ -171,7 +230,6 @@ export default function App() {
           </View>
         )}
       </SafeAreaView>
-    </SafeAreaProvider>
   )
 }
 

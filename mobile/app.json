@@ -3,7 +3,7 @@
     "name": "TCNP Central",
     "slug": "tcnp-central",
     "scheme": "tcnp",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -21,7 +21,7 @@
     },
     "android": {
       "package": "com.tcnp.central",
-      "versionCode": 1,
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -66,7 +66,8 @@
             "backgroundColor": "#0d1017"
           }
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "extra": {
       "appUrl": "https://tcnp.vercel.app",
