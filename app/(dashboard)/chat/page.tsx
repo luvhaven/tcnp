@@ -78,8 +78,9 @@ function ChatContent() {
     if (active && initialMessage) setConsumedSeeds(previous => previous.includes(requestKey) ? previous : [...previous, requestKey])
   }, [active?.id, initialMessage, requestKey])
 
-  return <div className="min-w-0 space-y-4">
-    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl border bg-card text-primary"><MessagesSquare className="h-5 w-5" /></span><div><h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Chat</h1><p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">Stay connected. Keep everyone in step.</p></div></div>
+  return <div className="min-w-0 nav:space-y-4">
+    {/* Phones: the conversation is the page. The tab bar already says "Chat". */}
+    <div className="hidden items-center gap-3 nav:flex"><span className="flex h-10 w-10 items-center justify-center rounded-xl border bg-card text-primary"><MessagesSquare className="h-5 w-5" /></span><div><h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Chat</h1><p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">Stay connected. Keep everyone in step.</p></div></div>
     {!loading && !query.isError && hasRequestedRoom && !requestedRoom && !selected && <p role="status" className="rounded-xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">This conversation is unavailable. It may be archived, or you may need an invitation. Choose another conversation from the dropdowns.</p>}
     {!loading && me && !me.team && !platform && <details className="rounded-xl border bg-card px-4 py-3"><summary className="cursor-pointer text-sm font-medium">Choose your team</summary><div className="pt-3"><TeamChatRoom joinOnly /></div></details>}
     <ChatWorkspace key={`${me?.id}:${workspaceKey}`} rooms={rooms} selectedRoomId={active?.id ?? null} loading={loading}

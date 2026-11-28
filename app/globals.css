@@ -818,6 +818,34 @@ html[data-tcnp-native] {
   --safe-bottom: var(--native-safe-bottom, 0px);
 }
 
+/* ─── Full-screen screens on phones (chat, live map) ──────────────────────── */
+
+/* Set by app/(dashboard)/layout.tsx. Below the nav breakpoint these screens
+   drop the app header and the page padding and run from the top of the
+   screen to the tab bar. */
+@media (max-width: 859px) {
+  [data-immersive] .app-header {
+    display: none;
+  }
+  [data-immersive] #main-content {
+    padding: var(--safe-top) 0 calc(var(--bottom-nav-h) + var(--safe-bottom));
+    background: hsl(var(--background));
+  }
+  [data-immersive] #main-content > div {
+    max-width: none;
+  }
+  [data-immersive] .chat-workspace {
+    height: calc(var(--chat-available-height, 100dvh) - var(--bottom-nav-h, 0px) - var(--safe-bottom));
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+  [data-immersive] .live-tracking-frame {
+    height: calc(100dvh - var(--safe-top) - var(--bottom-nav-h) - var(--safe-bottom));
+    margin: 0;
+  }
+}
+
 /* ─── Phone floors: thumb-sized controls, readable type ───────────────────── */
 
 /* Many screens size a control for a desktop toolbar with a fixed h-9, h-8,

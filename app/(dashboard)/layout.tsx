@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, Suspense, useEffect } from "react"
+import { usePathname } from "next/navigation"
 import dynamic from "next/dynamic"
 import { AnimatePresence, motion } from "framer-motion"
 import { useIsIOS, useIsClient } from "@/hooks/useIsClient"
@@ -96,6 +97,12 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  // Screens where every row of a phone counts (a conversation, a map) take
+  // the whole screen above the tab bar: no date-and-profile header, no page
+  // padding. The bell and profile menu stay one tap away on every other
+  // screen and under "More". See [data-immersive] in globals.css.
+  const pathname = usePathname() ?? ""
+  const immersive = /^\/(chat|tracking\/live)(\/|$)/.test(pathname)
   const drawerRef = useRef<HTMLDivElement>(null)
   const drawerTriggerRef = useRef<HTMLElement | null>(null)
   const isClient = useIsClient()
@@ -192,7 +199,7 @@ export default function DashboardLayout({
 
   return (
     <ErrorBoundary>
-      <div className="flex h-dvh min-h-0 overflow-hidden">
+      <div data-immersive={immersive ? "" : undefined} className="flex h-dvh min-h-0 overflow-hidden">
         <a
           href="#main-content"
           className="fixed left-4 top-3 z-[70] -translate-y-20 rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background shadow-elevation-lg transition-transform focus:translate-y-0"

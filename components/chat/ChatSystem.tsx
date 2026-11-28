@@ -305,10 +305,10 @@ export default function ChatSystem({ programId, papaId, team, initialMessage, ro
         </header>
       )}
 
-      <div className="flex min-h-12 flex-none items-center justify-between gap-3 border-b border-border/60 bg-muted/15 px-4 py-2">
+      <div className="flex min-h-11 flex-none items-center justify-between gap-3 border-b border-border/60 bg-muted/15 px-3 py-1 sm:min-h-12 sm:px-4 sm:py-2">
         <div className="relative min-w-0 flex-1 sm:max-w-xs"><Search aria-hidden="true" className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search this conversation" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search this conversation" className="h-9 border-0 bg-transparent pl-8 text-base shadow-none focus-visible:ring-2 focus-visible:ring-primary/50 sm:text-sm" /></div>
         <span className="inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground" role="status">
-          {chat.connection === 'offline' ? <><WifiOff className="h-3 w-3" />Offline</> : chat.connection === 'connected' ? <><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Connected</> : <><Loader2 className="h-3 w-3 animate-spin" />Connecting</>}
+          {chat.connection === 'offline' ? <><WifiOff className="h-3 w-3" />Offline</> : chat.connection === 'connected' ? <><span className="h-2 w-2 rounded-full bg-emerald-500 sm:h-1.5 sm:w-1.5" /><span className="sr-only sm:not-sr-only">Connected</span></> : <><Loader2 className="h-3 w-3 animate-spin" />Connecting</>}
         </span>
       </div>
 

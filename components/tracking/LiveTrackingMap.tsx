@@ -416,7 +416,7 @@ export default function LiveTrackingMap() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-lg font-bold tracking-tight sm:text-xl">Live Tracking</h1>
-          <p className="text-xs text-muted-foreground">Journeys, vehicles, and team members in real time.</p>
+          <p className="hidden text-xs text-muted-foreground sm:block">Journeys, vehicles, and team members in real time.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

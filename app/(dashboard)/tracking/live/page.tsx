@@ -56,7 +56,7 @@ export default function LiveTrackingPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-4rem-var(--bottom-nav-h)-var(--safe-bottom)-1.5rem)] -mx-3 -mb-4 sm:-mx-4 sm:-mb-6 overflow-hidden bg-background">
+    <div className="live-tracking-frame flex flex-col h-[calc(100dvh-4rem-var(--bottom-nav-h)-var(--safe-bottom)-1.5rem)] -mx-3 -mb-4 sm:-mx-4 sm:-mb-6 overflow-hidden bg-background">
       <LiveTrackingMap />
     </div>
   )

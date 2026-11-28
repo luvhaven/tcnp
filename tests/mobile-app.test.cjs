@@ -99,3 +99,14 @@ test('phone dialogs are bottom sheets and small controls get a thumb-sized floor
   assert.match(css, /@media \(pointer: coarse\) and \(max-width: 639px\) \{[\s\S]*?min-height: 2\.75rem;/)
   assert.match(css, /@media \(hover: hover\) \{\s*\.card-hover:hover/)
 })
+
+test('chat and the live map take the whole phone screen above the tab bar', () => {
+  const layout = fs.readFileSync('app/(dashboard)/layout.tsx', 'utf8')
+  const immersive = new RegExp(layout.match(/const immersive = \/(.+)\/\.test\(pathname\)/)[1])
+  for (const path of ['/chat', '/tracking/live']) assert.equal(immersive.test(path), true, path)
+  for (const path of ['/dashboard', '/chatter', '/tracking', '/incidents']) assert.equal(immersive.test(path), false, path)
+  assert.match(layout, /data-immersive=\{immersive \? "" : undefined\}/)
+  const css = fs.readFileSync('app/globals.css', 'utf8')
+  assert.match(css, /@media \(max-width: 859px\) \{\s*\[data-immersive\] \.app-header \{\s*display: none;/, 'phones only: desktop keeps its header')
+  assert.match(fs.readFileSync('app/(dashboard)/chat/page.tsx', 'utf8'), /<div className="hidden items-center gap-3 nav:flex">/)
+})
