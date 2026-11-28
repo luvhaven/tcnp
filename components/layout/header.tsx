@@ -233,7 +233,7 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
           onClick={onOpenSidebar}
           aria-expanded={sidebarOpen}
           aria-controls="app-sidebar-drawer"
-          className="hit-area inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-foreground nav:hidden"
+          className="hidden"
         >
           <HamburgerIcon isOpen={sidebarOpen} />
         </button>

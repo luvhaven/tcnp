@@ -562,10 +562,10 @@ function NestsContent({ initialNests, initialNestsError }: { initialNests: any[]
                       <Card className="overflow-hidden hover:shadow-lg transition-shadow h-full flex flex-col">
                         <CardHeader className="pb-2">
                           <div className="flex justify-between items-start">
-                            <div>
-                              <CardTitle className="text-lg">{nest.name}</CardTitle>
+                            <div className="min-w-0 flex-1">
+                              <CardTitle className="break-words text-lg">{nest.name}</CardTitle>
                               {programName && (
-                                <Badge variant="outline" className="mt-1">{programName}</Badge>
+                                <Badge variant="outline" className="mt-1 max-w-full truncate">{programName}</Badge>
                               )}
                             </div>
                             {(canManage || canPostOfficersFor(nest.program_id ?? null)) && (

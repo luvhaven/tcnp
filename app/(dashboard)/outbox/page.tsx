@@ -77,7 +77,7 @@ export default function OutboxPage() {
       badge="Device storage"
       description="Review work waiting to be sent. Submissions stay saved on this device for your account until they synchronise."
     />
-    {!online && <p role="status" className="flex gap-3 rounded-xl border bg-muted/40 p-4 text-sm leading-6"><WifiOff aria-hidden="true" className="mt-1 h-4 w-4 shrink-0" />You’re offline. Reconnect to send your saved submissions. Keep this browser’s site data to avoid losing unsent work.</p>}
+    {!online && <p role="status" className="flex gap-3 rounded-xl border bg-muted/40 p-4 text-sm leading-6"><WifiOff aria-hidden="true" className="mt-1 h-4 w-4 shrink-0" />You’re offline. Reconnect to send your saved submissions. Don’t clear TCNP’s saved data on this device, or unsent work is lost.</p>}
     {error && <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm"><p>{error}</p><Button variant="outline" className="mt-3" onClick={() => void refresh()}>Reload outbox</Button></div>}
     {loading ? <div role="status" className="space-y-3 rounded-xl border p-6"><span className="sr-only">Loading saved submissions…</span>{[1, 2, 3].map(item => <div key={item} className="h-14 animate-pulse rounded-lg bg-muted" />)}</div> : !error && entries.length === 0 ?
       <div role="status" className="rounded-2xl border bg-card px-6 py-14 text-center">

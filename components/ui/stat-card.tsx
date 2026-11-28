@@ -100,7 +100,7 @@ export function StatGrid({
     <div
       className={cn(
         "grid gap-3 sm:gap-4",
-        columns === 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2 nav:grid-cols-4",
+        columns === 3 ? "grid-cols-3 gap-2 sm:gap-4" : "grid-cols-2 nav:grid-cols-4",
         className
       )}
       {...props}

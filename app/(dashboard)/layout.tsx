@@ -255,7 +255,7 @@ export default function DashboardLayout({
                 animate={{ x: 0 }}
                 exit={{ x: "-100%" }}
                 transition={{ type: "tween", duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
-                className="relative z-50 h-full w-[248px] max-w-[80%] shadow-2xl"
+                className="relative z-50 h-full w-72 max-w-[85%] shadow-2xl"
               >
                 <ErrorBoundary>
                   <Suspense fallback={<div className="h-full w-[248px] bg-background animate-pulse" />}>

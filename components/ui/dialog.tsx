@@ -69,7 +69,10 @@ const Dialog = ({ open, onOpenChange, children }: DialogProps) => {
     // the panel itself, which carries tabIndex={-1} for exactly this.
     const container = containerRef.current
     const first = container?.querySelector<HTMLElement>(FOCUSABLE)
-    ;(first ?? container)?.focus()
+    // On a phone, focusing a text field raises the keyboard over half the
+    // sheet before the officer has read it; focus the panel there instead.
+    const touch = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches
+    ;(touch ? container : first ?? container)?.focus()
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -130,7 +133,9 @@ const Dialog = ({ open, onOpenChange, children }: DialogProps) => {
         onClose: close,
       }}
     >
-      <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overscroll-contain p-3 sm:p-4">
+      {/* Phones: a sheet that rises from the bottom edge, full width, within
+          thumb reach. From sm up: the centred dialog. */}
+      <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto overscroll-contain sm:items-center sm:p-4">
         <div
           className="dialog-overlay-in fixed inset-0 bg-black/50 backdrop-blur-sm"
           onClick={close}
@@ -138,7 +143,7 @@ const Dialog = ({ open, onOpenChange, children }: DialogProps) => {
         />
         <div
           ref={containerRef}
-          className="dialog-content-in relative z-50 max-h-[calc(100dvh-1.5rem)] max-w-full overscroll-contain sm:max-h-[calc(100dvh-2rem)]"
+          className="dialog-content-in relative z-50 flex max-h-[calc(100dvh-2.5rem)] w-full max-w-full justify-center overscroll-contain sm:w-auto sm:max-h-[calc(100dvh-2rem)]"
         >
           {children}
         </div>
@@ -163,7 +168,11 @@ const DialogContent = React.forwardRef<
       aria-describedby={ctx?.hasDescription ? ctx.descriptionId : undefined}
       tabIndex={-1}
       className={cn(
-        "relative max-h-[calc(100dvh-1.5rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-xl border bg-background p-6 shadow-elevation-xl outline-none sm:max-h-[calc(100dvh-2rem)]",
+        "relative max-h-[calc(100dvh-2.5rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-xl border bg-background p-4 shadow-elevation-xl outline-none sm:max-h-[calc(100dvh-2rem)] sm:p-6",
+        // Phone sheet: edge to edge, square at the bottom, clear of the
+        // phone's gesture bar. Written as max-sm so a caller's own max-w-* or
+        // rounded-* (meant for desktop) cannot shrink the sheet.
+        "max-sm:max-w-none max-sm:rounded-b-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0 max-sm:pb-[calc(1rem+var(--safe-bottom))]",
         className
       )}
       {...props}

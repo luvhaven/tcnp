@@ -1070,6 +1070,23 @@ function SOPContent() {
 
                 {/* Content area */}
                 <div ref={contentRef} className="min-w-0 flex-1 scroll-mt-4">
+                    {/* Phones: change section from the top. The full list sits
+                        under the section, a long scroll away in this manual. */}
+                    <nav aria-label="SOP sections" className="-mx-3 mb-4 flex gap-2 overflow-x-auto px-3 pb-1 [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden">
+                        {dynamicSections.map(s => {
+                            const isActive = !query && activeSection.id === s.id
+                            return (
+                                <button key={s.id} type="button" onClick={() => navigateTo(s.id)}
+                                    aria-current={isActive ? 'page' : undefined}
+                                    className={cn(
+                                        'min-h-11 shrink-0 rounded-full border px-4 text-sm font-medium transition-colors active:bg-muted',
+                                        isActive ? 'border-primary/40 bg-primary/10 text-primary' : 'text-muted-foreground'
+                                    )}>
+                                    {s.title}
+                                </button>
+                            )
+                        })}
+                    </nav>
                     {doQuickReference && <div className="mb-4 md:hidden">{doQuickReference}</div>}
 
                     {waitingForSection ? (

@@ -84,7 +84,7 @@ export function BottomNav({ onOpenMore, moreOpen }: BottomNavProps) {
                 aria-current={active ? "page" : undefined}
                 aria-label={badge ? `${name}, ${badge} unread` : undefined}
                 className={cn(
-                  "relative flex flex-1 flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "relative flex flex-1 flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] font-medium transition-[color,background-color,transform] duration-150 active:scale-95 active:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   active ? "text-primary" : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -113,7 +113,7 @@ export function BottomNav({ onOpenMore, moreOpen }: BottomNavProps) {
             // `relative` keeps globals.css's `nav button::after` hit-area
             // pseudo-element on this button instead of spanning the whole bar.
             className={cn(
-              "relative flex flex-1 flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "relative flex flex-1 flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] font-medium transition-[color,background-color,transform] duration-150 active:scale-95 active:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               moreOpen ? "text-primary" : "text-muted-foreground hover:text-foreground"
             )}
           >

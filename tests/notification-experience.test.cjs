@@ -105,6 +105,9 @@ test('real notification banner, inbox and feedback controls work together withou
   if (name === 'sonner') return { toast }
   if (name === '@/lib/utils') return { cn: require('clsx').clsx }
   if (name === '@/lib/audio/AudioManager') return { audioManager: audio }
+  // The activity-log link is leadership-only; this test runs as leadership.
+  if (name === '@/hooks/useCurrentUser') return { useCurrentUser: () => ({ data: { role: 'super_admin', has_admin_access: true } }) }
+  if (name === '@/components/layout/nav-config') return { canReadAuditLogs: () => true }
   if (name.startsWith('@/')) {
    const source = name.slice(2)
    return load(fs.existsSync(`${source}.ts`) ? `${source}.ts` : `${source}.tsx`)

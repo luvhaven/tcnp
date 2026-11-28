@@ -596,16 +596,16 @@ export default function PapasClient({ initialPapas, initialPapasError = false }:
                       </div>
 
                       {/* Actions */}
-                      <div className="flex shrink-0 items-center gap-1.5 self-end sm:self-center pt-2 sm:pt-0 border-t sm:border-t-0 border-border/40 w-full sm:w-auto justify-end">
-                        <Button variant="outline" size="sm" onClick={() => setViewer({ papaId: papa.id, step: 'details' })} className="h-9 gap-1 text-xs" aria-label={`View ${papa.full_name}`}>
+                      <div className="flex w-full shrink-0 items-center justify-end gap-2 self-end border-t border-border/40 pt-2 sm:w-auto sm:gap-1.5 sm:self-center sm:border-t-0 sm:pt-0">
+                        <Button variant="outline" size="sm" onClick={() => setViewer({ papaId: papa.id, step: 'details' })} className="h-11 flex-1 gap-1 text-sm sm:h-9 sm:flex-none sm:text-xs" aria-label={`View ${papa.full_name}`}>
                           <Eye className="h-3.5 w-3.5" aria-hidden="true" />
-                          <span className="hidden sm:inline">View</span>
+                          <span>View</span>
                         </Button>
                         {papa.phone && (
-                          <Button asChild variant="outline" size="sm" className="h-9 gap-1 text-xs text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10">
+                          <Button asChild variant="outline" size="sm" className="h-11 flex-1 gap-1 text-sm text-emerald-600 hover:bg-emerald-500/10 dark:text-emerald-400 sm:h-9 sm:flex-none sm:text-xs">
                             <a href={`tel:${papa.phone}`} aria-label={`Call ${papa.full_name}`}>
                               <Phone className="h-3.5 w-3.5" aria-hidden="true" />
-                              <span className="hidden sm:inline">Call</span>
+                              <span>Call</span>
                             </a>
                           </Button>
                         )}

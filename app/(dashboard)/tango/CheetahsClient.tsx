@@ -443,6 +443,8 @@ export default function CheetahsClient({ initialCheetahs, initialCheetahsError =
                           title="FLOWER Checklist"
                           onClick={() => setExpandedFlower(expandedFlower === cheetah.id ? null : cheetah.id)}
                         >
+                          {/* The chevron alone said nothing on a phone, where its tooltip never shows. */}
+                          <span className="mr-1 text-xs font-medium text-teal-600 sm:hidden">FLOWER check</span>
                           <ChevronDown className={`h-4 w-4 text-teal-500 transition-transform ${expandedFlower === cheetah.id ? 'rotate-180' : ''}`} />
                         </Button>}
                       </div>

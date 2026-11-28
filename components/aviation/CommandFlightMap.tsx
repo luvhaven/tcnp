@@ -222,7 +222,7 @@ export default function CommandFlightMap() {
                 {watch?.authenticatedProvider ? "OpenSky authenticated · 2-minute provider refresh" : "OpenSky anonymous · 15-minute provider refresh to stay within the published free quota"}
               </p>
             </div>
-            <div className="max-h-[21rem] flex-1 space-y-2 overflow-y-auto p-3">
+            <div className="flex-1 space-y-2 p-3 lg:max-h-[21rem] lg:overflow-y-auto">
               {flights.length === 0 && !loading ? (
                 <div className="flex h-full min-h-40 flex-col items-center justify-center px-4 text-center">
                   <SignalLow className="h-7 w-7 text-muted-foreground/50" />

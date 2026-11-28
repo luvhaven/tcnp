@@ -44,12 +44,18 @@ export function ChatWorkspace({ rooms, selectedRoomId, loading, error, canManage
     select(options.find(room => room.id === remembered[next]) || options[0])
   }
 
+  const tallest = useRef(0)
   useEffect(() => {
     const update = () => {
       const frame = frameRef.current
       if (!frame) return
       const height = window.visualViewport?.height ?? window.innerHeight
-      document.documentElement.classList.toggle('chat-keyboard-open', height < window.innerHeight * 0.78)
+      // Compare with the tallest the window has been. In a browser only the
+      // visual viewport shrinks for the keyboard; in the phone app the whole
+      // window does, so comparing the two against each other never fired and
+      // the tab bar stayed up over the message box.
+      tallest.current = Math.max(tallest.current, window.innerHeight, height)
+      document.documentElement.classList.toggle('chat-keyboard-open', height < tallest.current * 0.78)
       frame.style.setProperty('--chat-available-height', `${Math.max(220, height - frame.getBoundingClientRect().top)}px`)
     }
     update()

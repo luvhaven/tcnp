@@ -287,7 +287,7 @@ export default function DenClient({ initialDens, initialDensError = false, initi
         <TabsList
           ref={tabListRef}
           aria-label="November (Den) sections"
-          className="-mx-4 flex w-auto justify-start gap-1 rounded-none px-4 [scrollbar-width:none] sm:mx-0 sm:h-auto sm:w-full sm:flex-wrap sm:rounded-lg sm:px-1 [&::-webkit-scrollbar]:hidden"
+          className="-mx-3 flex w-auto justify-start gap-1 rounded-none px-3 [scrollbar-width:none] sm:mx-0 sm:h-auto sm:w-full sm:flex-wrap sm:rounded-lg sm:px-1 [&::-webkit-scrollbar]:hidden"
         >
           {tabs.map(value => {
             const Icon = TAB_ICON[value]

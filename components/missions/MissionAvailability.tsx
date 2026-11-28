@@ -615,7 +615,7 @@ export function MissionRequestPrompt({ currentUserId }: { currentUserId: string 
                   <Clock className="h-3 w-3" /> Respond before {new Date(req.deadline).toLocaleString()}
                 </p>
               </div>
-              <div className="flex shrink-0 gap-2">
+              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0">
                 <Button
                   size="sm"
                   className="gap-1 bg-emerald-600 hover:bg-emerald-500"

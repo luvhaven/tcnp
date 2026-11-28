@@ -190,7 +190,9 @@ export default function LiveTrackingMap() {
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
   const [mapCenter] = useState<[number, number]>([6.5244, 3.3792])
   const [isClient, setIsClient] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  // On a phone the map is the page: the officer list starts closed so the
+  // map fills the screen, and opens from its button.
+  const [sidebarOpen, setSidebarOpen] = useState(() => typeof window === 'undefined' || typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 1024px)').matches)
   const [showTraffic, setShowTraffic] = useState(false)
   const [trafficAvailable, setTrafficAvailable] = useState<boolean | null>(null)
 
@@ -406,7 +408,7 @@ export default function LiveTrackingMap() {
   }
 
   return (
-    <div className="flex h-[calc(100dvh-6rem)] min-h-0 flex-col gap-3 animate-fade-in">
+    <div className="flex h-full min-h-0 flex-col gap-3 animate-fade-in">
       {(locationError || journeyError) && <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm">{locationError} {journeyError} <button className="underline" onClick={handleManualRefresh}>Retry</button></div>}
       {lastUpdated && <p className="text-xs text-muted-foreground">Locations last refreshed at {lastUpdated}</p>}
 

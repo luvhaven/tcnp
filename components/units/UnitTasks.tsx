@@ -367,7 +367,7 @@ export default function UnitTasks({ unitSlug, programId: controlledProgram, prog
               </div>
               {can.changeStatus ? (
                 <Select value={task.status} disabled={setStatus.isPending} onValueChange={(value) => setStatus.mutate({ task, status: value as DenTaskStatus })}>
-                  <SelectTrigger className="h-11 w-[140px] shrink-0" aria-label={`Status of ${task.title}`}><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-11 w-[124px] shrink-0 sm:w-[140px]" aria-label={`Status of ${task.title}`}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {DEN_MY_TASK_STATUSES.map(status => <SelectItem key={status} value={status}>{DEN_TASK_STATUS_LABEL[status]}</SelectItem>)}
                   </SelectContent>

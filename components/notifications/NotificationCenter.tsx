@@ -26,6 +26,8 @@ import {
 import { formatDistanceToNow } from "date-fns"
 import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
+import { canReadAuditLogs } from "@/components/layout/nav-config"
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -164,6 +166,10 @@ type FilterTab = "all" | "unread" | "broken_arrow"
 
 export default function NotificationCenter() {
   const router = useRouter()
+  // The activity log is leadership-only; offering it to everyone sent most
+  // officers to a "no permission" screen.
+  const { data: currentUser } = useCurrentUser()
+  const showActivityLog = canReadAuditLogs(currentUser?.role, currentUser?.has_admin_access)
   const { notifications, unreadCount, loading, error, reload, markAsRead, markAllAsRead, deleteNotification } = useNotifications()
   const [open, setOpen] = useState(false)
   const [filter, setFilter] = useState<FilterTab>("all")
@@ -265,7 +271,7 @@ export default function NotificationCenter() {
                 "rounded-xl border bg-popover shadow-2xl shadow-black/15 ring-1 ring-border/50",
                 // dvh, not vh: iOS Safari's 100vh includes the area behind its toolbar.
                 // Also clear the bottom nav and the home-indicator inset.
-                "flex flex-col max-h-[calc(100dvh_-_80px_-_var(--bottom-nav-h,0px)_-_env(safe-area-inset-bottom))] sm:max-h-[520px]"
+                "flex flex-col max-h-[calc(100dvh_-_80px_-_var(--bottom-nav-h,0px)_-_var(--safe-bottom))] sm:max-h-[520px]"
               )}
             >
               {/* Header */}
@@ -395,12 +401,12 @@ export default function NotificationCenter() {
               </div>
 
               {/* Footer */}
-              {notifications.length > 0 && (
+              {notifications.length > 0 && showActivityLog && (
                 <div className="border-t bg-card/80 px-4 py-2.5">
                   <button
                     type="button"
                     onClick={() => { setOpen(false); router.push('/audit-logs') }}
-                    className="flex w-full items-center justify-between text-xs text-muted-foreground hover:text-primary transition-colors"
+                    className="flex min-h-11 w-full items-center justify-between text-sm text-muted-foreground transition-colors hover:text-primary sm:min-h-0 sm:text-xs"
                   >
                     <span>View full activity log</span>
                     <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />

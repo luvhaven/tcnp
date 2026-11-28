@@ -250,7 +250,7 @@ export function PasswordResetRequestsTab() {
               <TableHead className="w-[20%]">Unit / Oscar</TableHead>
               <TableHead className="w-[20%]">Status</TableHead>
               <TableHead className="w-[15%]">Requested</TableHead>
-              <TableHead className="w-[15%] text-right">Actions</TableHead>
+              <TableHead className="sticky right-0 w-[15%] bg-background text-right shadow-[-10px_0_10px_-10px_rgba(0,0,0,0.25)] sm:static sm:shadow-none">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -332,7 +332,9 @@ export function PasswordResetRequestsTab() {
                       </span>
                     </TableCell>
 
-                    <TableCell className="text-right">
+                    {/* Pinned on phones: Approve and Reject would otherwise sit a
+                        screen and a half to the right of the name. */}
+                    <TableCell className="sticky right-0 bg-background text-right shadow-[-10px_0_10px_-10px_rgba(0,0,0,0.25)] sm:static sm:shadow-none">
                       {isPending ? (
                         <div className="flex items-center justify-end gap-1.5">
                           <Button

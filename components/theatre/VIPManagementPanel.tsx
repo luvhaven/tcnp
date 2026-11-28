@@ -535,7 +535,8 @@ export default function VIPManagementPanel({ canManage: legacyCanManage = false,
                                         <button
                                             type="button"
                                             onClick={() => setFormData({ ...formData, photo_url: '' })}
-                                            className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
+                                            aria-label="Remove photo"
+                                            className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-100 transition-opacity sm:opacity-0 sm:hover:opacity-100 sm:focus-visible:opacity-100"
                                         >
                                             <X className="h-6 w-6 text-white" />
                                         </button>

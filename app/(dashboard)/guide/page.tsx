@@ -400,6 +400,24 @@ function GuideContent() {
 
         {/* Content area */}
         <div ref={contentRef} className="min-w-0 flex-1 scroll-mt-4">
+          {/* Phones: change topic from the top. The full list sits under the
+              article, a long scroll away on a phone. */}
+          <nav aria-label="Guide topics" className="-mx-3 mb-4 flex gap-2 overflow-x-auto px-3 pb-1 [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden">
+            {sections.map((section) => {
+              const isActive = !query && active === section.id
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => selectTopic(section.id)}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`min-h-11 shrink-0 rounded-full border px-4 text-sm font-medium transition-colors active:bg-muted ${isActive ? 'border-primary/40 bg-primary/10 text-primary' : 'text-muted-foreground'}`}
+                >
+                  {section.title}
+                </button>
+              )
+            })}
+          </nav>
           {query && results.length === 0 ? (
             <EmptyState
               icon={Search}

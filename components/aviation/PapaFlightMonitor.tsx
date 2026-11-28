@@ -528,8 +528,8 @@ export default function PapaFlightMonitor({
               <p className="mt-1 max-w-md text-xs leading-relaxed text-muted-foreground">Add a flight itinerary or a legacy flight number to a Papa dossier. The monitor will select the current or next flight automatically.</p>
             </div>
           ) : (
-            <div className="grid min-h-[26rem] lg:grid-cols-[minmax(0,1fr)_22rem]">
-              <div ref={listRef} className="max-h-[38rem] overflow-y-auto p-3 sm:p-4">
+            <div className="grid lg:min-h-[26rem] lg:grid-cols-[minmax(0,1fr)_22rem]">
+              <div ref={listRef} className="p-3 sm:p-4 lg:max-h-[38rem] lg:overflow-y-auto">
                 {filteredEntries.length === 0 ? (
                   <div className="flex h-48 items-center justify-center text-center text-sm text-muted-foreground">No flights match these filters.</div>
                 ) : (

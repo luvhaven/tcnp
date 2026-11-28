@@ -22,7 +22,7 @@ export default function LiveTrackingPage() {
             <div className="h-4 w-64 rounded-md bg-muted animate-pulse" />
           </div>
         </div>
-        <div className="h-[600px] rounded-xl border bg-muted animate-pulse" />
+        <div className="h-[60dvh] rounded-xl border bg-muted animate-pulse" />
       </div>
     )
   }
@@ -56,7 +56,7 @@ export default function LiveTrackingPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-4rem)] -mx-3 -mb-4 sm:-mx-4 sm:-mb-6 overflow-hidden bg-background">
+    <div className="flex flex-col h-[calc(100dvh-4rem-var(--bottom-nav-h)-var(--safe-bottom)-1.5rem)] -mx-3 -mb-4 sm:-mx-4 sm:-mb-6 overflow-hidden bg-background">
       <LiveTrackingMap />
     </div>
   )

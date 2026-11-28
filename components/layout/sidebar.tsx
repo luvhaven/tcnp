@@ -70,7 +70,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
     <div
       className={cn(
         "relative flex h-full flex-col border-r border-border/60 bg-gradient-to-b from-background via-card/95 to-background/95 shadow-xl backdrop-blur-sm transition-[width] duration-slow ease-out",
-        isMobile ? "w-64" : collapsed ? "w-[76px]" : "w-[248px]"
+        isMobile ? "w-full" : collapsed ? "w-[76px]" : "w-[248px]"
       )}
     >
       {/* Desktop collapse toggle. Centred in the 64px top-bar row — (64 - 24) / 2
@@ -164,7 +164,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
                         "relative flex min-h-11 items-center justify-start px-3 py-2 text-sm font-medium rounded-r-lg rounded-l-none gap-3 mr-1 transition-colors duration-150 border-l-[3px] border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                         isActive
                           ? "text-primary"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/60 active:bg-muted"
                       )}
                       title={collapsed && !isMobile ? item.name : undefined}
                     >
@@ -222,7 +222,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
 
       {/* Footer */}
       {!(collapsed && !isMobile) && (
-        <div className="mt-auto border-t border-border/50 bg-background/50 p-4 backdrop-blur-sm">
+        <div className={cn("mt-auto border-t border-border/50 bg-background/50 p-4 backdrop-blur-sm", isMobile && "pb-[calc(1rem+var(--safe-bottom))]")}>
           <div className="flex flex-col gap-1 text-xs text-muted-foreground">
             <span>Version {packageInfo.version}</span>
             <span>&copy; {new Date().getFullYear()} TCNP</span>

@@ -310,16 +310,16 @@ export default function TheatresClient({
 
       <Tabs value={activeTab} onValueChange={selectTab} className="space-y-4">
         <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 lg:grid-cols-4">
-          <TabsTrigger value="venues">Venues Management</TabsTrigger>
-          <TabsTrigger value="seating">
+          <TabsTrigger value="venues" className="min-w-0 whitespace-normal text-xs sm:text-sm">Venues Management</TabsTrigger>
+          <TabsTrigger value="seating" className="min-w-0 whitespace-normal text-xs sm:text-sm">
             <Armchair className="mr-2 h-4 w-4" />
             Seat Arrangements
           </TabsTrigger>
-          <TabsTrigger value="vip-access">
+          <TabsTrigger value="vip-access" className="min-w-0 whitespace-normal text-xs sm:text-sm">
             <Scan className="mr-2 h-4 w-4" />
             Senior Ministers&apos; Access
           </TabsTrigger>
-          <TabsTrigger value="operations">
+          <TabsTrigger value="operations" className="min-w-0 whitespace-normal text-xs sm:text-sm">
             <Waypoints className="mr-2 h-4 w-4" />
             Victor Operations
           </TabsTrigger>

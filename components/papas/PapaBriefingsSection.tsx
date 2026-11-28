@@ -99,16 +99,16 @@ export default function PapaBriefingsSection({ role, userId: providedUserId }: P
   return (
     <div className="space-y-4">
       {/* Section header */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <div className="p-2 rounded-lg bg-primary/10">
           <BookOpen className="h-5 w-5 text-primary" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-semibold">{config.sectionTitle}</h2>
           <p className="text-sm text-muted-foreground">{config.description}</p>
         </div>
         {canEdit && (
-          <span className="ml-auto text-xs bg-primary/10 text-primary px-2 py-1 rounded-full font-medium">
+          <span className="w-fit basis-full text-xs sm:ml-auto sm:basis-auto bg-primary/10 text-primary px-2 py-1 rounded-full font-medium">
             Team Lead — Edit enabled
           </span>
         )}

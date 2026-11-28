@@ -1,5 +1,6 @@
 "use client"
 
+import { saveFile, saveFileError } from '@/lib/save-file'
 import { useState, useEffect, useRef, type KeyboardEvent } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
@@ -133,7 +134,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
   useEffect(() => {
     try {
       const saved = localStorage.getItem('officersViewMode')
-      if (saved === 'table') setViewMode('table')
+      // The table needs five to seven columns; on a phone it is always cards.
+      if (saved === 'table' && window.matchMedia('(min-width: 768px)').matches) setViewMode('table')
     } catch { /* Browsing preferences must not block the directory. */ }
   }, [])
 
@@ -316,16 +318,8 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
         ].map(officerCSVCell).join(','))
     ].join('\n')
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    link.setAttribute('href', url)
-    link.setAttribute('download', `tcnp_directory_${new Date().toISOString().split('T')[0]}.csv`)
-    link.style.visibility = 'hidden'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    saveFile(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }), `tcnp_directory_${new Date().toISOString().split('T')[0]}.csv`)
+      .catch(error => toast.error(saveFileError(error)))
   }
 
   const { data: titles = [] } = useQuery({
@@ -1013,7 +1007,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                 <SelectItem value="swift">Team Swift</SelectItem>
               </SelectContent>
             </Select>
-            <div className="flex items-center rounded-md border p-0.5 bg-muted/50 h-9">
+            <div className="hidden h-9 items-center rounded-md border bg-muted/50 p-0.5 md:flex">
               <Button
                 type="button"
                 variant={viewMode === 'grid' ? "secondary" : "ghost"}
@@ -1043,7 +1037,7 @@ export default function OfficersClient({ initialOfficers }: { initialOfficers?: 
                 <Input
                   aria-label="Search officers"
                   placeholder="Search name, role, Oscar, email…"
-                  className="pl-8 h-9 bg-background border-primary/20 text-sm"
+                  className="h-11 border-primary/20 bg-background pl-8 text-base sm:h-9 sm:text-sm"
                   value={globalSearch}
                   onChange={(e) => setGlobalSearch(e.target.value)}
                 />

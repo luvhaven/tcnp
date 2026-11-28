@@ -36,7 +36,7 @@ export default function SettingsPage() {
               </Button>
             ))}
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">Saved automatically in this browser. Follow device updates when your device changes between light and dark mode.</p>
+          <p className="mt-3 text-xs text-muted-foreground">Saved automatically on this device. Follow device updates when your device changes between light and dark mode.</p>
         </CardContent>
       </Card>
       <Card>
@@ -45,7 +45,7 @@ export default function SettingsPage() {
           <DeviceNotificationControl compact />
           <div className="flex items-start justify-between gap-4 border-t pt-5">
             <div className="space-y-1"><Label htmlFor="app-sounds">App sounds</Label>
-              <p id="app-sounds-description" className="text-sm text-muted-foreground">{muted ? 'Off' : 'On'} — applies to all in-app sounds, including chat alerts and emergency alarms. Device notification sounds follow your browser and operating system settings.</p></div>
+              <p id="app-sounds-description" className="text-sm text-muted-foreground">{muted ? 'Off' : 'On'} — applies to all in-app sounds, including chat alerts and emergency alarms. Device notification sounds follow your device’s own settings.</p></div>
             <Switch id="app-sounds" checked={!muted} onCheckedChange={enabled => audioManager.setMuted(!enabled)} aria-describedby="app-sounds-description" />
           </div>
           <NotificationFeedbackControl />

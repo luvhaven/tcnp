@@ -1,5 +1,6 @@
 'use client'
 
+import { saveFile, saveFileError } from '@/lib/save-file'
 import { useReloadOnDeletion } from "@/hooks/useDashboardDeletions"
 import { Suspense, useEffect, useRef, useState, useCallback } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
@@ -388,14 +389,10 @@ function IncidentsContent() {
     const csv = [headers, ...rows]
       .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
       .join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `incidents-${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-    toast.success(`Exported ${visibleIncidents.length} incident${visibleIncidents.length !== 1 ? 's' : ''}`)
+    const count = visibleIncidents.length
+    saveFile(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), `incidents-${new Date().toISOString().slice(0, 10)}.csv`)
+      .then(() => toast.success(`Exported ${count} incident${count !== 1 ? 's' : ''}`))
+      .catch(error => toast.error(saveFileError(error)))
   }, [visibleIncidents])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -531,7 +528,68 @@ function IncidentsContent() {
       )
     }
     return (
-      <div className="overflow-x-auto">
+      <>
+      {/* Phones: one card per incident. The table needs eight columns, which
+          put Status, Time and Resolve off the side of a phone screen. */}
+      <ul className="divide-y md:hidden">
+        {visibleIncidents.map((incident) => {
+          const severityConfig = SEVERITY_CONFIG[incident.severity] ?? SEVERITY_CONFIG.medium
+          const statusConfig = STATUS_CONFIG[incident.status] ?? STATUS_CONFIG.open
+          const StatusIcon = statusConfig.icon
+          const isBrokenArrow = incident.type === 'BROKEN ARROW'
+          const route = [incident.journeys?.origin, incident.journeys?.destination].filter(Boolean).join(' → ')
+          return (
+            <li key={incident.id} className={isBrokenArrow ? 'bg-destructive/5' : undefined}>
+              <button type="button" onClick={() => openDialog(incident)} className="block w-full px-4 pb-2 pt-4 text-left active:bg-muted/60">
+                <span className="flex items-start justify-between gap-3">
+                  <span className={`min-w-0 break-words text-base font-semibold ${isBrokenArrow ? 'text-destructive' : ''}`}>
+                    {isBrokenArrow && '🚨 '}{incident.type}
+                  </span>
+                  <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium ${statusConfig.className}`}>
+                    <StatusIcon className="h-3 w-3" aria-hidden="true" />
+                    {statusConfig.label}
+                  </span>
+                </span>
+                <span className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                  <Badge className={`${severityConfig.color} text-xs text-white`}>{severityConfig.label}</Badge>
+                  <span>{format(new Date(incident.created_at), 'dd/MM/yy, HH:mm')}</span>
+                </span>
+                <span className="mt-2 block text-sm">
+                  <span className="font-medium">{incident.journeys?.papas?.full_name ?? 'No Papa linked'}</span>
+                  {incident.reporter?.full_name && <span className="text-muted-foreground"> · reported by {incident.reporter.full_name}</span>}
+                </span>
+                {route && (
+                  <span className="mt-1 flex items-start gap-1 text-sm text-muted-foreground">
+                    <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span className="min-w-0 break-words">{route}</span>
+                  </span>
+                )}
+              </button>
+              {(!isClosedStatus(incident.status) || canManage) && (
+                <div className="flex gap-2 px-4 pb-4">
+                  {!isClosedStatus(incident.status) && (
+                    <Button
+                      variant="outline"
+                      className="h-11 flex-1 border-emerald-400/50 text-emerald-600"
+                      aria-label={`Resolve incident ${incident.type}`}
+                      onClick={() => { void handleQuickResolve(incident) }}
+                    >
+                      <CheckCircle2 className="mr-1 h-4 w-4" aria-hidden="true" />
+                      Resolve
+                    </Button>
+                  )}
+                  {canManage && (
+                    <Button variant="outline" className="h-11" aria-label={`Delete incident ${incident.type}`} onClick={() => { void handleDelete(incident) }}>
+                      Delete
+                    </Button>
+                  )}
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/40">
@@ -695,6 +753,7 @@ function IncidentsContent() {
           </tbody>
         </table>
       </div>
+      </>
     )
   }
 
