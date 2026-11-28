@@ -50,7 +50,7 @@ export function PageHeader({
       className={cn("flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between", className)}
       {...props}
     >
-      <div className="flex min-w-0 items-start gap-3">
+      <div className="page-header-title flex min-w-0 items-start gap-3">
         {leading ?? (Icon && (
           <div
             className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", tones.tile)}

@@ -103,6 +103,10 @@ export default function DashboardLayout({
   // screen and under "More". See [data-immersive] in globals.css.
   const pathname = usePathname() ?? ""
   const immersive = /^\/(chat|tracking\/live)(\/|$)/.test(pathname)
+  // Ordinary scrolling pages that still give up the header and their title
+  // block on phones: the tab bar already names them, and the rows are worth
+  // more to an officer than a greeting.
+  const headerless = /^\/(dashboard|my-operations)(\/|$)/.test(pathname)
   const drawerRef = useRef<HTMLDivElement>(null)
   const drawerTriggerRef = useRef<HTMLElement | null>(null)
   const isClient = useIsClient()
@@ -199,7 +203,7 @@ export default function DashboardLayout({
 
   return (
     <ErrorBoundary>
-      <div data-immersive={immersive ? "" : undefined} className="flex h-dvh min-h-0 overflow-hidden">
+      <div data-immersive={immersive ? "" : undefined} data-headerless={headerless ? "" : undefined} className="flex h-dvh min-h-0 overflow-hidden">
         <a
           href="#main-content"
           className="fixed left-4 top-3 z-[70] -translate-y-20 rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background shadow-elevation-lg transition-transform focus:translate-y-0"

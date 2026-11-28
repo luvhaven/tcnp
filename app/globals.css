@@ -846,6 +846,27 @@ html[data-tcnp-native] {
   }
 }
 
+/* Pages that keep their normal scrolling layout but drop the app header and
+   their own icon-title-description block on phones (dashboard, My Ops). The
+   page's action buttons and status pills stay. The title is hidden from
+   sight only, so a screen reader still announces the page. */
+@media (max-width: 859px) {
+  [data-headerless] .app-header {
+    display: none;
+  }
+  [data-headerless] #main-content {
+    padding-top: calc(var(--safe-top) + 0.75rem);
+  }
+  [data-headerless] .page-header-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
 /* ─── Phone floors: thumb-sized controls, readable type ───────────────────── */
 
 /* Many screens size a control for a desktop toolbar with a fixed h-9, h-8,

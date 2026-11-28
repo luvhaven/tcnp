@@ -109,4 +109,11 @@ test('chat and the live map take the whole phone screen above the tab bar', () =
   const css = fs.readFileSync('app/globals.css', 'utf8')
   assert.match(css, /@media \(max-width: 859px\) \{\s*\[data-immersive\] \.app-header \{\s*display: none;/, 'phones only: desktop keeps its header')
   assert.match(fs.readFileSync('app/(dashboard)/chat/page.tsx', 'utf8'), /<div className="hidden items-center gap-3 nav:flex">/)
+
+  // Dashboard and My Ops keep scrolling normally but lose the header and title block.
+  const headerless = new RegExp(layout.match(/const headerless = \/(.+)\/\.test\(pathname\)/)[1])
+  for (const path of ['/dashboard', '/my-operations']) assert.equal(headerless.test(path), true, path)
+  for (const path of ['/incidents', '/my-operations-x', '/chat']) assert.equal(headerless.test(path), false, path)
+  assert.match(css, /\[data-headerless\] \.page-header-title \{[^}]*clip-path: inset\(50%\)/, 'hidden from sight, still read aloud')
+  assert.match(fs.readFileSync('components/ui/page-header.tsx', 'utf8'), /className="page-header-title /)
 })
