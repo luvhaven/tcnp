@@ -53,7 +53,7 @@ export function PageHeader({
       <div className="page-header-title flex min-w-0 items-start gap-3">
         {leading ?? (Icon && (
           <div
-            className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", tones.tile)}
+            className={cn("page-header-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", tones.tile)}
             aria-hidden="true"
           >
             <Icon className="h-5 w-5" />
@@ -61,7 +61,7 @@ export function PageHeader({
         ))}
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
+            <h1 className="page-header-h1 text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
             {typeof badge === "string" ? (
               <span
                 className={cn(
@@ -74,7 +74,7 @@ export function PageHeader({
             ) : badge}
           </div>
           {description && (
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
+            <p className="page-header-description mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
           )}
         </div>
       </div>

@@ -870,7 +870,17 @@ html[data-tcnp-native] {
   [data-headerless] #main-content {
     padding-top: calc(var(--safe-top) + 0.75rem);
   }
-  [data-headerless] .page-header-title {
+  /* Pages opened from "More": one compact line, no icon tile, no strapline. */
+  [data-headerless] .page-header-icon,
+  [data-headerless] .page-header-description {
+    display: none;
+  }
+  [data-headerless] .page-header-h1 {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+  }
+  /* Tab pages: the title block goes entirely. */
+  [data-tab-page] .page-header-title {
     position: absolute;
     width: 1px;
     height: 1px;

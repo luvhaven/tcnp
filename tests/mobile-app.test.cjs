@@ -110,11 +110,14 @@ test('chat and the live map take the whole phone screen above the tab bar', () =
   assert.match(css, /@media \(max-width: 859px\) \{[^{]*:is\(\[data-immersive\], \[data-headerless\]\) \.app-header \{\s*height: 0;/, 'phones only: desktop keeps its header')
   assert.match(fs.readFileSync('app/(dashboard)/chat/page.tsx', 'utf8'), /<div className="hidden items-center gap-3 nav:flex">/)
 
-  // Dashboard and My Ops keep scrolling normally but lose the header and title block.
-  const headerless = new RegExp(layout.match(/const headerless = \/(.+)\/\.test\(pathname\)/)[1])
-  for (const path of ['/dashboard', '/my-operations', '/incidents']) assert.equal(headerless.test(path), true, path)
-  for (const path of ['/journeys', '/my-operations-x', '/chat']) assert.equal(headerless.test(path), false, path)
-  assert.match(css, /\[data-headerless\] \.page-header-title \{[^}]*clip-path: inset\(50%\)/, 'hidden from sight, still read aloud')
+  // Every other page loses the app header on phones. The three tab pages also
+  // lose their title block; pages opened from More keep a one-line title.
+  assert.match(layout, /const headerless = !immersive\r?\n/)
+  const tabPage = new RegExp(layout.match(/const tabPage = \/(.+)\/\.test\(pathname\)/)[1])
+  for (const path of ['/dashboard', '/my-operations', '/incidents']) assert.equal(tabPage.test(path), true, path)
+  for (const path of ['/journeys', '/my-operations-x', '/chat', '/officers']) assert.equal(tabPage.test(path), false, path)
+  assert.match(css, /\[data-tab-page\] \.page-header-title \{[^}]*clip-path: inset\(50%\)/, 'hidden from sight, still read aloud')
+  assert.match(css, /\[data-headerless\] \.page-header-icon,\s*\[data-headerless\] \.page-header-description \{\s*display: none;/)
   assert.match(fs.readFileSync('components/ui/page-header.tsx', 'utf8'), /className="page-header-title /)
 })
 
