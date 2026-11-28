@@ -106,7 +106,7 @@ export default function DashboardLayout({
   // Ordinary scrolling pages that still give up the header and their title
   // block on phones: the tab bar already names them, and the rows are worth
   // more to an officer than a greeting.
-  const headerless = /^\/(dashboard|my-operations)(\/|$)/.test(pathname)
+  const headerless = /^\/(dashboard|my-operations|incidents)(\/|$)/.test(pathname)
   const drawerRef = useRef<HTMLDivElement>(null)
   const drawerTriggerRef = useRef<HTMLElement | null>(null)
   const isClient = useIsClient()

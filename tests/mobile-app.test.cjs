@@ -104,7 +104,7 @@ test('chat and the live map take the whole phone screen above the tab bar', () =
   const layout = fs.readFileSync('app/(dashboard)/layout.tsx', 'utf8')
   const immersive = new RegExp(layout.match(/const immersive = \/(.+)\/\.test\(pathname\)/)[1])
   for (const path of ['/chat', '/tracking/live']) assert.equal(immersive.test(path), true, path)
-  for (const path of ['/dashboard', '/chatter', '/tracking', '/incidents']) assert.equal(immersive.test(path), false, path)
+  for (const path of ['/dashboard', '/chatter', '/tracking', '/journeys']) assert.equal(immersive.test(path), false, path)
   assert.match(layout, /data-immersive=\{immersive \? "" : undefined\}/)
   const css = fs.readFileSync('app/globals.css', 'utf8')
   assert.match(css, /@media \(max-width: 859px\) \{[^{]*:is\(\[data-immersive\], \[data-headerless\]\) \.app-header \{\s*height: 0;/, 'phones only: desktop keeps its header')
@@ -112,8 +112,8 @@ test('chat and the live map take the whole phone screen above the tab bar', () =
 
   // Dashboard and My Ops keep scrolling normally but lose the header and title block.
   const headerless = new RegExp(layout.match(/const headerless = \/(.+)\/\.test\(pathname\)/)[1])
-  for (const path of ['/dashboard', '/my-operations']) assert.equal(headerless.test(path), true, path)
-  for (const path of ['/incidents', '/my-operations-x', '/chat']) assert.equal(headerless.test(path), false, path)
+  for (const path of ['/dashboard', '/my-operations', '/incidents']) assert.equal(headerless.test(path), true, path)
+  for (const path of ['/journeys', '/my-operations-x', '/chat']) assert.equal(headerless.test(path), false, path)
   assert.match(css, /\[data-headerless\] \.page-header-title \{[^}]*clip-path: inset\(50%\)/, 'hidden from sight, still read aloud')
   assert.match(fs.readFileSync('components/ui/page-header.tsx', 'utf8'), /className="page-header-title /)
 })
