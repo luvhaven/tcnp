@@ -1,5 +1,6 @@
 "use client"
 
+import { openStoredFile } from '@/lib/save-file'
 import { useReloadOnDeletion } from "@/hooks/useDashboardDeletions"
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react"
 import {
@@ -470,7 +471,7 @@ export default function VictorOperations({ canManage: legacyCanManage, currentUs
     try {
       const { data: signed, error } = await supabase.storage.from(PRESENTATION_BUCKET).createSignedUrl(asset.storage_path, 300, { download: asset.original_name || true })
       if (error) throw error
-      window.open(signed.signedUrl, "_blank", "noopener,noreferrer")
+      await openStoredFile(signed.signedUrl, asset.original_name || asset.storage_path.split("/").pop() || "presentation")
     } catch (error: any) {
       notifyError(error, "A secure download link could not be created.")
     } finally {

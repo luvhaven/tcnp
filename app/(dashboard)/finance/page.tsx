@@ -1,5 +1,6 @@
 "use client"
 
+import { openStoredFile } from '@/lib/save-file'
 import { useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
@@ -161,7 +162,7 @@ export default function FinancePage() {
     try {
       const { data, error } = await supabase.storage.from("finance-documents").createSignedUrl(doc.storage_path, 300)
       if (error || !data?.signedUrl) throw error ?? new Error("Could not create download link")
-      window.open(data.signedUrl, "_blank", "noopener,noreferrer")
+      await openStoredFile(data.signedUrl, doc.storage_path.split("/").pop() || doc.title)
     } catch (err: any) {
       notifyError(err, "Download failed")
     }

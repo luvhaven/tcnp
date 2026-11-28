@@ -32,3 +32,20 @@ export async function saveFile(blob: Blob, filename: string): Promise<void> {
 /** The message to show when an export fails, whatever was thrown. */
 export const saveFileError = (error: unknown) =>
   error instanceof Error && error.message ? error.message : 'The export could not be saved. Please retry.'
+
+/**
+ * Opens a stored document (a signed storage link).
+ *
+ * In a browser it opens in a new tab as before. Inside the phone app a new tab
+ * means being thrown out to the phone's browser, so the file is fetched here
+ * and handed to the app's share sheet, where it can be opened or saved.
+ */
+export async function openStoredFile(url: string, filename: string): Promise<void> {
+  if (!isNativeShell()) {
+    window.open(url, '_blank', 'noopener,noreferrer')
+    return
+  }
+  const response = await fetch(url)
+  if (!response.ok) throw new Error('The file could not be downloaded. Please retry.')
+  await saveFile(await response.blob(), filename)
+}

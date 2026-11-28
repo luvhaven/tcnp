@@ -1,5 +1,6 @@
 "use client"
 
+import { openStoredFile } from '@/lib/save-file'
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
@@ -145,7 +146,8 @@ export default function DenRepository({ canManage, currentUserId, selectedProgra
     if (item.storage_path) {
       const { data, error } = await supabase.storage.from(DEN_BUCKET).createSignedUrl(item.storage_path, 300)
       if (error || !data?.signedUrl) { notifyError(error ?? new Error("no link"), "Could not open this file"); return }
-      window.open(data.signedUrl, "_blank", "noopener,noreferrer")
+      try { await openStoredFile(data.signedUrl, item.storage_path.split("/").pop() || "document") }
+      catch (openError) { notifyError(openError, "Could not open this file") }
     } else if (item.external_url) {
       window.open(item.external_url, "_blank", "noopener,noreferrer")
     } else {
