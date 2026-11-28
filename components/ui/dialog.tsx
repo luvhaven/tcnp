@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { createPortal } from "react-dom"
+import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 /**
@@ -155,8 +156,11 @@ const Dialog = ({ open, onOpenChange, children }: DialogProps) => {
 
 const DialogContent = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, children, ...props }, ref) => {
+  React.HTMLAttributes<HTMLDivElement> & {
+    /** Pass false when the dialog draws its own close control. */
+    showClose?: boolean
+  }
+>(({ className, children, showClose = true, ...props }, ref) => {
   const ctx = React.useContext(DialogContext)
 
   return (
@@ -178,6 +182,20 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       {children}
+      {/* Always one obvious way out. It comes after the content in the page
+          order, so opening a dialog still puts the keyboard on its first
+          field, not on Close. Some dialogs had no Cancel at all, and
+          on a phone the strip of backdrop above a sheet is easy to miss. */}
+      {showClose && ctx?.onClose && (
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={ctx.onClose}
+          className="hit-area absolute right-2 top-2 z-10 grid size-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <X className="size-4" aria-hidden="true" />
+        </button>
+      )}
     </div>
   )
 })
@@ -188,7 +206,7 @@ const DialogHeader = ({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn("flex flex-col space-y-1.5 text-center sm:text-left", className)}
+    className={cn("flex flex-col space-y-1.5 px-8 text-center sm:pl-0 sm:text-left", className)}
     {...props}
   />
 )

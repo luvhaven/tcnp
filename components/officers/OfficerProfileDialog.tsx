@@ -251,7 +251,7 @@ export function OfficerProfileDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] max-w-2xl flex flex-col gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)] sm:rounded-2xl border-primary/20 shadow-2xl">
+      <DialogContent showClose={false} className="max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] max-w-2xl flex flex-col gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)] sm:rounded-2xl border-primary/20 shadow-2xl">
         {/* Header Cover Banner */}
         <div className="relative p-6 bg-gradient-to-br from-primary/20 via-primary/5 to-background border-b shrink-0 overflow-hidden">
           <div className="absolute -right-12 -top-12 h-44 w-44 rounded-full bg-primary/8 blur-2xl pointer-events-none" />
