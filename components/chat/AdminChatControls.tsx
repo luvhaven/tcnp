@@ -1,5 +1,6 @@
 'use client'
 
+import { saveFile } from '@/lib/save-file'
 import { useState } from 'react'
 import { Archive, Download, Loader2, MoreHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
@@ -48,12 +49,11 @@ export function AdminChatControls({ programId, papaId, programName, team, teamNa
         const doc = new jsPDF()
         doc.setFontSize(14); doc.text(doc.splitTextToSize(`Chat log: ${contextName}`, 180), 14, 16)
         autoTable(doc, { head: [['Date / time', 'Sender', 'Message']], body: rows.map(row => [row.created_at ? new Date(row.created_at).toLocaleString() : '', row.sender?.full_name || 'Officer', row.content]), startY: 35, styles: { fontSize: 9 }, columnStyles: { 0: { cellWidth: 35 }, 1: { cellWidth: 35 } } })
-        doc.save(`chat-${papaId || programId || team}-${Date.now()}.pdf`)
+        await saveFile(doc.output('blob'), `chat-${papaId || programId || team}-${Date.now()}.pdf`)
       } else {
         const cell = (value: unknown) => { let text = String(value ?? ''); if (/^[=+@\-\t\r]/.test(text)) text = `'${text}`; return `"${text.replaceAll('"', '""')}"` }
         const csv = [['id', 'created_at', 'sender', 'content'], ...rows.map(row => [row.id, row.created_at, row.sender?.full_name || 'Officer', row.content])].map(row => row.map(cell).join(',')).join('\r\n')
-        const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8;' }))
-        const link = document.createElement('a'); link.href = url; link.download = `chat-${papaId || programId || team}-${Date.now()}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
+        await saveFile(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8;' }), `chat-${papaId || programId || team}-${Date.now()}.csv`)
       }
       toast.success('Chat exported')
     } catch { toast.error('The export could not finish. Please retry.') }

@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 .chat-workspace {
-  height: calc(var(--chat-available-height, calc(100dvh - 11rem)) - var(--bottom-nav-h, 0px) - env(safe-area-inset-bottom) - 1rem);
+  height: calc(var(--chat-available-height, calc(100dvh - 11rem)) - var(--bottom-nav-h, 0px) - var(--safe-bottom) - 1rem);
   min-height: 18rem;
   max-height: 58rem;
 }
@@ -388,7 +388,8 @@
   input,
   select,
   textarea {
-    font-size: 16px;
+    /* !important: a text-sm on one field must not bring the zoom back. */
+    font-size: 16px !important;
   }
 }
 
@@ -543,9 +544,16 @@ a,
   transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
 }
 
-.card-hover:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
+/* Hover only where a pointer can hover: on a phone a tapped card would stay
+   lifted until the next tap. Touch gets a brief press instead. */
+@media (hover: hover) {
+  .card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+  }
+}
+.card-hover:active {
+  transform: scale(0.99);
 }
 
 /* Elevated card style for stat/summary cards */
@@ -554,10 +562,12 @@ a,
   border-radius: var(--radius);
 }
 
-.stat-card:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-xl);
-  border-color: hsl(var(--primary) / 0.35);
+@media (hover: hover) {
+  .stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-xl);
+    border-color: hsl(var(--primary) / 0.35);
+  }
 }
 
 /* Page content fade-in with slight upward motion */
@@ -790,6 +800,86 @@ body {
   padding-right: env(safe-area-inset-right);
 }
 
+/* How much of the screen edge belongs to the phone (notch, home indicator,
+   gesture bar). Everything that sits at the top or bottom reads these two, so
+   there is exactly one place that decides the spacing.
+
+   In a browser or an installed web app the browser reports it. Inside the
+   native app (mobile/) the app owns the screen edges: it tells the page the
+   exact figure, and until it does the figure is zero. Reading the browser's
+   value there as well reserved the same space twice, which is what left the
+   tab bar floating above the bottom of the screen. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+html[data-tcnp-native] {
+  --safe-top: var(--native-safe-top, 0px);
+  --safe-bottom: var(--native-safe-bottom, 0px);
+}
+
+/* ─── Phone floors: thumb-sized controls, readable type ───────────────────── */
+
+/* Many screens size a control for a desktop toolbar with a fixed h-9, h-8,
+   h-7 or h-6 (36 to 24px). The shared Button already grows to 44px on phones,
+   but an explicit height switches that off. On a touch phone those same
+   controls are raised to a thumb-sized floor here, in one place, instead of
+   in a hundred call sites. Only the exact utility class is matched, so a
+   control already written as "h-11 sm:h-9" is left alone. */
+@media (pointer: coarse) and (max-width: 639px) {
+  :is(button, a, input:not([type="checkbox"]):not([type="radio"]), select, summary, [role="combobox"], [role="tab"]):is([class~="h-9"], [class~="h-8"], [class~="h-7"], [class~="h-6"], [class~="min-h-8"], [class~="min-h-9"]) {
+    min-height: 2.75rem;
+  }
+  /* Square icon buttons stay square. */
+  :is(button, a):is([class~="w-9"], [class~="w-8"], [class~="w-7"], [class~="w-6"]):is([class~="h-9"], [class~="h-8"], [class~="h-7"], [class~="h-6"]) {
+    min-width: 2.75rem;
+  }
+  /* Nothing an officer has to read in the field is set below 11px. */
+  [class*="text-[9px]"],
+  [class*="text-[10px]"] {
+    font-size: 0.6875rem;
+    line-height: 1rem;
+  }
+}
+
+/* ─── Inside the native phone app ─────────────────────────────────────────── */
+
+/* The page is the app's whole screen, so it must not behave like a web page:
+   no stretch or glow when a list is pulled past its end, and no scrollbar
+   strip down the side (phones show position while scrolling on their own). */
+html[data-tcnp-native],
+html[data-tcnp-native] body {
+  overscroll-behavior: none;
+}
+html[data-tcnp-native] * {
+  scrollbar-width: none;
+}
+html[data-tcnp-native] *::-webkit-scrollbar {
+  display: none;
+}
+
+/* A long press on a button, tab or menu row selects its label and raises the
+   copy/share bubble in a web page. In an app, controls are pressed, not
+   selected. What officers read and may want to copy (names, numbers, messages,
+   notes) stays selectable. */
+html[data-tcnp-native] :is(button, [role="button"], [role="tab"], [role="menuitem"], [role="switch"], label, summary, nav, .app-header, .bottom-nav),
+html[data-tcnp-native] :is(nav, .app-header, .bottom-nav) * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+html[data-tcnp-native] :is(a, img) {
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+}
+
+/* The "More" tab at the bottom opens the same menu as the header's menu
+   button, and it is the one a thumb reaches. Two buttons for one menu is a
+   website habit; the app keeps the tab. */
+html[data-tcnp-native] .app-header [aria-controls="app-sidebar-drawer"] {
+  display: none;
+}
+
 /* Height of the phone bottom tab bar (components/layout/BottomNav). Zero from
    the `nav` breakpoint (860px, tailwind.config.ts) up, where it is hidden. */
 :root {
@@ -802,18 +892,18 @@ body {
 }
 
 .bottom-nav {
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: var(--safe-bottom);
 }
 
 /* Main scroll area: leave room for the tab bar and the home indicator so the
    last row of content can always scroll clear of both. */
 #main-content {
-  padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 1.5rem);
+  padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 1.5rem);
 }
 
 /* components/layout/FloatingStack */
 .floating-stack {
-  bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 0.75rem);
+  bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 0.75rem);
 }
 
 /* One ask at a time: while the notification reminder is up, the install
@@ -826,7 +916,7 @@ body {
    (components/operations/DistressButton) rather than over it. */
 @media (max-width: 767px) {
   body:has(.distress-bar) .floating-stack {
-    bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 6rem);
+    bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 6rem);
   }
 }
 
@@ -836,8 +926,8 @@ body {
 
   /* The sticky app header extends under the notch / status bar */
   .app-header {
-    padding-top: env(safe-area-inset-top);
-    height: calc(4rem + env(safe-area-inset-top));
+    padding-top: var(--safe-top);
+    height: calc(4rem + var(--safe-top));
   }
 
   /* No rubber-band page bounce inside the installed app — inner panes still scroll */

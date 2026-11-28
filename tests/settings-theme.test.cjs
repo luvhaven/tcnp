@@ -32,6 +32,7 @@ test('Settings and the actual profile theme control share a stable, working pref
  const cache = new Map(), primitives = {}
  const load = file => {
   if (!cache.has(file)) cache.set(file, compile(file, new Proxy({}, { get(_, name) {
+   if (name === '@/lib/native-shell') return { reportChromeToNative() {}, installNativeBack() {} }
    if (name === '@/lib/theme') return load('lib/theme.ts')
    if (name === '@/components/theme/ThemeProvider') return load('components/theme/ThemeProvider.tsx')
    if (name === '@/lib/audio/AudioManager') return load('lib/audio/AudioManager.ts')

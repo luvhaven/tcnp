@@ -1,5 +1,6 @@
 "use client"
 
+import { saveFile } from '@/lib/save-file'
 import { useRef, useState } from "react"
 import { FileSpreadsheet, LoaderCircle } from "lucide-react"
 import { toast } from "sonner"
@@ -27,14 +28,7 @@ export function OfficerStatusReportButton() {
         throw new Error("Report download failed")
       }
 
-      const url = URL.createObjectURL(await response.blob())
-      const link = document.createElement("a")
-      link.href = url
-      link.download = response.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] ?? "TCNP_Officer_Status.xlsx"
-      document.body.append(link)
-      link.click()
-      link.remove()
-      window.setTimeout(() => URL.revokeObjectURL(url), 30_000)
+      await saveFile(await response.blob(), response.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] ?? "TCNP_Officer_Status.xlsx")
     } catch {
       toast.error("Could not download the officer status report. Try again.")
     } finally {

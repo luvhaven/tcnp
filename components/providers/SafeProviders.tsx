@@ -15,7 +15,7 @@ import { useIsClient } from "@/hooks/useIsClient"
  *  top-center keeps toasts clear of the bottom tab bar and floating notices
  *  on phones; the offset clears the notch/status bar in the installed app;
  *  visibleToasts 3 stops a burst of failures from burying the page. */
-const TOAST_OFFSET = 'calc(env(safe-area-inset-top) + 0.75rem)'
+const TOAST_OFFSET = 'calc(var(--safe-top) + 0.75rem)'
 
 function ThemedToaster() {
     const { theme } = useTheme()

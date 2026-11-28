@@ -1,5 +1,7 @@
 'use client'
 
+import { saveFile } from '@/lib/save-file'
+import { isNativeShell } from '@/lib/native-shell'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -79,20 +81,15 @@ export default function ProgramExport({ programId, programName }: ProgramExportP
       if (saveError) throw saveError
 
       // Create downloadable file
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-        type: 'application/json'
-      })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `${programName.replace(/\s+/g, '_')}_export_${new Date().toISOString().split('T')[0]}.json`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      await saveFile(
+        new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' }),
+        `${programName.replace(/\s+/g, '_')}_export_${new Date().toISOString().split('T')[0]}.json`,
+      )
 
-      // Also create CSV for easier viewing
-      await exportToCSV(exportData, programName)
+      // Also one CSV per table for easier viewing. In the phone app each file
+      // would raise its own share sheet, a dozen in a row, so the app shares
+      // the complete JSON only.
+      if (!isNativeShell()) await exportToCSV(exportData, programName)
 
       toast.success('Program exported successfully!')
     } catch (error: any) {
@@ -151,15 +148,7 @@ export default function ProgramExport({ programId, programName }: ProgramExportP
   }
 
   const downloadCSV = (csv: string, filename: string) => {
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    void saveFile(new Blob([csv], { type: 'text/csv' }), filename).catch(() => undefined)
   }
 
   return (

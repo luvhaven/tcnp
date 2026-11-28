@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useSyncExternalStore } from 'react'
 import { normalizeTheme, resolveTheme, type AppTheme, type ResolvedTheme } from '@/lib/theme'
+import { installNativeBack, reportChromeToNative } from '@/lib/native-shell'
 export type { AppTheme } from '@/lib/theme'
 
 type ThemeContextValue = { theme: AppTheme; resolvedTheme: ResolvedTheme; setTheme: (theme: AppTheme) => void }
@@ -44,7 +45,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const theme = useSyncExternalStore(subscribeTheme, readTheme, () => 'auto' as AppTheme)
   const systemDark = useSyncExternalStore(subscribeSystemTheme, prefersDark, () => false)
   const resolvedTheme = resolveTheme(theme, systemDark)
-  useEffect(() => { applyTheme(theme) }, [theme, resolvedTheme])
+  // The native app paints the status-bar strip above the page; tell it which
+  // colour the page is so the two always match, whatever theme is chosen.
+  useEffect(() => { applyTheme(theme); reportChromeToNative() }, [theme, resolvedTheme])
+  useEffect(() => { installNativeBack() }, [])
   const value = useMemo(() => ({ theme, resolvedTheme, setTheme }), [theme, resolvedTheme])
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
 }

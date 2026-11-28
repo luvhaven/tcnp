@@ -1,5 +1,6 @@
 "use client"
 
+import { saveFile, saveFileError } from '@/lib/save-file'
 import { useReloadOnDeletion } from "@/hooks/useDashboardDeletions"
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -563,14 +564,10 @@ export default function JourneyStatusTable() {
         const csv = [headers, ...rows]
             .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
             .join('\n')
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `ops-monitor-${new Date().toISOString().slice(0, 10)}.csv`
-        a.click()
-        URL.revokeObjectURL(url)
-        toast.success(`Exported ${filteredJourneys.length} journey${filteredJourneys.length !== 1 ? 's' : ''} to CSV`)
+        const count = filteredJourneys.length
+        saveFile(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), `ops-monitor-${new Date().toISOString().slice(0, 10)}.csv`)
+            .then(() => toast.success(`Exported ${count} journey${count !== 1 ? 's' : ''} to CSV`))
+            .catch(error => toast.error(saveFileError(error)))
     }
 
     // Stats

@@ -1,5 +1,7 @@
 'use client'
 
+import { toast } from 'sonner'
+import { saveFile, saveFileError } from '@/lib/save-file'
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
@@ -174,10 +176,8 @@ export default function AfterOpReportPage() {
             r.improvements || '',
         ])
         const csv = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\n')
-        const blob = new Blob([csv], { type: 'text/csv' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a'); a.href = url; a.download = `tcnp-post-op-reports-${format(new Date(), 'yyyy-MM-dd')}.csv`; a.click()
-        URL.revokeObjectURL(url)
+        saveFile(new Blob([csv], { type: 'text/csv' }), `tcnp-post-op-reports-${format(new Date(), 'yyyy-MM-dd')}.csv`)
+            .catch(error => toast.error(saveFileError(error)))
     }
 
     // Mirrors the do_feedback_forms SELECT policy (own reports OR is_admin():

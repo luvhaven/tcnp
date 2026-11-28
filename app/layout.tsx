@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import { SafeProviders } from "@/components/providers/SafeProviders";
 import { THEME_BOOTSTRAP_SCRIPT } from "@/lib/theme";
 import { INSTALL_BOOTSTRAP_SCRIPT } from "@/lib/pwa-install";
+import { NATIVE_BOOTSTRAP_SCRIPT } from "@/lib/native-bootstrap";
 import { InlineScript } from "@/components/utils/InlineScript";
 
 export const metadata: Metadata = {
@@ -54,6 +55,9 @@ export default function RootLayout({
       <body>
         {/* Apply saved theme before first paint — prevents light-mode flash for dark users */}
         <InlineScript html={THEME_BOOTSTRAP_SCRIPT} />
+        {/* Inside the native phone app the app owns the screen edges; mark the
+            page before first paint so nothing reserves that space twice. */}
+        <InlineScript html={NATIVE_BOOTSTRAP_SCRIPT} />
         {/* Catch the browser's install offer before the app loads — it fires
             once, long before any install button has mounted (lib/pwa-install). */}
         <InlineScript html={INSTALL_BOOTSTRAP_SCRIPT} />

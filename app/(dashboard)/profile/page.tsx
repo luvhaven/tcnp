@@ -449,7 +449,7 @@ export default function ProfilePage() {
 
         {/* On a phone the save bar stays in reach, just above the bottom tab
             bar (--bottom-nav-h, globals.css), while the form scrolls. */}
-        <div className="sticky bottom-[calc(var(--bottom-nav-h)+env(safe-area-inset-bottom)+0.75rem)] z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background/95 p-2 pl-3 shadow-elevation-md backdrop-blur-md sm:static sm:z-auto sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:backdrop-blur-none">
+        <div className="sticky bottom-[calc(var(--bottom-nav-h)+var(--safe-bottom)+0.75rem)] z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background/95 p-2 pl-3 shadow-elevation-md backdrop-blur-md sm:static sm:z-auto sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:backdrop-blur-none">
           <Link href="/change-password" className="inline-flex min-h-9 items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
             <KeyRound className="h-4 w-4" /> Change password
           </Link>

@@ -33,7 +33,7 @@ export default function DistressButton(props: DistressButtonProps) {
       <div
         // Sits directly above the phone tab bar (BottomNav), which owns the safe-area inset.
         className="distress-bar fixed inset-x-0 z-40 border-t border-destructive/30 bg-background/95 px-4 pt-3 pb-3 backdrop-blur-sm md:hidden"
-        style={{ bottom: 'calc(var(--bottom-nav-h) + env(safe-area-inset-bottom))' }}
+        style={{ bottom: 'calc(var(--bottom-nav-h) + var(--safe-bottom))' }}
       >
         <HoldButton {...props} />
       </div>

@@ -71,6 +71,43 @@ export function postToNative(message: Record<string, unknown>) {
   try { (window as NativeWindow).ReactNativeWebView!.postMessage(JSON.stringify(message)) } catch { /* app is closing */ }
 }
 
+/**
+ * Tells the app which colour the page is, so the strip it paints behind the
+ * phone's status bar matches the chosen theme instead of the phone's setting.
+ * Older app versions ignore the message.
+ */
+export function reportChromeToNative() {
+  if (!isNativeShell()) return
+  try {
+    postToNative({
+      type: 'ui:chrome',
+      dark: document.documentElement.classList.contains('dark'),
+      background: getComputedStyle(document.body).backgroundColor,
+    })
+  } catch { /* cosmetic only */ }
+}
+
+/**
+ * What the phone's Back button does inside the app. A web page would simply
+ * go back a page, which on a phone means an open sheet, menu or the "More"
+ * drawer stays up while the screen behind it changes, and a half-filled form
+ * is lost. Here Back closes whatever is open first, then goes back a screen,
+ * and only leaves the app when there is nowhere left to go.
+ */
+const OPEN_OVERLAY = '[role="dialog"][aria-modal="true"], [role="menu"], [role="listbox"], [data-radix-popper-content-wrapper]'
+export function installNativeBack() {
+  if (!isNativeShell()) return
+  ;(window as NativeWindow & { __tcnpNativeBack?: (canGoBack: boolean) => void }).__tcnpNativeBack = (canGoBack) => {
+    if (document.querySelector(OPEN_OVERLAY)) {
+      // Every sheet, menu and drawer already closes on Escape.
+      ;(document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }))
+      return
+    }
+    if (canGoBack) window.history.back()
+    else postToNative({ type: 'app:exit' })
+  }
+}
+
 export function requestNative<T = any>(type: string, payload: Record<string, unknown> = {}, timeoutMs = REQUEST_TIMEOUT_MS): Promise<T> {
   if (!isNativeShell()) return Promise.reject(new Error('Not running inside the TCNP app.'))
   install()

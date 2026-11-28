@@ -212,6 +212,8 @@ test('programme export: admin/Command only, formula-safe CSV', () => {
     '@/lib/unit-access': unitAccessModule,
     '@/components/ui/button': { Button: () => null },
     '@/lib/notify': { notifyError() {}, UserFacingError: Error },
+    '@/lib/save-file': { saveFile: async () => {} },
+    '@/lib/native-shell': { isNativeShell: () => false },
     sonner: { toast: {} },
     'lucide-react': {},
   })
