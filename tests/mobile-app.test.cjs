@@ -107,7 +107,7 @@ test('chat and the live map take the whole phone screen above the tab bar', () =
   for (const path of ['/dashboard', '/chatter', '/tracking', '/incidents']) assert.equal(immersive.test(path), false, path)
   assert.match(layout, /data-immersive=\{immersive \? "" : undefined\}/)
   const css = fs.readFileSync('app/globals.css', 'utf8')
-  assert.match(css, /@media \(max-width: 859px\) \{\s*\[data-immersive\] \.app-header \{\s*display: none;/, 'phones only: desktop keeps its header')
+  assert.match(css, /@media \(max-width: 859px\) \{[^{]*:is\(\[data-immersive\], \[data-headerless\]\) \.app-header \{\s*height: 0;/, 'phones only: desktop keeps its header')
   assert.match(fs.readFileSync('app/(dashboard)/chat/page.tsx', 'utf8'), /<div className="hidden items-center gap-3 nav:flex">/)
 
   // Dashboard and My Ops keep scrolling normally but lose the header and title block.
@@ -116,4 +116,22 @@ test('chat and the live map take the whole phone screen above the tab bar', () =
   for (const path of ['/incidents', '/my-operations-x', '/chat']) assert.equal(headerless.test(path), false, path)
   assert.match(css, /\[data-headerless\] \.page-header-title \{[^}]*clip-path: inset\(50%\)/, 'hidden from sight, still read aloud')
   assert.match(fs.readFileSync('components/ui/page-header.tsx', 'utf8'), /className="page-header-title /)
+})
+
+test('with the header hidden, the bell, location switch and Log out are in the More menu', () => {
+  const sidebar = fs.readFileSync('components/layout/sidebar.tsx', 'utf8')
+  assert.match(sidebar, /\{isMobile && <MobileAccountActions userId=\{currentUser\?\.id\} onClose=\{onClose\} \/>\}/, 'phones only')
+  assert.match(sidebar, /onClose\?\.\(\); window\.dispatchEvent\(new Event\(OPEN_NOTIFICATIONS_EVENT\)\)/)
+  assert.match(sidebar, /<MenuLocationSwitch idPrefix="more" \/>/)
+  assert.match(sidebar, /await signOutOfTcnp\(userId\)/)
+  // One sign-out routine, so neither control can skip a step.
+  const signOut = fs.readFileSync('lib/sign-out.ts', 'utf8')
+  for (const step of ['is_online: false', 'disconnectDevicePush(false)', 'stopNativeTracking()', 'supabase.auth.signOut()']) assert.ok(signOut.includes(step), step)
+  assert.match(fs.readFileSync('components/layout/header.tsx', 'utf8'), /await signOutOfTcnp\(currentUser\?\.id\)/)
+  // The inbox stays mounted and reachable on the screens that hide the header.
+  const css = fs.readFileSync('app/globals.css', 'utf8')
+  assert.match(css, /:is\(\[data-immersive\], \[data-headerless\]\) \.app-header \{[^}]*backdrop-filter: none;[^}]*visibility: hidden;/)
+  assert.doesNotMatch(css, /\[data-(immersive|headerless)\] \.app-header \{\s*display: none/)
+  assert.match(css, /\.app-header \.notification-panel \{\s*visibility: visible;/)
+  assert.match(fs.readFileSync('components/notifications/NotificationCenter.tsx', 'utf8'), /window\.addEventListener\(OPEN_NOTIFICATIONS_EVENT, openInbox\)/)
 })

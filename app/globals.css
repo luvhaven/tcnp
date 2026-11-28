@@ -824,8 +824,24 @@ html[data-tcnp-native] {
    drop the app header and the page padding and run from the top of the
    screen to the tab bar. */
 @media (max-width: 859px) {
-  [data-immersive] .app-header {
-    display: none;
+  /* The header is collapsed to nothing, not removed: the notification inbox
+     is mounted inside it and is opened from the "More" menu. Its backdrop
+     filter goes too, because a filter would trap the inbox, which is fixed
+     to the screen, inside the header's (now empty) box. */
+  :is([data-immersive], [data-headerless]) .app-header {
+    height: 0;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: none;
+    visibility: hidden;
+  }
+  :is([data-immersive], [data-headerless]) .app-header .notification-panel {
+    visibility: visible;
+    top: calc(var(--safe-top) + 0.5rem);
   }
   [data-immersive] #main-content {
     padding: var(--safe-top) 0 calc(var(--bottom-nav-h) + var(--safe-bottom));
@@ -851,9 +867,6 @@ html[data-tcnp-native] {
    page's action buttons and status pills stay. The title is hidden from
    sight only, so a screen reader still announces the page. */
 @media (max-width: 859px) {
-  [data-headerless] .app-header {
-    display: none;
-  }
   [data-headerless] #main-content {
     padding-top: calc(var(--safe-top) + 0.75rem);
   }

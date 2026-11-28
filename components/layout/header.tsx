@@ -30,6 +30,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 import { officerRoleLabel } from "@/lib/officer-directory"
 import { useLocationSharing } from '@/hooks/useLocationSharing'
+import { signOutOfTcnp } from '@/lib/sign-out'
 import { Switch } from '@/components/ui/switch'
 
 function HamburgerIcon({ isOpen }: { isOpen: boolean }) {
@@ -105,9 +106,10 @@ function ThemeSegmented() {
   )
 }
 
-function MenuLocationSwitch() {
+/** `idPrefix` keeps ids unique when the header menu and the phone "More" menu both show it. */
+export function MenuLocationSwitch({ idPrefix = 'profile' }: { idPrefix?: string }) {
   const { enabled, checked, pending, error, setEnabled } = useLocationSharing()
-  return <div className="px-1 py-2"><div className="flex items-center justify-between gap-3"><label htmlFor="profile-location-tracking" className="flex cursor-pointer items-center gap-2 text-xs font-medium text-foreground"><MapPin className="h-4 w-4 text-primary" aria-hidden="true" />Location tracking</label><Switch id="profile-location-tracking" checked={checked} onCheckedChange={setEnabled} aria-describedby="profile-location-description" /></div><p id="profile-location-description" className="mt-1.5 text-xs leading-relaxed text-muted-foreground" role={error ? 'alert' : 'status'}>{error || (pending ? checked ? 'Enabling location sharing…' : 'Hiding your shared location…' : enabled ? 'On — this device can share your location.' : 'Off — your location pin is hidden on this device.')}</p>{error && <button type="button" className="mt-1 text-xs underline" onClick={() => setEnabled(false)}>Retry hiding location</button>}</div>
+  return <div className="px-1 py-2"><div className="flex items-center justify-between gap-3"><label htmlFor={`${idPrefix}-location-tracking`} className="flex cursor-pointer items-center gap-2 text-xs font-medium text-foreground"><MapPin className="h-4 w-4 text-primary" aria-hidden="true" />Location tracking</label><Switch id={`${idPrefix}-location-tracking`} checked={checked} onCheckedChange={setEnabled} aria-describedby={`${idPrefix}-location-description`} /></div><p id={`${idPrefix}-location-description`} className="mt-1.5 text-xs leading-relaxed text-muted-foreground" role={error ? 'alert' : 'status'}>{error || (pending ? checked ? 'Enabling location sharing…' : 'Hiding your shared location…' : enabled ? 'On — this device can share your location.' : 'Off — your location pin is hidden on this device.')}</p>{error && <button type="button" className="mt-1 text-xs underline" onClick={() => setEnabled(false)}>Retry hiding location</button>}</div>
 }
 
 function getInitials(name?: string | null, email?: string | null) {
@@ -208,18 +210,7 @@ export function Header({ onOpenSidebar, sidebarOpen = false }: { onOpenSidebar?:
 
   const handleLogout = async () => {
     setMenuOpen(false)
-    if (currentUser) {
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 1500)
-      try {
-        await supabase.from('users').update({ is_online: false, last_seen: new Date().toISOString() }).eq('id', currentUser.id).abortSignal(controller.signal)
-      } catch { /* Presence must never prevent signing out. */ }
-      finally { clearTimeout(timeout) }
-    }
-    await import('@/lib/device-push').then(m => m.disconnectDevicePush(false)).catch(() => undefined)
-    // Native app: stop background location for this officer before the session ends.
-    await import('@/lib/native-shell').then(m => m.stopNativeTracking()).catch(() => undefined)
-    await supabase.auth.signOut()
+    await signOutOfTcnp(currentUser?.id)
     router.push("/login")
   }
 

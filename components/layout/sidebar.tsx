@@ -1,13 +1,13 @@
 "use client"
 
-import { useMemo, useRef, useState } from "react"
+import { useMemo, useRef, useState, useSyncExternalStore } from "react"
 import packageInfo from '@/package.json'
 import { filterNavigation } from '@/lib/navigation-search'
 import { Input } from '@/components/ui/input'
 import Link from "next/link"
 import Image from "next/image"
 import { motion } from "framer-motion"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { useUnreadChatCount } from '@/hooks/useUnreadChatCount'
@@ -16,11 +16,55 @@ import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { useMyUnitMemberships } from '@/hooks/useUnitAccess'
 import { memberUnitSlugs } from '@/lib/unit-access'
 import {
+  Bell,
   ChevronLeft,
+  LogOut,
   Search,
   X,
 } from "lucide-react"
+import { MenuLocationSwitch } from "@/components/layout/header"
+import { OPEN_NOTIFICATIONS_EVENT, UNREAD_NOTIFICATIONS_EVENT, signOutOfTcnp } from "@/lib/sign-out"
 import { NAV_SECTIONS, getVisibleNav } from "@/components/layout/nav-config"
+
+/** The inbox's unread total, as announced by NotificationCenter. */
+function useUnreadNotifications() {
+  return useSyncExternalStore(
+    notify => { window.addEventListener(UNREAD_NOTIFICATIONS_EVENT, notify); return () => window.removeEventListener(UNREAD_NOTIFICATIONS_EVENT, notify) },
+    () => (window as Window & { __tcnpUnreadNotifications?: number }).__tcnpUnreadNotifications ?? 0,
+    () => 0,
+  )
+}
+
+/**
+ * Phone "More" menu only. Some phone screens hide the app header to give the
+ * page its room, which took the bell, the location switch and Log out with
+ * it. They live here so they are one tap from every screen.
+ */
+function MobileAccountActions({ userId, onClose }: { userId?: string | null; onClose?: () => void }) {
+  const router = useRouter()
+  const unread = useUnreadNotifications()
+  const [leaving, setLeaving] = useState(false)
+  const row = "flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium transition-colors active:bg-muted"
+  return (
+    <div className="space-y-1 border-t border-border/50 p-2">
+      <button type="button" className={cn(row, "text-foreground")} onClick={() => { onClose?.(); window.dispatchEvent(new Event(OPEN_NOTIFICATIONS_EVENT)) }}>
+        <Bell className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <span>Notifications</span>
+        {unread > 0 && <Badge variant="destructive" className="ml-auto font-semibold" aria-label={`${unread} unread`}>{unread > 99 ? "99+" : unread}</Badge>}
+      </button>
+      <div className="rounded-lg px-2"><MenuLocationSwitch idPrefix="more" /></div>
+      <button
+        type="button"
+        disabled={leaving}
+        className={cn(row, "text-destructive disabled:opacity-60")}
+        onClick={async () => { setLeaving(true); try { await signOutOfTcnp(userId) } finally { onClose?.(); router.push("/login") } }}
+      >
+        <LogOut className="h-4 w-4" aria-hidden="true" />
+        <span>{leaving ? "Logging out…" : "Log out"}</span>
+      </button>
+    </div>
+  )
+}
 
 /** Stable DOM id for a nav section, so its heading and list can be linked. */
 function sectionId(label: string) {
@@ -220,9 +264,11 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
         ))}
       </nav>
 
+      {isMobile && <MobileAccountActions userId={currentUser?.id} onClose={onClose} />}
+
       {/* Footer */}
       {!(collapsed && !isMobile) && (
-        <div className={cn("mt-auto border-t border-border/50 bg-background/50 p-4 backdrop-blur-sm", isMobile && "pb-[calc(1rem+var(--safe-bottom))]")}>
+        <div className={cn("border-t border-border/50 bg-background/50 p-4 backdrop-blur-sm", isMobile ? "pb-[calc(1rem+var(--safe-bottom))]" : "mt-auto")}>
           <div className="flex flex-col gap-1 text-xs text-muted-foreground">
             <span>Version {packageInfo.version}</span>
             <span>&copy; {new Date().getFullYear()} TCNP</span>

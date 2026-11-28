@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { canReadAuditLogs } from "@/components/layout/nav-config"
+import { OPEN_NOTIFICATIONS_EVENT, UNREAD_NOTIFICATIONS_EVENT } from "@/lib/sign-out"
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -176,6 +177,18 @@ export default function NotificationCenter() {
   const panelRef = useRef<HTMLDivElement>(null)
   // Keep the app-icon badge equal to the true unread total, like a messaging app.
   useEffect(() => { if (!loading) void syncAppBadge(unreadCount) }, [unreadCount, loading])
+  // On phone screens that hide the header, the bell lives in the "More" menu:
+  // it shows this count and opens this same inbox.
+  useEffect(() => {
+    ;(window as Window & { __tcnpUnreadNotifications?: number }).__tcnpUnreadNotifications = unreadCount
+    window.dispatchEvent(new Event(UNREAD_NOTIFICATIONS_EVENT))
+  }, [unreadCount])
+  useEffect(() => {
+    // Wait a moment so the press that asked for it is not read as an outside press.
+    const openInbox = () => { window.setTimeout(() => setOpen(true), 80) }
+    window.addEventListener(OPEN_NOTIFICATIONS_EVENT, openInbox)
+    return () => window.removeEventListener(OPEN_NOTIFICATIONS_EVENT, openInbox)
+  }, [])
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent) => {
@@ -263,7 +276,7 @@ export default function NotificationCenter() {
               transition={{ type: "spring", stiffness: 400, damping: 28 }}
               className={cn(
                 // Mobile: fixed to viewport so it never overflows
-                "fixed right-2 top-[68px] z-50",
+                "notification-panel fixed right-2 top-[68px] z-50",
                 // sm+: back to absolute anchored to the bell button
                 "sm:absolute sm:right-0 sm:top-[calc(100%+8px)]",
                 // Responsive width: fills the screen on mobile, capped at 380px on desktop
